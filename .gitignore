@@ -1,0 +1,18 @@
+# Local runtime artifacts
+logs/
+output/
+.playwright-cli/
+
+# Local Git metadata backups created while converting nested repositories
+.git-source-backups/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Environment overrides
+.env
+.env.*
+!.env.example
