@@ -4,6 +4,12 @@ output/
 .playwright-cli/
 docs/status/
 AGENTS.md
+RuoYi-Vue/.github/
+react-ui/.github/
+react-ui/.claude/
+react-ui/.husky/
+react-ui/public/CNAME
+react-ui/types/cache/
 
 # Local Git metadata backups created while converting nested repositories
 .git-source-backups/
