@@ -6,8 +6,8 @@ import {
   MobileOutlined,
   ManOutlined,
 } from '@ant-design/icons';
-import { Card, Col, Divider, List, Row } from 'antd';
-import React, { useState, useEffect } from 'react';
+import { Card, Col, Divider, Row } from 'antd';
+import React, { useEffect, useState } from 'react';
 import styles from './Center.module.css';
 import BaseInfo from './components/BaseInfo';
 import ResetPassword from './components/ResetPassword';
@@ -18,19 +18,11 @@ import { PageLoading } from '@ant-design/pro-components';
 const operationTabList = [
   {
     key: 'base',
-    tab: (
-      <span>
-        基本资料
-      </span>
-    ),
+    tab: <span>基本资料</span>,
   },
   {
     key: 'password',
-    tab: (
-      <span>
-        重置密码
-      </span>
-    ),
+    tab: <span>重置密码</span>,
   },
 ];
 
@@ -38,108 +30,80 @@ export type tabKeyType = 'base' | 'password';
 
 const DEFAULT_AVATAR = 'https://gw.alipayobjects.com/zos/rmsportal/BiazfanxmamNRoxxVxka.png';
 
+const sexMap: Record<string, string> = {
+  '0': '男',
+  '1': '女',
+  '2': '未知',
+};
+
+function InfoItem({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value?: React.ReactNode;
+}) {
+  return (
+    <div className={styles.infoItem}>
+      <div className={styles.infoLabel}>
+        {icon}
+        {label}
+      </div>
+      <div className={styles.infoValue}>{value || '-'}</div>
+    </div>
+  );
+}
+
 const Center: React.FC = () => {
-  
   const [tabKey, setTabKey] = useState<tabKeyType>('base');
-  
   const [cropperModalOpen, setCropperModalOpen] = useState<boolean>(false);
-  
-  //  获取用户信息
   const [userInfo, setUserInfo] = useState<any>();
   const [loading, setLoading] = useState(true);
+
   useEffect(() => {
-    getUserInfo().then((data) => {
-      if (!data?.user) {
-        setUserInfo(undefined);
-        return;
-      }
-      setUserInfo({
-        ...data,
-        user: {
-          ...data.user,
-          avatar: data.user.avatar || DEFAULT_AVATAR,
-        },
+    getUserInfo()
+      .then((data) => {
+        if (!data?.user) {
+          setUserInfo(undefined);
+          return;
+        }
+        setUserInfo({
+          ...data,
+          user: {
+            ...data.user,
+            avatar: data.user.avatar || DEFAULT_AVATAR,
+          },
+        });
+      })
+      .finally(() => {
+        setLoading(false);
       });
-    }).finally(() => {
-      setLoading(false);
-    });
   }, []);
+
   if (loading) {
-    return <div>loading...</div>;
+    return <PageLoading />;
   }
 
   const currentUser = userInfo?.user;
 
-  //  渲染用户信息
   const renderUserInfo = ({
     userName,
     phonenumber,
     email,
     sex,
     dept,
-  }: Partial<API.CurrentUser>) => {
-    return (
-      <List>
-        <List.Item>
-          <div>
-            <UserOutlined
-              style={{
-                marginRight: 8,
-              }}
-            />
-            用户名
-          </div>
-          <div>{userName}</div>
-        </List.Item>
-        <List.Item>
-          <div>
-            <ManOutlined
-              style={{
-                marginRight: 8,
-              }}
-            />
-            性别
-          </div>
-          <div>{sex === '1' ? '女' : '男'}</div>
-        </List.Item>
-        <List.Item>
-          <div>
-            <MobileOutlined
-              style={{
-                marginRight: 8,
-              }}
-            />
-            电话
-          </div>
-          <div>{phonenumber}</div>
-        </List.Item>
-        <List.Item>
-          <div>
-            <MailOutlined
-              style={{
-                marginRight: 8,
-              }}
-            />
-            邮箱
-          </div>
-          <div>{email}</div>
-        </List.Item>
-        <List.Item>
-          <div>
-            <ClusterOutlined
-              style={{
-                marginRight: 8,
-              }}
-            />
-            部门
-          </div>
-          <div>{dept?.deptName}</div>
-        </List.Item>
-      </List>
-    );
-  };
+  }: Partial<API.CurrentUser>) => (
+    <div className={styles.infoList}>
+      <InfoItem icon={<UserOutlined />} label="用户名" value={userName} />
+      <InfoItem icon={<ManOutlined />} label="性别" value={sexMap[`${sex}`] || '-'} />
+      <InfoItem icon={<MobileOutlined />} label="电话" value={phonenumber} />
+      <InfoItem icon={<MailOutlined />} label="邮箱" value={email} />
+      <InfoItem icon={<ClusterOutlined />} label="部门" value={dept?.deptName} />
+    </div>
+  );
 
-  // 渲染tab切换
   const renderChildrenByTabKey = (tabValue: tabKeyType) => {
     if (tabValue === 'base') {
       return <BaseInfo values={currentUser} />;
@@ -158,14 +122,10 @@ const Center: React.FC = () => {
     <div>
       <Row gutter={[16, 24]}>
         <Col lg={8} md={24}>
-          <Card
-            title="个人信息"
-            variant="borderless"
-            loading={loading}
-          >
+          <Card title="个人信息" variant="borderless" loading={loading}>
             {!loading && (
-              <div style={{ textAlign: "center"}}>
-                <div className={styles.avatarHolder} onClick={()=>{setCropperModalOpen(true)}}>
+              <div style={{ textAlign: 'center' }}>
+                <div className={styles.avatarHolder} onClick={() => setCropperModalOpen(true)}>
                   <img alt="" src={currentUser.avatar} />
                 </div>
                 {renderUserInfo(currentUser)}
@@ -205,7 +165,7 @@ const Center: React.FC = () => {
       </Row>
       <AvatarCropper
         onFinished={() => {
-          setCropperModalOpen(false);     
+          setCropperModalOpen(false);
         }}
         open={cropperModalOpen}
         data={currentUser.avatar}
