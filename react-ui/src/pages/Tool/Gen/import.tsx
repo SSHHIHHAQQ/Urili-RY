@@ -4,6 +4,7 @@ import { history, FormattedMessage } from '@umijs/max';
 import { importTables, queryTableList } from './service';
 import type { GenCodeType } from './data.d';
 import { ProColumns, ProTable } from '@ant-design/pro-components';
+import { getPersistedProTableSearch } from '@/utils/proTableSearch';
 import { PlusOutlined, RollbackOutlined } from '@ant-design/icons';
 import { message } from '@/utils/feedback';
 
@@ -49,9 +50,7 @@ const ImportTableList: React.FC = () => {
         <ProTable<GenCodeType>
           headerTitle="代码生成信息"
           rowKey="tableName"
-          search={{
-            labelWidth: 120,
-          }}
+          search={getPersistedProTableSearch({ labelWidth: 120 })}
           toolBarRender={() => [
             <Button
               type="primary"

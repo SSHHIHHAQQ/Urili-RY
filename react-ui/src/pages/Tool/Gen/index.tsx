@@ -22,6 +22,7 @@ import {
   ProDescriptionsItemProps,
   ProTable,
 } from '@ant-design/pro-components';
+import { getPersistedProTableSearch } from '@/utils/proTableSearch';
 
 const { Content } = Layout;
 
@@ -233,9 +234,7 @@ const GenCodeView: React.FC = () => {
           actionRef={actionRef}
           formRef={formTableRef}
           rowKey="tableId"
-          search={{
-            labelWidth: 120,
-          }}
+          search={getPersistedProTableSearch({ labelWidth: 120 })}
           toolBarRender={() => [
             <Button
               type="primary"

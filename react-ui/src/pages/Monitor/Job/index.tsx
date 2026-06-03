@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useIntl, FormattedMessage, useAccess, history } from '@umijs/max';
 import { Button, Dropdown, FormInstance, Modal, Space } from 'antd';
 import { ActionType, FooterToolbar, PageContainer, ProColumns, ProTable } from '@ant-design/pro-components';
+import { getPersistedProTableSearch } from '@/utils/proTableSearch';
 import { PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, DownOutlined, EditOutlined } from '@ant-design/icons';
 import { getJobList, removeJob, addJob, updateJob, exportJob, runJob } from '@/services/monitor/job';
 import { getDictSelectOption, getDictValueEnum } from '@/services/system/dict';
@@ -316,9 +317,7 @@ const JobTableList: React.FC = () => {
           formRef={formTableRef}
           rowKey="jobId"
           key="jobList"
-          search={{
-            labelWidth: 120,
-          }}
+          search={getPersistedProTableSearch({ labelWidth: 120 })}
           toolBarRender={() => [
             <Button
               type="primary"

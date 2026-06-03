@@ -208,6 +208,17 @@
 	    update sys_menu set order_num = #{orderNum} where menu_id = #{menuId}
 	</update>
 
+	<update id="updateMenuStatusByIds">
+	    update sys_menu
+	    set status = #{status},
+	        update_by = #{updateBy},
+	        update_time = sysdate()
+	    where menu_id in
+	    <foreach collection="menuIds" item="menuId" open="(" separator="," close=")">
+	        #{menuId}
+	    </foreach>
+	</update>
+
 	<delete id="deleteMenuById" parameterType="Long">
 	    delete from sys_menu where menu_id = #{menuId}
 	</delete>

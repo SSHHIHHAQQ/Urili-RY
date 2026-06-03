@@ -351,6 +351,59 @@ public class SysMenuServiceImpl implements ISysMenuService
     }
 
     /**
+     * 级联修改菜单状态
+     *
+     * @param menuIds 菜单ID
+     * @param status 菜单状态
+     * @param updateBy 更新人
+     * @return 结果
+     */
+    @Override
+    @Transactional
+    public int updateMenuStatusCascade(Long[] menuIds, String status, String updateBy)
+    {
+        Set<Long> targetMenuIds = new HashSet<>();
+        if (menuIds != null)
+        {
+            for (Long menuId : menuIds)
+            {
+                if (StringUtils.isNotNull(menuId))
+                {
+                    targetMenuIds.add(menuId);
+                }
+            }
+        }
+        if (targetMenuIds.isEmpty())
+        {
+            throw new ServiceException("请选择需要级联启停的菜单");
+        }
+
+        List<SysMenu> menus = menuMapper.selectMenuList(new SysMenu());
+        collectChildMenuIds(menus, targetMenuIds);
+        return menuMapper.updateMenuStatusByIds(new ArrayList<>(targetMenuIds), status, updateBy);
+    }
+
+    /**
+     * 补齐选中菜单的所有子级菜单ID
+     */
+    private void collectChildMenuIds(List<SysMenu> menus, Set<Long> targetMenuIds)
+    {
+        boolean changed = true;
+        while (changed)
+        {
+            changed = false;
+            for (SysMenu menu : menus)
+            {
+                if (StringUtils.isNotNull(menu.getParentId()) && targetMenuIds.contains(menu.getParentId())
+                        && targetMenuIds.add(menu.getMenuId()))
+                {
+                    changed = true;
+                }
+            }
+        }
+    }
+
+    /**
      * 删除菜单管理信息
      * 
      * @param menuId 菜单ID

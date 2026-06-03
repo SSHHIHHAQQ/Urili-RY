@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useIntl, FormattedMessage, useAccess, history, useParams } from '@umijs/max';
 import { Button, Modal } from 'antd';
 import { ActionType, PageContainer, ProColumns, ProTable } from '@ant-design/pro-components';
+import { getPersistedProTableSearch } from '@/utils/proTableSearch';
 import { PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, RollbackOutlined } from '@ant-design/icons';
 import { authUserSelectAll, authUserCancel, authUserCancelAll, allocatedUserList, unallocatedUserList } from '@/services/system/role';
 import { getDictValueEnum } from '@/services/system/dict';
@@ -166,9 +167,7 @@ const AuthUserTableList: React.FC = () => {
 					actionRef={actionRef}
 					rowKey="userId"
 					key="userList"
-					search={{
-						labelWidth: 120,
-					}}
+					search={getPersistedProTableSearch({ labelWidth: 120 })}
 					toolBarRender={() => [
 						<Button
 							type="primary"

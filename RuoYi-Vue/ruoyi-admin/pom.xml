@@ -54,6 +54,18 @@
             <artifactId>ruoyi-generator</artifactId>
         </dependency>
 
+        <!-- 卖家模块-->
+        <dependency>
+            <groupId>com.ruoyi</groupId>
+            <artifactId>seller</artifactId>
+        </dependency>
+
+        <!-- 买家模块-->
+        <dependency>
+            <groupId>com.ruoyi</groupId>
+            <artifactId>buyer</artifactId>
+        </dependency>
+
     </dependencies>
 
     <build>

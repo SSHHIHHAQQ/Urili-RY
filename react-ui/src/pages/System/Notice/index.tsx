@@ -5,6 +5,7 @@ import { useIntl, FormattedMessage, useAccess } from '@umijs/max';
 import type { FormInstance } from 'antd';
 import { Button, Modal } from 'antd';
 import { ActionType, FooterToolbar, PageContainer, ProColumns, ProTable } from '@ant-design/pro-components';
+import { getPersistedProTableSearch } from '@/utils/proTableSearch';
 import { PlusOutlined, DeleteOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { getNoticeList, removeNotice, addNotice, updateNotice } from '@/services/system/notice';
 import UpdateForm from './edit';
@@ -243,9 +244,7 @@ const NoticeTableList: React.FC = () => {
           formRef={formTableRef}
           rowKey="noticeId"
           key="noticeList"
-          search={{
-            labelWidth: 120,
-          }}
+          search={getPersistedProTableSearch({ labelWidth: 120 })}
           toolBarRender={() => [
             <Button
               type="primary"

@@ -5,6 +5,7 @@ import { useIntl, FormattedMessage, useAccess, history, useParams } from '@umijs
 import type { FormInstance } from 'antd';
 import { Button, Modal } from 'antd';
 import { ActionType, FooterToolbar, PageContainer, ProColumns, ProTable } from '@ant-design/pro-components';
+import { getPersistedProTableSearch } from '@/utils/proTableSearch';
 import { PlusOutlined, DeleteOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { getDictDataList, removeDictData, addDictData, updateDictData, exportDictData } from '@/services/system/dictdata';
 import UpdateForm from './edit';
@@ -306,9 +307,7 @@ const DictDataTableList: React.FC = () => {
           formRef={formTableRef}
           rowKey="dictCode"
           key="dataList"
-          search={{
-            labelWidth: 120,
-          }}
+          search={getPersistedProTableSearch({ labelWidth: 120 })}
           toolBarRender={() => [
             <Button
               type="primary"

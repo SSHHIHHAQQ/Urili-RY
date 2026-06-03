@@ -5,6 +5,7 @@ import { useIntl, FormattedMessage, useAccess } from '@umijs/max';
 import type { FormInstance } from 'antd';
 import { Button, Modal } from 'antd';
 import { ActionType, FooterToolbar, PageContainer, ProColumns, ProTable } from '@ant-design/pro-components';
+import { getPersistedProTableSearch } from '@/utils/proTableSearch';
 import { PlusOutlined, DeleteOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { getPostList, removePost, addPost, updatePost, exportPost } from '@/services/system/post';
 import UpdateForm from './edit';
@@ -233,9 +234,7 @@ const PostTableList: React.FC = () => {
           formRef={formTableRef}
           rowKey="postId"
           key="postList"
-          search={{
-            labelWidth: 120,
-          }}
+          search={getPersistedProTableSearch({ labelWidth: 120 })}
           toolBarRender={() => [
             <Button
               type="primary"

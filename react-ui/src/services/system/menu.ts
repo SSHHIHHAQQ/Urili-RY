@@ -45,6 +45,21 @@ export async function updateMenu(params: API.System.Menu, options?: { [key: stri
   });
 }
 
+// 级联启停菜单权限
+export async function cascadeMenuStatus(menuIds: string, status: string, options?: { [key: string]: any }) {
+  return request<API.Result>('/api/system/menu/cascadeStatus', {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json;charset=UTF-8',
+    },
+    data: {
+      menuIds,
+      status,
+    },
+    ...(options || {})
+  });
+}
+
 // 删除菜单权限
 export async function removeMenu(ids: string, options?: { [key: string]: any }) {
   return request<API.Result>(`/api/system/menu/${ids}`, {

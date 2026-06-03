@@ -4,6 +4,7 @@ import React, { useRef, useEffect } from 'react';
 import { useIntl, FormattedMessage, useAccess } from '@umijs/max';
 import { getOnlineUserList, forceLogout } from '@/services/monitor/online';
 import { ActionType, ProColumns, ProTable } from '@ant-design/pro-components';
+import { getPersistedProTableSearch } from '@/utils/proTableSearch';
 import { DeleteOutlined } from '@ant-design/icons';
 import { message } from '@/utils/feedback';
  
@@ -140,9 +141,7 @@ const OnlineUserTableList: React.FC = () => {
           formRef={formTableRef}
           rowKey="tokenId"
           key="logininforList"
-          search={{
-            labelWidth: 120,
-          }}
+          search={getPersistedProTableSearch({ labelWidth: 120 })}
           request={(params) =>
             getOnlineUserList({ ...params } as API.Monitor.OnlineUserListParams).then((res) => {
               const result = {

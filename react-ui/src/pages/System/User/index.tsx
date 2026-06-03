@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useIntl, FormattedMessage, useAccess } from '@umijs/max';
 import { App, Button, Card, Col, Dropdown, FormInstance, Modal, Row, Space, Switch } from 'antd';
 import { ActionType, FooterToolbar, PageContainer, ProColumns, ProTable } from '@ant-design/pro-components';
+import { getPersistedProTableSearch } from '@/utils/proTableSearch';
 import { PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, DownOutlined, EditOutlined } from '@ant-design/icons';
 import { getUserList, removeUser, addUser, updateUser, exportUser, getUser, changeUserStatus, updateAuthRole, resetUserPwd } from '@/services/system/user';
 import UpdateForm from './edit';
@@ -339,9 +340,7 @@ const UserTableList: React.FC = () => {
             formRef={formTableRef}
             rowKey="userId"
             key="userList"
-            search={{
-              labelWidth: 120,
-            }}
+            search={getPersistedProTableSearch({ labelWidth: 120 })}
             toolBarRender={() => [
               <Button
                 type="primary"

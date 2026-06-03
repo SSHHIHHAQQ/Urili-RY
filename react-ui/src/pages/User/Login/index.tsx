@@ -6,13 +6,14 @@ import {
 import {
   LoginForm, ProFormCaptcha, ProFormCheckbox, ProFormText, } from '@ant-design/pro-components';
 import { createStyles } from 'antd-style';
-import { FormattedMessage, history, SelectLang, useIntl, useModel, Helmet } from '@umijs/max';
+import { FormattedMessage, SelectLang, useIntl, useModel, Helmet } from '@umijs/max';
 import { Alert, Col, Row, Tabs, Image } from 'antd';
 import Settings from '../../../../config/defaultSettings';
 import React, { useEffect, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { clearSessionToken, setSessionToken } from '@/access';
 import { message } from '@/utils/feedback';
+import { getRoutersInfo, setRemoteMenu } from '@/services/session';
 
 const useActionStyles = createStyles(({ token }) => ({
   icon: {
@@ -81,6 +82,7 @@ const Login: React.FC = () => {
   const [userLoginState, setUserLoginState] = useState<API.LoginResult>({code: 200});
   const [type, setType] = useState<string>('account');
   const { initialState, setInitialState } = useModel('@@initialState');
+  const [captchaEnabled, setCaptchaEnabled] = useState<boolean>(false);
   const [captchaCode, setCaptchaCode] = useState<string>('');
   const [uuid, setUuid] = useState<string>('');
 
@@ -99,10 +101,24 @@ const Login: React.FC = () => {
   const intl = useIntl();
 
   const getCaptchaCode = async () => {
-    const response = await getCaptchaImg();
-    const imgdata = `data:image/png;base64,${response.img}`;
-    setCaptchaCode(imgdata);
-    setUuid(response.uuid);
+    try {
+      const response = await getCaptchaImg();
+      const nextCaptchaEnabled = response.captchaEnabled === true && !!response.img;
+      setCaptchaEnabled(nextCaptchaEnabled);
+      if (!nextCaptchaEnabled) {
+        setCaptchaCode('');
+        setUuid('');
+        return;
+      }
+      const imgdata = `data:image/png;base64,${response.img}`;
+      setCaptchaCode(imgdata);
+      setUuid(response.uuid || '');
+    } catch (error) {
+      console.log(error);
+      setCaptchaEnabled(false);
+      setCaptchaCode('');
+      setUuid('');
+    }
   };
 
   const fetchUserInfo = async () => {
@@ -120,7 +136,11 @@ const Login: React.FC = () => {
   const handleSubmit = async (values: API.LoginParams) => {
     try {
       // 登录
-      const response = await login({ ...values, uuid });
+      const response = await login(
+        captchaEnabled
+          ? { ...values, uuid }
+          : { ...values, code: undefined, uuid: undefined },
+      );
       if (response.code === 200) {
         const defaultLoginSuccessMessage = intl.formatMessage({
           id: 'pages.login.success',
@@ -131,17 +151,21 @@ const Login: React.FC = () => {
         console.log('login response: ', response);
         setSessionToken(response?.token, response?.token, expireTime);
         message.success(defaultLoginSuccessMessage);
+        const routers = await getRoutersInfo();
+        setRemoteMenu(routers);
         await fetchUserInfo();
         console.log('login ok');
         const urlParams = new URL(window.location.href).searchParams;
-        history.push(urlParams.get('redirect') || '/');
+        window.location.replace(urlParams.get('redirect') || '/');
         return;
       } else {
         console.log(response.msg);
         clearSessionToken();
         // 如果失败去设置用户错误信息
         setUserLoginState({ ...response, type });
-        getCaptchaCode();
+        if (captchaEnabled) {
+          getCaptchaCode();
+        }
       }
     } catch (error) {
       const defaultLoginFailureMessage = intl.formatMessage({
@@ -278,46 +302,48 @@ const Login: React.FC = () => {
                   },
                 ]}
               />
-              <Row>
-                <Col flex={3}>
-                  <ProFormText
-                    style={{
-                      float: 'right',
-                    }}
-                    name="code"
-                    placeholder={intl.formatMessage({
-                      id: 'pages.login.captcha.placeholder',
-                      defaultMessage: '请输入验证',
-                    })}
-                    rules={[
-                      {
-                        required: true,
-                        message: (
-                          <FormattedMessage
-                            id="pages.searchTable.updateForm.ruleName.nameRules"
-                            defaultMessage="请输入验证啊"
-                          />
-                        ),
-                      },
-                    ]}
-                  />
-                </Col>
-                <Col flex={2}>
-                  <Image
-                    src={captchaCode || undefined}
-                    alt="验证码"
-                    style={{
-                      display: 'inline-block',
-                      verticalAlign: 'top',
-                      cursor: 'pointer',
-                      paddingLeft: '10px',
-                      width: '100px',
-                    }}
-                    preview={false}
-                    onClick={() => getCaptchaCode()}
-                  />
-                </Col>
-              </Row>
+              {captchaEnabled && (
+                <Row>
+                  <Col flex={3}>
+                    <ProFormText
+                      style={{
+                        float: 'right',
+                      }}
+                      name="code"
+                      placeholder={intl.formatMessage({
+                        id: 'pages.login.captcha.placeholder',
+                        defaultMessage: '请输入验证',
+                      })}
+                      rules={[
+                        {
+                          required: true,
+                          message: (
+                            <FormattedMessage
+                              id="pages.searchTable.updateForm.ruleName.nameRules"
+                              defaultMessage="请输入验证啊"
+                            />
+                          ),
+                        },
+                      ]}
+                    />
+                  </Col>
+                  <Col flex={2}>
+                    <Image
+                      src={captchaCode || undefined}
+                      alt="验证码"
+                      style={{
+                        display: 'inline-block',
+                        verticalAlign: 'top',
+                        cursor: 'pointer',
+                        paddingLeft: '10px',
+                        width: '100px',
+                      }}
+                      preview={false}
+                      onClick={() => getCaptchaCode()}
+                    />
+                  </Col>
+                </Row>
+              )}
             </>
           )}
 

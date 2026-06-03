@@ -5,6 +5,7 @@ import { useIntl, FormattedMessage, useAccess, useParams, history } from '@umijs
 import type { FormInstance } from 'antd';
 import { Button, Modal } from 'antd';
 import { ActionType, FooterToolbar, PageContainer, ProColumns, ProTable } from '@ant-design/pro-components';
+import { getPersistedProTableSearch } from '@/utils/proTableSearch';
 import { PlusOutlined, DeleteOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { getJobLogList, removeJobLog, exportJobLog } from '@/services/monitor/jobLog';
 import DetailForm from './detail';
@@ -223,9 +224,7 @@ const JobLogTableList: React.FC = () => {
           formRef={formTableRef}
           rowKey="jobLogId"
           key="job-logList"
-          search={{
-            labelWidth: 120,
-          }}
+          search={getPersistedProTableSearch({ labelWidth: 120 })}
           toolBarRender={() => [
             <Button
               type="primary"

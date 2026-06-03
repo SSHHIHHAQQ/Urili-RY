@@ -135,6 +135,16 @@ public interface ISysMenuService
     public void updateMenuSort(String[] menuIds, String[] orderNums);
 
     /**
+     * 级联修改菜单状态
+     *
+     * @param menuIds 菜单ID
+     * @param status 菜单状态
+     * @param updateBy 更新人
+     * @return 结果
+     */
+    public int updateMenuStatusCascade(Long[] menuIds, String status, String updateBy);
+
+    /**
      * 删除菜单管理信息
      * 
      * @param menuId 菜单ID

@@ -3,9 +3,11 @@ import { message } from '@/utils/feedback';
 import React, { useState, useRef, useEffect } from 'react';
 import { useIntl, FormattedMessage, useAccess } from '@umijs/max';
 import { Button, Modal } from 'antd';
-import { ActionType, FooterToolbar, PageContainer, ProColumns, ProTable } from '@ant-design/pro-components';
-import { PlusOutlined, DeleteOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
-import { getMenuList, removeMenu, addMenu, updateMenu } from '@/services/system/menu';
+import { FooterToolbar, PageContainer, ProTable } from '@ant-design/pro-components';
+import { getPersistedProTableSearch } from '@/utils/proTableSearch';
+import type { ActionType, ProColumns } from '@ant-design/pro-components';
+import { PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, PoweroffOutlined, StopOutlined } from '@ant-design/icons';
+import { getMenuList, removeMenu, addMenu, updateMenu, cascadeMenuStatus } from '@/services/system/menu';
 import UpdateForm from './edit';
 import { getDictValueEnum } from '@/services/system/dict';
 import { buildTreeData } from '@/utils/tree';
@@ -24,7 +26,7 @@ const handleAdd = async (fields: API.System.Menu) => {
     hide();
     message.success('添加成功');
     return true;
-  } catch (error) {
+  } catch {
     hide();
     message.error('添加失败请重试！');
     return false;
@@ -43,7 +45,7 @@ const handleUpdate = async (fields: API.System.Menu) => {
     hide();
     message.success('配置成功');
     return true;
-  } catch (error) {
+  } catch {
     hide();
     message.error('配置失败请重试！');
     return false;
@@ -63,7 +65,7 @@ const handleRemove = async (selectedRows: API.System.Menu[]) => {
     hide();
     message.success('删除成功，即将刷新');
     return true;
-  } catch (error) {
+  } catch {
     hide();
     message.error('删除失败，请重试');
     return false;
@@ -79,9 +81,25 @@ const handleRemoveOne = async (selectedRow: API.System.Menu) => {
     hide();
     message.success('删除成功，即将刷新');
     return true;
-  } catch (error) {
+  } catch {
     hide();
     message.error('删除失败，请重试');
+    return false;
+  }
+};
+
+const handleCascadeStatus = async (selectedRows: API.System.Menu[], status: string) => {
+  const actionText = status === '0' ? '启用' : '停用';
+  if (!selectedRows?.length) return true;
+  const hide = message.loading(`正在级联${actionText}`);
+  try {
+    await cascadeMenuStatus(selectedRows.map((row) => row.menuId).join(','), status);
+    hide();
+    message.success(`级联${actionText}成功，即将刷新`);
+    return true;
+  } catch {
+    hide();
+    message.error(`级联${actionText}失败，请重试`);
     return false;
   }
 };
@@ -112,6 +130,24 @@ const MenuTableList: React.FC = () => {
       setStatusOptions(data);
     });
   }, []);
+
+  const showCascadeStatusConfirm = (status: string) => {
+    const actionText = status === '0' ? '启用' : '停用';
+    Modal.confirm({
+      title: `确认级联${actionText}所选菜单吗？`,
+      icon: <ExclamationCircleOutlined />,
+      content: `将同时${actionText}选中菜单及其所有下级菜单、按钮权限，请谨慎操作。`,
+      okText: '确认',
+      cancelText: '取消',
+      onOk: async () => {
+        const success = await handleCascadeStatus(selectedRows, status);
+        if (success) {
+          setSelectedRows([]);
+          actionRef.current?.reloadAndRest?.();
+        }
+      },
+    });
+  };
 
   const columns: ProColumns<API.System.Menu>[] = [
     {
@@ -210,9 +246,9 @@ const MenuTableList: React.FC = () => {
           actionRef={actionRef}
           rowKey="menuId"
           key="menuList"
-          search={{
-            labelWidth: 120,
-          }}
+          search={getPersistedProTableSearch({ labelWidth: 120 })}
+          tableAlertRender={false}
+          tableAlertOptionRender={false}
           toolBarRender={() => [
             <Button
               type="primary"
@@ -224,6 +260,23 @@ const MenuTableList: React.FC = () => {
               }}
             >
               <PlusOutlined /> <FormattedMessage id="pages.searchTable.new" defaultMessage="新建" />
+            </Button>,
+            <Button
+              key="cascadeEnable"
+              hidden={selectedRows?.length === 0 || !access.hasPerms('system:menu:edit')}
+              onClick={() => showCascadeStatusConfirm('0')}
+            >
+              <PoweroffOutlined />
+              级联启用
+            </Button>,
+            <Button
+              key="cascadeDisable"
+              danger
+              hidden={selectedRows?.length === 0 || !access.hasPerms('system:menu:edit')}
+              onClick={() => showCascadeStatusConfirm('1')}
+            >
+              <StopOutlined />
+              级联停用
             </Button>,
             <Button
               type="primary"
@@ -283,6 +336,21 @@ const MenuTableList: React.FC = () => {
             </div>
           }
         >
+          <Button
+            key="cascadeEnable"
+            hidden={!access.hasPerms('system:menu:edit')}
+            onClick={() => showCascadeStatusConfirm('0')}
+          >
+            级联启用
+          </Button>
+          <Button
+            key="cascadeDisable"
+            danger
+            hidden={!access.hasPerms('system:menu:edit')}
+            onClick={() => showCascadeStatusConfirm('1')}
+          >
+            级联停用
+          </Button>
           <Button
             key="remove"
             danger

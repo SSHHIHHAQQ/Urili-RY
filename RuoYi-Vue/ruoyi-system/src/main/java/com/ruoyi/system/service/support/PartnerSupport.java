@@ -1,0 +1,159 @@
+package com.ruoyi.system.service.support;
+
+import java.time.LocalDate;
+import java.util.List;
+import java.util.function.Function;
+import org.apache.commons.lang3.StringUtils;
+import com.ruoyi.common.exception.ServiceException;
+import com.ruoyi.system.domain.PartnerProfile;
+import com.ruoyi.system.domain.PartnerProfile.Attachment;
+
+/**
+ * Shared internal helpers for buyer/seller modules.
+ */
+public class PartnerSupport
+{
+    public static final String STATUS_NORMAL = "0";
+
+    public static final String ACCOUNT_ROLE_OWNER = "OWNER";
+
+    public static final String SUBJECT_TYPE_COMPANY = "COMPANY";
+
+    public static final String DEFAULT_LEVEL = "L1";
+
+    public static final String DEFAULT_OWNER_PASSWORD = "U12346";
+
+    private static final List<String> SUBJECT_TYPES = List.of("COMPANY", "PERSON", "OTHER");
+
+    private static final int NO_BASE_YEAR = 2026;
+
+    private static final int NO_MAX_DAILY_SEQUENCE = 9999;
+
+    private PartnerSupport()
+    {
+    }
+
+    public static void normalizeCommonProfile(PartnerProfile profile)
+    {
+        profile.setUsername(StringUtils.trimToEmpty(profile.getUsername()));
+        profile.setStatus(StringUtils.defaultIfBlank(profile.getStatus(), STATUS_NORMAL));
+        profile.setLegalId(StringUtils.trimToEmpty(profile.getLegalId()));
+        profile.setBusinessLicenseNo(StringUtils.trimToEmpty(profile.getBusinessLicenseNo()));
+        profile.setCountryCode(trimRequired(profile.getCountryCode(), "国家/地区不能为空").toUpperCase());
+        if (profile.getCountryCode().length() != 2)
+        {
+            throw new ServiceException("国家/地区代码必须是2位代码");
+        }
+        profile.setStateProvince(StringUtils.trimToEmpty(profile.getStateProvince()));
+        profile.setCity(trimRequired(profile.getCity(), "城市不能为空"));
+        profile.setPostalCode(trimRequired(profile.getPostalCode(), "邮编不能为空"));
+        profile.setAddressLine1(trimRequired(profile.getAddressLine1(), "地址1不能为空"));
+        profile.setAddressLine2(StringUtils.trimToEmpty(profile.getAddressLine2()));
+        profile.setContactName(trimRequired(profile.getContactName(), "联系人不能为空"));
+        profile.setContactPhone(trimRequired(profile.getContactPhone(), "手机号不能为空"));
+        profile.setContactEmail(StringUtils.trimToEmpty(profile.getContactEmail()));
+        normalizeAttachment(profile);
+    }
+
+    public static String normalizeSubjectType(String value)
+    {
+        String type = trimRequired(StringUtils.defaultIfBlank(value, SUBJECT_TYPE_COMPANY), "主体类型不能为空").toUpperCase();
+        if (!SUBJECT_TYPES.contains(type))
+        {
+            throw new ServiceException("主体类型不正确");
+        }
+        return type;
+    }
+
+    public static String normalizeLevel(String value, String message)
+    {
+        return trimRequired(StringUtils.defaultIfBlank(value, DEFAULT_LEVEL), message).toUpperCase();
+    }
+
+    public static void assertStatus(String status)
+    {
+        if (!STATUS_NORMAL.equals(status) && !"1".equals(status))
+        {
+            throw new ServiceException("状态不正确");
+        }
+    }
+
+    public static synchronized String generateNo(String prefix, Function<String, String> maxNoLookup)
+    {
+        LocalDate today = LocalDate.now();
+        String noPrefix = buildNoPrefix(prefix, today);
+        String maxNo = maxNoLookup.apply(noPrefix);
+        int nextSequence = 1;
+
+        if (StringUtils.isNotBlank(maxNo))
+        {
+            String sequenceText = maxNo.substring(noPrefix.length());
+            nextSequence = Integer.parseInt(sequenceText) + 1;
+        }
+
+        if (nextSequence > NO_MAX_DAILY_SEQUENCE)
+        {
+            throw new ServiceException("今日编号已达上限9999");
+        }
+
+        return noPrefix + String.format("%04d", nextSequence);
+    }
+
+    public static String buildOwnerNickName(String name, String shortName, String contactName)
+    {
+        String value = StringUtils.defaultIfBlank(contactName, StringUtils.defaultIfBlank(shortName, name));
+        return limitLength(value, 30);
+    }
+
+    public static String trimRequired(String value, String message)
+    {
+        String trimmed = StringUtils.trimToEmpty(value);
+        if (StringUtils.isBlank(trimmed))
+        {
+            throw new ServiceException(message);
+        }
+        return trimmed;
+    }
+
+    public static String limitLength(String value, int maxLength)
+    {
+        String trimmed = StringUtils.trimToEmpty(value);
+        if (trimmed.length() <= maxLength)
+        {
+            return trimmed;
+        }
+        return trimmed.substring(0, maxLength);
+    }
+
+    private static String buildNoPrefix(String prefix, LocalDate date)
+    {
+        int yearOffset = date.getYear() - NO_BASE_YEAR;
+        if (yearOffset < 0 || yearOffset > 25)
+        {
+            throw new ServiceException("编号年份超出编码范围");
+        }
+
+        char yearCode = (char) ('A' + yearOffset);
+        char monthCode = (char) ('A' + date.getMonthValue() - 1);
+        return prefix + yearCode + monthCode + String.format("%02d", date.getDayOfMonth());
+    }
+
+    private static void normalizeAttachment(PartnerProfile profile)
+    {
+        Attachment attachment = profile.getAttachment();
+        if (attachment == null)
+        {
+            profile.setAttachment(null);
+            return;
+        }
+
+        attachment.setFileName(trimRequired(attachment.getFileName(), "附件名称不能为空"));
+        attachment.setMimeType(trimRequired(StringUtils.defaultIfBlank(attachment.getMimeType(), "application/octet-stream"), "附件类型不能为空"));
+        if (attachment.getSizeBytes() == null || attachment.getSizeBytes() < 0)
+        {
+            attachment.setSizeBytes(0L);
+        }
+        attachment.setFileUrl(trimRequired(attachment.getFileUrl(), "附件地址不能为空"));
+        profile.setAttachment(attachment);
+    }
+}

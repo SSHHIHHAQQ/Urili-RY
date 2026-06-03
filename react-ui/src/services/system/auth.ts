@@ -1,7 +1,15 @@
 import { request } from '@umijs/max';
 
+export type CaptchaImageResult = {
+  captchaEnabled?: boolean;
+  uuid?: string;
+  img?: string;
+  code?: number;
+  msg?: string;
+};
+
 export async function getCaptchaImg(params?: Record<string, any>, options?: Record<string, any>) {
-  return request('/api/captchaImage', {
+  return request<CaptchaImageResult>('/api/captchaImage', {
     method: 'GET',
     params: {
       ...params,

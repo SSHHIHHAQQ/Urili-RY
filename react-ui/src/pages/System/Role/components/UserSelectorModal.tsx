@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Modal } from 'antd';
 import { FormattedMessage, useIntl } from '@umijs/max';
 import { ActionType, ParamsType, ProColumns, ProTable, RequestData } from '@ant-design/pro-components';
+import { getPersistedProTableSearch } from '@/utils/proTableSearch';
 import { getDictValueEnum } from '@/services/system/dict';
 import DictTag from '@/components/DictTag';
 
@@ -105,9 +106,7 @@ const UserSelectorModal: React.FC<DataScopeFormProps> = (props) => {
         actionRef={actionRef}
         rowKey="userId"
         key="userList"
-        search={{
-          labelWidth: 120,
-        }}
+        search={getPersistedProTableSearch({ labelWidth: 120 })}
         toolbar={{}}
         params={props.params}
         request={props.request}

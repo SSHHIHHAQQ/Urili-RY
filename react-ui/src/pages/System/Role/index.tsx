@@ -5,6 +5,7 @@ import { useIntl, FormattedMessage, useAccess, history } from '@umijs/max';
 import type { DataNode } from 'antd/es/tree';
 import { Button, Modal, Dropdown, FormInstance, Space, Switch, message as antdMessage } from 'antd';
 import { ActionType, FooterToolbar, PageContainer, ProColumns, ProTable } from '@ant-design/pro-components';
+import { getPersistedProTableSearch } from '@/utils/proTableSearch';
 import { PlusOutlined, EditOutlined, DeleteOutlined, ExclamationCircleOutlined, DownOutlined } from '@ant-design/icons';
 import { getRoleList, removeRole, addRole, updateRole, exportRole, getRoleMenuList, changeRoleStatus, updateRoleDataScope, getDeptTreeSelect, getRole } from '@/services/system/role';
 import UpdateForm from './edit';
@@ -349,9 +350,7 @@ const RoleTableList: React.FC = () => {
           formRef={formTableRef}
           rowKey="roleId"
           key="roleList"
-          search={{
-            labelWidth: 120,
-          }}
+          search={getPersistedProTableSearch({ labelWidth: 120 })}
           toolBarRender={() => [
             <Button
               type="primary"

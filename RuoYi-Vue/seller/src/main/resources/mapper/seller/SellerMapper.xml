@@ -1,0 +1,248 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.seller.mapper.SellerMapper">
+
+    <resultMap type="Seller" id="SellerResult">
+        <id     property="sellerId"            column="seller_id"             />
+        <result property="sellerNo"            column="seller_no"             />
+        <result property="sellerCode"          column="seller_code"           />
+        <result property="sellerName"          column="seller_name"           />
+        <result property="sellerShortName"     column="seller_short_name"     />
+        <result property="sellerType"          column="seller_type"           />
+        <result property="sellerLevel"         column="seller_level"          />
+        <result property="status"              column="status"                />
+        <result property="username"            column="username"              />
+        <result property="legalId"             column="legal_id"              />
+        <result property="businessLicenseNo"   column="business_license_no"   />
+        <result property="countryCode"         column="country_code"          />
+        <result property="stateProvince"       column="state_province"        />
+        <result property="city"                column="city"                  />
+        <result property="postalCode"          column="postal_code"           />
+        <result property="addressLine1"        column="address_line1"         />
+        <result property="addressLine2"        column="address_line2"         />
+        <result property="contactName"         column="contact_name"          />
+        <result property="contactPhone"        column="contact_phone"         />
+        <result property="contactEmail"        column="contact_email"         />
+        <result property="attachmentFileName"  column="attachment_file_name"  />
+        <result property="attachmentMimeType"  column="attachment_mime_type"  />
+        <result property="attachmentSizeBytes" column="attachment_size_bytes" />
+        <result property="attachmentFileUrl"   column="attachment_file_url"   />
+        <result property="accountCount"        column="account_count"         />
+        <result property="lastLoginTime"       column="last_login_time"       />
+        <result property="createBy"            column="create_by"             />
+        <result property="createTime"          column="create_time"           />
+        <result property="updateBy"            column="update_by"             />
+        <result property="updateTime"          column="update_time"           />
+        <result property="remark"              column="remark"                />
+    </resultMap>
+
+    <resultMap type="SellerAccount" id="SellerAccountResult">
+        <id     property="sellerAccountId" column="seller_account_id" />
+        <result property="sellerId"        column="seller_id"         />
+        <result property="userId"          column="user_id"           />
+        <result property="accountRole"     column="account_role"      />
+        <result property="status"          column="status"            />
+        <result property="userName"        column="user_name"         />
+        <result property="nickName"        column="nick_name"         />
+        <result property="email"           column="email"             />
+        <result property="phonenumber"     column="phonenumber"       />
+        <result property="userStatus"      column="user_status"       />
+        <result property="createBy"        column="create_by"         />
+        <result property="createTime"      column="create_time"       />
+        <result property="updateBy"        column="update_by"         />
+        <result property="updateTime"      column="update_time"       />
+        <result property="remark"          column="remark"            />
+    </resultMap>
+
+    <sql id="selectSellerColumns">
+        select s.seller_id, s.seller_no, s.seller_code, s.seller_name,
+               s.seller_short_name, s.seller_type, s.seller_level, s.status,
+               owner.user_name as username,
+               s.legal_id, s.business_license_no, s.country_code, s.state_province, s.city,
+               s.postal_code, s.address_line1, s.address_line2, s.contact_name, s.contact_phone,
+               s.contact_email, s.attachment_file_name, s.attachment_mime_type,
+               s.attachment_size_bytes, s.attachment_file_url, s.create_by, s.create_time,
+               s.update_by, s.update_time, s.remark,
+               coalesce(account_stat.account_count, 0) as account_count,
+               owner.login_date as last_login_time
+    </sql>
+
+    <sql id="sellerJoins">
+        left join seller_account owner_link
+               on owner_link.seller_id = s.seller_id
+              and owner_link.account_role = 'OWNER'
+              and owner_link.seller_account_id = (
+                    select min(owner_pick.seller_account_id)
+                    from seller_account owner_pick
+                    where owner_pick.seller_id = s.seller_id
+                      and owner_pick.account_role = 'OWNER'
+              )
+        left join sys_user owner on owner.user_id = owner_link.user_id
+        left join (
+            select seller_id, count(*) as account_count
+            from seller_account
+            group by seller_id
+        ) account_stat on account_stat.seller_id = s.seller_id
+    </sql>
+
+    <select id="selectSellerList" parameterType="Seller" resultMap="SellerResult">
+        <include refid="selectSellerColumns"/>
+        from seller s
+        <include refid="sellerJoins"/>
+        where 1 = 1
+        <if test="sellerNo != null and sellerNo != ''">
+            and s.seller_no like concat('%', #{sellerNo}, '%')
+        </if>
+        <if test="sellerCode != null and sellerCode != ''">
+            and s.seller_code like concat('%', #{sellerCode}, '%')
+        </if>
+        <if test="sellerName != null and sellerName != ''">
+            and s.seller_name like concat('%', #{sellerName}, '%')
+        </if>
+        <if test="companyName != null and companyName != ''">
+            and s.seller_name like concat('%', #{companyName}, '%')
+        </if>
+        <if test="sellerShortName != null and sellerShortName != ''">
+            and s.seller_short_name like concat('%', #{sellerShortName}, '%')
+        </if>
+        <if test="username != null and username != ''">
+            and owner.user_name like concat('%', #{username}, '%')
+        </if>
+        <if test="sellerLevel != null and sellerLevel != ''">
+            and s.seller_level = #{sellerLevel}
+        </if>
+        <if test="status != null and status != ''">
+            and s.status = #{status}
+        </if>
+        <if test="contactPhone != null and contactPhone != ''">
+            and s.contact_phone like concat('%', #{contactPhone}, '%')
+        </if>
+        <if test="countryCode != null and countryCode != ''">
+            and s.country_code = #{countryCode}
+        </if>
+        <if test="stateProvince != null and stateProvince != ''">
+            and s.state_province like concat('%', #{stateProvince}, '%')
+        </if>
+        <if test="city != null and city != ''">
+            and s.city like concat('%', #{city}, '%')
+        </if>
+        order by s.create_time desc, s.seller_id desc
+    </select>
+
+    <select id="selectSellerById" parameterType="Long" resultMap="SellerResult">
+        <include refid="selectSellerColumns"/>
+        from seller s
+        <include refid="sellerJoins"/>
+        where s.seller_id = #{sellerId}
+    </select>
+
+    <select id="selectMaxSellerNoByPrefix" parameterType="String" resultType="String">
+        select max(seller_no)
+        from seller
+        where seller_no like concat(#{sellerNoPrefix}, '%')
+          and length(seller_no) = 9
+    </select>
+
+    <select id="selectSellerByCode" parameterType="String" resultMap="SellerResult">
+        <include refid="selectSellerColumns"/>
+        from seller s
+        <include refid="sellerJoins"/>
+        where s.seller_code = #{sellerCode}
+        limit 1
+    </select>
+
+    <insert id="insertSeller" parameterType="Seller" useGeneratedKeys="true" keyProperty="sellerId">
+        insert into seller(
+            seller_no, seller_code, seller_name, seller_short_name,
+            seller_type, seller_level, status, legal_id, business_license_no, country_code,
+            state_province, city, postal_code, address_line1, address_line2, contact_name,
+            contact_phone, contact_email, attachment_file_name, attachment_mime_type,
+            attachment_size_bytes, attachment_file_url, create_by, create_time, remark
+        ) values (
+            #{sellerNo}, #{sellerCode}, #{sellerName}, #{sellerShortName},
+            #{sellerType}, #{sellerLevel}, #{status}, #{legalId}, #{businessLicenseNo}, #{countryCode},
+            #{stateProvince}, #{city}, #{postalCode}, #{addressLine1}, #{addressLine2}, #{contactName},
+            #{contactPhone}, #{contactEmail}, #{attachmentFileName}, #{attachmentMimeType},
+            #{attachmentSizeBytes}, #{attachmentFileUrl}, #{createBy}, sysdate(), #{remark}
+        )
+    </insert>
+
+    <update id="updateSeller" parameterType="Seller">
+        update seller
+        set seller_code = #{sellerCode},
+            seller_name = #{sellerName},
+            seller_short_name = #{sellerShortName},
+            seller_type = #{sellerType},
+            seller_level = #{sellerLevel},
+            status = #{status},
+            legal_id = #{legalId},
+            business_license_no = #{businessLicenseNo},
+            country_code = #{countryCode},
+            state_province = #{stateProvince},
+            city = #{city},
+            postal_code = #{postalCode},
+            address_line1 = #{addressLine1},
+            address_line2 = #{addressLine2},
+            contact_name = #{contactName},
+            contact_phone = #{contactPhone},
+            contact_email = #{contactEmail},
+            attachment_file_name = #{attachmentFileName},
+            attachment_mime_type = #{attachmentMimeType},
+            attachment_size_bytes = #{attachmentSizeBytes},
+            attachment_file_url = #{attachmentFileUrl},
+            update_by = #{updateBy},
+            update_time = sysdate(),
+            remark = #{remark}
+        where seller_id = #{sellerId}
+    </update>
+
+    <update id="updateSellerStatus">
+        update seller
+        set status = #{status},
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where seller_id = #{sellerId}
+    </update>
+
+    <select id="selectSellerAccountList" resultMap="SellerAccountResult">
+        select a.seller_account_id, a.seller_id, a.user_id, a.account_role, a.status,
+               a.create_by, a.create_time, a.update_by, a.update_time, a.remark,
+               u.user_name, u.nick_name, u.email, u.phonenumber, u.status as user_status
+        from seller_account a
+        left join sys_user u on u.user_id = a.user_id
+        where a.seller_id = #{sellerId}
+        order by a.create_time desc, a.seller_account_id desc
+    </select>
+
+    <select id="selectSellerAccountByUserId" parameterType="Long" resultMap="SellerAccountResult">
+        select a.seller_account_id, a.seller_id, a.user_id, a.account_role, a.status,
+               a.create_by, a.create_time, a.update_by, a.update_time, a.remark,
+               u.user_name, u.nick_name, u.email, u.phonenumber, u.status as user_status
+        from seller_account a
+        left join sys_user u on u.user_id = a.user_id
+        where a.user_id = #{userId}
+        limit 1
+    </select>
+
+    <select id="selectOwnerSellerAccountBySellerId" parameterType="Long" resultMap="SellerAccountResult">
+        select a.seller_account_id, a.seller_id, a.user_id, a.account_role, a.status,
+               a.create_by, a.create_time, a.update_by, a.update_time, a.remark,
+               u.user_name, u.nick_name, u.email, u.phonenumber, u.status as user_status
+        from seller_account a
+        left join sys_user u on u.user_id = a.user_id
+        where a.seller_id = #{sellerId}
+          and a.account_role = 'OWNER'
+        order by a.seller_account_id asc
+        limit 1
+    </select>
+
+    <insert id="insertSellerAccount" parameterType="SellerAccount" useGeneratedKeys="true" keyProperty="sellerAccountId">
+        insert into seller_account(
+            seller_id, user_id, account_role, status, create_by, create_time, remark
+        ) values (
+            #{sellerId}, #{userId}, #{accountRole}, #{status}, #{createBy}, sysdate(), #{remark}
+        )
+    </insert>
+</mapper>

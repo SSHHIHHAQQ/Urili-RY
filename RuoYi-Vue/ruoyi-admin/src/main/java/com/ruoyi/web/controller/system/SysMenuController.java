@@ -19,6 +19,7 @@ import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.core.domain.entity.SysMenu;
 import com.ruoyi.common.enums.BusinessType;
+import com.ruoyi.common.core.text.Convert;
 import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.system.service.ISysMenuService;
 
@@ -142,6 +143,27 @@ public class SysMenuController extends BaseController
         String[] orderNums = params.get("orderNums").split(",");
         menuService.updateMenuSort(menuIds, orderNums);
         return success();
+    }
+
+    /**
+     * 级联启停菜单
+     */
+    @PreAuthorize("@ss.hasPermi('system:menu:edit')")
+    @Log(title = "菜单级联启停", businessType = BusinessType.UPDATE)
+    @PutMapping("/cascadeStatus")
+    public AjaxResult cascadeStatus(@RequestBody Map<String, String> params)
+    {
+        String menuIds = params.get("menuIds");
+        String status = params.get("status");
+        if (StringUtils.isEmpty(menuIds))
+        {
+            return error("请选择需要级联启停的菜单");
+        }
+        if (!UserConstants.NORMAL.equals(status) && !UserConstants.EXCEPTION.equals(status))
+        {
+            return error("菜单状态参数不正确");
+        }
+        return toAjax(menuService.updateMenuStatusCascade(Convert.toLongArray(menuIds), status, getUsername()));
     }
 
     /**
