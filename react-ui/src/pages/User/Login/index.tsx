@@ -1,4 +1,3 @@
-import Footer from '@/components/Footer';
 import { getCaptchaImg, login } from '@/services/system/auth';
 import { getFakeCaptcha } from '@/services/ant-design-pro/login';
 import {
@@ -447,7 +446,6 @@ const Login: React.FC = () => {
           </div>
         </LoginForm>
       </div>
-      <Footer />
     </div>
   );
 };

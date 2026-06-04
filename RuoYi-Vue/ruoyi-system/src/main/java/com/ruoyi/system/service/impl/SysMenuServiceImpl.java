@@ -384,6 +384,39 @@ public class SysMenuServiceImpl implements ISysMenuService
     }
 
     /**
+     * 级联修改菜单显示状态
+     *
+     * @param menuIds 菜单ID
+     * @param visible 显示状态
+     * @param updateBy 更新人
+     * @return 结果
+     */
+    @Override
+    @Transactional
+    public int updateMenuVisibleCascade(Long[] menuIds, String visible, String updateBy)
+    {
+        Set<Long> targetMenuIds = new HashSet<>();
+        if (menuIds != null)
+        {
+            for (Long menuId : menuIds)
+            {
+                if (StringUtils.isNotNull(menuId))
+                {
+                    targetMenuIds.add(menuId);
+                }
+            }
+        }
+        if (targetMenuIds.isEmpty())
+        {
+            throw new ServiceException("请选择需要级联显隐的菜单");
+        }
+
+        List<SysMenu> menus = menuMapper.selectMenuList(new SysMenu());
+        collectChildMenuIds(menus, targetMenuIds);
+        return menuMapper.updateMenuVisibleByIds(new ArrayList<>(targetMenuIds), visible, updateBy);
+    }
+
+    /**
      * 补齐选中菜单的所有子级菜单ID
      */
     private void collectChildMenuIds(List<SysMenu> menus, Set<Long> targetMenuIds)

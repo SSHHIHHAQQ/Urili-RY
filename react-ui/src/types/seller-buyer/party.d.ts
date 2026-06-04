@@ -8,7 +8,9 @@ declare namespace API.Partner {
   }
 
   export interface PortalAccountBase {
-    userId?: number;
+    accountId?: number;
+    deptId?: number;
+    deptName?: string;
     accountRole?: string;
     status?: string;
     userName?: string;
@@ -17,6 +19,9 @@ declare namespace API.Partner {
     email?: string;
     phonenumber?: string;
     userStatus?: string;
+    lastLoginIp?: string;
+    lastLoginTime?: string;
+    pwdUpdateTime?: string;
     createBy?: string;
     createTime?: string;
     updateBy?: string;
@@ -24,12 +29,46 @@ declare namespace API.Partner {
     remark?: string;
   }
 
+  export interface PortalDept {
+    deptId?: number;
+    subjectId?: number;
+    parentId?: number;
+    ancestors?: string;
+    deptName?: string;
+    parentName?: string;
+    orderNum?: number;
+    leader?: string;
+    phone?: string;
+    email?: string;
+    status?: string;
+    children?: PortalDept[];
+  }
+
+  export interface PortalTreeNode {
+    id: number;
+    label: string;
+    children?: PortalTreeNode[];
+  }
+
+  export interface PortalDeptListResult {
+    code: number;
+    msg: string;
+    data: PortalDept[];
+  }
+
+  export interface PortalDeptTreeResult {
+    code: number;
+    msg: string;
+    data: PortalTreeNode[];
+  }
+
   export interface DirectLoginResult {
     token: string;
+    ticketId?: number;
     loginUrl: string;
     expireMinutes: number;
     expireTime: string;
-    userId: number;
+    accountId: number;
     username: string;
   }
 

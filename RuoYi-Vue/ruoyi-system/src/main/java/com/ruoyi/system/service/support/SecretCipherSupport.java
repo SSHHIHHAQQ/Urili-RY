@@ -1,4 +1,4 @@
-package com.ruoyi.integration.support;
+package com.ruoyi.system.service.support;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -98,7 +98,7 @@ public class SecretCipherSupport
     {
         if (StringUtils.isBlank(encryptionKey))
         {
-            throw new ServiceException("缺少 URILI_SECRET_ENCRYPTION_KEY，不能保存或使用上游系统凭证");
+            throw new ServiceException("缺少 URILI_SECRET_ENCRYPTION_KEY，不能保存或使用外部系统凭证");
         }
         byte[] raw = encryptionKey.trim().getBytes(StandardCharsets.UTF_8);
         byte[] keyBytes;

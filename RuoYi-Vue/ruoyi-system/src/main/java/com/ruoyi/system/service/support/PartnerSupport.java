@@ -18,6 +18,8 @@ public class PartnerSupport
 
     public static final String ACCOUNT_ROLE_OWNER = "OWNER";
 
+    public static final String ACCOUNT_ROLE_STAFF = "STAFF";
+
     public static final String SUBJECT_TYPE_COMPANY = "COMPANY";
 
     public static final String DEFAULT_LEVEL = "L1";

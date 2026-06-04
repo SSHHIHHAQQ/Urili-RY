@@ -219,6 +219,17 @@
 	    </foreach>
 	</update>
 
+	<update id="updateMenuVisibleByIds">
+	    update sys_menu
+	    set visible = #{visible},
+	        update_by = #{updateBy},
+	        update_time = sysdate()
+	    where menu_id in
+	    <foreach collection="menuIds" item="menuId" open="(" separator="," close=")">
+	        #{menuId}
+	    </foreach>
+	</update>
+
 	<delete id="deleteMenuById" parameterType="Long">
 	    delete from sys_menu where menu_id = #{menuId}
 	</delete>

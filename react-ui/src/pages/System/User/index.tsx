@@ -1,10 +1,10 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useIntl, FormattedMessage, useAccess } from '@umijs/max';
-import { App, Button, Card, Col, Dropdown, FormInstance, Modal, Row, Space, Switch } from 'antd';
-import { ActionType, FooterToolbar, PageContainer, ProColumns, ProTable } from '@ant-design/pro-components';
+import { App, Button, Card, Col, Dropdown, Modal, Row, Switch } from 'antd';
+import { type ActionType, FooterToolbar, PageContainer, type ProColumns, ProTable } from '@ant-design/pro-components';
 import { getPersistedProTableSearch } from '@/utils/proTableSearch';
-import { PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, DownOutlined, EditOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, DownOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { getUserList, removeUser, addUser, updateUser, exportUser, getUser, changeUserStatus, updateAuthRole, resetUserPwd } from '@/services/system/user';
 import UpdateForm from './edit';
 import { getDictValueEnum } from '@/services/system/dict';
@@ -24,7 +24,7 @@ import AuthRoleForm from './components/AuthRole';
  * */
 
 const UserTableList: React.FC = () => {
-  const { message, modal } = App.useApp();
+  const { message } = App.useApp();
 
   const handleAdd = async (fields: API.System.User) => {
     const hide = message.loading('正在添加');
@@ -33,7 +33,7 @@ const UserTableList: React.FC = () => {
       hide();
       message.success('添加成功');
       return true;
-    } catch (error) {
+    } catch {
       hide();
       message.error('添加失败请重试！');
       return false;
@@ -41,14 +41,13 @@ const UserTableList: React.FC = () => {
   };
 
   const handleUpdate = async (fields: API.System.User) => {
-    const { message } = App.useApp();
     const hide = message.loading('正在配置');
     try {
       await updateUser(fields);
       hide();
       message.success('配置成功');
       return true;
-    } catch (error) {
+    } catch {
       hide();
       message.error('配置失败请重试！');
       return false;
@@ -64,7 +63,7 @@ const UserTableList: React.FC = () => {
       hide();
       message.success('删除成功，即将刷新');
       return true;
-    } catch (error) {
+    } catch {
       hide();
       message.error('删除失败，请重试');
       return false;
@@ -72,7 +71,6 @@ const UserTableList: React.FC = () => {
   };
 
   const handleRemoveOne = async (selectedRow: API.System.User) => {
-    const { message } = App.useApp();
     const hide = message.loading('正在删除');
     if (!selectedRow) return true;
     try {
@@ -81,7 +79,7 @@ const UserTableList: React.FC = () => {
       hide();
       message.success('删除成功，即将刷新');
       return true;
-    } catch (error) {
+    } catch {
       hide();
       message.error('删除失败，请重试');
       return false;
@@ -89,14 +87,13 @@ const UserTableList: React.FC = () => {
   };
 
   const handleExport = async () => {
-    const { message } = App.useApp();
     const hide = message.loading('正在导出');
     try {
       await exportUser();
       hide();
       message.success('导出成功');
       return true;
-    } catch (error) {
+    } catch {
       hide();
       message.error('导出失败，请重试');
       return false;
@@ -138,8 +135,7 @@ const UserTableList: React.FC = () => {
   }, []);
 
   const showChangeStatusConfirm = (record: API.System.User) => {
-    const { message } = App.useApp();
-    let text = record.status === "1" ? "启用" : "停用";
+    const text = record.status === "1" ? "启用" : "停用";
     const newStatus = record.status === '0' ? '1' : '0';
     Modal.confirm({
       title: `确认要${text}${record.userName}用户吗？`,
@@ -237,7 +233,6 @@ const UserTableList: React.FC = () => {
           type="link"
           size="small"
           key="edit"
-          icon=<EditOutlined />
           hidden={!access.hasPerms('system:user:edit')}
           onClick={async () => {
             fetchUserInfo(record.userId);
@@ -253,7 +248,6 @@ const UserTableList: React.FC = () => {
           type="link"
           size="small"
           danger
-          icon=<DeleteOutlined />
           key="batchRemove"
           hidden={!access.hasPerms('system:user:remove')}
           onClick={async () => {
@@ -277,6 +271,7 @@ const UserTableList: React.FC = () => {
         </Button>,
         <Dropdown
           key="more"
+          trigger={['click']}
           menu={{
             items: [
               {
@@ -304,10 +299,7 @@ const UserTableList: React.FC = () => {
           }}
         >
           <a onClick={(e) => e.preventDefault()}>
-            <Space>
-              <DownOutlined />
-              更多
-            </Space>
+            更多 <DownOutlined style={{ fontSize: 10 }} />
           </a>
         </Dropdown>,
       ],

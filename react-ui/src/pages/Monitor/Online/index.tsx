@@ -1,11 +1,9 @@
-import type { FormInstance } from 'antd';
 import { Button, Modal } from 'antd';
 import React, { useRef, useEffect } from 'react';
 import { useIntl, FormattedMessage, useAccess } from '@umijs/max';
 import { getOnlineUserList, forceLogout } from '@/services/monitor/online';
-import { ActionType, ProColumns, ProTable } from '@ant-design/pro-components';
+import { type ActionType, type ProColumns, ProTable } from '@ant-design/pro-components';
 import { getPersistedProTableSearch } from '@/utils/proTableSearch';
-import { DeleteOutlined } from '@ant-design/icons';
 import { message } from '@/utils/feedback';
  
 
@@ -24,7 +22,7 @@ const handleForceLogout = async (selectedRow: API.Monitor.OnlineUserType) => {
     hide();
     message.success('强制下线成功，即将刷新');
     return true;
-  } catch (error) {
+  } catch {
     hide();
     message.error('强制下线失败，请重试');
     return false;
@@ -105,7 +103,6 @@ const OnlineUserTableList: React.FC = () => {
           size="small"
           danger
           key="batchRemove"
-          icon=<DeleteOutlined />
           hidden={!access.hasPerms('monitor:online:forceLogout')}
           onClick={async () => {
             Modal.confirm({

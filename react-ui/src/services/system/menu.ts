@@ -60,6 +60,21 @@ export async function cascadeMenuStatus(menuIds: string, status: string, options
   });
 }
 
+// 级联显隐菜单权限
+export async function cascadeMenuVisible(menuIds: string, visible: string, options?: { [key: string]: any }) {
+  return request<API.Result>('/api/system/menu/cascadeVisible', {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json;charset=UTF-8',
+    },
+    data: {
+      menuIds,
+      visible,
+    },
+    ...(options || {})
+  });
+}
+
 // 删除菜单权限
 export async function removeMenu(ids: string, options?: { [key: string]: any }) {
   return request<API.Result>(`/api/system/menu/${ids}`, {

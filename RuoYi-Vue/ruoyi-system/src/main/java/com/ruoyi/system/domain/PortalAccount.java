@@ -11,7 +11,11 @@ public abstract class PortalAccount extends BaseEntity
 {
     private static final long serialVersionUID = 1L;
 
-    private Long userId;
+    private Long accountId;
+
+    private Long deptId;
+
+    private String deptName;
 
     private String accountRole;
 
@@ -29,14 +33,40 @@ public abstract class PortalAccount extends BaseEntity
 
     private String userStatus;
 
-    public Long getUserId()
+    private String lastLoginIp;
+
+    private java.util.Date lastLoginTime;
+
+    private java.util.Date pwdUpdateTime;
+
+    public Long getAccountId()
     {
-        return userId;
+        return accountId;
     }
 
-    public void setUserId(Long userId)
+    public void setAccountId(Long accountId)
     {
-        this.userId = userId;
+        this.accountId = accountId;
+    }
+
+    public Long getDeptId()
+    {
+        return deptId;
+    }
+
+    public void setDeptId(Long deptId)
+    {
+        this.deptId = deptId;
+    }
+
+    public String getDeptName()
+    {
+        return deptName;
+    }
+
+    public void setDeptName(String deptName)
+    {
+        this.deptName = deptName;
     }
 
     @NotBlank(message = "账号角色不能为空")
@@ -124,5 +154,35 @@ public abstract class PortalAccount extends BaseEntity
     public void setUserStatus(String userStatus)
     {
         this.userStatus = userStatus;
+    }
+
+    public String getLastLoginIp()
+    {
+        return lastLoginIp;
+    }
+
+    public void setLastLoginIp(String lastLoginIp)
+    {
+        this.lastLoginIp = lastLoginIp;
+    }
+
+    public java.util.Date getLastLoginTime()
+    {
+        return lastLoginTime;
+    }
+
+    public void setLastLoginTime(java.util.Date lastLoginTime)
+    {
+        this.lastLoginTime = lastLoginTime;
+    }
+
+    public java.util.Date getPwdUpdateTime()
+    {
+        return pwdUpdateTime;
+    }
+
+    public void setPwdUpdateTime(java.util.Date pwdUpdateTime)
+    {
+        this.pwdUpdateTime = pwdUpdateTime;
     }
 }

@@ -13,6 +13,8 @@ public class PortalDirectLoginResult implements Serializable
 
     private String token;
 
+    private Long ticketId;
+
     private String loginUrl;
 
     private Integer expireMinutes;
@@ -20,7 +22,7 @@ public class PortalDirectLoginResult implements Serializable
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private Date expireTime;
 
-    private Long userId;
+    private Long accountId;
 
     private String username;
 
@@ -32,6 +34,16 @@ public class PortalDirectLoginResult implements Serializable
     public void setToken(String token)
     {
         this.token = token;
+    }
+
+    public Long getTicketId()
+    {
+        return ticketId;
+    }
+
+    public void setTicketId(Long ticketId)
+    {
+        this.ticketId = ticketId;
     }
 
     public String getLoginUrl()
@@ -64,14 +76,14 @@ public class PortalDirectLoginResult implements Serializable
         this.expireTime = expireTime;
     }
 
-    public Long getUserId()
+    public Long getAccountId()
     {
-        return userId;
+        return accountId;
     }
 
-    public void setUserId(Long userId)
+    public void setAccountId(Long accountId)
     {
-        this.userId = userId;
+        this.accountId = accountId;
     }
 
     public String getUsername()

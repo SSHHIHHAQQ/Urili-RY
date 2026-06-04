@@ -167,6 +167,27 @@ public class SysMenuController extends BaseController
     }
 
     /**
+     * 级联显隐菜单
+     */
+    @PreAuthorize("@ss.hasPermi('system:menu:edit')")
+    @Log(title = "菜单级联显隐", businessType = BusinessType.UPDATE)
+    @PutMapping("/cascadeVisible")
+    public AjaxResult cascadeVisible(@RequestBody Map<String, String> params)
+    {
+        String menuIds = params.get("menuIds");
+        String visible = params.get("visible");
+        if (StringUtils.isEmpty(menuIds))
+        {
+            return error("请选择需要级联显隐的菜单");
+        }
+        if (!UserConstants.NORMAL.equals(visible) && !UserConstants.EXCEPTION.equals(visible))
+        {
+            return error("显示状态参数不正确");
+        }
+        return toAjax(menuService.updateMenuVisibleCascade(Convert.toLongArray(menuIds), visible, getUsername()));
+    }
+
+    /**
      * 删除菜单
      */
     @PreAuthorize("@ss.hasPermi('system:menu:remove')")

@@ -1,9 +1,12 @@
 package com.ruoyi.seller.mapper;
 
+import java.util.Date;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 import com.ruoyi.seller.domain.Seller;
 import com.ruoyi.seller.domain.SellerAccount;
+import com.ruoyi.system.domain.PortalLoginLog;
+import com.ruoyi.system.domain.PortalLoginSession;
 
 /**
  * 卖家Mapper接口
@@ -26,9 +29,29 @@ public interface SellerMapper
 
     public List<SellerAccount> selectSellerAccountList(@Param("sellerId") Long sellerId);
 
-    public SellerAccount selectSellerAccountByUserId(Long userId);
+    public SellerAccount selectSellerAccountById(Long sellerAccountId);
+
+    public SellerAccount selectSellerAccountByUserName(String userName);
 
     public SellerAccount selectOwnerSellerAccountBySellerId(@Param("sellerId") Long sellerId);
 
     public int insertSellerAccount(SellerAccount account);
+
+    public int updateSellerAccount(SellerAccount account);
+
+    public int resetSellerAccountPassword(@Param("sellerAccountId") Long sellerAccountId, @Param("password") String password,
+            @Param("updateBy") String updateBy);
+
+    public int updateSellerAccountLoginInfo(@Param("sellerAccountId") Long sellerAccountId,
+            @Param("lastLoginIp") String lastLoginIp, @Param("lastLoginTime") Date lastLoginTime);
+
+    public int insertSellerLoginLog(PortalLoginLog log);
+
+    public int insertSellerSession(PortalLoginSession session);
+
+    public List<String> selectOnlineSellerSessionTokenIds(@Param("sellerId") Long sellerId,
+            @Param("sellerAccountId") Long sellerAccountId);
+
+    public int forceLogoutSellerSessions(@Param("sellerId") Long sellerId,
+            @Param("sellerAccountId") Long sellerAccountId);
 }

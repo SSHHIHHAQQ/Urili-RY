@@ -1,6 +1,4 @@
 import {
-  DisconnectOutlined,
-  LinkOutlined,
   SearchOutlined,
   SyncOutlined,
 } from '@ant-design/icons';
@@ -131,7 +129,6 @@ export default function SkuSyncPanel({
                 <Button
                   type="link"
                   size="small"
-                  icon={<DisconnectOutlined />}
                   hidden={!access.hasPerms('integration:upstream:pair')}
                 >
                   解除
@@ -143,7 +140,6 @@ export default function SkuSyncPanel({
                 key="pair"
                 type="link"
                 size="small"
-                icon={<LinkOutlined />}
                 hidden={!access.hasPerms('integration:upstream:pair')}
                 onClick={() =>
                   setPairingModal({ open: true, type: 'sku', row: record })

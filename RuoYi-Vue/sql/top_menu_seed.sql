@@ -8,31 +8,37 @@ insert into sys_menu
      is_frame, is_cache, menu_type, visible, status, perms, icon, create_by,
      create_time, update_by, update_time, remark)
 values
-    (2010, '主体管理', 0, 1, 'partner', null, '', 'PartnerManagement',
+    (2010, '主体管理', 0, 5, 'partner', null, '', 'PartnerManagement',
      1, 0, 'M', '0', '0', '', 'TeamOutlined', 'admin',
      sysdate(), '', null, '顶级菜单：主体管理'),
-    (2060, '商品管理', 0, 2, 'product', null, '', 'ProductManagement',
+    (2060, '商品管理', 0, 10, 'product', null, '', 'ProductManagement',
      1, 0, 'M', '0', '0', '', 'ShoppingOutlined', 'admin',
      sysdate(), '', null, '顶级菜单：商品管理'),
-    (2070, '订单管理', 0, 3, 'order', null, '', 'OrderManagement',
+    (2070, '订单管理', 0, 15, 'order', null, '', 'OrderManagement',
      1, 0, 'M', '0', '0', '', 'OrderedListOutlined', 'admin',
      sysdate(), '', null, '顶级菜单：订单管理'),
-    (2080, '库存管理', 0, 4, 'inventory', null, '', 'InventoryManagement',
+    (2080, '库存管理', 0, 20, 'inventory', null, '', 'InventoryManagement',
      1, 0, 'M', '0', '0', '', 'StockOutlined', 'admin',
      sysdate(), '', null, '顶级菜单：库存管理'),
-    (2020, '仓库管理', 0, 5, 'warehouse', null, '', 'WarehouseManagement',
+    (2020, '仓库管理', 0, 25, 'warehouse', null, '', 'WarehouseManagement',
      1, 0, 'M', '0', '0', '', 'HomeOutlined', 'admin',
      sysdate(), '', null, '顶级菜单：仓库管理，复用原仓储管理菜单位'),
-    (2030, '海外仓服务设置', 0, 6, 'overseas-warehouse-service', null, '', 'OverseasWarehouseServiceManagement',
+    (2030, '海外仓服务设置', 0, 30, 'overseas-warehouse-service', null, '', 'OverseasWarehouseServiceManagement',
      1, 0, 'M', '0', '0', '', 'GlobalOutlined', 'admin',
      sysdate(), '', null, '顶级菜单：海外仓服务设置，复用原上游系统菜单位'),
-    (2050, '财务管理', 0, 7, 'finance', null, '', 'FinanceManagement',
+    (2050, '财务管理', 0, 35, 'finance', null, '', 'FinanceManagement',
      1, 0, 'M', '0', '0', '', 'AccountBookOutlined', 'admin',
      sysdate(), '', null, '顶级菜单：财务管理，复用原计费管理菜单位'),
-    (108, '日志中心', 0, 8, 'log-center', null, '', 'LogCenter',
+    (2090, '基础配置', 0, 40, 'basic-config', null, '', 'BasicConfig',
+     1, 0, 'M', '0', '0', '', 'SettingOutlined', 'admin',
+     sysdate(), '', null, '顶级菜单：基础配置'),
+    (2100, '审核中心', 0, 45, 'review-center', null, '', 'ReviewCenter',
+     1, 0, 'M', '0', '0', '', 'AuditOutlined', 'admin',
+     sysdate(), '', null, '顶级菜单：审核中心'),
+    (108, '日志中心', 0, 50, 'log-center', null, '', 'LogCenter',
      1, 0, 'M', '0', '0', '', 'FileTextOutlined', 'admin',
      sysdate(), '', null, '顶级菜单：日志中心，复用若依原日志管理目录'),
-    (3, '工具中心', 0, 9, 'tool', null, '', '',
+    (3, '工具中心', 0, 55, 'tool', null, '', '',
      1, 0, 'M', '0', '0', '', 'ToolOutlined', 'admin',
      sysdate(), '', null, '顶级菜单：工具中心，复用若依原系统工具目录')
 on duplicate key update
@@ -62,7 +68,7 @@ set order_num = 90,
 where menu_id = 1;
 
 update sys_menu
-set order_num = 91,
+set order_num = 95,
     update_by = 'admin',
     update_time = sysdate()
 where menu_id = 2;
@@ -82,7 +88,7 @@ where menu_id = 2040;
 update sys_menu
 set visible = '1',
     status = '1',
-    order_num = 99,
+    order_num = 100,
     update_by = 'admin',
     update_time = sysdate(),
     remark = '已由独立顶级菜单替代，保留历史草案'

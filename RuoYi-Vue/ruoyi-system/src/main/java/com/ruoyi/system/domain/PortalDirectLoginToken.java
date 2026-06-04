@@ -12,13 +12,15 @@ public class PortalDirectLoginToken implements Serializable
 
     private String token;
 
+    private Long ticketId;
+
     private String portalType;
 
     private Long partnerId;
 
     private String partnerNo;
 
-    private Long userId;
+    private Long accountId;
 
     private String username;
 
@@ -36,6 +38,16 @@ public class PortalDirectLoginToken implements Serializable
     public void setToken(String token)
     {
         this.token = token;
+    }
+
+    public Long getTicketId()
+    {
+        return ticketId;
+    }
+
+    public void setTicketId(Long ticketId)
+    {
+        this.ticketId = ticketId;
     }
 
     public String getPortalType()
@@ -68,14 +80,14 @@ public class PortalDirectLoginToken implements Serializable
         this.partnerNo = partnerNo;
     }
 
-    public Long getUserId()
+    public Long getAccountId()
     {
-        return userId;
+        return accountId;
     }
 
-    public void setUserId(Long userId)
+    public void setAccountId(Long accountId)
     {
-        this.userId = userId;
+        this.accountId = accountId;
     }
 
     public String getUsername()

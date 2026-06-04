@@ -6,8 +6,8 @@ import { Button, Modal } from 'antd';
 import { FooterToolbar, PageContainer, ProTable } from '@ant-design/pro-components';
 import { getPersistedProTableSearch } from '@/utils/proTableSearch';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
-import { PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, PoweroffOutlined, StopOutlined } from '@ant-design/icons';
-import { getMenuList, removeMenu, addMenu, updateMenu, cascadeMenuStatus } from '@/services/system/menu';
+import { PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, PoweroffOutlined, StopOutlined, EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons';
+import { getMenuList, removeMenu, addMenu, updateMenu, cascadeMenuStatus, cascadeMenuVisible } from '@/services/system/menu';
 import UpdateForm from './edit';
 import { getDictValueEnum } from '@/services/system/dict';
 import { buildTreeData } from '@/utils/tree';
@@ -104,6 +104,22 @@ const handleCascadeStatus = async (selectedRows: API.System.Menu[], status: stri
   }
 };
 
+const handleCascadeVisible = async (selectedRows: API.System.Menu[], visible: string) => {
+  const actionText = visible === '0' ? '显示' : '隐藏';
+  if (!selectedRows?.length) return true;
+  const hide = message.loading(`正在级联${actionText}`);
+  try {
+    await cascadeMenuVisible(selectedRows.map((row) => row.menuId).join(','), visible);
+    hide();
+    message.success(`级联${actionText}成功，即将刷新`);
+    return true;
+  } catch {
+    hide();
+    message.error(`级联${actionText}失败，请重试`);
+    return false;
+  }
+};
+
 
 const MenuTableList: React.FC = () => {
 
@@ -149,6 +165,24 @@ const MenuTableList: React.FC = () => {
     });
   };
 
+  const showCascadeVisibleConfirm = (visible: string) => {
+    const actionText = visible === '0' ? '显示' : '隐藏';
+    Modal.confirm({
+      title: `确认级联${actionText}所选菜单吗？`,
+      icon: <ExclamationCircleOutlined />,
+      content: `将同时${actionText}选中菜单及其所有下级菜单、按钮权限，请谨慎操作。`,
+      okText: '确认',
+      cancelText: '取消',
+      onOk: async () => {
+        const success = await handleCascadeVisible(selectedRows, visible);
+        if (success) {
+          setSelectedRows([]);
+          actionRef.current?.reloadAndRest?.();
+        }
+      },
+    });
+  };
+
   const columns: ProColumns<API.System.Menu>[] = [
     {
       title: <FormattedMessage id="system.menu.menu_name" defaultMessage="菜单名称" />,
@@ -178,6 +212,15 @@ const MenuTableList: React.FC = () => {
       dataIndex: 'perms',
       valueType: 'text',
       search: false,
+    },
+    {
+      title: <FormattedMessage id="system.menu.visible" defaultMessage="显示状态" />,
+      dataIndex: 'visible',
+      valueType: 'select',
+      valueEnum: visibleOptions,
+      render: (_, record) => {
+        return (<DictTag enums={visibleOptions} value={record.visible} />);
+      },
     },
     {
       title: <FormattedMessage id="system.menu.status" defaultMessage="菜单状态" />,
@@ -275,8 +318,25 @@ const MenuTableList: React.FC = () => {
               hidden={selectedRows?.length === 0 || !access.hasPerms('system:menu:edit')}
               onClick={() => showCascadeStatusConfirm('1')}
             >
-              <StopOutlined />
+            <StopOutlined />
               级联停用
+            </Button>,
+            <Button
+              key="cascadeShow"
+              hidden={selectedRows?.length === 0 || !access.hasPerms('system:menu:edit')}
+              onClick={() => showCascadeVisibleConfirm('0')}
+            >
+              <EyeOutlined />
+              级联显示
+            </Button>,
+            <Button
+              key="cascadeHide"
+              danger
+              hidden={selectedRows?.length === 0 || !access.hasPerms('system:menu:edit')}
+              onClick={() => showCascadeVisibleConfirm('1')}
+            >
+              <EyeInvisibleOutlined />
+              级联隐藏
             </Button>,
             <Button
               type="primary"
@@ -350,6 +410,21 @@ const MenuTableList: React.FC = () => {
             onClick={() => showCascadeStatusConfirm('1')}
           >
             级联停用
+          </Button>
+          <Button
+            key="cascadeShow"
+            hidden={!access.hasPerms('system:menu:edit')}
+            onClick={() => showCascadeVisibleConfirm('0')}
+          >
+            级联显示
+          </Button>
+          <Button
+            key="cascadeHide"
+            danger
+            hidden={!access.hasPerms('system:menu:edit')}
+            onClick={() => showCascadeVisibleConfirm('1')}
+          >
+            级联隐藏
           </Button>
           <Button
             key="remove"

@@ -13,7 +13,7 @@
 - 买家端建立独立账号、角色、菜单、部门、权限、登录日志、操作日志体系。
 - 管理端不通过混用账号体系获得控制权，而是通过平台管理接口、主体状态、账号状态、菜单/角色配置、免密代入、强制踢出和审计日志保留控制权。
 
-当前计划只定义方案和实施顺序，不直接执行 DDL、DML、后端代码或前端代码修改。
+本文件作为三端独立改造的开发方向文件。2026-06-04 已开始进入实施阶段，具体代码、SQL、远程库执行和验证记录以 `docs/plans/2026-06-04-three-terminal-isolation-goal-tracker.md` 为准。
 
 ## 设计边界
 
@@ -334,14 +334,14 @@ updated_by_account_id
 
 当前已经落地的卖家/买家管理里，以下设计需要调整：
 
-- `seller_account.user_id` 不能再作为卖家端账号主身份。
-- `buyer_account.user_id` 不能再作为买家端账号主身份。
-- `PortalAccountSupport` 当前创建 `sys_user` 的逻辑要废弃或改造成只服务旧迁移。
-- 重置密码从更新 `sys_user.password` 改为更新 `seller_account.password` / `buyer_account.password`。
-- 最后登录时间从 `sys_user.login_date` 改为 `seller_account.last_login_time` / `buyer_account.last_login_time`。
+- `seller_account.user_id` 已在远程库迁移中删除，不能再作为卖家端账号主身份。
+- `buyer_account.user_id` 已在远程库迁移中删除，不能再作为买家端账号主身份。
+- `PortalAccountSupport` / `PortalAccountMapper` 已删除，后续不要恢复为端账号公共支撑。
+- 重置密码已从更新 `sys_user.password` 改为更新 `seller_account.password` / `buyer_account.password`。
+- 最后登录时间已从 `sys_user.login_date` 改为读取 `seller_account.last_login_time` / `buyer_account.last_login_time`。
 - 免密登录从基于 `sys_user` 改为基于卖家/买家账号表。
 - 列表查询中 join `sys_user owner` 的地方要改为读取端内账号表。
-- 复用台账中关于 `PortalAccountSupport` 和“密码仍存 sys_user.password”的内容需要在实施时同步更新为过期或迁移说明。
+- 复用台账中关于端账号密码、账号支撑类和免密登录的内容已同步更新。
 
 ## 实施阶段
 
@@ -352,7 +352,7 @@ updated_by_account_id
 动作：
 
 1. 标记旧文档中“卖家/买家复用 sys_user”的结论已过期。
-2. 暂停继续扩展 `PortalAccountSupport`。
+2. 不恢复或继续扩展已删除的 `PortalAccountSupport`。
 3. 新增需求先按三端独立身份模型评估。
 
 验收：
@@ -362,7 +362,7 @@ updated_by_account_id
 
 ### 阶段 1：账号表改造方案
 
-目标：先确认表结构，不直接执行。
+目标：确认并落地第一批端内账号权限基础表。
 
 动作：
 
@@ -374,9 +374,9 @@ updated_by_account_id
 
 验收：
 
-- 用户确认表设计。
-- 明确回滚方式。
-- 明确远程库执行计划。
+- 表设计写入 SQL 和目标追踪记录。
+- 明确迁移方式和执行结果。
+- 远程库执行后有结构和接口验证记录。
 
 ### 阶段 2：数据库迁移
 
@@ -470,6 +470,6 @@ buyer-ui/
 
 ## 下一步建议
 
-建议下一步只做一件事：输出并确认三端独立账号权限的表结构设计。
+当前已完成第一批管理端卖家/买家账号改造、远程库迁移、卖家端/买家端真实登录与 token 消费改造、管理端维护 `seller_menu` / `buyer_menu`、`seller_role` / `buyer_role`、`seller_dept` / `buyer_dept` 的第一批后端接口，以及端账号绑定端内角色和端内 `getInfo` / `getRouters` 权限菜单读取闭环。详细执行和验证证据见 `docs/plans/2026-06-04-three-terminal-isolation-goal-tracker.md`。
 
-确认通过后，再进入数据库迁移和后端改造。未确认前，不执行 DDL/DML，不改认证代码。
+下一步建议进入管理端前端页面接入和管理端控制能力改造：把端内菜单、角色、部门、账号角色绑定和端账号部门选择接入管理端页面；端账号 `dept_id` 后端新增/编辑/列表链路和前端 service/type 契约已完成；免密代入审计票据 `portal_direct_login_ticket` 已落地，继续接入强制踢出能力；后续真实端内业务接口必须从端 token 推导主体范围，不相信前端传入 `sellerId` / `buyerId`。

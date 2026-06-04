@@ -42,9 +42,9 @@ import com.ruoyi.integration.lingxing.LingxingRequestLogEntry;
 import com.ruoyi.integration.lingxing.LingxingWarehouse;
 import com.ruoyi.integration.mapper.UpstreamSystemMapper;
 import com.ruoyi.integration.service.IUpstreamSystemService;
-import com.ruoyi.integration.support.SecretCipherSupport;
 import com.ruoyi.integration.support.UpstreamMaskUtils;
 import com.ruoyi.integration.support.UpstreamSystemConstants;
+import com.ruoyi.system.service.support.SecretCipherSupport;
 
 /**
  * 上游系统管理服务实现。

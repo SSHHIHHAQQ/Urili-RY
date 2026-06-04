@@ -3,9 +3,11 @@ import { useAccess } from '@umijs/max';
 import {
   App,
   Button,
+  Dropdown,
   Form,
   Image,
   Input,
+  InputNumber,
   Modal,
   Select,
   Space,
@@ -14,34 +16,26 @@ import {
   Typography,
   Upload,
 } from 'antd';
-import type { UploadFile, UploadProps } from 'antd';
+import type { MenuProps, UploadFile, UploadProps } from 'antd';
 import {
   PageContainer,
-  ProForm,
-  ProFormRadio,
-  ProFormText,
-  ProFormTextArea,
   ProTable,
   type ActionType,
   type ProColumns,
 } from '@ant-design/pro-components';
 import {
+  DownOutlined,
   DollarOutlined,
-  EditOutlined,
-  KeyOutlined,
-  LoginOutlined,
   PlusOutlined,
-  TeamOutlined,
   UploadOutlined,
-  UserAddOutlined,
 } from '@ant-design/icons';
 import type { DictValueEnumObj } from '@/components/DictTag';
 import { uploadCommonFile } from '@/services/common/file';
 import { getDictSelectOption, getDictValueEnum } from '@/services/system/dict';
 import { getPersistedProTableSearch } from '@/utils/proTableSearch';
+import PartnerAccountModal from './PartnerAccountModal';
 
 type PartnerRecord = Record<string, any>;
-type PortalAccountRecord = API.Partner.PortalAccountBase & Record<string, any>;
 type AttachmentUploadFile = UploadFile<API.Partner.PartyAttachment>;
 
 type SelectOption = {
@@ -64,10 +58,13 @@ type PartnerService = {
   add: (data: any) => Promise<API.Result>;
   update: (data: any) => Promise<API.Result>;
   changeStatus: (data: any) => Promise<API.Result>;
-  listAccounts: (id: number) => Promise<{ code: number; msg: string; data: PortalAccountRecord[] }>;
-  addAccount: (id: number, data: any) => Promise<API.Result>;
-  resetPassword: (data: any) => Promise<API.Result>;
-  resetDefaultPassword: (data: any) => Promise<API.Result>;
+  getAccounts: (id: number) => Promise<{ code: number; msg?: string; data: API.Partner.PortalAccountBase[] }>;
+  addAccount: (id: number, data: API.Partner.PortalAccountBase) => Promise<API.Result>;
+  updateAccount: (id: number, data: API.Partner.PortalAccountBase) => Promise<API.Result>;
+  getDeptTree: (id: number) => Promise<API.Partner.PortalDeptTreeResult>;
+  resetAccountDefaultPassword: (data: any) => Promise<API.Result>;
+  forceLogoutSubject: (id: number) => Promise<API.Result>;
+  forceLogoutAccount: (id: number, accountId: number) => Promise<API.Result>;
   resetOwnerPassword: (id: number) => Promise<API.Result>;
   directLogin: (id: number) => Promise<API.Partner.DirectLoginApiResult>;
 };
@@ -83,12 +80,11 @@ export type PartnerModuleConfig = {
   shortNameField: string;
   typeField: string;
   levelField: string;
-  accountIdField: string;
   ownerIdField: string;
+  accountIdField: string;
   balanceTitle: string;
   showRechargePlaceholder?: boolean;
   levelDictType: string;
-  accountRoleDictType: string;
   services: PartnerService;
 };
 
@@ -116,12 +112,6 @@ type PartnerFormValues = {
 const fallbackStatusOptions: DictValueEnumObj = {
   '0': { text: '正常', label: '正常', value: '0', listClass: 'success' },
   '1': { text: '停用', label: '停用', value: '1', listClass: 'danger' },
-};
-
-const fallbackAccountRoleOptions: DictValueEnumObj = {
-  OWNER: { text: '负责人', label: '负责人', value: 'OWNER' },
-  ADMIN: { text: '管理员', label: '管理员', value: 'ADMIN' },
-  STAFF: { text: '普通账号', label: '普通账号', value: 'STAFF' },
 };
 
 const ATTACHMENT_ACCEPT = 'image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt';
@@ -169,22 +159,22 @@ const formGridStyle: React.CSSProperties = {
 
 const compactCellTextStyle: React.CSSProperties = {
   display: 'block',
-  whiteSpace: 'normal',
-  wordBreak: 'break-word',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
   lineHeight: 1.35,
 };
 
 const compactSubTextStyle: React.CSSProperties = {
   display: 'block',
-  whiteSpace: 'normal',
-  wordBreak: 'break-word',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
   lineHeight: 1.35,
 };
 
-const compactOperationStyle: React.CSSProperties = {
-  columnGap: 4,
-  rowGap: 0,
-  flexWrap: 'wrap',
+const balanceRangeNumberStyle: React.CSSProperties = {
+  width: '50%',
 };
 
 function getStatusOptions(statusOptions: DictValueEnumObj) {
@@ -236,10 +226,65 @@ function getRangeValue(value: unknown) {
   return Array.isArray(value) ? value : [];
 }
 
+function hasSearchValue(value: unknown) {
+  return value !== undefined && value !== null && value !== '';
+}
+
+function getBalanceRangeInputValue(value: unknown): [number | string | undefined, number | string | undefined] {
+  const range = getRangeValue(value);
+  return [range[0], range[1]];
+}
+
+function BalanceRangeInput({
+  value,
+  onChange,
+  disabled,
+}: {
+  value?: unknown;
+  onChange?: (value?: [number | string | undefined, number | string | undefined]) => void;
+  disabled?: boolean;
+}) {
+  const [minValue, maxValue] = getBalanceRangeInputValue(value);
+
+  const updateValue = (index: 0 | 1, nextValue: number | string | null) => {
+    const next: [number | string | undefined, number | string | undefined] = [minValue, maxValue];
+    next[index] = nextValue ?? undefined;
+    onChange?.(hasSearchValue(next[0]) || hasSearchValue(next[1]) ? next : undefined);
+  };
+
+  return (
+    <Space.Compact block>
+      <InputNumber
+        controls={false}
+        disabled={disabled}
+        min={0}
+        precision={2}
+        placeholder="最小"
+        value={minValue as number | undefined}
+        style={balanceRangeNumberStyle}
+        onChange={(nextValue) => updateValue(0, nextValue)}
+      />
+      <InputNumber
+        controls={false}
+        disabled={disabled}
+        min={0}
+        precision={2}
+        placeholder="最大"
+        value={maxValue as number | undefined}
+        style={balanceRangeNumberStyle}
+        onChange={(nextValue) => updateValue(1, nextValue)}
+      />
+    </Space.Compact>
+  );
+}
+
 function buildListParams(params: Record<string, any>, current?: number, pageSize?: number) {
-  const { createTimeRange, lastLoginTimeRange, balanceMin, balanceMax, ...rest } = params;
+  const { createTimeRange, lastLoginTimeRange, balanceRange, balanceMin, balanceMax, ...rest } = params;
   const createRange = getRangeValue(createTimeRange);
   const lastLoginRange = getRangeValue(lastLoginTimeRange);
+  const accountBalanceRange = getRangeValue(balanceRange);
+  const resolvedBalanceMin = accountBalanceRange[0] ?? balanceMin;
+  const resolvedBalanceMax = accountBalanceRange[1] ?? balanceMax;
   const next: Record<string, any> = {
     ...rest,
     pageNum: current,
@@ -258,11 +303,11 @@ function buildListParams(params: Record<string, any>, current?: number, pageSize
   if (lastLoginRange[1]) {
     next['params[lastLoginEndTime]'] = lastLoginRange[1];
   }
-  if (balanceMin !== undefined && balanceMin !== '') {
-    next['params[balanceMin]'] = balanceMin;
+  if (hasSearchValue(resolvedBalanceMin)) {
+    next['params[balanceMin]'] = resolvedBalanceMin;
   }
-  if (balanceMax !== undefined && balanceMax !== '') {
-    next['params[balanceMax]'] = balanceMax;
+  if (hasSearchValue(resolvedBalanceMax)) {
+    next['params[balanceMax]'] = resolvedBalanceMax;
   }
 
   return next;
@@ -287,17 +332,7 @@ function formatDateTimeText(value: unknown) {
 
 function renderCompactText(value: unknown) {
   const text = value == null || value === '' ? '-' : String(value);
-  return <Typography.Text style={compactCellTextStyle}>{text}</Typography.Text>;
-}
-
-function getStatusTag(value?: string, statusOptions: DictValueEnumObj = fallbackStatusOptions) {
-  const options = getStatusOptions(statusOptions);
-  const option = value ? options[value] : undefined;
-  if (!option) {
-    return <Tag>{value || '-'}</Tag>;
-  }
-  const color = option.listClass === 'success' ? 'success' : option.listClass === 'danger' ? 'error' : 'default';
-  return <Tag color={color}>{option.label}</Tag>;
+  return <Typography.Text style={compactCellTextStyle} title={text}>{text}</Typography.Text>;
 }
 
 function getValue(record: PartnerRecord | undefined, field: string) {
@@ -441,20 +476,15 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
   const access = useAccess();
   const actionRef = useRef<ActionType>(null);
   const [partnerForm] = Form.useForm<PartnerFormValues>();
-  const [accountForm] = Form.useForm<PortalAccountRecord & { confirmPassword?: string }>();
-  const accountPassword = Form.useWatch('password', accountForm);
 
   const [statusOptions, setStatusOptions] = useState<DictValueEnumObj>({});
   const [subjectTypeOptions, setSubjectTypeOptions] = useState<SelectOption[]>(fallbackSubjectTypeOptions);
   const [levelOptions, setLevelOptions] = useState<SelectOption[]>(fallbackLevelOptions);
-  const [accountRoleOptions, setAccountRoleOptions] = useState<DictValueEnumObj>(fallbackAccountRoleOptions);
   const [countryRegionOptions, setCountryRegionOptions] = useState<SelectOption[]>(fallbackCountryRegionOptions);
   const [partnerModalOpen, setPartnerModalOpen] = useState(false);
-  const [accountListOpen, setAccountListOpen] = useState(false);
   const [accountModalOpen, setAccountModalOpen] = useState(false);
+  const [accountPartner, setAccountPartner] = useState<PartnerRecord>();
   const [currentPartner, setCurrentPartner] = useState<PartnerRecord>();
-  const [accounts, setAccounts] = useState<PortalAccountRecord[]>([]);
-  const [accountsLoading, setAccountsLoading] = useState(false);
   const [attachmentFileList, setAttachmentFileList] = useState<AttachmentUploadFile[]>([]);
 
   const permPrefix = `${config.moduleKey}:admin`;
@@ -469,13 +499,10 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
     getDictSelectOption(config.levelDictType)
       .then((data) => setLevelOptions(normalizeDictSelectOptions(data as DictSelectRawOption[], fallbackLevelOptions)))
       .catch(() => setLevelOptions(fallbackLevelOptions));
-    getDictValueEnum(config.accountRoleDictType)
-      .then((data) => setAccountRoleOptions(Object.keys(data).length > 0 ? data : fallbackAccountRoleOptions))
-      .catch(() => setAccountRoleOptions(fallbackAccountRoleOptions));
     getDictSelectOption('country_region')
       .then((data) => setCountryRegionOptions(normalizeDictSelectOptions(data as DictSelectRawOption[], fallbackCountryRegionOptions)))
       .catch(() => setCountryRegionOptions(fallbackCountryRegionOptions));
-  }, [config.accountRoleDictType, config.levelDictType]);
+  }, [config.levelDictType]);
 
   const openPartnerModal = async (record?: PartnerRecord) => {
     setCurrentPartner(record);
@@ -551,77 +578,6 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
     });
   };
 
-  const loadAccounts = async (partner: PartnerRecord) => {
-    const partnerId = getValue(partner, config.idField);
-    if (!partnerId) {
-      return;
-    }
-    setCurrentPartner(partner);
-    setAccountListOpen(true);
-    setAccountsLoading(true);
-    try {
-      const resp = await config.services.listAccounts(partnerId);
-      if (resp.code === 200) {
-        setAccounts(resp.data || []);
-      } else {
-        message.error(resp.msg || '账号加载失败');
-      }
-    } finally {
-      setAccountsLoading(false);
-    }
-  };
-
-  const openAccountModal = () => {
-    accountForm.resetFields();
-    accountForm.setFieldsValue({
-      accountRole: 'STAFF',
-      status: '0',
-    });
-    setAccountModalOpen(true);
-  };
-
-  const handleAccountSubmit = async () => {
-    const partnerId = getValue(currentPartner, config.idField);
-    if (!partnerId) {
-      return;
-    }
-    const values = await accountForm.validateFields();
-    const hide = message.loading('正在创建账号');
-    try {
-      const resp = await config.services.addAccount(partnerId, {
-        ...values,
-        status: values.status || '0',
-      });
-      hide();
-      if (resp.code === 200) {
-        message.success('账号创建成功');
-        setAccountModalOpen(false);
-        await loadAccounts(currentPartner as PartnerRecord);
-        actionRef.current?.reload();
-        return;
-      }
-      message.error(resp.msg || '账号创建失败');
-    } catch {
-      hide();
-      message.error('账号创建失败，请重试');
-    }
-  };
-
-  const handleResetAccountDefaultPassword = (record: PortalAccountRecord) => {
-    modal.confirm({
-      title: `确认重置账号 ${record.userName || '-'} 的密码吗？`,
-      content: '密码将重置为默认密码 U12346。',
-      onOk: async () => {
-        const resp = await config.services.resetDefaultPassword({ userId: record.userId });
-        if (resp.code === 200) {
-          message.success('密码已重置为默认密码 U12346');
-          return;
-        }
-        message.error(resp.msg || '密码重置失败');
-      },
-    });
-  };
-
   const handleResetOwnerPassword = (record: PartnerRecord) => {
     const partnerId = getValue(record, config.idField);
     if (!partnerId) {
@@ -662,11 +618,23 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
     }
   };
 
-  const checkAccountConfirmPassword = (_rule: unknown, value: string) => {
-    if (value === accountPassword) {
-      return Promise.resolve();
+  const handleForceLogoutSubject = (record: PartnerRecord) => {
+    const partnerId = getValue(record, config.idField);
+    if (!partnerId) {
+      return;
     }
-    return Promise.reject(new Error('两次密码输入不一致'));
+    modal.confirm({
+      title: `确认强制踢出${config.label}端在线会话吗？`,
+      content: '该主体下当前在线的端账号会话会立即失效。',
+      onOk: async () => {
+        const resp = await config.services.forceLogoutSubject(partnerId);
+        if (resp.code === 200) {
+          message.success('在线会话已强制踢出');
+          return;
+        }
+        message.error(resp.msg || '强制踢出失败');
+      },
+    });
   };
 
   const handleAttachmentBeforeUpload: UploadProps['beforeUpload'] = (file) => {
@@ -688,35 +656,35 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
       title: `内部${config.label}编号`,
       dataIndex: config.noField,
       valueType: 'text',
-      width: 96,
+      width: 128,
       render: (_, record) => renderCompactText(getValue(record, config.noField)),
     },
     {
       title: `${config.label}代码`,
       dataIndex: config.codeField,
       valueType: 'text',
-      width: 82,
+      width: 110,
       render: (_, record) => renderCompactText(getValue(record, config.codeField)),
     },
     {
       title: `${config.label}名称`,
       dataIndex: config.nameField,
       valueType: 'text',
-      width: 128,
+      width: 180,
       render: (_, record) => renderCompactText(getValue(record, config.nameField)),
     },
     {
       title: `${config.label}简称`,
       dataIndex: config.shortNameField,
       valueType: 'text',
-      width: 82,
+      width: 120,
       render: (_, record) => renderCompactText(getValue(record, config.shortNameField)),
     },
     {
       title: '登录账号',
       dataIndex: 'username',
       valueType: 'text',
-      width: 98,
+      width: 140,
       render: (_, record) => renderCompactText(record.username),
     },
     {
@@ -738,14 +706,14 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
       dataIndex: config.levelField,
       valueType: 'select',
       valueEnum: levelValueEnum,
-      width: 64,
+      width: 96,
       render: (_, record) => <Tag color="blue">{levelValueEnum[getValue(record, config.levelField)]?.label || getValue(record, config.levelField) || '-'}</Tag>,
     },
     {
       title: config.balanceTitle,
       dataIndex: 'accountBalance',
       search: false,
-      width: 92,
+      width: 140,
       render: (_, record) => (
         <Space direction="vertical" size={0}>
           <span>{formatBalance(record)}</span>
@@ -754,18 +722,11 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
       ),
     },
     {
-      title: `${config.balanceTitle}最小`,
-      dataIndex: 'balanceMin',
-      valueType: 'digit',
+      title: config.balanceTitle,
+      dataIndex: 'balanceRange',
+      valueType: 'digitRange',
       hideInTable: true,
-      fieldProps: { min: 0, precision: 2 },
-    },
-    {
-      title: `${config.balanceTitle}最大`,
-      dataIndex: 'balanceMax',
-      valueType: 'digit',
-      hideInTable: true,
-      fieldProps: { min: 0, precision: 2 },
+      formItemRender: () => <BalanceRangeInput />,
     },
     ...(config.showRechargePlaceholder
       ? [
@@ -773,7 +734,7 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
             title: '充值',
             dataIndex: 'rechargePlaceholder',
             search: false,
-            width: 64,
+            width: 96,
             render: () => (
               <Tag icon={<DollarOutlined />} color="default">
                 待接入
@@ -786,7 +747,7 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
       title: '联系人',
       dataIndex: 'contactName',
       search: false,
-      width: 120,
+      width: 180,
       render: (_, record) => (
         <Space direction="vertical" size={0}>
           <Typography.Text style={compactCellTextStyle}>{record.contactName || '-'}</Typography.Text>
@@ -797,18 +758,11 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
       ),
     },
     {
-      title: '账号数',
-      dataIndex: 'accountCount',
-      search: false,
-      width: 56,
-      align: 'right',
-    },
-    {
       title: '状态',
       dataIndex: 'status',
       valueType: 'select',
       valueEnum: statusValueEnum,
-      width: 76,
+      width: 96,
       render: (_, record) => (
         <Switch
           checked={record.status === '0'}
@@ -823,7 +777,7 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
       title: '时间',
       dataIndex: 'timeInfo',
       search: false,
-      width: 132,
+      width: 170,
       render: (_, record) => (
         <Space direction="vertical" size={0}>
           <Typography.Text style={compactCellTextStyle}>{formatDateTimeText(record.createTime)}</Typography.Text>
@@ -849,83 +803,75 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
       title: '操作',
       dataIndex: 'option',
       valueType: 'option',
-      width: 152,
-      render: (_, record) => (
-        <Space size={0} style={compactOperationStyle} wrap>
-          <Button
-            type="link"
-            size="small"
-            key="directLogin"
-            icon={<LoginOutlined />}
-            hidden={!access.hasPerms(`${permPrefix}:directLogin`)}
-            onClick={() => void handleDirectLogin(record)}
-          >
-            登录{config.label}端
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            key="resetOwnerPwd"
-            icon={<KeyOutlined />}
-            hidden={!access.hasPerms(`${permPrefix}:resetPwd`)}
-            onClick={() => handleResetOwnerPassword(record)}
-          >
-            重置主账号
-          </Button>
+      width: 128,
+      render: (_, record) => {
+        const moreItems: MenuProps['items'] = [];
+
+        if (access.hasPerms(`${permPrefix}:directLogin`)) {
+          moreItems.push({
+            key: 'directLogin',
+            label: `登录${config.label}端`,
+          });
+        }
+        if (access.hasPerms(`${permPrefix}:resetPwd`)) {
+          moreItems.push({
+            key: 'resetOwnerPwd',
+            label: '重置主账号',
+          });
+        }
+        if (access.hasPerms(`${permPrefix}:forceLogout`)) {
+          moreItems.push({
+            key: 'forceLogout',
+            label: '强制踢出',
+          });
+        }
+
+        return [
           <Button
             type="link"
             size="small"
             key="edit"
-            icon={<EditOutlined />}
             hidden={!access.hasPerms(`${permPrefix}:edit`)}
             onClick={() => void openPartnerModal(record)}
           >
             编辑
-          </Button>
+          </Button>,
           <Button
             type="link"
             size="small"
             key="accounts"
-            icon={<TeamOutlined />}
             hidden={!access.hasPerms(`${permPrefix}:query`)}
-            onClick={() => void loadAccounts(record)}
+            onClick={() => {
+              setAccountPartner(record);
+              setAccountModalOpen(true);
+            }}
           >
             账号
-          </Button>
-        </Space>
-      ),
-    },
-  ];
-
-  const accountColumns: ProColumns<PortalAccountRecord>[] = [
-    { title: '登录账号', dataIndex: 'userName' },
-    { title: '姓名', dataIndex: 'nickName' },
-    {
-      title: '账号角色',
-      dataIndex: 'accountRole',
-      renderText: (value) => accountRoleOptions[value]?.label || value || '-',
-    },
-    { title: '手机', dataIndex: 'phonenumber', renderText: (value) => value || '-' },
-    { title: '邮箱', dataIndex: 'email', ellipsis: true, renderText: (value) => value || '-' },
-    { title: '绑定状态', dataIndex: 'status', render: (_, record) => getStatusTag(record.status, statusOptions) },
-    { title: '用户状态', dataIndex: 'userStatus', render: (_, record) => getStatusTag(record.userStatus, statusOptions) },
-    { title: '创建时间', dataIndex: 'createTime', valueType: 'dateTime' },
-    {
-      title: '操作',
-      dataIndex: 'option',
-      valueType: 'option',
-      render: (_, record) => [
-        <Button
-          type="link"
-          size="small"
-          key="resetPwd"
-          icon={<KeyOutlined />}
-          hidden={!access.hasPerms(`${permPrefix}:resetPwd`)}
-          onClick={() => handleResetAccountDefaultPassword(record)}
-        >
-          重置默认密码
-        </Button>,
-      ],
+          </Button>,
+          moreItems.length > 0 ? (
+            <Dropdown
+              key="more"
+              trigger={['click']}
+              menu={{
+                items: moreItems,
+                onClick: ({ key }) => {
+                  if (key === 'directLogin') {
+                    void handleDirectLogin(record);
+                  } else if (key === 'resetOwnerPwd') {
+                    handleResetOwnerPassword(record);
+                  } else if (key === 'forceLogout') {
+                    handleForceLogoutSubject(record);
+                  }
+                },
+              }}
+            >
+              <a onClick={(event) => event.preventDefault()}>
+                更多 <DownOutlined style={{ fontSize: 10 }} />
+              </a>
+            </Dropdown>
+          ) : null,
+        ];
+      },
     },
   ];
 
@@ -937,7 +883,7 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
         headerTitle={config.title}
         search={getPersistedProTableSearch({ labelWidth: 112 })}
         columns={columns}
-        tableLayout="auto"
+        tableLayout="fixed"
         toolBarRender={() => [
           <Button
             type="primary"
@@ -958,6 +904,18 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
               total: res.total || 0,
               success: res.code === 200,
             }));
+        }}
+      />
+
+      <PartnerAccountModal
+        config={config}
+        open={accountModalOpen}
+        partner={accountPartner}
+        onOpenChange={(open) => {
+          setAccountModalOpen(open);
+          if (!open) {
+            setAccountPartner(undefined);
+          }
         }}
       />
 
@@ -1071,89 +1029,6 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
             </Form.Item>
           </div>
         </Form>
-      </Modal>
-
-      <Modal
-        width={980}
-        title={`${getValue(currentPartner, config.nameField) || config.label} - 账号`}
-        open={accountListOpen}
-        destroyOnHidden
-        footer={null}
-        onCancel={() => setAccountListOpen(false)}
-      >
-        <ProTable<PortalAccountRecord>
-          rowKey={(record) => String(getValue(record, config.accountIdField) || record.userId)}
-          columns={accountColumns}
-          dataSource={accounts}
-          loading={accountsLoading}
-          search={false}
-          pagination={false}
-          options={false}
-          toolBarRender={() => [
-            <Button
-              type="primary"
-              key="addAccount"
-              icon={<UserAddOutlined />}
-              hidden={!access.hasPerms(`${permPrefix}:add`)}
-              onClick={openAccountModal}
-            >
-              新增账号
-            </Button>,
-          ]}
-        />
-      </Modal>
-
-      <Modal
-        width={640}
-        title={`新增${config.label}端账号`}
-        open={accountModalOpen}
-        destroyOnHidden
-        onOk={handleAccountSubmit}
-        onCancel={() => setAccountModalOpen(false)}
-      >
-        <ProForm form={accountForm} grid submitter={false} layout="horizontal">
-          <ProFormText
-            name="userName"
-            label="登录账号"
-            colProps={{ span: 12 }}
-            rules={[{ required: true, message: '登录账号不能为空' }]}
-          />
-          <ProFormText
-            name="nickName"
-            label="姓名"
-            colProps={{ span: 12 }}
-            rules={[{ required: true, message: '姓名不能为空' }]}
-          />
-          <ProFormText.Password
-            name="password"
-            label="初始密码"
-            colProps={{ span: 12 }}
-            rules={[{ required: true, message: '初始密码不能为空' }]}
-          />
-          <ProFormText.Password
-            name="confirmPassword"
-            label="确认密码"
-            colProps={{ span: 12 }}
-            rules={[{ required: true, message: '确认密码不能为空' }, { validator: checkAccountConfirmPassword }]}
-          />
-          <ProFormRadio.Group
-            name="accountRole"
-            label="账号角色"
-            valueEnum={accountRoleOptions}
-            colProps={{ span: 12 }}
-            rules={[{ required: true, message: '账号角色不能为空' }]}
-          />
-          <ProFormRadio.Group
-            name="status"
-            label="状态"
-            valueEnum={statusValueEnum}
-            colProps={{ span: 12 }}
-            rules={[{ required: true, message: '状态不能为空' }]}
-          />
-          <ProFormText name="phonenumber" label="手机" colProps={{ span: 12 }} fieldProps={{ maxLength: 11 }} />
-          <ProFormText name="email" label="邮箱" colProps={{ span: 12 }} />
-          <ProFormTextArea name="remark" label="备注" colProps={{ span: 24 }} />
-        </ProForm>
       </Modal>
 
     </PageContainer>

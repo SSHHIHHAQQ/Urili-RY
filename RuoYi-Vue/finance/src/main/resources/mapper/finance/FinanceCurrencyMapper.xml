@@ -1,0 +1,330 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.finance.mapper.FinanceCurrencyMapper">
+
+    <resultMap type="FinanceCurrency" id="CurrencyResult">
+        <id     property="currencyId"         column="currency_id"          />
+        <result property="currencyCode"       column="currency_code"        />
+        <result property="currencyName"       column="currency_name"        />
+        <result property="currencySymbol"     column="currency_symbol"      />
+        <result property="baseCurrencyCode"   column="base_currency_code"   />
+        <result property="officialRate"       column="official_rate"        />
+        <result property="effectiveRate"      column="effective_rate"       />
+        <result property="ratePrecision"      column="rate_precision"       />
+        <result property="amountPrecision"    column="amount_precision"     />
+        <result property="roundingMode"       column="rounding_mode"        />
+        <result property="adjustmentMode"     column="adjustment_mode"      />
+        <result property="adjustmentValue"    column="adjustment_value"     />
+        <result property="officialRateTime"   column="official_rate_time"   />
+        <result property="effectiveRateTime"  column="effective_rate_time"  />
+        <result property="isDefault"          column="is_default"           />
+        <result property="status"             column="status"               />
+        <result property="createBy"           column="create_by"            />
+        <result property="createTime"         column="create_time"          />
+        <result property="updateBy"           column="update_by"            />
+        <result property="updateTime"         column="update_time"          />
+        <result property="remark"             column="remark"               />
+    </resultMap>
+
+    <resultMap type="FinanceCurrencyRateHistory" id="RateHistoryResult">
+        <id     property="rateHistoryId"      column="rate_history_id"     />
+        <result property="currencyCode"       column="currency_code"       />
+        <result property="baseCurrencyCode"   column="base_currency_code"  />
+        <result property="officialRate"       column="official_rate"       />
+        <result property="effectiveRate"      column="effective_rate"      />
+        <result property="adjustmentMode"     column="adjustment_mode"     />
+        <result property="adjustmentValue"    column="adjustment_value"    />
+        <result property="sourceType"         column="source_type"         />
+        <result property="sourceConfigId"     column="source_config_id"    />
+        <result property="officialRateTime"   column="official_rate_time"  />
+        <result property="effectiveRateTime"  column="effective_rate_time" />
+        <result property="changeReason"       column="change_reason"       />
+        <result property="createBy"           column="create_by"           />
+        <result property="createTime"         column="create_time"         />
+    </resultMap>
+
+    <resultMap type="FinanceCurrencySyncConfig" id="SyncConfigResult">
+        <id     property="syncConfigId"        column="sync_config_id"        />
+        <result property="providerCode"        column="provider_code"         />
+        <result property="providerName"        column="provider_name"         />
+        <result property="baseCurrencyCode"    column="base_currency_code"    />
+        <result property="apiBaseUrl"          column="api_base_url"          />
+        <result property="authType"            column="auth_type"             />
+        <result property="credentialCiphertext" column="credential_ciphertext" />
+        <result property="credentialKeyId"     column="credential_key_id"     />
+        <result property="credentialMasked"    column="credential_masked"     />
+        <result property="requestTimeoutMs"    column="request_timeout_ms"    />
+        <result property="retryCount"          column="retry_count"           />
+        <result property="scheduleType"        column="schedule_type"         />
+        <result property="cronExpression"      column="cron_expression"       />
+        <result property="rateAnchorTime"      column="rate_anchor_time"      />
+        <result property="syncEnabled"         column="sync_enabled"          />
+        <result property="lastSyncTime"        column="last_sync_time"        />
+        <result property="lastSyncStatus"      column="last_sync_status"      />
+        <result property="status"              column="status"                />
+        <result property="createBy"            column="create_by"             />
+        <result property="createTime"          column="create_time"           />
+        <result property="updateBy"            column="update_by"             />
+        <result property="updateTime"          column="update_time"           />
+        <result property="remark"              column="remark"                />
+    </resultMap>
+
+    <resultMap type="FinanceCurrencySyncLog" id="SyncLogResult">
+        <id     property="syncLogId"      column="sync_log_id"      />
+        <result property="traceId"        column="trace_id"         />
+        <result property="syncConfigId"   column="sync_config_id"   />
+        <result property="providerCode"   column="provider_code"    />
+        <result property="requestUrl"     column="request_url"      />
+        <result property="requestTime"    column="request_time"     />
+        <result property="responseTime"   column="response_time"    />
+        <result property="costMs"         column="cost_ms"          />
+        <result property="status"         column="status"           />
+        <result property="errorCode"      column="error_code"       />
+        <result property="errorMessage"   column="error_message"    />
+        <result property="currencyCount"  column="currency_count"   />
+        <result property="updatedCount"   column="updated_count"    />
+        <result property="responseSummary" column="response_summary" />
+        <result property="createTime"     column="create_time"      />
+    </resultMap>
+
+    <select id="selectCurrencyList" parameterType="FinanceCurrency" resultMap="CurrencyResult">
+        select *
+        from finance_currency
+        where 1 = 1
+        <if test="keyword != null and keyword != ''">
+            and (
+                currency_code like concat('%', #{keyword}, '%')
+                or currency_name like concat('%', #{keyword}, '%')
+            )
+        </if>
+        <if test="currencyCode != null and currencyCode != ''">
+            and currency_code like concat('%', #{currencyCode}, '%')
+        </if>
+        <if test="currencyName != null and currencyName != ''">
+            and currency_name like concat('%', #{currencyName}, '%')
+        </if>
+        <if test="status != null and status != ''">
+            and status = #{status}
+        </if>
+        <if test="isDefault != null and isDefault != ''">
+            and is_default = #{isDefault}
+        </if>
+        <if test="params.effectiveBeginTime != null and params.effectiveBeginTime != ''">
+            and date_format(effective_rate_time,'%Y%m%d') &gt;= date_format(#{params.effectiveBeginTime},'%Y%m%d')
+        </if>
+        <if test="params.effectiveEndTime != null and params.effectiveEndTime != ''">
+            and date_format(effective_rate_time,'%Y%m%d') &lt;= date_format(#{params.effectiveEndTime},'%Y%m%d')
+        </if>
+        order by is_default desc, status asc, currency_code asc
+    </select>
+
+    <select id="selectEnabledCurrencyList" resultMap="CurrencyResult">
+        select *
+        from finance_currency
+        where status = '0'
+        order by is_default desc, currency_code asc
+    </select>
+
+    <select id="selectEnabledCurrencyOptions" resultType="FinanceCurrencyOption">
+        select concat(currency_name, ' (', currency_code, ')') as label,
+               currency_code as value,
+               currency_symbol as symbol,
+               amount_precision as amountPrecision
+        from finance_currency
+        where status = '0'
+        order by is_default desc, currency_code asc
+    </select>
+
+    <select id="selectCurrencyByCode" parameterType="String" resultMap="CurrencyResult">
+        select *
+        from finance_currency
+        where currency_code = #{currencyCode}
+        limit 1
+    </select>
+
+    <insert id="insertCurrency" parameterType="FinanceCurrency" useGeneratedKeys="true" keyProperty="currencyId">
+        insert into finance_currency(
+            currency_code, currency_name, currency_symbol, base_currency_code,
+            official_rate, effective_rate, rate_precision, amount_precision,
+            rounding_mode, adjustment_mode, adjustment_value, official_rate_time,
+            effective_rate_time, is_default, status, create_by, create_time, remark
+        ) values (
+            #{currencyCode}, #{currencyName}, #{currencySymbol}, #{baseCurrencyCode},
+            #{officialRate}, #{effectiveRate}, #{ratePrecision}, #{amountPrecision},
+            #{roundingMode}, #{adjustmentMode}, #{adjustmentValue}, #{officialRateTime},
+            #{effectiveRateTime}, #{isDefault}, #{status}, #{createBy}, sysdate(), #{remark}
+        )
+    </insert>
+
+    <update id="updateCurrency" parameterType="FinanceCurrency">
+        update finance_currency
+        set currency_name = #{currencyName},
+            currency_symbol = #{currencySymbol},
+            base_currency_code = #{baseCurrencyCode},
+            official_rate = #{officialRate},
+            effective_rate = #{effectiveRate},
+            rate_precision = #{ratePrecision},
+            amount_precision = #{amountPrecision},
+            rounding_mode = #{roundingMode},
+            adjustment_mode = #{adjustmentMode},
+            adjustment_value = #{adjustmentValue},
+            official_rate_time = #{officialRateTime},
+            effective_rate_time = #{effectiveRateTime},
+            is_default = #{isDefault},
+            status = #{status},
+            update_by = #{updateBy},
+            update_time = sysdate(),
+            remark = #{remark}
+        where currency_code = #{currencyCode}
+    </update>
+
+    <update id="updateCurrencyStatus">
+        update finance_currency
+        set status = #{status},
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where currency_code = #{currencyCode}
+    </update>
+
+    <delete id="deleteCurrencyByCode" parameterType="String">
+        delete from finance_currency
+        where currency_code = #{currencyCode}
+    </delete>
+
+    <update id="clearDefaultCurrency">
+        update finance_currency
+        set is_default = 'N',
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where is_default = 'Y'
+          and currency_code &lt;&gt; #{excludeCurrencyCode}
+    </update>
+
+    <update id="updateSyncedRate">
+        update finance_currency
+        set base_currency_code = #{baseCurrencyCode},
+            official_rate = #{officialRate},
+            effective_rate = #{effectiveRate},
+            official_rate_time = #{officialRateTime},
+            effective_rate_time = #{effectiveRateTime},
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where currency_code = #{currencyCode}
+    </update>
+
+    <insert id="insertRateHistory" parameterType="FinanceCurrencyRateHistory" useGeneratedKeys="true" keyProperty="rateHistoryId">
+        insert into finance_currency_rate_history(
+            currency_code, base_currency_code, official_rate, effective_rate,
+            adjustment_mode, adjustment_value, source_type, source_config_id,
+            official_rate_time, effective_rate_time, change_reason, create_by, create_time
+        ) values (
+            #{currencyCode}, #{baseCurrencyCode}, #{officialRate}, #{effectiveRate},
+            #{adjustmentMode}, #{adjustmentValue}, #{sourceType}, #{sourceConfigId},
+            #{officialRateTime}, #{effectiveRateTime}, #{changeReason}, #{createBy}, sysdate()
+        )
+    </insert>
+
+    <select id="selectRateHistoryList" resultMap="RateHistoryResult">
+        select *
+        from finance_currency_rate_history
+        where currency_code = #{currencyCode}
+        order by create_time desc, rate_history_id desc
+    </select>
+
+    <select id="countRateHistoryByCurrencyCode" resultType="int">
+        select count(1)
+        from finance_currency_rate_history
+        where currency_code = #{currencyCode}
+    </select>
+
+    <select id="selectFirstSyncConfig" resultMap="SyncConfigResult">
+        select *
+        from finance_currency_sync_config
+        order by status asc, sync_config_id asc
+        limit 1
+    </select>
+
+    <select id="selectSyncConfigByProviderCode" resultMap="SyncConfigResult">
+        select *
+        from finance_currency_sync_config
+        where provider_code = #{providerCode}
+        limit 1
+    </select>
+
+    <insert id="insertSyncConfig" parameterType="FinanceCurrencySyncConfig" useGeneratedKeys="true" keyProperty="syncConfigId">
+        insert into finance_currency_sync_config(
+            provider_code, provider_name, base_currency_code, api_base_url,
+            auth_type, credential_ciphertext, credential_key_id, credential_masked,
+            request_timeout_ms, retry_count, schedule_type, cron_expression,
+            rate_anchor_time, sync_enabled, status, create_by, create_time, remark
+        ) values (
+            #{providerCode}, #{providerName}, #{baseCurrencyCode}, #{apiBaseUrl},
+            #{authType}, #{credentialCiphertext}, #{credentialKeyId}, #{credentialMasked},
+            #{requestTimeoutMs}, #{retryCount}, #{scheduleType}, #{cronExpression},
+            #{rateAnchorTime}, #{syncEnabled}, #{status}, #{createBy}, sysdate(), #{remark}
+        )
+    </insert>
+
+    <update id="updateSyncConfig" parameterType="FinanceCurrencySyncConfig">
+        update finance_currency_sync_config
+        set provider_code = #{providerCode},
+            provider_name = #{providerName},
+            base_currency_code = #{baseCurrencyCode},
+            api_base_url = #{apiBaseUrl},
+            auth_type = #{authType},
+            credential_ciphertext = #{credentialCiphertext},
+            credential_key_id = #{credentialKeyId},
+            credential_masked = #{credentialMasked},
+            request_timeout_ms = #{requestTimeoutMs},
+            retry_count = #{retryCount},
+            schedule_type = #{scheduleType},
+            cron_expression = #{cronExpression},
+            rate_anchor_time = #{rateAnchorTime},
+            sync_enabled = #{syncEnabled},
+            status = #{status},
+            update_by = #{updateBy},
+            update_time = sysdate(),
+            remark = #{remark}
+        where sync_config_id = #{syncConfigId}
+    </update>
+
+    <update id="updateSyncConfigSummary">
+        update finance_currency_sync_config
+        set last_sync_time = sysdate(),
+            last_sync_status = #{lastSyncStatus},
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where sync_config_id = #{syncConfigId}
+    </update>
+
+    <insert id="insertSyncLog" parameterType="FinanceCurrencySyncLog" useGeneratedKeys="true" keyProperty="syncLogId">
+        insert into finance_currency_sync_log(
+            trace_id, sync_config_id, provider_code, request_url, request_time,
+            response_time, cost_ms, status, error_code, error_message,
+            currency_count, updated_count, response_summary, create_time
+        ) values (
+            #{traceId}, #{syncConfigId}, #{providerCode}, #{requestUrl}, #{requestTime},
+            #{responseTime}, #{costMs}, #{status}, #{errorCode}, #{errorMessage},
+            #{currencyCount}, #{updatedCount}, #{responseSummary}, #{createTime}
+        )
+    </insert>
+
+    <select id="selectSyncLogList" parameterType="FinanceCurrencySyncLog" resultMap="SyncLogResult">
+        select *
+        from finance_currency_sync_log
+        where 1 = 1
+        <if test="traceId != null and traceId != ''">
+            and trace_id like concat('%', #{traceId}, '%')
+        </if>
+        <if test="providerCode != null and providerCode != ''">
+            and provider_code = #{providerCode}
+        </if>
+        <if test="status != null and status != ''">
+            and status = #{status}
+        </if>
+        order by request_time desc, sync_log_id desc
+    </select>
+
+</mapper>

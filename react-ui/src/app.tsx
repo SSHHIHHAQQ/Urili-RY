@@ -1,4 +1,4 @@
-import { Footer, Question, SelectLang, AvatarDropdown, AvatarName } from '@/components';
+import { Question, SelectLang, AvatarDropdown, AvatarName } from '@/components';
 import { LinkOutlined } from '@ant-design/icons';
 import type { Settings as LayoutSettings } from '@ant-design/pro-components';
 import { SettingDrawer } from '@ant-design/pro-components';
@@ -12,6 +12,7 @@ import { clearSessionToken, getAccessToken, getRefreshToken, getTokenExpireTime 
 import { getRemoteMenu, getRoutersInfo, getUserInfo, patchRouteWithRemoteMenus, setRemoteMenu } from './services/session';
 import { PageEnum } from './enums/pagesEnums';
 import { AntdFeedbackProvider } from './utils/feedback';
+import './global.css';
 
 
 const isDev = process.env.NODE_ENV === 'development';
@@ -96,7 +97,7 @@ export const layout: RunTimeLayoutConfig = ({ initialState, setInitialState }) =
         return getRemoteMenu();
       },
     },
-    footerRender: () => <Footer />,
+    footerRender: false,
     onPageChange: () => {
       const { location } = history;
       // 如果没有登录，重定向到 login
@@ -226,12 +227,12 @@ export const request: any = {
     (url: any, options: { headers: any }) => {
       const headers = options.headers ? options.headers : [];
       console.log('request ====>:', url);
-      const authHeader = headers['Authorization'];
-      const isToken = headers['isToken'];
+      const authHeader = headers.Authorization;
+      const isToken = headers.isToken;
       if (!authHeader && isToken !== false) {
         const expireTime = getTokenExpireTime();
         if (expireTime) {
-          const left = Number(expireTime) - new Date().getTime();
+          const left = Number(expireTime) - Date.now();
           const refreshToken = getRefreshToken();
           if (left < checkRegion && refreshToken) {
             if (left < 0) {
@@ -240,7 +241,7 @@ export const request: any = {
           } else {
             const accessToken = getAccessToken();
             if (accessToken) {
-              headers['Authorization'] = `Bearer ${accessToken}`;
+              headers.Authorization = `Bearer ${accessToken}`;
             }
           }
         } else {

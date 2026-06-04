@@ -62,7 +62,29 @@ export async function addAdminBuyerAccount(buyerId: number, data: API.Partner.Bu
   });
 }
 
-export async function resetAdminBuyerAccountPassword(data: Pick<API.Partner.BuyerAccount, 'userId' | 'password'>) {
+export async function updateAdminBuyerAccount(buyerId: number, data: API.Partner.BuyerAccount) {
+  return request<API.Result>(`/api/buyer/admin/buyers/${buyerId}/accounts`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json;charset=UTF-8',
+    },
+    data,
+  });
+}
+
+export async function getAdminBuyerDepts(buyerId: number) {
+  return request<API.Partner.PortalDeptListResult>(`/api/buyer/admin/buyers/${buyerId}/depts/list`, {
+    method: 'GET',
+  });
+}
+
+export async function getAdminBuyerDeptTree(buyerId: number) {
+  return request<API.Partner.PortalDeptTreeResult>(`/api/buyer/admin/buyers/${buyerId}/depts/treeselect`, {
+    method: 'GET',
+  });
+}
+
+export async function resetAdminBuyerAccountPassword(data: Pick<API.Partner.BuyerAccount, 'buyerAccountId' | 'password'>) {
   return request<API.Result>('/api/buyer/admin/buyers/accounts/resetPwd', {
     method: 'PUT',
     headers: {
@@ -72,7 +94,7 @@ export async function resetAdminBuyerAccountPassword(data: Pick<API.Partner.Buye
   });
 }
 
-export async function resetAdminBuyerAccountDefaultPassword(data: Pick<API.Partner.BuyerAccount, 'userId'>) {
+export async function resetAdminBuyerAccountDefaultPassword(data: Pick<API.Partner.BuyerAccount, 'buyerAccountId'>) {
   return request<API.Result>('/api/buyer/admin/buyers/accounts/resetDefaultPwd', {
     method: 'PUT',
     headers: {
@@ -85,6 +107,18 @@ export async function resetAdminBuyerAccountDefaultPassword(data: Pick<API.Partn
 export async function resetAdminBuyerOwnerPassword(buyerId: number) {
   return request<API.Result>(`/api/buyer/admin/buyers/${buyerId}/resetOwnerPwd`, {
     method: 'PUT',
+  });
+}
+
+export async function forceLogoutAdminBuyerSessions(buyerId: number) {
+  return request<API.Result>(`/api/buyer/admin/buyers/${buyerId}/sessions`, {
+    method: 'DELETE',
+  });
+}
+
+export async function forceLogoutAdminBuyerAccountSessions(buyerId: number, buyerAccountId: number) {
+  return request<API.Result>(`/api/buyer/admin/buyers/${buyerId}/accounts/${buyerAccountId}/sessions`, {
+    method: 'DELETE',
   });
 }
 

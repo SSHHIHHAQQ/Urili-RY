@@ -1,0 +1,331 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.buyer.mapper.BuyerPortalPermissionMapper">
+
+    <resultMap type="PortalMenu" id="PortalMenuResult">
+        <id     property="menuId"     column="menu_id"     />
+        <result property="menuName"   column="menu_name"   />
+        <result property="parentName" column="parent_name" />
+        <result property="parentId"   column="parent_id"   />
+        <result property="orderNum"   column="order_num"   />
+        <result property="path"       column="path"        />
+        <result property="component"  column="component"   />
+        <result property="query"      column="query"       />
+        <result property="routeName"  column="route_name"  />
+        <result property="isFrame"    column="is_frame"    />
+        <result property="isCache"    column="is_cache"    />
+        <result property="menuType"   column="menu_type"   />
+        <result property="visible"    column="visible"     />
+        <result property="status"     column="status"      />
+        <result property="perms"      column="perms"       />
+        <result property="icon"       column="icon"        />
+        <result property="createBy"   column="create_by"   />
+        <result property="createTime" column="create_time" />
+        <result property="updateBy"   column="update_by"   />
+        <result property="updateTime" column="update_time" />
+        <result property="remark"     column="remark"      />
+    </resultMap>
+
+    <resultMap type="PortalRole" id="PortalRoleResult">
+        <id     property="roleId"     column="role_id"     />
+        <result property="subjectId"  column="subject_id"  />
+        <result property="roleName"   column="role_name"   />
+        <result property="roleKey"    column="role_key"    />
+        <result property="roleSort"   column="role_sort"   />
+        <result property="status"     column="status"      />
+        <result property="delFlag"    column="del_flag"    />
+        <result property="createBy"   column="create_by"   />
+        <result property="createTime" column="create_time" />
+        <result property="updateBy"   column="update_by"   />
+        <result property="updateTime" column="update_time" />
+        <result property="remark"     column="remark"      />
+    </resultMap>
+
+    <sql id="selectBuyerMenuVo">
+        select m.buyer_menu_id as menu_id, m.menu_name, p.menu_name as parent_name,
+               m.parent_id, m.order_num, m.path, m.component, m.`query`, m.route_name,
+               m.is_frame, m.is_cache, m.menu_type, m.visible, m.status,
+               ifnull(m.perms, '') as perms, m.icon, m.create_by, m.create_time,
+               m.update_by, m.update_time, m.remark
+        from buyer_menu m
+        left join buyer_menu p on p.buyer_menu_id = m.parent_id
+    </sql>
+
+    <select id="selectBuyerMenuList" parameterType="PortalMenu" resultMap="PortalMenuResult">
+        <include refid="selectBuyerMenuVo"/>
+        <where>
+            <if test="menuName != null and menuName != ''">
+                and m.menu_name like concat('%', #{menuName}, '%')
+            </if>
+            <if test="visible != null and visible != ''">
+                and m.visible = #{visible}
+            </if>
+            <if test="status != null and status != ''">
+                and m.status = #{status}
+            </if>
+        </where>
+        order by m.parent_id, m.order_num, m.buyer_menu_id
+    </select>
+
+    <select id="selectBuyerMenuById" parameterType="Long" resultMap="PortalMenuResult">
+        <include refid="selectBuyerMenuVo"/>
+        where m.buyer_menu_id = #{menuId}
+    </select>
+
+    <select id="hasChildByMenuId" parameterType="Long" resultType="Integer">
+        select count(1) from buyer_menu where parent_id = #{menuId}
+    </select>
+
+    <select id="checkMenuExistRole" parameterType="Long" resultType="Integer">
+        select count(1) from buyer_role_menu where buyer_menu_id = #{menuId}
+    </select>
+
+    <select id="checkBuyerMenuNameUnique" resultMap="PortalMenuResult">
+        <include refid="selectBuyerMenuVo"/>
+        where m.menu_name = #{menuName} and m.parent_id = #{parentId}
+        limit 1
+    </select>
+
+    <insert id="insertBuyerMenu" parameterType="PortalMenu" useGeneratedKeys="true" keyProperty="menuId">
+        insert into buyer_menu(
+            menu_name, parent_id, order_num, path, component, `query`, route_name,
+            is_frame, is_cache, menu_type, visible, status, perms, icon,
+            create_by, create_time, remark
+        ) values (
+            #{menuName}, #{parentId}, #{orderNum}, #{path}, #{component}, #{query}, #{routeName},
+            #{isFrame}, #{isCache}, #{menuType}, #{visible}, #{status}, #{perms}, #{icon},
+            #{createBy}, sysdate(), #{remark}
+        )
+    </insert>
+
+    <update id="updateBuyerMenu" parameterType="PortalMenu">
+        update buyer_menu
+        set menu_name = #{menuName},
+            parent_id = #{parentId},
+            order_num = #{orderNum},
+            path = #{path},
+            component = #{component},
+            `query` = #{query},
+            route_name = #{routeName},
+            is_frame = #{isFrame},
+            is_cache = #{isCache},
+            menu_type = #{menuType},
+            visible = #{visible},
+            status = #{status},
+            perms = #{perms},
+            icon = #{icon},
+            update_by = #{updateBy},
+            update_time = sysdate(),
+            remark = #{remark}
+        where buyer_menu_id = #{menuId}
+    </update>
+
+    <delete id="deleteBuyerMenuById" parameterType="Long">
+        delete from buyer_menu where buyer_menu_id = #{menuId}
+    </delete>
+
+    <select id="selectBuyerMenuIdsByRoleId" parameterType="Long" resultType="Long">
+        select m.buyer_menu_id
+        from buyer_menu m
+        inner join buyer_role_menu rm on rm.buyer_menu_id = m.buyer_menu_id
+        where rm.buyer_role_id = #{roleId}
+        order by m.parent_id, m.order_num
+    </select>
+
+    <sql id="selectBuyerRoleVo">
+        select r.buyer_role_id as role_id, r.buyer_id as subject_id, r.role_name,
+               r.role_key, r.role_sort, r.status, r.del_flag, r.create_by,
+               r.create_time, r.update_by, r.update_time, r.remark
+        from buyer_role r
+    </sql>
+
+    <select id="selectBuyerRoleList" parameterType="PortalRole" resultMap="PortalRoleResult">
+        <include refid="selectBuyerRoleVo"/>
+        where r.del_flag = '0'
+        <if test="subjectId != null">
+            and r.buyer_id = #{subjectId}
+        </if>
+        <if test="roleName != null and roleName != ''">
+            and r.role_name like concat('%', #{roleName}, '%')
+        </if>
+        <if test="roleKey != null and roleKey != ''">
+            and r.role_key like concat('%', #{roleKey}, '%')
+        </if>
+        <if test="status != null and status != ''">
+            and r.status = #{status}
+        </if>
+        <if test="params.beginTime != null and params.beginTime != ''">
+            and date_format(r.create_time,'%Y%m%d') &gt;= date_format(#{params.beginTime},'%Y%m%d')
+        </if>
+        <if test="params.endTime != null and params.endTime != ''">
+            and date_format(r.create_time,'%Y%m%d') &lt;= date_format(#{params.endTime},'%Y%m%d')
+        </if>
+        order by r.role_sort, r.buyer_role_id
+    </select>
+
+    <select id="selectBuyerRoleById" resultMap="PortalRoleResult">
+        <include refid="selectBuyerRoleVo"/>
+        where r.del_flag = '0'
+          and r.buyer_id = #{buyerId}
+          and r.buyer_role_id = #{roleId}
+    </select>
+
+    <select id="checkBuyerRoleNameUnique" resultMap="PortalRoleResult">
+        <include refid="selectBuyerRoleVo"/>
+        where r.del_flag = '0'
+          and r.buyer_id = #{buyerId}
+          and r.role_name = #{roleName}
+        limit 1
+    </select>
+
+    <select id="checkBuyerRoleKeyUnique" resultMap="PortalRoleResult">
+        <include refid="selectBuyerRoleVo"/>
+        where r.del_flag = '0'
+          and r.buyer_id = #{buyerId}
+          and r.role_key = #{roleKey}
+        limit 1
+    </select>
+
+    <insert id="insertBuyerRole" parameterType="PortalRole" useGeneratedKeys="true" keyProperty="roleId">
+        insert into buyer_role(
+            buyer_id, role_name, role_key, role_sort, status,
+            create_by, create_time, remark
+        ) values (
+            #{subjectId}, #{roleName}, #{roleKey}, #{roleSort}, #{status},
+            #{createBy}, sysdate(), #{remark}
+        )
+    </insert>
+
+    <update id="updateBuyerRole" parameterType="PortalRole">
+        update buyer_role
+        set role_name = #{roleName},
+            role_key = #{roleKey},
+            role_sort = #{roleSort},
+            status = #{status},
+            update_by = #{updateBy},
+            update_time = sysdate(),
+            remark = #{remark}
+        where buyer_id = #{subjectId}
+          and buyer_role_id = #{roleId}
+          and del_flag = '0'
+    </update>
+
+    <update id="updateBuyerRoleStatus">
+        update buyer_role
+        set status = #{status},
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where buyer_id = #{buyerId}
+          and buyer_role_id = #{roleId}
+          and del_flag = '0'
+    </update>
+
+    <update id="deleteBuyerRoleById">
+        update buyer_role
+        set del_flag = '2',
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where buyer_id = #{buyerId}
+          and buyer_role_id = #{roleId}
+    </update>
+
+    <select id="countBuyerAccountRoleByRoleId" parameterType="Long" resultType="Integer">
+        select count(1) from buyer_account_role where buyer_role_id = #{roleId}
+    </select>
+
+    <select id="selectBuyerAccountRoleIds" resultType="Long">
+        select ar.buyer_role_id
+        from buyer_account_role ar
+        inner join buyer_account a on a.buyer_account_id = ar.buyer_account_id
+        inner join buyer_role r on r.buyer_role_id = ar.buyer_role_id
+        where a.buyer_id = #{buyerId}
+          and a.buyer_account_id = #{accountId}
+          and r.buyer_id = #{buyerId}
+          and r.del_flag = '0'
+        order by r.role_sort, r.buyer_role_id
+    </select>
+
+    <select id="selectBuyerAccountRoleKeys" resultType="String">
+        select distinct r.role_key
+        from buyer_account_role ar
+        inner join buyer_account a on a.buyer_account_id = ar.buyer_account_id
+        inner join buyer_role r on r.buyer_role_id = ar.buyer_role_id
+        where a.buyer_id = #{buyerId}
+          and a.buyer_account_id = #{accountId}
+          and r.buyer_id = #{buyerId}
+          and r.del_flag = '0'
+          and r.status = '0'
+    </select>
+
+    <select id="selectBuyerAccountPermissions" resultType="String">
+        select distinct m.perms
+        from buyer_account_role ar
+        inner join buyer_role r on r.buyer_role_id = ar.buyer_role_id
+        inner join buyer_role_menu rm on rm.buyer_role_id = r.buyer_role_id
+        inner join buyer_menu m on m.buyer_menu_id = rm.buyer_menu_id
+        where ar.buyer_account_id = #{accountId}
+          and r.buyer_id = #{buyerId}
+          and r.del_flag = '0'
+          and r.status = '0'
+          and m.status = '0'
+          and m.perms is not null
+          and m.perms != ''
+    </select>
+
+    <select id="selectBuyerAccountMenuList" resultMap="PortalMenuResult">
+        select distinct m.buyer_menu_id as menu_id, m.menu_name, p.menu_name as parent_name,
+               m.parent_id, m.order_num, m.path, m.component, m.`query`, m.route_name,
+               m.is_frame, m.is_cache, m.menu_type, m.visible, m.status,
+               ifnull(m.perms, '') as perms, m.icon, m.create_by, m.create_time,
+               m.update_by, m.update_time, m.remark
+        from buyer_account_role ar
+        inner join buyer_role r on r.buyer_role_id = ar.buyer_role_id
+        inner join buyer_role_menu rm on rm.buyer_role_id = r.buyer_role_id
+        inner join buyer_menu m on m.buyer_menu_id = rm.buyer_menu_id
+        left join buyer_menu p on p.buyer_menu_id = m.parent_id
+        where ar.buyer_account_id = #{accountId}
+          and r.buyer_id = #{buyerId}
+          and r.del_flag = '0'
+          and r.status = '0'
+          and m.status = '0'
+          and m.menu_type in ('M', 'C')
+        order by m.parent_id, m.order_num, m.buyer_menu_id
+    </select>
+
+    <select id="countBuyerRolesByIds" resultType="Integer">
+        select count(1)
+        from buyer_role
+        where buyer_id = #{buyerId}
+          and del_flag = '0'
+          and buyer_role_id in
+        <foreach collection="roleIds" item="roleId" open="(" separator="," close=")">
+            #{roleId}
+        </foreach>
+    </select>
+
+    <delete id="deleteBuyerAccountRoles" parameterType="Long">
+        delete from buyer_account_role where buyer_account_id = #{accountId}
+    </delete>
+
+    <insert id="batchBuyerAccountRoles">
+        insert into buyer_account_role(buyer_account_id, buyer_role_id)
+        values
+        <foreach collection="roleIds" item="roleId" separator=",">
+            (#{accountId}, #{roleId})
+        </foreach>
+    </insert>
+
+    <delete id="deleteBuyerRoleMenuByRoleId" parameterType="Long">
+        delete from buyer_role_menu where buyer_role_id = #{roleId}
+    </delete>
+
+    <insert id="batchBuyerRoleMenu">
+        insert into buyer_role_menu(buyer_role_id, buyer_menu_id)
+        values
+        <foreach collection="menuIds" item="menuId" separator=",">
+            (#{roleId}, #{menuId})
+        </foreach>
+    </insert>
+</mapper>

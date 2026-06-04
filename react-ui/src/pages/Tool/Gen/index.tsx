@@ -1,6 +1,6 @@
-import { DownloadOutlined, PlusOutlined } from '@ant-design/icons';
-import { Button, Drawer, Modal, Card, Layout } from 'antd';
-import type { FormInstance } from 'antd';
+import { DownloadOutlined, DownOutlined, PlusOutlined } from '@ant-design/icons';
+import { Button, Drawer, Modal, Card, Dropdown, Layout } from 'antd';
+import type { MenuProps } from 'antd';
 import React, { useState, useRef } from 'react';
 import { history, FormattedMessage, useAccess } from '@umijs/max';
 import PreviewForm from './components/PreviewCode';
@@ -15,11 +15,11 @@ import {
   syncDbInfo,
 } from './service';
 import {
-  ActionType,
+  type ActionType,
   FooterToolbar,
-  ProColumns,
+  type ProColumns,
   ProDescriptions,
-  ProDescriptionsItemProps,
+  type ProDescriptionsItemProps,
   ProTable,
 } from '@ant-design/pro-components';
 import { getPersistedProTableSearch } from '@/utils/proTableSearch';
@@ -41,7 +41,7 @@ const handleRemove = async (selectedRows: GenCodeType[]) => {
     hide();
     message.success('删除成功，即将刷新');
     return true;
-  } catch (error) {
+  } catch (_error) {
     hide();
     message.error('删除失败，请重试');
     return false;
@@ -59,7 +59,7 @@ const handleRemoveOne = async (selectedRow: GenCodeType) => {
     hide();
     message.success('删除成功，即将刷新');
     return true;
-  } catch (error) {
+  } catch (_error) {
     hide();
     message.error('删除失败，请重试');
     return false;
@@ -129,100 +129,102 @@ const GenCodeView: React.FC = () => {
       dataIndex: 'option',
       width: '220px',
       valueType: 'option',
-      render: (_, record) => [
-        <Button
-          type="link"
-          size="small"
-          key="preview"
-          hidden={!access.hasPerms('tool:gen:edit')}
-          onClick={() => {
-            previewCode(record.tableId).then((res) => {
-              if (res.code === 200) {
-                setPreivewData(res.data);
-                setShowPreview(true);
-              } else {
-                message.error('获取数据失败');
-              }
-            });
-          }}
-        >
-          预览
-        </Button>,
-        <Button
-          type="link"
-          size="small"
-          key="config"
-          hidden={!access.hasPerms('tool:gen:edit')}
-          onClick={() => {
-            history.push(`/tool/gen/edit?id=${record.tableId}`);
-          }}
-        >
-          编辑
-        </Button>,
-        <Button
-          type="link"
-          size="small"
-          danger
-          key="delete"
-          hidden={!access.hasPerms('tool:gen:del')}
-          onClick={async () => {
-            Modal.confirm({
-              title: '删除任务',
-              content: '确定删除该任务吗？',
-              okText: '确认',
-              cancelText: '取消',
-              onOk: async () => {
-                const success = await handleRemoveOne(record);
-                if (success) {
-                  if (actionRef.current) {
-                    actionRef.current.reload();
-                  }
-                }
-              },
-            });
-          }}
-        >
-          删除
-        </Button>,
-        <Button
-          type="link"
-          size="small"
-          key="sync"
-          hidden={!access.hasPerms('tool:gen:edit')}
-          onClick={() => {
-            syncDbInfo(record.tableName).then((res) => {
-              if (res.code === 200) {
-                message.success('同步成功');
-              } else {
-                message.error('同步失败');
-              }
-            });
-          }}
-        >
-          同步
-        </Button>,
-        <Button
-          type="link"
-          size="small"
-          key="gencode"
-          hidden={!access.hasPerms('tool:gen:edit')}
-          onClick={() => {
-            if (record.genType === '1') {
-              genCode(record.tableName).then((res) => {
+      render: (_, record) => {
+        const moreItems: MenuProps['items'] = [];
+
+        if (access.hasPerms('tool:gen:del')) {
+          moreItems.push({ key: 'delete', label: '删除', danger: true });
+        }
+        if (access.hasPerms('tool:gen:edit')) {
+          moreItems.push(
+            { key: 'sync', label: '同步' },
+            { key: 'gencode', label: '生成代码' },
+          );
+        }
+
+        return [
+          <Button
+            type="link"
+            size="small"
+            key="preview"
+            hidden={!access.hasPerms('tool:gen:edit')}
+            onClick={() => {
+              previewCode(record.tableId).then((res) => {
                 if (res.code === 200) {
-                  message.success(`成功生成到自定义路径：${record.genPath}`);
+                  setPreivewData(res.data);
+                  setShowPreview(true);
                 } else {
-                  message.error(res.msg);
+                  message.error('获取数据失败');
                 }
               });
-            } else {
-              batchGenCode(record.tableName);
-            }
-          }}
-        >
-          生成代码
-        </Button>,
-      ],
+            }}
+          >
+            预览
+          </Button>,
+          <Button
+            type="link"
+            size="small"
+            key="config"
+            hidden={!access.hasPerms('tool:gen:edit')}
+            onClick={() => {
+              history.push(`/tool/gen/edit?id=${record.tableId}`);
+            }}
+          >
+            编辑
+          </Button>,
+          moreItems.length > 0 ? (
+            <Dropdown
+              key="more"
+              trigger={['click']}
+              menu={{
+                items: moreItems,
+                onClick: ({ key }) => {
+                  if (key === 'delete') {
+                    Modal.confirm({
+                      title: '删除任务',
+                      content: '确定删除该任务吗？',
+                      okText: '确认',
+                      cancelText: '取消',
+                      onOk: async () => {
+                        const success = await handleRemoveOne(record);
+                        if (success) {
+                          if (actionRef.current) {
+                            actionRef.current.reload();
+                          }
+                        }
+                      },
+                    });
+                  } else if (key === 'sync') {
+                    syncDbInfo(record.tableName).then((res) => {
+                      if (res.code === 200) {
+                        message.success('同步成功');
+                      } else {
+                        message.error('同步失败');
+                      }
+                    });
+                  } else if (key === 'gencode') {
+                    if (record.genType === '1') {
+                      genCode(record.tableName).then((res) => {
+                        if (res.code === 200) {
+                          message.success(`成功生成到自定义路径：${record.genPath}`);
+                        } else {
+                          message.error(res.msg);
+                        }
+                      });
+                    } else {
+                      batchGenCode(record.tableName);
+                    }
+                  }
+                },
+              }}
+            >
+              <a onClick={(event) => event.preventDefault()}>
+                更多 <DownOutlined style={{ fontSize: 10 }} />
+              </a>
+            </Dropdown>
+          ) : null,
+        ];
+      },
     },
   ];
 

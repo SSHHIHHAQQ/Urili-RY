@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.PortalDirectLoginTicketMapper">
+
+    <resultMap type="PortalDirectLoginTicket" id="PortalDirectLoginTicketResult">
+        <id     property="ticketId"         column="ticket_id"          />
+        <result property="terminal"         column="terminal"           />
+        <result property="targetSubjectId"  column="target_subject_id"  />
+        <result property="targetSubjectNo"  column="target_subject_no"  />
+        <result property="targetAccountId"  column="target_account_id"  />
+        <result property="targetUserName"   column="target_user_name"   />
+        <result property="actingAdminId"    column="acting_admin_id"    />
+        <result property="actingAdminName"  column="acting_admin_name"  />
+        <result property="reason"           column="reason"             />
+        <result property="tokenHash"        column="token_hash"         />
+        <result property="expireTime"       column="expire_time"        />
+        <result property="usedTime"         column="used_time"          />
+        <result property="usedIp"           column="used_ip"            />
+        <result property="status"           column="status"             />
+        <result property="createBy"         column="create_by"          />
+        <result property="createTime"       column="create_time"        />
+        <result property="updateBy"         column="update_by"          />
+        <result property="updateTime"       column="update_time"        />
+        <result property="remark"           column="remark"             />
+    </resultMap>
+
+    <sql id="selectPortalDirectLoginTicketVo">
+        select ticket_id, terminal, target_subject_id, target_subject_no, target_account_id,
+               target_user_name, acting_admin_id, acting_admin_name, reason, token_hash,
+               expire_time, used_time, used_ip, status, create_by, create_time,
+               update_by, update_time, remark
+        from portal_direct_login_ticket
+    </sql>
+
+    <insert id="insertPortalDirectLoginTicket" parameterType="PortalDirectLoginTicket" useGeneratedKeys="true" keyProperty="ticketId">
+        insert into portal_direct_login_ticket (
+            terminal, target_subject_id, target_subject_no, target_account_id, target_user_name,
+            acting_admin_id, acting_admin_name, reason, token_hash, expire_time, used_time,
+            used_ip, status, create_by, create_time, update_by, update_time, remark
+        ) values (
+            #{terminal}, #{targetSubjectId}, #{targetSubjectNo}, #{targetAccountId}, #{targetUserName},
+            #{actingAdminId}, #{actingAdminName}, #{reason}, #{tokenHash}, #{expireTime}, #{usedTime},
+            #{usedIp}, #{status}, #{createBy}, sysdate(), #{updateBy}, #{updateTime}, #{remark}
+        )
+    </insert>
+
+    <select id="selectPortalDirectLoginTicketByTokenHash" parameterType="String" resultMap="PortalDirectLoginTicketResult">
+        <include refid="selectPortalDirectLoginTicketVo"/>
+        where token_hash = #{tokenHash}
+        limit 1
+    </select>
+
+    <update id="markPortalDirectLoginTicketUsed">
+        update portal_direct_login_ticket
+        set status = 'USED',
+            used_time = #{usedTime},
+            used_ip = #{usedIp},
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where ticket_id = #{ticketId}
+          and status = 'ISSUED'
+          and used_time is null
+          and expire_time &gt;= #{usedTime}
+    </update>
+
+    <update id="markPortalDirectLoginTicketExpired">
+        update portal_direct_login_ticket
+        set status = 'EXPIRED',
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where ticket_id = #{ticketId}
+          and status = 'ISSUED'
+    </update>
+</mapper>

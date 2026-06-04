@@ -1,4 +1,3 @@
-import { DisconnectOutlined, LinkOutlined } from '@ant-design/icons';
 import {
   type ActionType,
   type ProColumns,
@@ -88,7 +87,6 @@ export default function SyncTabs({
                 <Button
                   type="link"
                   size="small"
-                  icon={<DisconnectOutlined />}
                   hidden={!access.hasPerms('integration:upstream:pair')}
                 >
                   解除
@@ -100,7 +98,6 @@ export default function SyncTabs({
                 key="pair"
                 type="link"
                 size="small"
-                icon={<LinkOutlined />}
                 hidden={!access.hasPerms('integration:upstream:pair')}
                 onClick={() =>
                   setPairingModal({
@@ -166,7 +163,6 @@ export default function SyncTabs({
           key="pair"
           type="link"
           size="small"
-          icon={<LinkOutlined />}
           hidden={!access.hasPerms('integration:upstream:pair')}
           onClick={() =>
             setPairingModal({ open: true, type: 'logistics', row: record })

@@ -2,10 +2,10 @@ import { message } from '@/utils/feedback';
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useIntl, FormattedMessage, useAccess, history } from '@umijs/max';
-import { Button, Dropdown, FormInstance, Modal, Space } from 'antd';
-import { ActionType, FooterToolbar, PageContainer, ProColumns, ProTable } from '@ant-design/pro-components';
+import { Button, Dropdown, Modal } from 'antd';
+import { type ActionType, FooterToolbar, PageContainer, type ProColumns, ProTable } from '@ant-design/pro-components';
 import { getPersistedProTableSearch } from '@/utils/proTableSearch';
-import { PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, DownOutlined, EditOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, DownOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { getJobList, removeJob, addJob, updateJob, exportJob, runJob } from '@/services/monitor/job';
 import { getDictSelectOption, getDictValueEnum } from '@/services/system/dict';
 import UpdateForm from './edit';
@@ -35,7 +35,7 @@ const handleAdd = async (fields: API.Monitor.Job) => {
       message.error(resp.msg);
     }
     return true;
-  } catch (error) {
+  } catch {
     hide();
     message.error('添加失败请重试！');
     return false;
@@ -58,7 +58,7 @@ const handleUpdate = async (fields: API.Monitor.Job) => {
       message.error(resp.msg);
     }
     return true;
-  } catch (error) {
+  } catch {
     hide();
     message.error('配置失败请重试！');
     return false;
@@ -82,7 +82,7 @@ const handleRemove = async (selectedRows: API.Monitor.Job[]) => {
       message.error(resp.msg);
     }
     return true;
-  } catch (error) {
+  } catch {
     hide();
     message.error('删除失败，请重试');
     return false;
@@ -102,7 +102,7 @@ const handleRemoveOne = async (selectedRow: API.Monitor.Job) => {
       message.error(resp.msg);
     }
     return true;
-  } catch (error) {
+  } catch {
     hide();
     message.error('删除失败，请重试');
     return false;
@@ -120,7 +120,7 @@ const handleExport = async () => {
     hide();
     message.success('导出成功');
     return true;
-  } catch (error) {
+  } catch {
     hide();
     message.error('导出失败，请重试');
     return false;
@@ -217,7 +217,6 @@ const JobTableList: React.FC = () => {
           type="link"
           size="small"
           key="edit"
-          icon = <EditOutlined />
           hidden={!access.hasPerms('monitor:job:edit')}
           onClick={() => {
             setModalVisible(true);
@@ -231,7 +230,6 @@ const JobTableList: React.FC = () => {
           size="small"
           danger
           key="batchRemove"
-          icon = <DeleteOutlined />
           hidden={!access.hasPerms('monitor:job:remove')}
           onClick={async () => {
             Modal.confirm({
@@ -254,6 +252,7 @@ const JobTableList: React.FC = () => {
         </Button>,
         <Dropdown
           key="more"
+          trigger={['click']}
           menu={{
             items: [
               {
@@ -295,10 +294,7 @@ const JobTableList: React.FC = () => {
           }}
         >
           <a className="ant-dropdown-link" onClick={(e) => e.preventDefault()}>
-            <Space>
-              <DownOutlined />
-              更多
-            </Space>
+            更多 <DownOutlined style={{ fontSize: 10 }} />
           </a>
         </Dropdown>,
       ],

@@ -124,6 +124,16 @@ public interface SysMenuMapper
     public int updateMenuStatusByIds(@Param("menuIds") List<Long> menuIds, @Param("status") String status, @Param("updateBy") String updateBy);
 
     /**
+     * 批量修改菜单显示状态
+     *
+     * @param menuIds 菜单ID集合
+     * @param visible 显示状态
+     * @param updateBy 更新人
+     * @return 结果
+     */
+    public int updateMenuVisibleByIds(@Param("menuIds") List<Long> menuIds, @Param("visible") String visible, @Param("updateBy") String updateBy);
+
+    /**
      * 删除菜单管理信息
      *
      * @param menuId 菜单ID

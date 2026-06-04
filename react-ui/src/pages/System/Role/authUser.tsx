@@ -3,7 +3,7 @@ import { message } from '@/utils/feedback';
 import React, { useState, useRef, useEffect } from 'react';
 import { useIntl, FormattedMessage, useAccess, history, useParams } from '@umijs/max';
 import { Button, Modal } from 'antd';
-import { ActionType, PageContainer, ProColumns, ProTable } from '@ant-design/pro-components';
+import { type ActionType, PageContainer, type ProColumns, ProTable } from '@ant-design/pro-components';
 import { getPersistedProTableSearch } from '@/utils/proTableSearch';
 import { PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, RollbackOutlined } from '@ant-design/icons';
 import { authUserSelectAll, authUserCancel, authUserCancelAll, allocatedUserList, unallocatedUserList } from '@/services/system/role';
@@ -30,7 +30,7 @@ const cancelAuthUserAll = async (roleId: string, selectedRows: API.System.User[]
 			message.error(resp.msg);
 		}
 		return true;
-	} catch (error) {
+	} catch {
 		hide();
 		message.error('取消授权失败，请重试');
 		return false;
@@ -48,7 +48,7 @@ const cancelAuthUser = async (roleId: string, userId: number) => {
 			message.error(resp.msg);
 		}
 		return true;
-	} catch (error) {
+	} catch {
 		hide();
 		message.error('取消授权失败，请重试');
 		return false;
@@ -130,13 +130,12 @@ const AuthUserTableList: React.FC = () => {
 					type="link"
 					size="small"
 					danger
-					icon={<DeleteOutlined />}
 					key="remove"
 					hidden={!access.hasPerms('system:role:remove')}
 					onClick={async () => {
 						Modal.confirm({
 							title: '删除',
-							content: '确认要取消该用户' + record.userName + '"角色授权吗？',
+							content: `确认要取消该用户${record.userName}的角色授权吗？`,
 							okText: '确认',
 							cancelText: '取消',
 							onOk: async () => {

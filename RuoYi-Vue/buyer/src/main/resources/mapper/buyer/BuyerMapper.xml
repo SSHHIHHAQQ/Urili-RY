@@ -42,15 +42,21 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
     <resultMap type="BuyerAccount" id="BuyerAccountResult">
         <id     property="buyerAccountId" column="buyer_account_id"  />
+        <result property="accountId"      column="buyer_account_id"  />
         <result property="buyerId"        column="buyer_id"          />
-        <result property="userId"         column="user_id"           />
+        <result property="deptId"         column="dept_id"           />
+        <result property="deptName"       column="dept_name"         />
         <result property="accountRole"    column="account_role"      />
         <result property="status"         column="status"            />
         <result property="userName"       column="user_name"         />
         <result property="nickName"       column="nick_name"         />
+        <result property="password"       column="password"          />
         <result property="email"          column="email"             />
         <result property="phonenumber"    column="phonenumber"       />
         <result property="userStatus"     column="user_status"       />
+        <result property="lastLoginIp"    column="last_login_ip"     />
+        <result property="lastLoginTime"  column="last_login_time"   />
+        <result property="pwdUpdateTime"  column="pwd_update_time"   />
         <result property="createBy"       column="create_by"         />
         <result property="createTime"     column="create_time"       />
         <result property="updateBy"       column="update_by"         />
@@ -61,14 +67,14 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <sql id="selectBuyerColumns">
         select b.buyer_id, b.buyer_no, b.buyer_code, b.buyer_name,
                b.buyer_short_name, b.buyer_type, b.buyer_level, b.status,
-               owner.user_name as username,
+               owner_link.user_name as username,
                b.legal_id, b.business_license_no, b.country_code, b.state_province, b.city,
                b.postal_code, b.address_line1, b.address_line2, b.contact_name, b.contact_phone,
                b.contact_email, b.attachment_file_name, b.attachment_mime_type,
                b.attachment_size_bytes, b.attachment_file_url, b.create_by, b.create_time,
                b.update_by, b.update_time, b.remark,
                coalesce(account_stat.account_count, 0) as account_count,
-               owner.login_date as last_login_time,
+               owner_link.last_login_time as last_login_time,
                cast(0.00 as decimal(18,2)) as account_balance,
                'USD' as balance_currency
     </sql>
@@ -83,7 +89,6 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                     where owner_pick.buyer_id = b.buyer_id
                       and owner_pick.account_role = 'OWNER'
               )
-        left join sys_user owner on owner.user_id = owner_link.user_id
         left join (
             select buyer_id, count(*) as account_count
             from buyer_account
@@ -112,7 +117,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             and b.buyer_short_name like concat('%', #{buyerShortName}, '%')
         </if>
         <if test="username != null and username != ''">
-            and owner.user_name like concat('%', #{username}, '%')
+            and owner_link.user_name like concat('%', #{username}, '%')
         </if>
         <if test="buyerLevel != null and buyerLevel != ''">
             and b.buyer_level = #{buyerLevel}
@@ -139,10 +144,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             and date_format(b.create_time,'%Y%m%d') &lt;= date_format(#{params.createEndTime},'%Y%m%d')
         </if>
         <if test="params.lastLoginBeginTime != null and params.lastLoginBeginTime != ''">
-            and date_format(owner.login_date,'%Y%m%d') &gt;= date_format(#{params.lastLoginBeginTime},'%Y%m%d')
+            and date_format(owner_link.last_login_time,'%Y%m%d') &gt;= date_format(#{params.lastLoginBeginTime},'%Y%m%d')
         </if>
         <if test="params.lastLoginEndTime != null and params.lastLoginEndTime != ''">
-            and date_format(owner.login_date,'%Y%m%d') &lt;= date_format(#{params.lastLoginEndTime},'%Y%m%d')
+            and date_format(owner_link.last_login_time,'%Y%m%d') &lt;= date_format(#{params.lastLoginEndTime},'%Y%m%d')
         </if>
         <if test="params.balanceMin != null and params.balanceMin != ''">
             and cast(0.00 as decimal(18,2)) &gt;= cast(#{params.balanceMin} as decimal(18,2))
@@ -229,31 +234,41 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </update>
 
     <select id="selectBuyerAccountList" resultMap="BuyerAccountResult">
-        select a.buyer_account_id, a.buyer_id, a.user_id, a.account_role, a.status,
-               a.create_by, a.create_time, a.update_by, a.update_time, a.remark,
-               u.user_name, u.nick_name, u.email, u.phonenumber, u.status as user_status
+        select a.buyer_account_id, a.buyer_id, a.dept_id, d.dept_name, a.account_role, a.status, a.status as user_status,
+               a.user_name, a.nick_name, a.email, a.phonenumber, a.last_login_ip, a.last_login_time, a.pwd_update_time,
+               a.create_by, a.create_time, a.update_by, a.update_time, a.remark
         from buyer_account a
-        left join sys_user u on u.user_id = a.user_id
+        left join buyer_dept d on d.buyer_dept_id = a.dept_id and d.buyer_id = a.buyer_id and d.del_flag = '0'
         where a.buyer_id = #{buyerId}
         order by a.create_time desc, a.buyer_account_id desc
     </select>
 
-    <select id="selectBuyerAccountByUserId" parameterType="Long" resultMap="BuyerAccountResult">
-        select a.buyer_account_id, a.buyer_id, a.user_id, a.account_role, a.status,
-               a.create_by, a.create_time, a.update_by, a.update_time, a.remark,
-               u.user_name, u.nick_name, u.email, u.phonenumber, u.status as user_status
+    <select id="selectBuyerAccountById" parameterType="Long" resultMap="BuyerAccountResult">
+        select a.buyer_account_id, a.buyer_id, a.dept_id, d.dept_name, a.account_role, a.status, a.status as user_status,
+               a.user_name, a.nick_name, a.email, a.phonenumber, a.last_login_ip, a.last_login_time, a.pwd_update_time,
+               a.create_by, a.create_time, a.update_by, a.update_time, a.remark
         from buyer_account a
-        left join sys_user u on u.user_id = a.user_id
-        where a.user_id = #{userId}
+        left join buyer_dept d on d.buyer_dept_id = a.dept_id and d.buyer_id = a.buyer_id and d.del_flag = '0'
+        where a.buyer_account_id = #{buyerAccountId}
+        limit 1
+    </select>
+
+    <select id="selectBuyerAccountByUserName" parameterType="String" resultMap="BuyerAccountResult">
+        select a.buyer_account_id, a.buyer_id, a.dept_id, d.dept_name, a.account_role, a.status, a.status as user_status,
+               a.user_name, a.nick_name, a.password, a.email, a.phonenumber, a.last_login_ip, a.last_login_time, a.pwd_update_time,
+               a.create_by, a.create_time, a.update_by, a.update_time, a.remark
+        from buyer_account a
+        left join buyer_dept d on d.buyer_dept_id = a.dept_id and d.buyer_id = a.buyer_id and d.del_flag = '0'
+        where a.user_name = #{userName}
         limit 1
     </select>
 
     <select id="selectOwnerBuyerAccountByBuyerId" parameterType="Long" resultMap="BuyerAccountResult">
-        select a.buyer_account_id, a.buyer_id, a.user_id, a.account_role, a.status,
-               a.create_by, a.create_time, a.update_by, a.update_time, a.remark,
-               u.user_name, u.nick_name, u.email, u.phonenumber, u.status as user_status
+        select a.buyer_account_id, a.buyer_id, a.dept_id, d.dept_name, a.account_role, a.status, a.status as user_status,
+               a.user_name, a.nick_name, a.email, a.phonenumber, a.last_login_ip, a.last_login_time, a.pwd_update_time,
+               a.create_by, a.create_time, a.update_by, a.update_time, a.remark
         from buyer_account a
-        left join sys_user u on u.user_id = a.user_id
+        left join buyer_dept d on d.buyer_dept_id = a.dept_id and d.buyer_id = a.buyer_id and d.del_flag = '0'
         where a.buyer_id = #{buyerId}
           and a.account_role = 'OWNER'
         order by a.buyer_account_id asc
@@ -262,9 +277,86 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
     <insert id="insertBuyerAccount" parameterType="BuyerAccount" useGeneratedKeys="true" keyProperty="buyerAccountId">
         insert into buyer_account(
-            buyer_id, user_id, account_role, status, create_by, create_time, remark
+            buyer_id, dept_id, user_name, nick_name, password, email, phonenumber,
+            account_role, status, pwd_update_time, create_by, create_time, remark
         ) values (
-            #{buyerId}, #{userId}, #{accountRole}, #{status}, #{createBy}, sysdate(), #{remark}
+            #{buyerId}, #{deptId}, #{userName}, #{nickName}, #{password}, #{email}, #{phonenumber},
+            #{accountRole}, #{status}, sysdate(), #{createBy}, sysdate(), #{remark}
         )
     </insert>
+
+    <update id="updateBuyerAccount" parameterType="BuyerAccount">
+        update buyer_account
+        set nick_name = #{nickName},
+            dept_id = #{deptId},
+            email = #{email},
+            phonenumber = #{phonenumber},
+            status = #{status},
+            update_by = #{updateBy},
+            update_time = sysdate(),
+            remark = #{remark}
+        where buyer_account_id = #{buyerAccountId}
+    </update>
+
+    <update id="resetBuyerAccountPassword">
+        update buyer_account
+        set password = #{password},
+            pwd_update_time = sysdate(),
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where buyer_account_id = #{buyerAccountId}
+    </update>
+
+    <update id="updateBuyerAccountLoginInfo">
+        update buyer_account
+        set last_login_ip = #{lastLoginIp},
+            last_login_time = #{lastLoginTime},
+            update_time = sysdate()
+        where buyer_account_id = #{buyerAccountId}
+    </update>
+
+    <insert id="insertBuyerLoginLog" parameterType="PortalLoginLog">
+        insert into buyer_login_log(
+            buyer_id, buyer_account_id, user_name, ipaddr, login_location,
+            browser, os, status, msg, login_time
+        ) values (
+            #{subjectId}, #{accountId}, #{userName}, #{ipaddr}, #{loginLocation},
+            #{browser}, #{os}, #{status}, #{msg}, #{loginTime}
+        )
+    </insert>
+
+    <insert id="insertBuyerSession" parameterType="PortalLoginSession">
+        insert into buyer_session(
+            token_id, buyer_id, buyer_account_id, user_name,
+            login_ip, login_time, expire_time, status
+        ) values (
+            #{tokenId}, #{subjectId}, #{accountId}, #{userName},
+            #{loginIp}, #{loginTime}, #{expireTime}, #{status}
+        )
+    </insert>
+
+    <select id="selectOnlineBuyerSessionTokenIds" resultType="String">
+        select token_id
+        from buyer_session
+        where buyer_id = #{buyerId}
+          and status = '0'
+          and logout_time is null
+          and expire_time >= sysdate()
+        <if test="buyerAccountId != null">
+          and buyer_account_id = #{buyerAccountId}
+        </if>
+    </select>
+
+    <update id="forceLogoutBuyerSessions">
+        update buyer_session
+        set status = '1',
+            logout_time = sysdate()
+        where buyer_id = #{buyerId}
+          and status = '0'
+          and logout_time is null
+          and expire_time >= sysdate()
+        <if test="buyerAccountId != null">
+          and buyer_account_id = #{buyerAccountId}
+        </if>
+    </update>
 </mapper>

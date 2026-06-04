@@ -42,15 +42,21 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
     <resultMap type="SellerAccount" id="SellerAccountResult">
         <id     property="sellerAccountId" column="seller_account_id" />
+        <result property="accountId"       column="seller_account_id" />
         <result property="sellerId"        column="seller_id"         />
-        <result property="userId"          column="user_id"           />
+        <result property="deptId"          column="dept_id"           />
+        <result property="deptName"        column="dept_name"         />
         <result property="accountRole"     column="account_role"      />
         <result property="status"          column="status"            />
         <result property="userName"        column="user_name"         />
         <result property="nickName"        column="nick_name"         />
+        <result property="password"        column="password"          />
         <result property="email"           column="email"             />
         <result property="phonenumber"     column="phonenumber"       />
         <result property="userStatus"      column="user_status"       />
+        <result property="lastLoginIp"     column="last_login_ip"     />
+        <result property="lastLoginTime"   column="last_login_time"   />
+        <result property="pwdUpdateTime"   column="pwd_update_time"   />
         <result property="createBy"        column="create_by"         />
         <result property="createTime"      column="create_time"       />
         <result property="updateBy"        column="update_by"         />
@@ -61,14 +67,14 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <sql id="selectSellerColumns">
         select s.seller_id, s.seller_no, s.seller_code, s.seller_name,
                s.seller_short_name, s.seller_type, s.seller_level, s.status,
-               owner.user_name as username,
+               owner_link.user_name as username,
                s.legal_id, s.business_license_no, s.country_code, s.state_province, s.city,
                s.postal_code, s.address_line1, s.address_line2, s.contact_name, s.contact_phone,
                s.contact_email, s.attachment_file_name, s.attachment_mime_type,
                s.attachment_size_bytes, s.attachment_file_url, s.create_by, s.create_time,
                s.update_by, s.update_time, s.remark,
                coalesce(account_stat.account_count, 0) as account_count,
-               owner.login_date as last_login_time,
+               owner_link.last_login_time as last_login_time,
                cast(0.00 as decimal(18,2)) as account_balance,
                'USD' as balance_currency
     </sql>
@@ -83,7 +89,6 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                     where owner_pick.seller_id = s.seller_id
                       and owner_pick.account_role = 'OWNER'
               )
-        left join sys_user owner on owner.user_id = owner_link.user_id
         left join (
             select seller_id, count(*) as account_count
             from seller_account
@@ -112,7 +117,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             and s.seller_short_name like concat('%', #{sellerShortName}, '%')
         </if>
         <if test="username != null and username != ''">
-            and owner.user_name like concat('%', #{username}, '%')
+            and owner_link.user_name like concat('%', #{username}, '%')
         </if>
         <if test="sellerLevel != null and sellerLevel != ''">
             and s.seller_level = #{sellerLevel}
@@ -139,10 +144,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             and date_format(s.create_time,'%Y%m%d') &lt;= date_format(#{params.createEndTime},'%Y%m%d')
         </if>
         <if test="params.lastLoginBeginTime != null and params.lastLoginBeginTime != ''">
-            and date_format(owner.login_date,'%Y%m%d') &gt;= date_format(#{params.lastLoginBeginTime},'%Y%m%d')
+            and date_format(owner_link.last_login_time,'%Y%m%d') &gt;= date_format(#{params.lastLoginBeginTime},'%Y%m%d')
         </if>
         <if test="params.lastLoginEndTime != null and params.lastLoginEndTime != ''">
-            and date_format(owner.login_date,'%Y%m%d') &lt;= date_format(#{params.lastLoginEndTime},'%Y%m%d')
+            and date_format(owner_link.last_login_time,'%Y%m%d') &lt;= date_format(#{params.lastLoginEndTime},'%Y%m%d')
         </if>
         <if test="params.balanceMin != null and params.balanceMin != ''">
             and cast(0.00 as decimal(18,2)) &gt;= cast(#{params.balanceMin} as decimal(18,2))
@@ -229,31 +234,41 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </update>
 
     <select id="selectSellerAccountList" resultMap="SellerAccountResult">
-        select a.seller_account_id, a.seller_id, a.user_id, a.account_role, a.status,
-               a.create_by, a.create_time, a.update_by, a.update_time, a.remark,
-               u.user_name, u.nick_name, u.email, u.phonenumber, u.status as user_status
+        select a.seller_account_id, a.seller_id, a.dept_id, d.dept_name, a.account_role, a.status, a.status as user_status,
+               a.user_name, a.nick_name, a.email, a.phonenumber, a.last_login_ip, a.last_login_time, a.pwd_update_time,
+               a.create_by, a.create_time, a.update_by, a.update_time, a.remark
         from seller_account a
-        left join sys_user u on u.user_id = a.user_id
+        left join seller_dept d on d.seller_dept_id = a.dept_id and d.seller_id = a.seller_id and d.del_flag = '0'
         where a.seller_id = #{sellerId}
         order by a.create_time desc, a.seller_account_id desc
     </select>
 
-    <select id="selectSellerAccountByUserId" parameterType="Long" resultMap="SellerAccountResult">
-        select a.seller_account_id, a.seller_id, a.user_id, a.account_role, a.status,
-               a.create_by, a.create_time, a.update_by, a.update_time, a.remark,
-               u.user_name, u.nick_name, u.email, u.phonenumber, u.status as user_status
+    <select id="selectSellerAccountById" parameterType="Long" resultMap="SellerAccountResult">
+        select a.seller_account_id, a.seller_id, a.dept_id, d.dept_name, a.account_role, a.status, a.status as user_status,
+               a.user_name, a.nick_name, a.email, a.phonenumber, a.last_login_ip, a.last_login_time, a.pwd_update_time,
+               a.create_by, a.create_time, a.update_by, a.update_time, a.remark
         from seller_account a
-        left join sys_user u on u.user_id = a.user_id
-        where a.user_id = #{userId}
+        left join seller_dept d on d.seller_dept_id = a.dept_id and d.seller_id = a.seller_id and d.del_flag = '0'
+        where a.seller_account_id = #{sellerAccountId}
+        limit 1
+    </select>
+
+    <select id="selectSellerAccountByUserName" parameterType="String" resultMap="SellerAccountResult">
+        select a.seller_account_id, a.seller_id, a.dept_id, d.dept_name, a.account_role, a.status, a.status as user_status,
+               a.user_name, a.nick_name, a.password, a.email, a.phonenumber, a.last_login_ip, a.last_login_time, a.pwd_update_time,
+               a.create_by, a.create_time, a.update_by, a.update_time, a.remark
+        from seller_account a
+        left join seller_dept d on d.seller_dept_id = a.dept_id and d.seller_id = a.seller_id and d.del_flag = '0'
+        where a.user_name = #{userName}
         limit 1
     </select>
 
     <select id="selectOwnerSellerAccountBySellerId" parameterType="Long" resultMap="SellerAccountResult">
-        select a.seller_account_id, a.seller_id, a.user_id, a.account_role, a.status,
-               a.create_by, a.create_time, a.update_by, a.update_time, a.remark,
-               u.user_name, u.nick_name, u.email, u.phonenumber, u.status as user_status
+        select a.seller_account_id, a.seller_id, a.dept_id, d.dept_name, a.account_role, a.status, a.status as user_status,
+               a.user_name, a.nick_name, a.email, a.phonenumber, a.last_login_ip, a.last_login_time, a.pwd_update_time,
+               a.create_by, a.create_time, a.update_by, a.update_time, a.remark
         from seller_account a
-        left join sys_user u on u.user_id = a.user_id
+        left join seller_dept d on d.seller_dept_id = a.dept_id and d.seller_id = a.seller_id and d.del_flag = '0'
         where a.seller_id = #{sellerId}
           and a.account_role = 'OWNER'
         order by a.seller_account_id asc
@@ -262,9 +277,86 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
     <insert id="insertSellerAccount" parameterType="SellerAccount" useGeneratedKeys="true" keyProperty="sellerAccountId">
         insert into seller_account(
-            seller_id, user_id, account_role, status, create_by, create_time, remark
+            seller_id, dept_id, user_name, nick_name, password, email, phonenumber,
+            account_role, status, pwd_update_time, create_by, create_time, remark
         ) values (
-            #{sellerId}, #{userId}, #{accountRole}, #{status}, #{createBy}, sysdate(), #{remark}
+            #{sellerId}, #{deptId}, #{userName}, #{nickName}, #{password}, #{email}, #{phonenumber},
+            #{accountRole}, #{status}, sysdate(), #{createBy}, sysdate(), #{remark}
         )
     </insert>
+
+    <update id="updateSellerAccount" parameterType="SellerAccount">
+        update seller_account
+        set nick_name = #{nickName},
+            dept_id = #{deptId},
+            email = #{email},
+            phonenumber = #{phonenumber},
+            status = #{status},
+            update_by = #{updateBy},
+            update_time = sysdate(),
+            remark = #{remark}
+        where seller_account_id = #{sellerAccountId}
+    </update>
+
+    <update id="resetSellerAccountPassword">
+        update seller_account
+        set password = #{password},
+            pwd_update_time = sysdate(),
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where seller_account_id = #{sellerAccountId}
+    </update>
+
+    <update id="updateSellerAccountLoginInfo">
+        update seller_account
+        set last_login_ip = #{lastLoginIp},
+            last_login_time = #{lastLoginTime},
+            update_time = sysdate()
+        where seller_account_id = #{sellerAccountId}
+    </update>
+
+    <insert id="insertSellerLoginLog" parameterType="PortalLoginLog">
+        insert into seller_login_log(
+            seller_id, seller_account_id, user_name, ipaddr, login_location,
+            browser, os, status, msg, login_time
+        ) values (
+            #{subjectId}, #{accountId}, #{userName}, #{ipaddr}, #{loginLocation},
+            #{browser}, #{os}, #{status}, #{msg}, #{loginTime}
+        )
+    </insert>
+
+    <insert id="insertSellerSession" parameterType="PortalLoginSession">
+        insert into seller_session(
+            token_id, seller_id, seller_account_id, user_name,
+            login_ip, login_time, expire_time, status
+        ) values (
+            #{tokenId}, #{subjectId}, #{accountId}, #{userName},
+            #{loginIp}, #{loginTime}, #{expireTime}, #{status}
+        )
+    </insert>
+
+    <select id="selectOnlineSellerSessionTokenIds" resultType="String">
+        select token_id
+        from seller_session
+        where seller_id = #{sellerId}
+          and status = '0'
+          and logout_time is null
+          and expire_time >= sysdate()
+        <if test="sellerAccountId != null">
+          and seller_account_id = #{sellerAccountId}
+        </if>
+    </select>
+
+    <update id="forceLogoutSellerSessions">
+        update seller_session
+        set status = '1',
+            logout_time = sysdate()
+        where seller_id = #{sellerId}
+          and status = '0'
+          and logout_time is null
+          and expire_time >= sysdate()
+        <if test="sellerAccountId != null">
+          and seller_account_id = #{sellerAccountId}
+        </if>
+    </update>
 </mapper>

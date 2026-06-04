@@ -72,6 +72,12 @@
             <artifactId>integration</artifactId>
         </dependency>
 
+        <!-- 财务模块-->
+        <dependency>
+            <groupId>com.ruoyi</groupId>
+            <artifactId>finance</artifactId>
+        </dependency>
+
     </dependencies>
 
     <build>

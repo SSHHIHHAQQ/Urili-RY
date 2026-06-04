@@ -3,10 +3,10 @@ import { message } from '@/utils/feedback';
 import React, { useState, useRef, useEffect } from 'react';
 import { useIntl, FormattedMessage, useAccess, history } from '@umijs/max';
 import type { DataNode } from 'antd/es/tree';
-import { Button, Modal, Dropdown, FormInstance, Space, Switch, message as antdMessage } from 'antd';
-import { ActionType, FooterToolbar, PageContainer, ProColumns, ProTable } from '@ant-design/pro-components';
+import { Button, Modal, Dropdown, Switch, message as antdMessage } from 'antd';
+import { type ActionType, FooterToolbar, PageContainer, type ProColumns, ProTable } from '@ant-design/pro-components';
 import { getPersistedProTableSearch } from '@/utils/proTableSearch';
-import { PlusOutlined, EditOutlined, DeleteOutlined, ExclamationCircleOutlined, DownOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, DownOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { getRoleList, removeRole, addRole, updateRole, exportRole, getRoleMenuList, changeRoleStatus, updateRoleDataScope, getDeptTreeSelect, getRole } from '@/services/system/role';
 import UpdateForm from './edit';
 import { getDictValueEnum } from '@/services/system/dict';
@@ -32,7 +32,7 @@ const handleAdd = async (fields: API.System.Role) => {
       message.error(resp.msg);
     }
     return true;
-  } catch (error) {
+  } catch {
     hide();
     message.error('添加失败请重试！');
     return false;
@@ -55,7 +55,7 @@ const handleUpdate = async (fields: API.System.Role) => {
       message.error(resp.msg);
     }
     return true;
-  } catch (error) {
+  } catch {
     hide();
     message.error('配置失败请重试！');
     return false;
@@ -79,7 +79,7 @@ const handleRemove = async (selectedRows: API.System.Role[]) => {
       message.error(resp.msg);
     }
     return true;
-  } catch (error) {
+  } catch {
     hide();
     message.error('删除失败，请重试');
     return false;
@@ -99,7 +99,7 @@ const handleRemoveOne = async (selectedRow: API.System.Role) => {
       message.error(resp.msg);
     }
     return true;
-  } catch (error) {
+  } catch {
     hide();
     message.error('删除失败，请重试');
     return false;
@@ -118,7 +118,7 @@ const handleExport = async () => {
     hide();
     message.success('导出成功');
     return true;
-  } catch (error) {
+  } catch {
     hide();
     message.error('导出失败，请重试');
     return false;
@@ -154,7 +154,7 @@ const RoleTableList: React.FC = () => {
   }, []);
 
   const showChangeStatusConfirm = (record: API.System.Role) => {
-    let text = record.status === "1" ? "启用" : "停用";
+    const text = record.status === "1" ? "启用" : "停用";
     const newStatus = record.status === '0' ? '1' : '0';
     confirm({
       title: `确认要${text}${record.roleName}角色吗？`,
@@ -242,7 +242,6 @@ const RoleTableList: React.FC = () => {
           type="link"
           size="small"
           key="edit"
-          icon=<EditOutlined />
           hidden={!access.hasPerms('system:role:edit')}
           onClick={() => {
             getRoleMenuList(record.roleId).then((res) => {
@@ -267,7 +266,6 @@ const RoleTableList: React.FC = () => {
           size="small"
           danger
           key="batchRemove"
-          icon=<DeleteOutlined />
           hidden={!access.hasPerms('system:role:remove')}
           onClick={async () => {
             Modal.confirm({
@@ -290,6 +288,7 @@ const RoleTableList: React.FC = () => {
         </Button>,
         <Dropdown
           key="more"
+          trigger={['click']}
           menu={{
             items: [
               {
@@ -327,10 +326,7 @@ const RoleTableList: React.FC = () => {
           }}
         >
           <a onClick={(e) => e.preventDefault()}>
-            <Space>
-              <DownOutlined />
-              更多
-            </Space>
+            更多 <DownOutlined style={{ fontSize: 10 }} />
           </a>
         </Dropdown>,
       ],
