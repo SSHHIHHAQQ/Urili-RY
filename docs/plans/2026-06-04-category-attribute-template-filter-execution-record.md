@@ -109,7 +109,7 @@ http://127.0.0.1:8001/basic-config/product-attribute
 - 复用台账检查结果：本次新增的是商品属性配置页内部组件和工具函数，未形成跨模块公共能力，暂不登记复用台账。
 - 大文件合理性判断结果：主组件拆分后为 394 行，新增拆分文件均小于 300 行。
 - 重复代码检查结果：类目树筛选和规则筛选逻辑集中到 `categoryAttributeFilterUtils.ts`，未在两个表格中复制筛选判断。
-- CodeGraph 更新结果：已执行 `codegraph sync .`，结果为 `Already up to date`。
+- CodeGraph 更新结果：已执行 `codegraph sync .`。首次筛选增强后结果为 `Already up to date`；补充类目树滚动修正和“小数位数”文案后再次执行，结果为同步 6 个变更文件、188 个节点。
 
 ## 8. 未验证项
 
