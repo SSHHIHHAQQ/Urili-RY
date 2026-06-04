@@ -73,7 +73,7 @@ public class SellerServiceImpl implements ISellerService
     {
         Seller current = selectSellerById(seller.getSellerId());
         seller.setSellerNo(current.getSellerNo());
-        normalizeSeller(seller);
+        normalizeSeller(seller, current.getAttachmentFileUrl());
         seller.setUpdateBy(SecurityUtils.getUsername());
         checkSellerCodeUnique(seller);
 
@@ -192,12 +192,17 @@ public class SellerServiceImpl implements ISellerService
 
     private void normalizeSeller(Seller seller)
     {
+        normalizeSeller(seller, null);
+    }
+
+    private void normalizeSeller(Seller seller, String unchangedLegacyAttachmentUrl)
+    {
         seller.setSellerCode(PartnerSupport.trimRequired(seller.getSellerCode(), "卖家代码不能为空"));
         seller.setSellerName(PartnerSupport.trimRequired(seller.getSellerName(), "卖家全称不能为空"));
         seller.setSellerShortName(PartnerSupport.trimRequired(seller.getSellerShortName(), "卖家简称不能为空"));
         seller.setSellerType(PartnerSupport.normalizeSubjectType(seller.getSellerType()));
         seller.setSellerLevel(PartnerSupport.normalizeLevel(seller.getSellerLevel(), "卖家等级不能为空"));
-        PartnerSupport.normalizeCommonProfile(seller);
+        PartnerSupport.normalizeCommonProfile(seller, unchangedLegacyAttachmentUrl);
     }
 
     private void createOwnerAccountIfNeeded(Seller seller)

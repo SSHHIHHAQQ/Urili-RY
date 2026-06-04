@@ -1,4 +1,5 @@
-export type WarehouseRow = API.Integration.WarehouseSyncItem & Partial<API.Integration.WarehousePairing>;
+export type WarehouseRow = API.Integration.WarehouseSyncItem &
+  Partial<API.Integration.WarehousePairing>;
 
 export type LogisticsRow = API.Integration.LogisticsChannelSyncItem & {
   warehouseCodes: string;

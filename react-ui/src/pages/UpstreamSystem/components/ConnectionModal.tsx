@@ -1,6 +1,6 @@
-import { settlementOptions } from '@/pages/UpstreamSystem/constants';
 import { Form, Input, Modal, Select } from 'antd';
 import { useEffect } from 'react';
+import { settlementOptions } from '@/pages/UpstreamSystem/constants';
 
 export type ConnectionModalMode = 'create' | 'edit' | 'credential';
 
@@ -12,7 +12,13 @@ interface ConnectionModalProps {
   onSubmit: (values: any) => Promise<boolean>;
 }
 
-export default function ConnectionModal({ mode, open, record, onCancel, onSubmit }: ConnectionModalProps) {
+export default function ConnectionModal({
+  mode,
+  open,
+  record,
+  onCancel,
+  onSubmit,
+}: ConnectionModalProps) {
   const [form] = Form.useForm();
   const titleMap = {
     create: '新增主仓接入',
@@ -49,13 +55,25 @@ export default function ConnectionModal({ mode, open, record, onCancel, onSubmit
       }}
       destroyOnHidden
     >
-      <Form form={form} layout="vertical" initialValues={{ settlementType: 'UPSTREAM_PAYABLE' }}>
+      <Form
+        form={form}
+        layout="vertical"
+        initialValues={{ settlementType: 'UPSTREAM_PAYABLE' }}
+      >
         {showInfoFields ? (
           <>
-            <Form.Item name="masterWarehouseName" label="主仓名称" rules={[{ required: true, message: '请输入主仓名称' }]}>
+            <Form.Item
+              name="masterWarehouseName"
+              label="主仓名称"
+              rules={[{ required: true, message: '请输入主仓名称' }]}
+            >
               <Input placeholder="例如 CA012" maxLength={200} />
             </Form.Item>
-            <Form.Item name="settlementType" label="结算类型" rules={[{ required: true, message: '请选择结算类型' }]}>
+            <Form.Item
+              name="settlementType"
+              label="结算类型"
+              rules={[{ required: true, message: '请选择结算类型' }]}
+            >
               <Select options={settlementOptions} />
             </Form.Item>
             <Form.Item name="remark" label="备注">
@@ -65,10 +83,18 @@ export default function ConnectionModal({ mode, open, record, onCancel, onSubmit
         ) : null}
         {showCredentialFields ? (
           <>
-            <Form.Item name="appKey" label="Key" rules={[{ required: true, message: '请输入Key' }]}>
+            <Form.Item
+              name="appKey"
+              label="Key"
+              rules={[{ required: true, message: '请输入Key' }]}
+            >
               <Input autoComplete="off" />
             </Form.Item>
-            <Form.Item name="appSecret" label="Secret" rules={[{ required: true, message: '请输入Secret' }]}>
+            <Form.Item
+              name="appSecret"
+              label="Secret"
+              rules={[{ required: true, message: '请输入Secret' }]}
+            >
               <Input.Password autoComplete="new-password" />
             </Form.Item>
           </>

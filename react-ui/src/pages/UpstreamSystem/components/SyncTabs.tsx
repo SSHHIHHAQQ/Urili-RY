@@ -1,20 +1,23 @@
+import { DisconnectOutlined, LinkOutlined } from '@ant-design/icons';
+import {
+  type ActionType,
+  type ProColumns,
+  ProTable,
+} from '@ant-design/pro-components';
+import { Button, Popconfirm, Space, Tabs, Tag, Typography } from 'antd';
+import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import {
   deleteLogisticsChannelPairing,
-  deleteSkuPairing,
   deleteWarehousePairing,
   getLogisticsChannelPairings,
   getLogisticsChannelSyncList,
   getRequestLogList,
-  getSkuSyncList,
   getWarehousePairings,
   getWarehouseSyncList,
 } from '@/services/integration/upstreamSystem';
-import { DisconnectOutlined, LinkOutlined } from '@ant-design/icons';
-import { type ActionType, type ProColumns, ProTable } from '@ant-design/pro-components';
-import { Button, Popconfirm, Space, Tabs, Tag, Typography } from 'antd';
-import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import { resultOk, statusTag } from '../helpers';
 import type { LogisticsRow, PairingModalState, WarehouseRow } from '../types';
+import SkuSyncPanel from './SkuSyncPanel';
 
 type ActionRef = MutableRefObject<ActionType | null>;
 
@@ -22,6 +25,7 @@ type SyncTabsProps = {
   access: { hasPerms: (permission: string) => boolean };
   logActionRef: ActionRef;
   logisticsActionRef: ActionRef;
+  onSkuSynced?: () => void;
   selectedConnection: API.Integration.UpstreamConnection;
   setPairingModal: Dispatch<SetStateAction<PairingModalState>>;
   skuActionRef: ActionRef;
@@ -32,6 +36,7 @@ export default function SyncTabs({
   access,
   logActionRef,
   logisticsActionRef,
+  onSkuSynced,
   selectedConnection,
   setPairingModal,
   skuActionRef,
@@ -43,9 +48,24 @@ export default function SyncTabs({
     { title: '领星仓库代码', dataIndex: 'warehouseCode', width: 150 },
     { title: '领星仓库名称', dataIndex: 'warehouseName', width: 180 },
     { title: '国家/地区', dataIndex: 'countryCode', width: 100 },
-    { title: '同步状态', dataIndex: 'status', width: 110, render: (_, record) => statusTag(record.status) },
-    { title: '系统仓库代码', dataIndex: 'systemWarehouseCode', width: 150, search: false },
-    { title: '系统仓库名称', dataIndex: 'systemWarehouseName', width: 180, search: false },
+    {
+      title: '同步状态',
+      dataIndex: 'status',
+      width: 110,
+      render: (_, record) => statusTag(record.status),
+    },
+    {
+      title: '系统仓库代码',
+      dataIndex: 'systemWarehouseCode',
+      width: 150,
+      search: false,
+    },
+    {
+      title: '系统仓库名称',
+      dataIndex: 'systemWarehouseName',
+      width: 180,
+      search: false,
+    },
     {
       title: '操作',
       valueType: 'option',
@@ -58,11 +78,19 @@ export default function SyncTabs({
                 title="确认解除仓库配对？"
                 onConfirm={async () => {
                   if (!record.warehousePairingId) return;
-                  const ok = resultOk(await deleteWarehousePairing(record.warehousePairingId), '已解除配对');
+                  const ok = resultOk(
+                    await deleteWarehousePairing(record.warehousePairingId),
+                    '已解除配对',
+                  );
                   if (ok) warehouseActionRef.current?.reload();
                 }}
               >
-                <Button type="link" size="small" icon={<DisconnectOutlined />} hidden={!access.hasPerms('integration:upstream:pair')}>
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<DisconnectOutlined />}
+                  hidden={!access.hasPerms('integration:upstream:pair')}
+                >
                   解除
                 </Button>
               </Popconfirm>,
@@ -74,7 +102,13 @@ export default function SyncTabs({
                 size="small"
                 icon={<LinkOutlined />}
                 hidden={!access.hasPerms('integration:upstream:pair')}
-                onClick={() => setPairingModal({ open: true, type: 'warehouse', row: record })}
+                onClick={() =>
+                  setPairingModal({
+                    open: true,
+                    type: 'warehouse',
+                    row: record,
+                  })
+                }
               >
                 配对
               </Button>,
@@ -85,7 +119,12 @@ export default function SyncTabs({
   const logisticsColumns: ProColumns<LogisticsRow>[] = [
     { title: '领星渠道代码', dataIndex: 'channelCode', width: 150 },
     { title: '领星渠道名称', dataIndex: 'channelName', width: 200 },
-    { title: '涉及仓库', dataIndex: 'warehouseCodes', width: 200, search: false },
+    {
+      title: '涉及仓库',
+      dataIndex: 'warehouseCodes',
+      width: 200,
+      search: false,
+    },
     {
       title: '系统渠道',
       dataIndex: 'pairings',
@@ -100,7 +139,12 @@ export default function SyncTabs({
                 key={pairing.logisticsChannelPairingId}
                 title="确认解除物流渠道配对？"
                 onConfirm={async () => {
-                  const ok = resultOk(await deleteLogisticsChannelPairing(pairing.logisticsChannelPairingId), '已解除配对');
+                  const ok = resultOk(
+                    await deleteLogisticsChannelPairing(
+                      pairing.logisticsChannelPairingId,
+                    ),
+                    '已解除配对',
+                  );
                   if (ok) logisticsActionRef.current?.reload();
                 }}
               >
@@ -124,7 +168,9 @@ export default function SyncTabs({
           size="small"
           icon={<LinkOutlined />}
           hidden={!access.hasPerms('integration:upstream:pair')}
-          onClick={() => setPairingModal({ open: true, type: 'logistics', row: record })}
+          onClick={() =>
+            setPairingModal({ open: true, type: 'logistics', row: record })
+          }
         >
           配对
         </Button>,
@@ -132,64 +178,43 @@ export default function SyncTabs({
     },
   ];
 
-  const skuColumns: ProColumns<API.Integration.SkuSyncItem>[] = [
-    { title: '领星 masterSku', dataIndex: 'masterSku', width: 180, copyable: true },
-    { title: '领星产品名', dataIndex: 'masterProductName', width: 240 },
-    { title: '同步状态', dataIndex: 'status', width: 100, render: (_, record) => statusTag(record.status) },
-    { title: '配对状态', dataIndex: 'pairingStatus', width: 100, render: (_, record) => statusTag(record.pairingStatus) },
-    { title: '系统SKU', dataIndex: 'systemSku', width: 160, search: false },
-    { title: '系统SKU名称', dataIndex: 'systemSkuName', width: 200, search: false },
-    {
-      title: '操作',
-      valueType: 'option',
-      width: 140,
-      render: (_, record) =>
-        record.skuPairingId
-          ? [
-              <Popconfirm
-                key="unpair"
-                title="确认解除SKU配对？"
-                onConfirm={async () => {
-                  if (!record.skuPairingId) return;
-                  const ok = resultOk(await deleteSkuPairing(record.skuPairingId), '已解除配对');
-                  if (ok) skuActionRef.current?.reload();
-                }}
-              >
-                <Button type="link" size="small" icon={<DisconnectOutlined />} hidden={!access.hasPerms('integration:upstream:pair')}>
-                  解除
-                </Button>
-              </Popconfirm>,
-            ]
-          : [
-              <Button
-                key="pair"
-                type="link"
-                size="small"
-                icon={<LinkOutlined />}
-                hidden={!access.hasPerms('integration:upstream:pair')}
-                onClick={() => setPairingModal({ open: true, type: 'sku', row: record })}
-              >
-                配对
-              </Button>,
-            ],
-    },
-  ];
-
   const logColumns: ProColumns<API.Integration.RequestLog>[] = [
     { title: '时间', dataIndex: 'createTime', width: 170, search: false },
     { title: '操作', dataIndex: 'operation', width: 150 },
-    { title: '结果', dataIndex: 'status', width: 100, render: (_, record) => <Tag color={record.status === 'SUCCESS' ? 'green' : 'red'}>{record.status}</Tag> },
+    {
+      title: '结果',
+      dataIndex: 'status',
+      width: 100,
+      render: (_, record) => (
+        <Tag color={record.status === 'SUCCESS' ? 'green' : 'red'}>
+          {record.status}
+        </Tag>
+      ),
+    },
     { title: '耗时(ms)', dataIndex: 'durationMs', width: 100, search: false },
-    { title: '错误码', dataIndex: 'externalErrorCode', width: 130, search: false },
-    { title: '错误信息', dataIndex: 'externalErrorMessage', ellipsis: true, search: false },
-    { title: 'TraceId', dataIndex: 'traceId', width: 220, copyable: true, search: false },
+    {
+      title: '错误码',
+      dataIndex: 'externalErrorCode',
+      width: 130,
+      search: false,
+    },
+    {
+      title: '错误信息',
+      dataIndex: 'externalErrorMessage',
+      ellipsis: true,
+      search: false,
+    },
+    {
+      title: 'TraceId',
+      dataIndex: 'traceId',
+      width: 220,
+      copyable: true,
+      search: false,
+    },
   ];
 
   return (
     <Space direction="vertical" style={{ width: '100%' }} size={12}>
-      <Typography.Text strong>
-        当前主仓：{selectedConnection.masterWarehouseName} / {selectedConnection.connectionCode}
-      </Typography.Text>
       <Tabs
         items={[
           {
@@ -202,9 +227,20 @@ export default function SyncTabs({
                 columns={warehouseColumns}
                 search={false}
                 request={async () => {
-                  const [syncResp, pairingResp] = await Promise.all([getWarehouseSyncList(selectedCode), getWarehousePairings(selectedCode)]);
-                  const pairingMap = new Map((pairingResp.data || []).map((item) => [item.upstreamWarehouseCode, item]));
-                  const rows = (syncResp.data || []).map((item) => ({ ...item, ...(pairingMap.get(item.warehouseCode) || {}) }));
+                  const [syncResp, pairingResp] = await Promise.all([
+                    getWarehouseSyncList(selectedCode),
+                    getWarehousePairings(selectedCode),
+                  ]);
+                  const pairingMap = new Map(
+                    (pairingResp.data || []).map((item) => [
+                      item.upstreamWarehouseCode,
+                      item,
+                    ]),
+                  );
+                  const rows = (syncResp.data || []).map((item) => ({
+                    ...item,
+                    ...(pairingMap.get(item.warehouseCode) || {}),
+                  }));
                   return { data: rows, success: syncResp.code === 200 };
                 }}
                 pagination={{ pageSize: 10 }}
@@ -221,12 +257,21 @@ export default function SyncTabs({
                 columns={logisticsColumns}
                 search={false}
                 request={async () => {
-                  const [syncResp, pairingResp] = await Promise.all([getLogisticsChannelSyncList(selectedCode), getLogisticsChannelPairings(selectedCode)]);
+                  const [syncResp, pairingResp] = await Promise.all([
+                    getLogisticsChannelSyncList(selectedCode),
+                    getLogisticsChannelPairings(selectedCode),
+                  ]);
                   const groups = new Map<string, LogisticsRow>();
                   (syncResp.data || []).forEach((item) => {
                     const current = groups.get(item.channelCode);
                     if (current) {
-                      current.warehouseCodes = Array.from(new Set(`${current.warehouseCodes},${item.warehouseCode}`.split(','))).join(',');
+                      current.warehouseCodes = Array.from(
+                        new Set(
+                          `${current.warehouseCodes},${item.warehouseCode}`.split(
+                            ',',
+                          ),
+                        ),
+                      ).join(',');
                     } else {
                       groups.set(item.channelCode, {
                         ...item,
@@ -237,7 +282,10 @@ export default function SyncTabs({
                   });
                   const rows = Array.from(groups.values()).map((row) => ({
                     ...row,
-                    pairings: (pairingResp.data || []).filter((pairing) => pairing.upstreamChannelCode === row.channelCode),
+                    pairings: (pairingResp.data || []).filter(
+                      (pairing) =>
+                        pairing.upstreamChannelCode === row.channelCode,
+                    ),
                   }));
                   return { data: rows, success: syncResp.code === 200 };
                 }}
@@ -249,19 +297,12 @@ export default function SyncTabs({
             key: 'sku',
             label: '领星SKU同步清单',
             children: (
-              <ProTable<API.Integration.SkuSyncItem>
+              <SkuSyncPanel
+                access={access}
                 actionRef={skuActionRef}
-                rowKey="masterSku"
-                columns={skuColumns}
-                request={async (params) => {
-                  const resp = await getSkuSyncList(selectedCode, {
-                    ...params,
-                    keyword: params.keyword || params.masterSku || params.masterProductName,
-                  });
-                  return { data: resp.rows || [], total: resp.total || 0, success: resp.code === 200 };
-                }}
-                pagination={{ pageSize: 10 }}
-                search={{ labelWidth: 90 }}
+                onSynced={onSkuSynced}
+                selectedCode={selectedCode}
+                setPairingModal={setPairingModal}
               />
             ),
           },
@@ -275,7 +316,11 @@ export default function SyncTabs({
                 columns={logColumns}
                 request={async (params) => {
                   const resp = await getRequestLogList(selectedCode, params);
-                  return { data: resp.rows || [], total: resp.total || 0, success: resp.code === 200 };
+                  return {
+                    data: resp.rows || [],
+                    total: resp.total || 0,
+                    success: resp.code === 200,
+                  };
                 }}
                 pagination={{ pageSize: 10 }}
                 search={false}

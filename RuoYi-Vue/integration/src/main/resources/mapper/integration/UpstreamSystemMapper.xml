@@ -66,6 +66,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="skuPairingId"        column="sku_pairing_id"        />
         <result property="systemSku"           column="system_sku"            />
         <result property="systemSkuName"       column="system_sku_name"       />
+        <result property="customerName"        column="customer_name"         />
     </resultMap>
 
     <resultMap type="UpstreamWarehousePairing" id="WarehousePairingResult">
@@ -211,6 +212,14 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <update id="updateConnectionStatus">
         update upstream_system_connection
         set status = #{status},
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where connection_code = #{connectionCode}
+    </update>
+
+    <update id="updateConnectionDisplayOrder">
+        update upstream_system_connection
+        set display_order = #{displayOrder},
             update_by = #{updateBy},
             update_time = sysdate()
         where connection_code = #{connectionCode}
@@ -425,7 +434,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                case when p.sku_pairing_id is null then 'UNASSIGNED' else 'PAIRED' end as pairing_status,
                p.sku_pairing_id,
                p.system_sku,
-               p.system_sku_name
+               p.system_sku_name,
+               p.customer_name
         from upstream_system_sku_candidate c
         left join upstream_system_sku_pairing p
                on p.connection_code = c.connection_code
@@ -434,8 +444,39 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <if test="status != null and status != ''">
             and c.status = #{status}
         </if>
+        <if test="pairingStatus != null and pairingStatus != ''">
+            <choose>
+                <when test="pairingStatus == 'PAIRED'">
+                    and p.sku_pairing_id is not null
+                </when>
+                <when test="pairingStatus == 'UNASSIGNED'">
+                    and p.sku_pairing_id is null
+                </when>
+            </choose>
+        </if>
         <if test="keyword != null and keyword != ''">
-            and c.search_text like concat('%', #{keyword}, '%')
+            <choose>
+                <when test="field == 'masterSku'">
+                    and c.master_sku like concat('%', #{keyword}, '%')
+                </when>
+                <when test="field == 'masterProductName'">
+                    and c.master_product_name like concat('%', #{keyword}, '%')
+                </when>
+                <when test="field == 'systemSku'">
+                    and p.system_sku like concat('%', #{keyword}, '%')
+                </when>
+                <when test="field == 'customerName'">
+                    and p.customer_name like concat('%', #{keyword}, '%')
+                </when>
+                <otherwise>
+                    and (
+                        c.search_text like concat('%', #{keyword}, '%')
+                        or p.system_sku like concat('%', #{keyword}, '%')
+                        or p.system_sku_name like concat('%', #{keyword}, '%')
+                        or p.customer_name like concat('%', #{keyword}, '%')
+                    )
+                </otherwise>
+            </choose>
         </if>
         order by c.update_time desc, c.master_sku asc
     </select>

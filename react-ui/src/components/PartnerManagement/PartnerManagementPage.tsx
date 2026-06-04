@@ -36,6 +36,7 @@ import {
   UserAddOutlined,
 } from '@ant-design/icons';
 import type { DictValueEnumObj } from '@/components/DictTag';
+import { uploadCommonFile } from '@/services/common/file';
 import { getDictSelectOption, getDictValueEnum } from '@/services/system/dict';
 import { getPersistedProTableSearch } from '@/utils/proTableSearch';
 
@@ -122,6 +123,26 @@ const fallbackAccountRoleOptions: DictValueEnumObj = {
   ADMIN: { text: '管理员', label: '管理员', value: 'ADMIN' },
   STAFF: { text: '普通账号', label: '普通账号', value: 'STAFF' },
 };
+
+const ATTACHMENT_ACCEPT = 'image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt';
+const ATTACHMENT_MAX_SIZE = 10 * 1024 * 1024;
+const ATTACHMENT_ALLOWED_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'bmp', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'txt']);
+
+function getFileExtension(fileName: string) {
+  const index = fileName.lastIndexOf('.');
+  return index >= 0 ? fileName.slice(index + 1).toLowerCase() : '';
+}
+
+function validateAttachmentCandidate(file: File) {
+  if (file.size > ATTACHMENT_MAX_SIZE) {
+    return '附件大小不能超过 10MB';
+  }
+  const extension = getFileExtension(file.name);
+  if (!ATTACHMENT_ALLOWED_EXTENSIONS.has(extension)) {
+    return '附件类型仅支持图片、PDF、Word、Excel、CSV 或 TXT';
+  }
+  return '';
+}
 
 const fallbackLevelOptions: SelectOption[] = [
   { label: '等级1', value: 'L1', searchText: 'l1 等级1' },
@@ -287,6 +308,14 @@ function getAttachmentUrl(attachment?: API.Partner.PartyAttachment | null) {
   return attachment?.fileUrl || attachment?.dataUrl || '';
 }
 
+function isManagedAttachmentUrl(url?: string) {
+  return !!url && url.startsWith('/profile/');
+}
+
+function isLegacyDataUrl(url?: string) {
+  return !!url && url.toLowerCase().startsWith('data:');
+}
+
 function getAttachmentFromPartner(partner?: PartnerRecord): API.Partner.PartyAttachment | undefined {
   if (partner?.attachment) {
     const attachment = partner.attachment as API.Partner.PartyAttachment;
@@ -321,34 +350,28 @@ function attachmentToUploadFile(attachment: API.Partner.PartyAttachment): Attach
   };
 }
 
-function readFileAsDataUrl(file: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        resolve(reader.result);
-        return;
-      }
-      reject(new Error('INVALID_FILE_RESULT'));
-    };
-    reader.onerror = () => reject(new Error('FILE_READ_FAILED'));
-    reader.readAsDataURL(file);
-  });
-}
-
 async function uploadFileToAttachment(file: AttachmentUploadFile): Promise<API.Partner.PartyAttachment> {
   if (file.response?.fileUrl) {
-    return file.response;
+    const fileUrl = getAttachmentUrl(file.response);
+    if (isManagedAttachmentUrl(fileUrl) || isLegacyDataUrl(fileUrl)) {
+      return { ...file.response, fileUrl };
+    }
+    throw new Error('UNSUPPORTED_ATTACHMENT_URL');
   }
   if (!file.originFileObj) {
     throw new Error('ATTACHMENT_FILE_MISSING');
   }
-  const dataUrl = await readFileAsDataUrl(file.originFileObj);
+
+  const uploadResult = await uploadCommonFile(file.originFileObj);
+  if (uploadResult.code !== 200 || !uploadResult.fileName) {
+    throw new Error(uploadResult.msg || 'ATTACHMENT_UPLOAD_FAILED');
+  }
+
   return {
-    fileName: file.originFileObj.name,
+    fileName: uploadResult.originalFilename || file.originFileObj.name,
     mimeType: file.originFileObj.type || 'application/octet-stream',
     sizeBytes: file.originFileObj.size,
-    fileUrl: dataUrl,
+    fileUrl: uploadResult.fileName,
   };
 }
 
@@ -485,7 +508,7 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
     try {
       attachment = await attachmentFileListToAttachment(attachmentFileList);
     } catch {
-      message.error('附件读取失败，请重新选择文件');
+      message.error('附件上传失败，请重新选择文件');
       return;
     }
 
@@ -644,6 +667,15 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
       return Promise.resolve();
     }
     return Promise.reject(new Error('两次密码输入不一致'));
+  };
+
+  const handleAttachmentBeforeUpload: UploadProps['beforeUpload'] = (file) => {
+    const error = validateAttachmentCandidate(file);
+    if (error) {
+      message.error(error);
+      return Upload.LIST_IGNORE;
+    }
+    return false;
   };
 
   const handleAttachmentChange: UploadProps['onChange'] = ({ fileList }) => {
@@ -968,8 +1000,8 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
             <Form.Item label="附件">
               <Space direction="vertical" size={8}>
                 <Upload
-                  accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"
-                  beforeUpload={() => false}
+                  accept={ATTACHMENT_ACCEPT}
+                  beforeUpload={handleAttachmentBeforeUpload}
                   fileList={attachmentFileList}
                   maxCount={1}
                   onChange={handleAttachmentChange}

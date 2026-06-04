@@ -25,6 +25,7 @@ import com.ruoyi.integration.domain.request.SkuPairingRequest;
 import com.ruoyi.integration.domain.request.UpstreamConnectionInfoRequest;
 import com.ruoyi.integration.domain.request.UpstreamConnectionRequest;
 import com.ruoyi.integration.domain.request.UpstreamCredentialRequest;
+import com.ruoyi.integration.domain.request.UpstreamOrderRequest;
 import com.ruoyi.integration.domain.request.UpstreamStatusRequest;
 import com.ruoyi.integration.domain.request.WarehousePairingRequest;
 import com.ruoyi.integration.service.IUpstreamSystemService;
@@ -90,6 +91,14 @@ public class AdminUpstreamSystemController extends BaseController
         return toAjax(upstreamSystemService.updateConnectionStatus(connectionCode, request.getStatus()));
     }
 
+    @PreAuthorize("@ss.hasPermi('integration:upstream:edit')")
+    @Log(title = "上游系统排序", businessType = BusinessType.UPDATE)
+    @PutMapping("/order")
+    public AjaxResult order(@Validated @RequestBody UpstreamOrderRequest request)
+    {
+        return toAjax(upstreamSystemService.updateConnectionOrder(request.getConnectionCodes()));
+    }
+
     @PreAuthorize("@ss.hasPermi('integration:upstream:sync')")
     @Log(title = "上游系统授权校验", businessType = BusinessType.OTHER)
     @PostMapping("/{connectionCode}/authorize")
@@ -104,6 +113,14 @@ public class AdminUpstreamSystemController extends BaseController
     public AjaxResult sync(@PathVariable("connectionCode") String connectionCode)
     {
         return success(upstreamSystemService.syncAll(connectionCode));
+    }
+
+    @PreAuthorize("@ss.hasPermi('integration:upstream:sync')")
+    @Log(title = "上游SKU同步", businessType = BusinessType.OTHER)
+    @PostMapping("/{connectionCode}/skus/sync")
+    public AjaxResult syncSkus(@PathVariable("connectionCode") String connectionCode)
+    {
+        return success(upstreamSystemService.syncSkusOnly(connectionCode));
     }
 
     @PreAuthorize("@ss.hasPermi('integration:upstream:query')")
@@ -174,10 +191,12 @@ public class AdminUpstreamSystemController extends BaseController
     @GetMapping("/{connectionCode}/skus/list")
     public TableDataInfo skus(@PathVariable("connectionCode") String connectionCode,
         @RequestParam(value = "status", required = false) String status,
+        @RequestParam(value = "pairingStatus", required = false) String pairingStatus,
+        @RequestParam(value = "field", required = false) String field,
         @RequestParam(value = "keyword", required = false) String keyword)
     {
         startPage();
-        List<UpstreamSkuSyncItem> list = upstreamSystemService.selectSkuSyncList(connectionCode, status, keyword);
+        List<UpstreamSkuSyncItem> list = upstreamSystemService.selectSkuSyncList(connectionCode, status, pairingStatus, field, keyword);
         return getDataTable(list);
     }
 

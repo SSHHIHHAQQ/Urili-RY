@@ -10,6 +10,7 @@ interface PairingModalProps {
   nameName: string;
   upstreamLabel: string;
   upstreamValue?: string;
+  showCustomerName?: boolean;
   onCancel: () => void;
   onSubmit: (values: any) => Promise<boolean>;
 }
@@ -23,6 +24,7 @@ export default function PairingModal({
   nameName,
   upstreamLabel,
   upstreamValue,
+  showCustomerName,
   onCancel,
   onSubmit,
 }: PairingModalProps) {
@@ -52,12 +54,25 @@ export default function PairingModal({
         <Form.Item label={upstreamLabel}>
           <Input value={upstreamValue} disabled />
         </Form.Item>
-        <Form.Item name={codeName} label={codeLabel} rules={[{ required: true, message: `请输入${codeLabel}` }]}>
+        <Form.Item
+          name={codeName}
+          label={codeLabel}
+          rules={[{ required: true, message: `请输入${codeLabel}` }]}
+        >
           <Input maxLength={128} />
         </Form.Item>
-        <Form.Item name={nameName} label={nameLabel} rules={[{ required: true, message: `请输入${nameLabel}` }]}>
+        <Form.Item
+          name={nameName}
+          label={nameLabel}
+          rules={[{ required: true, message: `请输入${nameLabel}` }]}
+        >
           <Input maxLength={255} />
         </Form.Item>
+        {showCustomerName ? (
+          <Form.Item name="customerName" label="客户名称">
+            <Input maxLength={255} />
+          </Form.Item>
+        ) : null}
         <Form.Item name="remark" label="备注">
           <Input.TextArea rows={3} maxLength={500} />
         </Form.Item>

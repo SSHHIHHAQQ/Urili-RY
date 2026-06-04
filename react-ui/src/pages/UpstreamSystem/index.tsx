@@ -1,4 +1,7 @@
-import { message } from '@/utils/feedback';
+import { type ActionType, PageContainer } from '@ant-design/pro-components';
+import { useAccess } from '@umijs/max';
+import { Empty, Grid, Space } from 'antd';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   addLogisticsChannelPairing,
   addSkuPairing,
@@ -8,196 +11,211 @@ import {
   getUpstreamConnectionList,
   syncUpstreamConnection,
   updateUpstreamConnection,
+  updateUpstreamConnectionOrder,
   updateUpstreamCredentials,
   updateUpstreamStatus,
 } from '@/services/integration/upstreamSystem';
-import {
-  CheckCircleOutlined,
-  EditOutlined,
-  KeyOutlined,
-  PlusOutlined,
-  SafetyCertificateOutlined,
-  StopOutlined,
-  SyncOutlined,
-} from '@ant-design/icons';
-import { PageContainer, type ProColumns, ProTable, type ActionType } from '@ant-design/pro-components';
-import { useAccess } from '@umijs/max';
-import { Button, Empty, Popconfirm } from 'antd';
-import { useRef, useState } from 'react';
-import ConnectionModal, { type ConnectionModalMode } from './components/ConnectionModal';
+import { message } from '@/utils/feedback';
+import ConnectionModal, {
+  type ConnectionModalMode,
+} from './components/ConnectionModal';
+import ConnectionSidebar from './components/ConnectionSidebar';
+import ConnectionSummary from './components/ConnectionSummary';
 import PairingModal from './components/PairingModal';
 import SyncTabs from './components/SyncTabs';
-import { resultOk, statusTag } from './helpers';
+import { resultOk } from './helpers';
 import type { PairingModalState } from './types';
+
+const connectionPageSize = 200;
 
 export default function UpstreamSystemPage() {
   const access = useAccess();
-  const connectionActionRef = useRef<ActionType>(null);
+  const screens = Grid.useBreakpoint();
   const warehouseActionRef = useRef<ActionType>(null);
   const logisticsActionRef = useRef<ActionType>(null);
   const skuActionRef = useRef<ActionType>(null);
   const logActionRef = useRef<ActionType>(null);
-  const [selectedConnection, setSelectedConnection] = useState<API.Integration.UpstreamConnection>();
+  const [connections, setConnections] = useState<
+    API.Integration.UpstreamConnection[]
+  >([]);
+  const [loadingConnections, setLoadingConnections] = useState(false);
+  const [selectedConnection, setSelectedConnection] =
+    useState<API.Integration.UpstreamConnection>();
   const [connectionModal, setConnectionModal] = useState<{
     open: boolean;
     mode: ConnectionModalMode;
     record?: API.Integration.UpstreamConnection;
   }>({ open: false, mode: 'create' });
-  const [pairingModal, setPairingModal] = useState<PairingModalState>({ open: false });
+  const [pairingModal, setPairingModal] = useState<PairingModalState>({
+    open: false,
+  });
 
-  const reloadCurrent = () => {
-    connectionActionRef.current?.reload();
+  const fetchConnections = useCallback(async (preferredCode?: string) => {
+    setLoadingConnections(true);
+    try {
+      const resp = await getUpstreamConnectionList({
+        pageNum: 1,
+        pageSize: connectionPageSize,
+      });
+      if (resp.code !== 200) {
+        message.error(resp.msg || '主仓接入加载失败');
+        return [];
+      }
+      const rows = resp.rows || [];
+      setConnections(rows);
+      setSelectedConnection((current) => {
+        const nextCode = preferredCode || current?.connectionCode;
+        return rows.find((item) => item.connectionCode === nextCode) || rows[0];
+      });
+      return rows;
+    } finally {
+      setLoadingConnections(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchConnections();
+  }, [fetchConnections]);
+
+  const reloadTabs = () => {
     warehouseActionRef.current?.reload();
     logisticsActionRef.current?.reload();
     skuActionRef.current?.reload();
     logActionRef.current?.reload();
   };
 
-  const requireConnectionCode = () => selectedConnection?.connectionCode || '';
+  const reloadCurrent = async (preferredCode?: string) => {
+    await fetchConnections(preferredCode || selectedConnection?.connectionCode);
+    reloadTabs();
+  };
 
-  const connectionColumns: ProColumns<API.Integration.UpstreamConnection>[] = [
-    { title: '主仓名称', dataIndex: 'masterWarehouseName', width: 160 },
-    { title: '接入编号', dataIndex: 'connectionCode', width: 190, copyable: true },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      width: 90,
-      search: false,
-      render: (_, record) => statusTag(record.status),
-    },
-    { title: 'Key', dataIndex: 'appKeyMask', width: 120, search: false },
-    { title: '结算类型', dataIndex: 'settlementType', width: 140 },
-    { title: '最近授权', dataIndex: 'lastAuthorizedTime', width: 170, search: false },
-    { title: '最近同步', dataIndex: 'lastSyncTime', width: 170, search: false },
-    {
-      title: '操作',
-      valueType: 'option',
-      width: 300,
-      render: (_, record) => [
-        <Button
-          key="edit"
-          type="link"
-          size="small"
-          icon={<EditOutlined />}
-          hidden={!access.hasPerms('integration:upstream:edit')}
-          onClick={() => setConnectionModal({ open: true, mode: 'edit', record })}
-        >
-          编辑
-        </Button>,
-        <Button
-          key="credential"
-          type="link"
-          size="small"
-          icon={<KeyOutlined />}
-          hidden={!access.hasPerms('integration:upstream:credential')}
-          onClick={() => setConnectionModal({ open: true, mode: 'credential', record })}
-        >
-          授权
-        </Button>,
-        <Button
-          key="authorize"
-          type="link"
-          size="small"
-          icon={<SafetyCertificateOutlined />}
-          hidden={!access.hasPerms('integration:upstream:sync')}
-          onClick={async () => {
-            const hide = message.loading('正在校验授权');
-            const ok = resultOk(await authorizeUpstreamConnection(record.connectionCode), '授权校验通过');
-            hide();
-            if (ok) reloadCurrent();
-          }}
-        >
-          校验
-        </Button>,
-        <Button
-          key="sync"
-          type="link"
-          size="small"
-          icon={<SyncOutlined />}
-          hidden={!access.hasPerms('integration:upstream:sync')}
-          onClick={async () => {
-            const hide = message.loading('正在同步');
-            const resp = await syncUpstreamConnection(record.connectionCode);
-            hide();
-            if (resp.code === 200) {
-              message.success(`同步完成：仓库 ${resp.data?.warehouseCount || 0}，渠道 ${resp.data?.logisticsChannelCount || 0}，SKU ${resp.data?.skuCount || 0}`);
-              setSelectedConnection(record);
-              reloadCurrent();
-            } else {
-              message.error(resp.msg);
-            }
-          }}
-        >
-          同步
-        </Button>,
-        <Popconfirm
-          key="status"
-          title={record.status === 'ENABLED' ? '确认停用该主仓接入？' : '确认启用该主仓接入？'}
-          onConfirm={async () => {
-            const nextStatus = record.status === 'ENABLED' ? 'DISABLED' : 'ENABLED';
-            const ok = resultOk(await updateUpstreamStatus(record.connectionCode, nextStatus), '状态已更新');
-            if (ok) reloadCurrent();
-          }}
-        >
-          <Button
-            type="link"
-            size="small"
-            icon={record.status === 'ENABLED' ? <StopOutlined /> : <CheckCircleOutlined />}
-            hidden={!access.hasPerms('integration:upstream:edit')}
-          >
-            {record.status === 'ENABLED' ? '停用' : '启用'}
-          </Button>
-        </Popconfirm>,
-      ],
-    },
-  ];
+  const selectedCode = selectedConnection?.connectionCode || '';
 
-  const selectedCode = requireConnectionCode();
+  const handleAuthorize = async (
+    record: API.Integration.UpstreamConnection,
+  ) => {
+    const hide = message.loading('正在校验授权');
+    const ok = resultOk(
+      await authorizeUpstreamConnection(record.connectionCode),
+      '授权校验通过',
+    );
+    hide();
+    if (ok) {
+      await reloadCurrent(record.connectionCode);
+    }
+  };
+
+  const handleSync = async (record: API.Integration.UpstreamConnection) => {
+    const hide = message.loading('正在同步');
+    const resp = await syncUpstreamConnection(record.connectionCode);
+    hide();
+    if (resp.code === 200) {
+      message.success(
+        `同步完成：仓库 ${resp.data?.warehouseCount || 0}，渠道 ${resp.data?.logisticsChannelCount || 0}，SKU ${resp.data?.skuCount || 0}`,
+      );
+      await reloadCurrent(record.connectionCode);
+    } else {
+      message.error(resp.msg);
+    }
+  };
+
+  const handleToggleStatus = async (
+    record: API.Integration.UpstreamConnection,
+  ) => {
+    const nextStatus = record.status === 'ENABLED' ? 'DISABLED' : 'ENABLED';
+    const ok = resultOk(
+      await updateUpstreamStatus(record.connectionCode, nextStatus),
+      '状态已更新',
+    );
+    if (ok) {
+      await reloadCurrent(record.connectionCode);
+    }
+  };
+
+  const saveOrder = async (connectionCodes: string[]) => {
+    const ok = resultOk(
+      await updateUpstreamConnectionOrder(connectionCodes),
+      '排序已保存',
+    );
+    if (ok) {
+      await fetchConnections(selectedCode);
+    }
+    return ok;
+  };
 
   return (
     <PageContainer>
-      <ProTable<API.Integration.UpstreamConnection>
-        actionRef={connectionActionRef}
-        rowKey="connectionCode"
-        columns={connectionColumns}
-        request={async (params) => {
-          const resp = await getUpstreamConnectionList(params);
-          if (!selectedConnection && resp.rows?.length) {
-            setSelectedConnection(resp.rows[0]);
-          }
-          return { data: resp.rows || [], total: resp.total || 0, success: resp.code === 200 };
+      <div
+        style={{
+          alignItems: 'start',
+          display: 'grid',
+          gap: 16,
+          gridTemplateColumns: screens.md
+            ? 'minmax(240px, 280px) minmax(0, 1fr)'
+            : '1fr',
         }}
-        toolBarRender={() => [
-          <Button
-            key="add"
-            type="primary"
-            icon={<PlusOutlined />}
-            hidden={!access.hasPerms('integration:upstream:add')}
-            onClick={() => setConnectionModal({ open: true, mode: 'create' })}
-          >
-            新增主仓接入
-          </Button>,
-        ]}
-        onRow={(record) => ({
-          onClick: () => setSelectedConnection(record),
-        })}
-        pagination={{ pageSize: 10 }}
-        search={{ labelWidth: 90 }}
-      />
-
-      {selectedConnection ? (
-        <SyncTabs
+      >
+        <ConnectionSidebar
           access={access}
-          logActionRef={logActionRef}
-          logisticsActionRef={logisticsActionRef}
-          selectedConnection={selectedConnection}
-          setPairingModal={setPairingModal}
-          skuActionRef={skuActionRef}
-          warehouseActionRef={warehouseActionRef}
+          connections={connections}
+          loading={loadingConnections}
+          onCreate={() => setConnectionModal({ open: true, mode: 'create' })}
+          onSaveOrder={saveOrder}
+          onSelect={setSelectedConnection}
+          selectedCode={selectedCode}
         />
-      ) : (
-        <Empty description="暂无主仓接入" />
-      )}
+
+        {selectedConnection ? (
+          <Space
+            direction="vertical"
+            size={16}
+            style={{ minWidth: 0, width: '100%' }}
+          >
+            <ConnectionSummary
+              access={access}
+              connection={selectedConnection}
+              onAuthorize={() => handleAuthorize(selectedConnection)}
+              onCredential={() =>
+                setConnectionModal({
+                  open: true,
+                  mode: 'credential',
+                  record: selectedConnection,
+                })
+              }
+              onEdit={() =>
+                setConnectionModal({
+                  open: true,
+                  mode: 'edit',
+                  record: selectedConnection,
+                })
+              }
+              onSync={() => handleSync(selectedConnection)}
+              onToggleStatus={() => handleToggleStatus(selectedConnection)}
+            />
+            <SyncTabs
+              access={access}
+              logActionRef={logActionRef}
+              logisticsActionRef={logisticsActionRef}
+              onSkuSynced={() => fetchConnections(selectedCode)}
+              selectedConnection={selectedConnection}
+              setPairingModal={setPairingModal}
+              skuActionRef={skuActionRef}
+              warehouseActionRef={warehouseActionRef}
+            />
+          </Space>
+        ) : (
+          <div
+            style={{
+              background: '#fff',
+              border: '1px solid #f0f0f0',
+              borderRadius: 6,
+              padding: 48,
+            }}
+          >
+            <Empty description="暂无主仓接入" />
+          </div>
+        )}
+      </div>
 
       <ConnectionModal
         mode={connectionModal.mode}
@@ -206,7 +224,10 @@ export default function UpstreamSystemPage() {
         onCancel={() => setConnectionModal({ open: false, mode: 'create' })}
         onSubmit={async (values) => {
           const modalRecord = connectionModal.record;
-          if (connectionModal.mode !== 'create' && !modalRecord?.connectionCode) {
+          if (
+            connectionModal.mode !== 'create' &&
+            !modalRecord?.connectionCode
+          ) {
             return false;
           }
           const hide = message.loading('正在保存');
@@ -215,16 +236,24 @@ export default function UpstreamSystemPage() {
             resp = await addUpstreamConnection(values);
           } else if (connectionModal.mode === 'edit') {
             if (!modalRecord) return false;
-            resp = await updateUpstreamConnection(modalRecord.connectionCode, values);
+            resp = await updateUpstreamConnection(
+              modalRecord.connectionCode,
+              values,
+            );
           } else {
             if (!modalRecord) return false;
-            resp = await updateUpstreamCredentials(modalRecord.connectionCode, values);
+            resp = await updateUpstreamCredentials(
+              modalRecord.connectionCode,
+              values,
+            );
           }
           hide();
           const ok = resultOk(resp, '保存成功');
           if (ok) {
             setConnectionModal({ open: false, mode: 'create' });
-            connectionActionRef.current?.reload();
+            await fetchConnections(
+              modalRecord?.connectionCode || values.connectionCode,
+            );
           }
           return ok;
         }}
@@ -232,8 +261,20 @@ export default function UpstreamSystemPage() {
 
       <PairingModal
         open={pairingModal.open}
-        title={pairingModal.open && pairingModal.type === 'warehouse' ? '仓库配对' : pairingModal.open && pairingModal.type === 'logistics' ? '物流渠道配对' : 'SKU配对'}
-        upstreamLabel={pairingModal.open && pairingModal.type === 'warehouse' ? '领星仓库' : pairingModal.open && pairingModal.type === 'logistics' ? '领星渠道' : '领星masterSku'}
+        title={
+          pairingModal.open && pairingModal.type === 'warehouse'
+            ? '仓库配对'
+            : pairingModal.open && pairingModal.type === 'logistics'
+              ? '物流渠道配对'
+              : 'SKU配对'
+        }
+        upstreamLabel={
+          pairingModal.open && pairingModal.type === 'warehouse'
+            ? '领星仓库'
+            : pairingModal.open && pairingModal.type === 'logistics'
+              ? '领星渠道'
+              : '领星masterSku'
+        }
         upstreamValue={
           pairingModal.open && pairingModal.type === 'warehouse'
             ? `${pairingModal.row.warehouseCode} / ${pairingModal.row.warehouseName}`
@@ -243,20 +284,54 @@ export default function UpstreamSystemPage() {
                 ? `${pairingModal.row.masterSku} / ${pairingModal.row.masterProductName}`
                 : ''
         }
-        codeLabel={pairingModal.open && pairingModal.type === 'sku' ? '系统SKU' : pairingModal.open && pairingModal.type === 'warehouse' ? '系统仓库代码' : '系统渠道代码'}
-        nameLabel={pairingModal.open && pairingModal.type === 'sku' ? '系统SKU名称' : pairingModal.open && pairingModal.type === 'warehouse' ? '系统仓库名称' : '系统渠道名称'}
-        codeName={pairingModal.open && pairingModal.type === 'sku' ? 'systemSku' : pairingModal.open && pairingModal.type === 'warehouse' ? 'systemWarehouseCode' : 'systemChannelCode'}
-        nameName={pairingModal.open && pairingModal.type === 'sku' ? 'systemSkuName' : pairingModal.open && pairingModal.type === 'warehouse' ? 'systemWarehouseName' : 'systemChannelName'}
+        codeLabel={
+          pairingModal.open && pairingModal.type === 'sku'
+            ? '系统SKU'
+            : pairingModal.open && pairingModal.type === 'warehouse'
+              ? '系统仓库代码'
+              : '系统渠道代码'
+        }
+        nameLabel={
+          pairingModal.open && pairingModal.type === 'sku'
+            ? '系统SKU名称'
+            : pairingModal.open && pairingModal.type === 'warehouse'
+              ? '系统仓库名称'
+              : '系统渠道名称'
+        }
+        codeName={
+          pairingModal.open && pairingModal.type === 'sku'
+            ? 'systemSku'
+            : pairingModal.open && pairingModal.type === 'warehouse'
+              ? 'systemWarehouseCode'
+              : 'systemChannelCode'
+        }
+        nameName={
+          pairingModal.open && pairingModal.type === 'sku'
+            ? 'systemSkuName'
+            : pairingModal.open && pairingModal.type === 'warehouse'
+              ? 'systemWarehouseName'
+              : 'systemChannelName'
+        }
+        showCustomerName={pairingModal.open && pairingModal.type === 'sku'}
         onCancel={() => setPairingModal({ open: false })}
         onSubmit={async (values) => {
           if (!pairingModal.open) return false;
           const hide = message.loading('正在配对');
           const resp =
             pairingModal.type === 'warehouse'
-              ? await addWarehousePairing(selectedCode, { ...values, upstreamWarehouseCode: pairingModal.row.warehouseCode })
+              ? await addWarehousePairing(selectedCode, {
+                  ...values,
+                  upstreamWarehouseCode: pairingModal.row.warehouseCode,
+                })
               : pairingModal.type === 'logistics'
-                ? await addLogisticsChannelPairing(selectedCode, { ...values, upstreamChannelCode: pairingModal.row.channelCode })
-                : await addSkuPairing(selectedCode, { ...values, masterSku: pairingModal.row.masterSku });
+                ? await addLogisticsChannelPairing(selectedCode, {
+                    ...values,
+                    upstreamChannelCode: pairingModal.row.channelCode,
+                  })
+                : await addSkuPairing(selectedCode, {
+                    ...values,
+                    masterSku: pairingModal.row.masterSku,
+                  });
           hide();
           const ok = resultOk(resp, '配对成功');
           if (ok) {

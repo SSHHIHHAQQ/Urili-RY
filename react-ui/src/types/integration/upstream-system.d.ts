@@ -131,8 +131,21 @@ declare namespace API.Integration {
     skuPairingId?: number;
     systemSku?: string;
     systemSkuName?: string;
+    customerName?: string;
     syncBatchId?: string;
     lastSeenTime?: string;
+    updateTime?: string;
+  }
+
+  export interface SkuSyncState {
+    connectionCode: string;
+    status?: string;
+    syncBatchId?: string;
+    lastStartedTime?: string;
+    lastFinishedTime?: string;
+    lastSuccessTime?: string;
+    lastErrorMessage?: string;
+    nextSyncTime?: string;
     updateTime?: string;
   }
 

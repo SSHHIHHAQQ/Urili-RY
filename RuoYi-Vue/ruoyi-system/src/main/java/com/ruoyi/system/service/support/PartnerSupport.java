@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.function.Function;
 import org.apache.commons.lang3.StringUtils;
+import com.ruoyi.common.constant.Constants;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.system.domain.PartnerProfile;
 import com.ruoyi.system.domain.PartnerProfile.Attachment;
@@ -29,11 +30,21 @@ public class PartnerSupport
 
     private static final int NO_MAX_DAILY_SEQUENCE = 9999;
 
+    private static final String MANAGED_ATTACHMENT_PREFIX = Constants.RESOURCE_PREFIX + "/";
+
+    private static final List<String> ATTACHMENT_EXTENSIONS = List.of("bmp", "gif", "jpg", "jpeg", "png", "pdf", "doc",
+            "docx", "xls", "xlsx", "csv", "txt");
+
     private PartnerSupport()
     {
     }
 
     public static void normalizeCommonProfile(PartnerProfile profile)
+    {
+        normalizeCommonProfile(profile, null);
+    }
+
+    public static void normalizeCommonProfile(PartnerProfile profile, String unchangedLegacyAttachmentUrl)
     {
         profile.setUsername(StringUtils.trimToEmpty(profile.getUsername()));
         profile.setStatus(StringUtils.defaultIfBlank(profile.getStatus(), STATUS_NORMAL));
@@ -52,7 +63,7 @@ public class PartnerSupport
         profile.setContactName(trimRequired(profile.getContactName(), "联系人不能为空"));
         profile.setContactPhone(trimRequired(profile.getContactPhone(), "手机号不能为空"));
         profile.setContactEmail(StringUtils.trimToEmpty(profile.getContactEmail()));
-        normalizeAttachment(profile);
+        normalizeAttachment(profile, unchangedLegacyAttachmentUrl);
     }
 
     public static String normalizeSubjectType(String value)
@@ -138,7 +149,7 @@ public class PartnerSupport
         return prefix + yearCode + monthCode + String.format("%02d", date.getDayOfMonth());
     }
 
-    private static void normalizeAttachment(PartnerProfile profile)
+    private static void normalizeAttachment(PartnerProfile profile, String unchangedLegacyAttachmentUrl)
     {
         Attachment attachment = profile.getAttachment();
         if (attachment == null)
@@ -153,7 +164,40 @@ public class PartnerSupport
         {
             attachment.setSizeBytes(0L);
         }
-        attachment.setFileUrl(trimRequired(attachment.getFileUrl(), "附件地址不能为空"));
+        String fileUrl = trimRequired(attachment.getFileUrl(), "附件地址不能为空");
+        validateAttachmentFileUrl(fileUrl, unchangedLegacyAttachmentUrl);
+        validateAttachmentExtension(fileUrl);
+        attachment.setFileUrl(fileUrl);
         profile.setAttachment(attachment);
+    }
+
+    private static void validateAttachmentFileUrl(String fileUrl, String unchangedLegacyAttachmentUrl)
+    {
+        if (StringUtils.startsWith(fileUrl, MANAGED_ATTACHMENT_PREFIX))
+        {
+            return;
+        }
+
+        if (StringUtils.equals(fileUrl, unchangedLegacyAttachmentUrl) && StringUtils.startsWithIgnoreCase(fileUrl, "data:"))
+        {
+            return;
+        }
+
+        throw new ServiceException("附件必须先通过文件服务上传");
+    }
+
+    private static void validateAttachmentExtension(String fileUrl)
+    {
+        if (!StringUtils.startsWith(fileUrl, MANAGED_ATTACHMENT_PREFIX))
+        {
+            return;
+        }
+
+        String path = StringUtils.substringBefore(fileUrl, "?");
+        String extension = StringUtils.substringAfterLast(path, ".").toLowerCase();
+        if (!ATTACHMENT_EXTENSIONS.contains(extension))
+        {
+            throw new ServiceException("附件类型仅支持图片、PDF、Word、Excel、CSV 或 TXT");
+        }
     }
 }

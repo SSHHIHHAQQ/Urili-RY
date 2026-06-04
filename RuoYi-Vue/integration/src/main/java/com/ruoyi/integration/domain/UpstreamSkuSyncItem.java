@@ -24,6 +24,7 @@ public class UpstreamSkuSyncItem
     private Long skuPairingId;
     private String systemSku;
     private String systemSkuName;
+    private String customerName;
 
     public String getConnectionCode() { return connectionCode; }
     public void setConnectionCode(String connectionCode) { this.connectionCode = connectionCode; }
@@ -51,4 +52,6 @@ public class UpstreamSkuSyncItem
     public void setSystemSku(String systemSku) { this.systemSku = systemSku; }
     public String getSystemSkuName() { return systemSkuName; }
     public void setSystemSkuName(String systemSkuName) { this.systemSkuName = systemSkuName; }
+    public String getCustomerName() { return customerName; }
+    public void setCustomerName(String customerName) { this.customerName = customerName; }
 }

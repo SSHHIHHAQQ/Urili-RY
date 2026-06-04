@@ -73,7 +73,7 @@ public class BuyerServiceImpl implements IBuyerService
     {
         Buyer current = selectBuyerById(buyer.getBuyerId());
         buyer.setBuyerNo(current.getBuyerNo());
-        normalizeBuyer(buyer);
+        normalizeBuyer(buyer, current.getAttachmentFileUrl());
         buyer.setUpdateBy(SecurityUtils.getUsername());
         checkBuyerCodeUnique(buyer);
 
@@ -192,12 +192,17 @@ public class BuyerServiceImpl implements IBuyerService
 
     private void normalizeBuyer(Buyer buyer)
     {
+        normalizeBuyer(buyer, null);
+    }
+
+    private void normalizeBuyer(Buyer buyer, String unchangedLegacyAttachmentUrl)
+    {
         buyer.setBuyerCode(PartnerSupport.trimRequired(buyer.getBuyerCode(), "买家代码不能为空"));
         buyer.setBuyerName(PartnerSupport.trimRequired(buyer.getBuyerName(), "买家全称不能为空"));
         buyer.setBuyerShortName(PartnerSupport.trimRequired(buyer.getBuyerShortName(), "买家简称不能为空"));
         buyer.setBuyerType(PartnerSupport.normalizeSubjectType(buyer.getBuyerType()));
         buyer.setBuyerLevel(PartnerSupport.normalizeLevel(buyer.getBuyerLevel(), "买家等级不能为空"));
-        PartnerSupport.normalizeCommonProfile(buyer);
+        PartnerSupport.normalizeCommonProfile(buyer, unchangedLegacyAttachmentUrl);
     }
 
     private void createOwnerAccountIfNeeded(Buyer buyer)

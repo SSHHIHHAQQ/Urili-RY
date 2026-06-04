@@ -2,8 +2,11 @@ package com.ruoyi.integration.service.impl;
 
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
@@ -50,6 +53,8 @@ import com.ruoyi.integration.support.UpstreamSystemConstants;
 public class UpstreamSystemServiceImpl implements IUpstreamSystemService
 {
     private static final int SKU_PAGE_SIZE = 100;
+
+    private final Set<String> syncingSkuConnectionCodes = ConcurrentHashMap.newKeySet();
 
     @Autowired
     private UpstreamSystemMapper upstreamSystemMapper;
@@ -158,6 +163,30 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
     }
 
     @Override
+    @Transactional
+    public int updateConnectionOrder(List<String> connectionCodes)
+    {
+        if (connectionCodes == null || connectionCodes.isEmpty())
+        {
+            throw new ServiceException("排序主仓不能为空");
+        }
+        Set<String> seenCodes = new HashSet<>();
+        int rows = 0;
+        int displayOrder = 1;
+        for (String rawCode : connectionCodes)
+        {
+            String connectionCode = trimRequired(rawCode, "主仓接入编号不能为空");
+            if (!seenCodes.add(connectionCode))
+            {
+                throw new ServiceException("排序主仓不能重复：" + connectionCode);
+            }
+            selectConnectionByCode(connectionCode);
+            rows += upstreamSystemMapper.updateConnectionDisplayOrder(connectionCode, displayOrder++, SecurityUtils.getUsername());
+        }
+        return rows;
+    }
+
+    @Override
     public int authorize(String connectionCode)
     {
         UpstreamSystemConnection connection = selectConnectionByCode(connectionCode);
@@ -185,6 +214,10 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
         if (!UpstreamSystemConstants.STATUS_ENABLED.equals(connection.getStatus()))
         {
             throw new ServiceException("主仓接入已停用，不能同步");
+        }
+        if (!syncingSkuConnectionCodes.add(connectionCode))
+        {
+            throw new ServiceException("该主仓SKU正在同步，请稍后再试");
         }
         String syncBatchId = UUID.randomUUID().toString();
         UpstreamSkuSyncState syncing = new UpstreamSkuSyncState();
@@ -262,6 +295,72 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
             upstreamSystemMapper.upsertSkuSyncState(failed);
             upstreamSystemMapper.updateConnectionSyncSummary(connectionCode);
             throw toServiceException(ex);
+        }
+        finally
+        {
+            syncingSkuConnectionCodes.remove(connectionCode);
+        }
+    }
+
+    @Override
+    public UpstreamSyncResult syncSkusOnly(String connectionCode)
+    {
+        UpstreamSystemConnection connection = selectConnectionByCode(connectionCode);
+        if (!UpstreamSystemConstants.STATUS_ENABLED.equals(connection.getStatus()))
+        {
+            throw new ServiceException("主仓接入已停用，不能同步SKU");
+        }
+        if (!syncingSkuConnectionCodes.add(connectionCode))
+        {
+            throw new ServiceException("该主仓SKU正在同步，请稍后再试");
+        }
+
+        String syncBatchId = UUID.randomUUID().toString();
+        Date startedTime = new Date();
+        UpstreamSkuSyncState syncing = new UpstreamSkuSyncState();
+        syncing.setConnectionCode(connectionCode);
+        syncing.setStatus(UpstreamSystemConstants.SYNC_STATUS_SYNCING);
+        syncing.setSyncBatchId(syncBatchId);
+        syncing.setLastStartedTime(startedTime);
+        upstreamSystemMapper.upsertSkuSyncState(syncing);
+
+        try
+        {
+            LingxingOpenApiClient client = createClient(connection);
+            int skuCount = syncSkus(client, connectionCode, syncBatchId);
+            Date finishedTime = new Date();
+            UpstreamSkuSyncState fresh = new UpstreamSkuSyncState();
+            fresh.setConnectionCode(connectionCode);
+            fresh.setStatus(UpstreamSystemConstants.SYNC_STATUS_FRESH);
+            fresh.setSyncBatchId(syncBatchId);
+            fresh.setLastStartedTime(startedTime);
+            fresh.setLastFinishedTime(finishedTime);
+            fresh.setLastSuccessTime(finishedTime);
+            fresh.setNextSyncTime(new Date(System.currentTimeMillis() + 10 * 60 * 1000L));
+            upstreamSystemMapper.upsertSkuSyncState(fresh);
+            upstreamSystemMapper.updateConnectionSyncSummary(connectionCode);
+
+            UpstreamSyncResult result = new UpstreamSyncResult();
+            result.setSyncBatchId(syncBatchId);
+            result.setSkuCount(skuCount);
+            return result;
+        }
+        catch (RuntimeException ex)
+        {
+            UpstreamSkuSyncState failed = new UpstreamSkuSyncState();
+            failed.setConnectionCode(connectionCode);
+            failed.setStatus(UpstreamSystemConstants.SYNC_STATUS_FAILED);
+            failed.setSyncBatchId(syncBatchId);
+            failed.setLastStartedTime(startedTime);
+            failed.setLastFinishedTime(new Date());
+            failed.setLastErrorMessage(StringUtils.left(ex.getMessage(), 500));
+            upstreamSystemMapper.upsertSkuSyncState(failed);
+            upstreamSystemMapper.updateConnectionSyncSummary(connectionCode);
+            throw toServiceException(ex);
+        }
+        finally
+        {
+            syncingSkuConnectionCodes.remove(connectionCode);
         }
     }
 
@@ -366,9 +465,11 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
     }
 
     @Override
-    public List<UpstreamSkuSyncItem> selectSkuSyncList(String connectionCode, String status, String keyword)
+    public List<UpstreamSkuSyncItem> selectSkuSyncList(String connectionCode, String status, String pairingStatus,
+        String field, String keyword)
     {
-        return upstreamSystemMapper.selectSkuSyncList(connectionCode, trimOptional(status), trimOptional(keyword));
+        return upstreamSystemMapper.selectSkuSyncList(connectionCode, trimOptional(status),
+            trimOptional(pairingStatus), trimOptional(field), trimOptional(keyword));
     }
 
     @Override

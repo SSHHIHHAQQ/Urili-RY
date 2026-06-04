@@ -31,6 +31,9 @@ public interface UpstreamSystemMapper
     int updateConnectionStatus(@Param("connectionCode") String connectionCode, @Param("status") String status,
         @Param("updateBy") String updateBy);
 
+    int updateConnectionDisplayOrder(@Param("connectionCode") String connectionCode,
+        @Param("displayOrder") Integer displayOrder, @Param("updateBy") String updateBy);
+
     int updateConnectionSyncSummary(@Param("connectionCode") String connectionCode);
 
     Integer selectMaxDisplayOrder();
@@ -78,7 +81,8 @@ public interface UpstreamSystemMapper
     int markMissingSkus(@Param("connectionCode") String connectionCode, @Param("syncBatchId") String syncBatchId);
 
     List<UpstreamSkuSyncItem> selectSkuSyncList(@Param("connectionCode") String connectionCode,
-        @Param("status") String status, @Param("keyword") String keyword);
+        @Param("status") String status, @Param("pairingStatus") String pairingStatus,
+        @Param("field") String field, @Param("keyword") String keyword);
 
     UpstreamSkuSyncItem selectSkuSyncItem(@Param("connectionCode") String connectionCode, @Param("masterSku") String masterSku);
 

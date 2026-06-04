@@ -35,9 +35,13 @@ public interface IUpstreamSystemService
 
     int updateConnectionStatus(String connectionCode, String status);
 
+    int updateConnectionOrder(List<String> connectionCodes);
+
     int authorize(String connectionCode);
 
     UpstreamSyncResult syncAll(String connectionCode);
+
+    UpstreamSyncResult syncSkusOnly(String connectionCode);
 
     List<UpstreamWarehouseSyncItem> selectWarehouseSyncList(String connectionCode, String status);
 
@@ -55,7 +59,8 @@ public interface IUpstreamSystemService
 
     int deleteLogisticsChannelPairing(Long logisticsChannelPairingId);
 
-    List<UpstreamSkuSyncItem> selectSkuSyncList(String connectionCode, String status, String keyword);
+    List<UpstreamSkuSyncItem> selectSkuSyncList(String connectionCode, String status, String pairingStatus,
+        String field, String keyword);
 
     List<UpstreamSkuPairing> selectSkuPairingList(String connectionCode);
 

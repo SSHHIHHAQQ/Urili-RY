@@ -37,6 +37,13 @@ export async function updateUpstreamStatus(connectionCode: string, status: strin
   });
 }
 
+export async function updateUpstreamConnectionOrder(connectionCodes: string[]) {
+  return request<API.Result>(`${baseUrl}/order`, {
+    method: 'PUT',
+    data: { connectionCodes },
+  });
+}
+
 export async function authorizeUpstreamConnection(connectionCode: string) {
   return request<API.Result>(`${baseUrl}/${connectionCode}/authorize`, {
     method: 'POST',
@@ -45,6 +52,12 @@ export async function authorizeUpstreamConnection(connectionCode: string) {
 
 export async function syncUpstreamConnection(connectionCode: string) {
   return request<API.Result & { data: API.Integration.SyncResult }>(`${baseUrl}/${connectionCode}/sync`, {
+    method: 'POST',
+  });
+}
+
+export async function syncUpstreamSku(connectionCode: string) {
+  return request<API.Result & { data: API.Integration.SyncResult }>(`${baseUrl}/${connectionCode}/skus/sync`, {
     method: 'POST',
   });
 }
@@ -111,6 +124,12 @@ export async function getSkuSyncList(connectionCode: string, params?: Record<str
   return request<API.Integration.SkuPageResult>(`${baseUrl}/${connectionCode}/skus/list`, {
     method: 'GET',
     params,
+  });
+}
+
+export async function getSkuSyncState(connectionCode: string) {
+  return request<API.Result & { data: API.Integration.SkuSyncState }>(`${baseUrl}/${connectionCode}/sku-sync-state`, {
+    method: 'GET',
   });
 }
 
