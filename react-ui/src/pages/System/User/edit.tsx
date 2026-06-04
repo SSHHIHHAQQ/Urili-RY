@@ -11,6 +11,7 @@ import { Form, Modal } from 'antd';
 import { useIntl, FormattedMessage } from '@umijs/max';
 import type { DataNode } from 'antd/es/tree';
 import { DictValueEnumObj } from '@/components/DictTag';
+import { SEARCHABLE_SELECT_PROPS, SEARCHABLE_TREE_SELECT_PROPS } from '@/utils/selectSearch';
 
 /* *
  *
@@ -118,6 +119,7 @@ const UserForm: React.FC<UserFormProps> = (props) => {
           request={async () => {
             return depts;
           }}
+          fieldProps={SEARCHABLE_TREE_SELECT_PROPS}
           placeholder="请输入用户部门"
           colProps={{ md: 12, xl: 12 }}
           rules={[
@@ -203,6 +205,7 @@ const UserForm: React.FC<UserFormProps> = (props) => {
           })}
           initialValue={'0'}
           placeholder="请输入用户性别"
+          fieldProps={SEARCHABLE_SELECT_PROPS}
           colProps={{ md: 12, xl: 12 }}
           rules={[
             {
@@ -241,6 +244,7 @@ const UserForm: React.FC<UserFormProps> = (props) => {
           })}
           options={posts}
           placeholder="请选择岗位"
+          fieldProps={SEARCHABLE_SELECT_PROPS}
           colProps={{ md: 12, xl: 12 }}
           rules={[{ required: true, message: '请选择岗位!' }]}
         />
@@ -253,6 +257,7 @@ const UserForm: React.FC<UserFormProps> = (props) => {
           })}
           options={roles}
           placeholder="请选择角色"
+          fieldProps={SEARCHABLE_SELECT_PROPS}
           colProps={{ md: 12, xl: 12 }}
           rules={[{ required: true, message: '请选择角色!' }]}
         />
