@@ -6,6 +6,7 @@ import type { FormInstance } from 'antd';
 import { Button, Modal } from 'antd';
 import { ActionType, FooterToolbar, PageContainer, ProColumns, ProTable } from '@ant-design/pro-components';
 import { getPersistedProTableSearch } from '@/utils/proTableSearch';
+import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 import { PlusOutlined, DeleteOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { getOperlogList, removeOperlog, addOperlog, updateOperlog, exportOperlog } from '@/services/monitor/operlog';
 import UpdateForm from './detail';
@@ -150,6 +151,7 @@ const OperlogTableList: React.FC = () => {
       dataIndex: 'businessType',
       valueType: 'select',
       valueEnum: businessTypeOptions,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       render: (_, record) => {
         return (<DictTag enums={businessTypeOptions} value={record.businessType} />);
       },
@@ -164,6 +166,7 @@ const OperlogTableList: React.FC = () => {
       dataIndex: 'operatorType',
       valueType: 'select',
       valueEnum: operatorTypeOptions,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       render: (_, record) => {
         return (<DictTag enums={operatorTypeOptions} value={record.operatorType} />);
       },
@@ -188,6 +191,7 @@ const OperlogTableList: React.FC = () => {
       dataIndex: 'status',
       valueType: 'select',
       valueEnum: statusOptions,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       render: (_, record) => {
         return (<DictTag key="status" enums={statusOptions} value={record.status} />);
       },

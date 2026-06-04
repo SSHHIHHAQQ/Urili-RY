@@ -5,6 +5,7 @@ import { useIntl, FormattedMessage, useAccess, history } from '@umijs/max';
 import { Button, Dropdown, Modal } from 'antd';
 import { type ActionType, FooterToolbar, PageContainer, type ProColumns, ProTable } from '@ant-design/pro-components';
 import { getPersistedProTableSearch } from '@/utils/proTableSearch';
+import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 import { PlusOutlined, DeleteOutlined, DownOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { getJobList, removeJob, addJob, updateJob, exportJob, runJob } from '@/services/monitor/job';
 import { getDictSelectOption, getDictValueEnum } from '@/services/system/dict';
@@ -184,6 +185,7 @@ const JobTableList: React.FC = () => {
       dataIndex: 'jobGroup',
       valueType: 'text',
       valueEnum: jobGroupOptions,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       render: (_, record) => {
         return (<DictTag options={jobGroupOptions} value={record.jobGroup} />);
       },
@@ -203,6 +205,7 @@ const JobTableList: React.FC = () => {
       dataIndex: 'status',
       valueType: 'select',
       valueEnum: statusOptions,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       render: (_, record) => {
         return (<DictTag enums={statusOptions} value={record.status} />);
       },
