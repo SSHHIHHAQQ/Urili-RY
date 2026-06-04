@@ -48,7 +48,7 @@ product_attribute 1 - n product_category_attribute
 | `category_code` | `varchar(64)` | 是 | 无 | 稳定分类编码，全局唯一 |
 | `category_name` | `varchar(128)` | 是 | 无 | 分类名称 |
 | `category_level` | `int` | 是 | `1` | 分类层级，冗余字段 |
-| `publish_enabled` | `char(1)` | 是 | `N` | 是否允许卖家发布选择 |
+| `publish_enabled` | `char(1)` | 是 | `N` | 兼容字段；业务上不再人工配置，接口按是否存在子分类自动派生 |
 | `sort_order` | `int` | 是 | `0` | 同父级排序 |
 | `schema_version` | `int` | 是 | `1` | 分类属性规则版本，规则变更时递增 |
 | `status` | `char(1)` | 是 | `0` | `0` 正常，`1` 停用 |
@@ -66,7 +66,7 @@ product_attribute 1 - n product_category_attribute
 - 唯一：同一父分类下 `category_name` 不重复。
 - 索引：`parent_id`、`ancestors`、`status`。
 - 不建议第一版保存 `leaf_flag`；是否最末级由“是否存在未删除子分类”实时判断，避免数据不一致。
-- `publish_enabled = Y` 只代表运营允许发布选择；实际可选还必须同时满足最末级、正常状态、父级未停用。
+- 商品分类是否可发布由是否最末级自动判断：无未删除子分类即为可发布，有未删除子分类即为不可发布；管理端不再提供人工配置入口。
 
 关键业务规则：
 

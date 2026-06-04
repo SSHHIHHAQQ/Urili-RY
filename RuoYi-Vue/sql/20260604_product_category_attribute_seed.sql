@@ -11,7 +11,7 @@ create table if not exists product_category (
   category_code    varchar(64)   not null                 comment '分类编码',
   category_name    varchar(128)  not null                 comment '分类名称',
   category_level   int           not null default 1       comment '分类层级',
-  publish_enabled  char(1)       not null default 'N'     comment '是否允许发布选择：Y是 N否',
+  publish_enabled  char(1)       not null default 'N'     comment '兼容字段，是否可发布由是否存在子分类自动判断：Y是 N否',
   sort_order       int           not null default 0       comment '显示排序',
   schema_version   int           not null default 1       comment '类目属性规则版本',
   status           char(1)       not null default '0'     comment '状态：0正常 1停用',

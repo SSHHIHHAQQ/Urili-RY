@@ -529,6 +529,25 @@
   - 响应不得包含 `password`、`createBy`、`updateBy`、`delFlag`、`remark` 等后台或敏感字段。
   - 同构端内接口继续按 seller 样板复制到 buyer，只替换 terminal、权限标识、service 和文案。
 
+### 端内当前账号日志只读接口
+
+- 位置：
+  - `RuoYi-Vue/seller/src/main/java/com/ruoyi/seller/controller/SellerPortalController.java`
+  - `RuoYi-Vue/buyer/src/main/java/com/ruoyi/buyer/controller/BuyerPortalController.java`
+  - `react-ui/src/services/portal/session.ts`
+  - `react-ui/src/types/seller-buyer/party.d.ts`
+- 当前用途：
+  - 卖家端 `/seller/account/login-logs` 返回当前卖家端账号自己的登录日志。
+  - 卖家端 `/seller/account/oper-logs` 返回当前卖家端账号自己的操作日志。
+  - 买家端 `/buyer/account/login-logs` 返回当前买家端账号自己的登录日志。
+  - 买家端 `/buyer/account/oper-logs` 返回当前买家端账号自己的操作日志。
+  - 前端统一通过 `sellerPortalSessionService.getLoginLogs` / `getOperLogs` 和 `buyerPortalSessionService.getLoginLogs` / `getOperLogs` 调用。
+- 复用规则：
+  - 端内当前账号日志接口必须从 `PortalSessionContext.requireSession(...)` 推导 `subjectId` 和 `accountId`，并覆盖查询对象中的同名字段。
+  - 前端传入的 `subjectId`、`accountId` 只能作为无效输入处理，不能扩大查询范围。
+  - 管理端审计列表继续使用 `/seller/admin/sellers/*` 和 `/buyer/admin/buyers/*` 下的日志接口；不要把端内当前账号日志接口当成管理端全量审计接口。
+  - 后续端内安全中心或个人中心日志页只读取当前账号日志，不允许筛选其他主体或其他账号。
+
 ### 三端前端 session 基础层
 
 - 位置：
@@ -538,12 +557,29 @@
 - 当前用途：
   - 管理端继续使用原有 `access_token` / `refresh_token` / `expireTime`，避免影响当前 admin 登录。
   - 卖家端、买家端预留独立 token key：`seller_*` / `buyer_*`。
-  - `portal/session.ts` 统一封装卖家端、买家端登录、免密登录、主动退出、修改当前账号密码、`getInfo`、`getRouters`、主体资料、当前账号资料、端内账号只读列表、端内部门只读列表和端内角色只读列表接口。
+  - `portal/session.ts` 统一封装卖家端、买家端登录、免密登录、主动退出、修改当前账号密码、`getInfo`、`getRouters`、主体资料、当前账号资料、端内账号只读列表、端内部门只读列表、端内角色只读列表和当前账号日志只读接口。
 - 复用规则：
   - 后续三端物理拆分时，卖家端、买家端前端优先复用 `setTerminalSessionToken`、`getTerminalAccessToken`、`clearTerminalSessionToken`，不要重新设计 localStorage key。
   - 后续端内页面调用当前账号、主体资料、菜单、权限和退出登录时，优先复用 `sellerPortalSessionService` / `buyerPortalSessionService` 或底层 `portal*` 方法，不要在页面里直接拼 `/seller` / `/buyer` 路径。
   - 后续端内安全设置或个人中心修改密码时，优先调用 `sellerPortalSessionService.updatePassword` / `buyerPortalSessionService.updatePassword`；页面不要传主体 ID、账号 ID，也不要持久化旧密码、新密码或确认密码。
   - 当前 `react-ui/` 仍是管理端验证入口；该基础层只为后续物理拆分降低重复改造，不代表现在立即复制 `seller-ui` / `buyer-ui`。
+
+### 三端前端直登入口与端内工作台模板
+
+- 位置：
+  - `react-ui/src/pages/Portal/terminal.ts`
+  - `react-ui/src/pages/Portal/DirectLogin/index.tsx`
+  - `react-ui/src/pages/Portal/Home/index.tsx`
+  - `react-ui/config/routes.ts`
+- 当前用途：
+  - `/seller/direct-login` 和 `/buyer/direct-login` 共用同一页面消费管理端生成的一次性免密票据。
+  - `/seller/portal` 和 `/buyer/portal` 共用同一工作台页面读取当前端主体、当前账号、端内账号、端内部门、端内角色和权限信息。
+  - `PORTAL_META` 和 `PORTAL_SERVICE` 统一承载 terminal 到文案、首页路径和 service 的映射。
+- 复用规则：
+  - 已确认的 seller/buyer 同构前端按模板复制：卖家侧做成样板后，买家侧只替换 terminal、文案、路由、权限标识、字段配置和 service。
+  - 直登页只能消费 `directLoginToken` 并写入对应端 token key；不能写入或覆盖管理端 `access_token`。
+  - 工作台或后续端内页面必须通过 `getTerminalAccessToken(terminal)` 读取端 token，不要复用管理端 `getAccessToken()`。
+  - 当前工作台是验证型入口；后续正式卖家端/买家端页面可以替换 UI，但必须保留端 token、端 service 和后端 `PortalSessionContext` 权限边界。
 
 ### PlannedPage
 
