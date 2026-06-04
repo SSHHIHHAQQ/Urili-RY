@@ -3,6 +3,7 @@ import { Modal } from 'antd';
 import { FormattedMessage, useIntl } from '@umijs/max';
 import { ActionType, ParamsType, ProColumns, ProTable, RequestData } from '@ant-design/pro-components';
 import { getPersistedProTableSearch } from '@/utils/proTableSearch';
+import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 import { getDictValueEnum } from '@/services/system/dict';
 import DictTag from '@/components/DictTag';
 
@@ -71,6 +72,7 @@ const UserSelectorModal: React.FC<DataScopeFormProps> = (props) => {
       valueType: 'select',
       search: false,
       valueEnum: statusOptions,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       render: (_, record) => {
         return (<DictTag enums={statusOptions} value={record.status} />);
       },
