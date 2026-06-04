@@ -12,7 +12,9 @@ import com.ruoyi.buyer.domain.Buyer;
 import com.ruoyi.buyer.domain.BuyerAccount;
 import com.ruoyi.buyer.mapper.BuyerMapper;
 import com.ruoyi.buyer.service.IBuyerService;
+import com.ruoyi.system.domain.PortalDirectLoginResult;
 import com.ruoyi.system.service.support.PartnerSupport;
+import com.ruoyi.system.service.support.PortalDirectLoginSupport;
 import com.ruoyi.system.service.support.PortalAccountSupport;
 
 /**
@@ -30,6 +32,9 @@ public class BuyerServiceImpl implements IBuyerService
 
     @Autowired
     private PortalAccountSupport accountSupport;
+
+    @Autowired
+    private PortalDirectLoginSupport directLoginSupport;
 
     @Override
     public List<Buyer> selectBuyerList(Buyer buyer)
@@ -141,6 +146,48 @@ public class BuyerServiceImpl implements IBuyerService
         }
         selectBuyerById(current.getBuyerId());
         return accountSupport.resetPassword(account.getUserId(), account.getPassword());
+    }
+
+    @Override
+    public int resetBuyerAccountDefaultPassword(BuyerAccount account)
+    {
+        if (account.getUserId() == null)
+        {
+            throw new ServiceException("用户ID不能为空");
+        }
+        BuyerAccount current = buyerMapper.selectBuyerAccountByUserId(account.getUserId());
+        if (current == null)
+        {
+            throw new ServiceException("买家账号不存在");
+        }
+        selectBuyerById(current.getBuyerId());
+        return accountSupport.resetPassword(account.getUserId(), PartnerSupport.DEFAULT_OWNER_PASSWORD);
+    }
+
+    @Override
+    public int resetBuyerOwnerPassword(Long buyerId)
+    {
+        selectBuyerById(buyerId);
+        BuyerAccount owner = buyerMapper.selectOwnerBuyerAccountByBuyerId(buyerId);
+        if (owner == null || owner.getUserId() == null)
+        {
+            throw new ServiceException("买家主账号不存在");
+        }
+        return accountSupport.resetPassword(owner.getUserId(), PartnerSupport.DEFAULT_OWNER_PASSWORD);
+    }
+
+    @Override
+    public PortalDirectLoginResult createBuyerDirectLogin(Long buyerId)
+    {
+        Buyer buyer = selectBuyerById(buyerId);
+        BuyerAccount owner = buyerMapper.selectOwnerBuyerAccountByBuyerId(buyerId);
+        if (!PartnerSupport.STATUS_NORMAL.equals(buyer.getStatus()))
+        {
+            throw new ServiceException("买家已停用，不能免密登录");
+        }
+        return directLoginSupport.createToken("buyer", buyerId, buyer.getBuyerNo(), owner,
+            PortalDirectLoginSupport.BUYER_WEB_URL_CONFIG_KEY,
+            "http://127.0.0.1:8001/buyer/direct-login");
     }
 
     private void normalizeBuyer(Buyer buyer)

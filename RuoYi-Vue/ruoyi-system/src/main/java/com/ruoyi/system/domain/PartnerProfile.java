@@ -1,6 +1,7 @@
 package com.ruoyi.system.domain;
 
 import java.io.Serializable;
+import java.math.BigDecimal;
 import java.util.Date;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -53,6 +54,10 @@ public abstract class PartnerProfile extends BaseEntity
     private Integer accountCount;
 
     private Date lastLoginTime;
+
+    private BigDecimal accountBalance;
+
+    private String balanceCurrency;
 
     public String getStatus()
     {
@@ -345,6 +350,26 @@ public abstract class PartnerProfile extends BaseEntity
     public void setLastLoginTime(Date lastLoginTime)
     {
         this.lastLoginTime = lastLoginTime;
+    }
+
+    public BigDecimal getAccountBalance()
+    {
+        return accountBalance;
+    }
+
+    public void setAccountBalance(BigDecimal accountBalance)
+    {
+        this.accountBalance = accountBalance;
+    }
+
+    public String getBalanceCurrency()
+    {
+        return balanceCurrency;
+    }
+
+    public void setBalanceCurrency(String balanceCurrency)
+    {
+        this.balanceCurrency = balanceCurrency;
     }
 
     public static class Attachment implements Serializable

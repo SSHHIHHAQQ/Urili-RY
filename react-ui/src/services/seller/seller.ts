@@ -71,3 +71,25 @@ export async function resetAdminSellerAccountPassword(data: Pick<API.Partner.Sel
     data,
   });
 }
+
+export async function resetAdminSellerAccountDefaultPassword(data: Pick<API.Partner.SellerAccount, 'userId'>) {
+  return request<API.Result>('/api/seller/admin/sellers/accounts/resetDefaultPwd', {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json;charset=UTF-8',
+    },
+    data,
+  });
+}
+
+export async function resetAdminSellerOwnerPassword(sellerId: number) {
+  return request<API.Result>(`/api/seller/admin/sellers/${sellerId}/resetOwnerPwd`, {
+    method: 'PUT',
+  });
+}
+
+export async function createAdminSellerDirectLogin(sellerId: number) {
+  return request<API.Partner.DirectLoginApiResult>(`/api/seller/admin/sellers/${sellerId}/directLogin`, {
+    method: 'POST',
+  });
+}

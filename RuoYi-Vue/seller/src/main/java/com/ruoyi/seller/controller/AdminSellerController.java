@@ -92,4 +92,28 @@ public class AdminSellerController extends BaseController
     {
         return toAjax(sellerService.resetSellerAccountPassword(account));
     }
+
+    @PreAuthorize("@ss.hasPermi('seller:admin:resetPwd')")
+    @Log(title = "卖家账号", businessType = BusinessType.UPDATE)
+    @PutMapping("/accounts/resetDefaultPwd")
+    public AjaxResult resetDefaultPassword(@RequestBody SellerAccount account)
+    {
+        return toAjax(sellerService.resetSellerAccountDefaultPassword(account));
+    }
+
+    @PreAuthorize("@ss.hasPermi('seller:admin:resetPwd')")
+    @Log(title = "卖家主账号", businessType = BusinessType.UPDATE)
+    @PutMapping("/{sellerId}/resetOwnerPwd")
+    public AjaxResult resetOwnerPassword(@PathVariable("sellerId") Long sellerId)
+    {
+        return toAjax(sellerService.resetSellerOwnerPassword(sellerId));
+    }
+
+    @PreAuthorize("@ss.hasPermi('seller:admin:directLogin')")
+    @Log(title = "卖家免密登录", businessType = BusinessType.OTHER)
+    @PostMapping("/{sellerId}/directLogin")
+    public AjaxResult directLogin(@PathVariable("sellerId") Long sellerId)
+    {
+        return success(sellerService.createSellerDirectLogin(sellerId));
+    }
 }

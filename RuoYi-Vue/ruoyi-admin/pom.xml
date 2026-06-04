@@ -66,6 +66,12 @@
             <artifactId>buyer</artifactId>
         </dependency>
 
+        <!-- 外部系统接入模块-->
+        <dependency>
+            <groupId>com.ruoyi</groupId>
+            <artifactId>integration</artifactId>
+        </dependency>
+
     </dependencies>
 
     <build>

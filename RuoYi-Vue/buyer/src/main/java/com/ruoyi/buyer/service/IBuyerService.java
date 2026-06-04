@@ -3,6 +3,7 @@ package com.ruoyi.buyer.service;
 import java.util.List;
 import com.ruoyi.buyer.domain.Buyer;
 import com.ruoyi.buyer.domain.BuyerAccount;
+import com.ruoyi.system.domain.PortalDirectLoginResult;
 
 /**
  * 买家Service接口
@@ -24,4 +25,10 @@ public interface IBuyerService
     public int insertBuyerAccount(Long buyerId, BuyerAccount account);
 
     public int resetBuyerAccountPassword(BuyerAccount account);
+
+    public int resetBuyerAccountDefaultPassword(BuyerAccount account);
+
+    public int resetBuyerOwnerPassword(Long buyerId);
+
+    public PortalDirectLoginResult createBuyerDirectLogin(Long buyerId);
 }

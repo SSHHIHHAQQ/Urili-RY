@@ -3,10 +3,13 @@ import {
   addAdminSeller,
   addAdminSellerAccount,
   changeAdminSellerStatus,
+  createAdminSellerDirectLogin,
   getAdminSeller,
   getAdminSellerAccounts,
   getAdminSellerList,
+  resetAdminSellerAccountDefaultPassword,
   resetAdminSellerAccountPassword,
+  resetAdminSellerOwnerPassword,
   updateAdminSeller,
 } from '@/services/seller/seller';
 
@@ -23,6 +26,7 @@ const sellerConfig: PartnerModuleConfig = {
   levelField: 'sellerLevel',
   accountIdField: 'sellerAccountId',
   ownerIdField: 'sellerId',
+  balanceTitle: '分销账户余额',
   levelDictType: 'seller_level',
   accountRoleDictType: 'seller_account_role',
   services: {
@@ -34,6 +38,9 @@ const sellerConfig: PartnerModuleConfig = {
     listAccounts: getAdminSellerAccounts,
     addAccount: addAdminSellerAccount,
     resetPassword: resetAdminSellerAccountPassword,
+    resetDefaultPassword: resetAdminSellerAccountDefaultPassword,
+    resetOwnerPassword: resetAdminSellerOwnerPassword,
+    directLogin: createAdminSellerDirectLogin,
   },
 };
 

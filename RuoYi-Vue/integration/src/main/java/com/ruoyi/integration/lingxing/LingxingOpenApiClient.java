@@ -1,0 +1,379 @@
+package com.ruoyi.integration.lingxing;
+
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Date;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
+import java.util.UUID;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONArray;
+import com.alibaba.fastjson2.JSONObject;
+import org.apache.commons.lang3.StringUtils;
+import com.ruoyi.integration.support.UpstreamMaskUtils;
+
+/**
+ * 领星 WMS OpenAPI 客户端。
+ */
+public class LingxingOpenApiClient
+{
+    private static final String DEFAULT_BASE_URL = "https://api.xlwms.com/openapi/v1";
+
+    private static final int DEFAULT_TIMEOUT_MS = 10000;
+
+    private static final int DEFAULT_MAX_RETRIES = 2;
+
+    private static final int DEFAULT_RETRY_DELAY_MS = 250;
+
+    private final LingxingCredentials credentials;
+
+    private final LingxingRequestLogger requestLogger;
+
+    private final HttpClient httpClient;
+
+    private final String baseUrl;
+
+    public LingxingOpenApiClient(LingxingCredentials credentials, LingxingRequestLogger requestLogger)
+    {
+        this(credentials, requestLogger, DEFAULT_BASE_URL);
+    }
+
+    public LingxingOpenApiClient(LingxingCredentials credentials, LingxingRequestLogger requestLogger, String baseUrl)
+    {
+        this.credentials = credentials;
+        this.requestLogger = requestLogger;
+        this.baseUrl = StringUtils.defaultIfBlank(baseUrl, DEFAULT_BASE_URL).replaceAll("/$", "");
+        this.httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofMillis(DEFAULT_TIMEOUT_MS)).build();
+    }
+
+    public List<Object> listWorkOrderTypes(String traceId)
+    {
+        Object data = post("/workOrder/types", Collections.emptyMap(), "AUTH_CHECK", traceId);
+        if (!(data instanceof JSONArray array))
+        {
+            throw new LingxingClientException("LINGXING_RESPONSE_ERROR", "领星工单类型响应不是数组", false);
+        }
+        return new ArrayList<>(array);
+    }
+
+    public List<LingxingWarehouse> listWarehouses(String traceId)
+    {
+        Object data = post("/warehouse/options", Collections.emptyMap(), "WAREHOUSE_SYNC", traceId);
+        if (!(data instanceof JSONArray array))
+        {
+            throw new LingxingClientException("LINGXING_RESPONSE_ERROR", "领星仓库响应不是数组", false);
+        }
+        List<LingxingWarehouse> warehouses = new ArrayList<>();
+        for (Object item : array)
+        {
+            if (item instanceof JSONObject object)
+            {
+                String code = object.getString("whCode");
+                String name = object.getString("whNameCn");
+                if (StringUtils.isNotBlank(code) && StringUtils.isNotBlank(name))
+                {
+                    LingxingWarehouse warehouse = new LingxingWarehouse();
+                    warehouse.setWarehouseCode(code.trim());
+                    warehouse.setWarehouseName(name.trim());
+                    warehouse.setCountryCode(StringUtils.defaultString(object.getString("countryCode")).trim());
+                    warehouses.add(warehouse);
+                }
+            }
+        }
+        return warehouses;
+    }
+
+    public List<LingxingLogisticsChannel> listLogisticsChannels(String warehouseCode, String traceId)
+    {
+        Map<String, Object> dataRequest = new LinkedHashMap<>();
+        dataRequest.put("whCode", warehouseCode);
+        Object data = post("/logistics/channel/list", dataRequest, "LOGISTICS_CHANNEL_SYNC", traceId);
+        if (!(data instanceof JSONArray array))
+        {
+            throw new LingxingClientException("LINGXING_RESPONSE_ERROR", "领星物流渠道响应不是数组", false);
+        }
+        List<LingxingLogisticsChannel> channels = new ArrayList<>();
+        for (Object item : array)
+        {
+            if (item instanceof JSONObject object)
+            {
+                String code = object.getString("channelCode");
+                String name = object.getString("channelName");
+                if (StringUtils.isNotBlank(code) && StringUtils.isNotBlank(name))
+                {
+                    LingxingLogisticsChannel channel = new LingxingLogisticsChannel();
+                    channel.setWarehouseCode(warehouseCode);
+                    channel.setChannelCode(code.trim());
+                    channel.setChannelName(name.trim());
+                    channels.add(channel);
+                }
+            }
+        }
+        return channels;
+    }
+
+    public LingxingProductPage listProductSkuPage(int current, int size, String traceId)
+    {
+        int safeCurrent = Math.max(1, current);
+        int safeSize = Math.max(1, Math.min(100, size));
+        Map<String, Object> dataRequest = new LinkedHashMap<>();
+        dataRequest.put("page", safeCurrent);
+        dataRequest.put("pageSize", safeSize);
+        Object data = post("/product/pagelist", dataRequest, "SKU_SYNC", traceId);
+        if (!(data instanceof JSONObject object))
+        {
+            throw new LingxingClientException("LINGXING_RESPONSE_ERROR", "领星SKU响应不是对象", false);
+        }
+        LingxingProductPage page = new LingxingProductPage();
+        page.setCurrent(firstInt(object, safeCurrent, "page", "current"));
+        page.setSize(firstInt(object, safeSize, "pageSize", "size"));
+        JSONArray records = firstArray(object, "records", "list", "rows");
+        page.setTotal(firstInt(object, records.size(), "total", "totalCount", "count"));
+        List<LingxingProductSku> skus = new ArrayList<>();
+        for (Object item : records)
+        {
+            if (item instanceof JSONObject row)
+            {
+                String sku = firstString(row, "sku", "productSku", "productSkuCode", "productCode");
+                String productName = firstString(row, "productName", "productNameCn", "productAliasName", "name", "skuName");
+                if (StringUtils.isNotBlank(sku) && StringUtils.isNotBlank(productName))
+                {
+                    LingxingProductSku productSku = new LingxingProductSku();
+                    productSku.setSku(sku.trim());
+                    productSku.setProductName(productName.trim());
+                    skus.add(productSku);
+                }
+            }
+        }
+        page.setRecords(skus);
+        return page;
+    }
+
+    private Object post(String path, Object data, String operation, String traceId)
+    {
+        String safeTraceId = StringUtils.defaultIfBlank(traceId, UUID.randomUUID().toString());
+        String reqTime = String.valueOf(System.currentTimeMillis() / 1000L);
+        String authcode = sign(data, reqTime);
+        String endpoint = baseUrl + path;
+        String requestUrl = endpoint + "?authcode=" + URLEncoder.encode(authcode, StandardCharsets.UTF_8);
+        Map<String, Object> requestBody = new LinkedHashMap<>();
+        requestBody.put("appKey", credentials.getAppKey());
+        requestBody.put("reqTime", reqTime);
+        requestBody.put("data", data);
+        String requestJson = JSON.toJSONString(requestBody);
+        String requestLog = "{\"appKey\":\"" + UpstreamMaskUtils.mask(credentials.getAppKey()) + "\",\"authcode\":\""
+            + UpstreamMaskUtils.mask(authcode) + "\",\"reqTime\":\"" + reqTime + "\",\"data\":" + JSON.toJSONString(data) + "}";
+
+        for (int attempt = 1; attempt <= DEFAULT_MAX_RETRIES + 1; attempt++)
+        {
+            long started = System.currentTimeMillis();
+            LingxingRequestLogEntry log = new LingxingRequestLogEntry();
+            log.setTraceId(safeTraceId);
+            log.setOperation(operation);
+            log.setEndpoint(endpoint);
+            log.setRequestTime(new Date(started));
+            log.setRequestPayloadRedacted(requestLog);
+            try
+            {
+                HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(requestUrl))
+                    .timeout(Duration.ofMillis(DEFAULT_TIMEOUT_MS))
+                    .header("Accept", "application/json")
+                    .header("Content-Type", "application/json")
+                    .header("X-Trace-Id", safeTraceId)
+                    .POST(HttpRequest.BodyPublishers.ofString(requestJson, StandardCharsets.UTF_8))
+                    .build();
+                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+                long finished = System.currentTimeMillis();
+                log.setResponseTime(new Date(finished));
+                log.setDurationMs(finished - started);
+                log.setResponsePayloadRedacted(UpstreamMaskUtils.redactJson(response.body()));
+
+                if (response.statusCode() == 429 || response.statusCode() >= 500)
+                {
+                    throw new LingxingClientException("LINGXING_HTTP_ERROR", "领星接口HTTP " + response.statusCode(), true);
+                }
+                if (response.statusCode() < 200 || response.statusCode() >= 300)
+                {
+                    throw new LingxingClientException("LINGXING_HTTP_ERROR", "领星接口HTTP " + response.statusCode(), false);
+                }
+                JSONObject payload = JSON.parseObject(response.body());
+                if (payload.getIntValue("code") != 200)
+                {
+                    String message = StringUtils.defaultIfBlank(payload.getString("message"), payload.getString("msg"));
+                    throw new LingxingClientException(String.valueOf(payload.get("code")),
+                        StringUtils.defaultIfBlank(message, "领星接口返回业务错误"), false);
+                }
+                log.setStatus("SUCCESS");
+                writeLog(log);
+                return payload.get("data");
+            }
+            catch (LingxingClientException ex)
+            {
+                finishFailureLog(log, ex);
+                writeLog(log);
+                if (!ex.isRetryable() || attempt > DEFAULT_MAX_RETRIES)
+                {
+                    throw ex;
+                }
+                sleepBeforeRetry();
+            }
+            catch (Exception ex)
+            {
+                LingxingClientException clientException = new LingxingClientException("LINGXING_NETWORK_ERROR",
+                    StringUtils.defaultIfBlank(ex.getMessage(), "领星网络请求失败"), true);
+                finishFailureLog(log, clientException);
+                writeLog(log);
+                if (attempt > DEFAULT_MAX_RETRIES)
+                {
+                    throw clientException;
+                }
+                sleepBeforeRetry();
+            }
+        }
+        throw new LingxingClientException("LINGXING_RETRY_ERROR", "领星请求重试失败", false);
+    }
+
+    private void finishFailureLog(LingxingRequestLogEntry log, LingxingClientException ex)
+    {
+        long finished = System.currentTimeMillis();
+        log.setResponseTime(new Date(finished));
+        log.setDurationMs(Math.max(0, finished - log.getRequestTime().getTime()));
+        log.setExternalErrorCode(ex.getErrorCode());
+        log.setExternalErrorMessage(ex.getMessage());
+        log.setStatus("FAILURE");
+    }
+
+    private void writeLog(LingxingRequestLogEntry log)
+    {
+        if (requestLogger != null)
+        {
+            requestLogger.log(log);
+        }
+    }
+
+    private void sleepBeforeRetry()
+    {
+        try
+        {
+            Thread.sleep(DEFAULT_RETRY_DELAY_MS);
+        }
+        catch (InterruptedException ex)
+        {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private String sign(Object data, String reqTime)
+    {
+        try
+        {
+            String payload = credentials.getAppKey() + normalizeForSigning(data) + reqTime;
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(credentials.getAppSecret().getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            byte[] bytes = mac.doFinal(payload.getBytes(StandardCharsets.UTF_8));
+            StringBuilder builder = new StringBuilder();
+            for (byte b : bytes)
+            {
+                builder.append(String.format("%02x", b));
+            }
+            return builder.toString();
+        }
+        catch (Exception ex)
+        {
+            throw new LingxingClientException("LINGXING_SIGN_ERROR", "领星请求签名失败", false);
+        }
+    }
+
+    private String normalizeForSigning(Object value)
+    {
+        if (value == null)
+        {
+            return "null";
+        }
+        if (value instanceof Map<?, ?> map)
+        {
+            Map<String, Object> sorted = new TreeMap<>();
+            for (Map.Entry<?, ?> entry : map.entrySet())
+            {
+                sorted.put(String.valueOf(entry.getKey()), entry.getValue());
+            }
+            List<String> parts = new ArrayList<>();
+            for (Map.Entry<String, Object> entry : sorted.entrySet())
+            {
+                parts.add("\"" + entry.getKey() + "\":" + normalizeForSigning(entry.getValue()));
+            }
+            return "{" + String.join(",", parts) + "}";
+        }
+        if (value instanceof Iterable<?> iterable)
+        {
+            List<String> parts = new ArrayList<>();
+            for (Object item : iterable)
+            {
+                parts.add(normalizeForSigning(item));
+            }
+            return "[" + String.join(",", parts) + "]";
+        }
+        return JSON.toJSONString(value);
+    }
+
+    private static int firstInt(JSONObject object, int defaultValue, String... keys)
+    {
+        for (String key : keys)
+        {
+            Object value = object.get(key);
+            if (value instanceof Number number)
+            {
+                return Math.max(0, number.intValue());
+            }
+            if (value instanceof String string && StringUtils.isNotBlank(string))
+            {
+                try
+                {
+                    return Math.max(0, Integer.parseInt(string));
+                }
+                catch (NumberFormatException ignored)
+                {
+                }
+            }
+        }
+        return defaultValue;
+    }
+
+    private static JSONArray firstArray(JSONObject object, String... keys)
+    {
+        for (String key : keys)
+        {
+            JSONArray array = object.getJSONArray(key);
+            if (array != null)
+            {
+                return array;
+            }
+        }
+        return new JSONArray();
+    }
+
+    private static String firstString(JSONObject object, String... keys)
+    {
+        for (String key : keys)
+        {
+            String value = object.getString(key);
+            if (StringUtils.isNotBlank(value))
+            {
+                return value;
+            }
+        }
+        return "";
+    }
+}

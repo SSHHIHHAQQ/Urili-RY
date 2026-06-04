@@ -1,0 +1,515 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.integration.mapper.UpstreamSystemMapper">
+
+    <resultMap type="UpstreamSystemConnection" id="ConnectionResult">
+        <id     property="connectionCode"       column="connection_code"        />
+        <result property="systemKind"           column="system_kind"            />
+        <result property="masterWarehouseName"  column="master_warehouse_name"  />
+        <result property="settlementType"       column="settlement_type"        />
+        <result property="appKeyMask"           column="app_key_mask"           />
+        <result property="appSecretMask"        column="app_secret_mask"        />
+        <result property="appKeyCiphertext"     column="app_key_ciphertext"     />
+        <result property="appSecretCiphertext"  column="app_secret_ciphertext"  />
+        <result property="credentialKeyId"      column="credential_key_id"      />
+        <result property="status"               column="status"                 />
+        <result property="credentialStatus"     column="credential_status"      />
+        <result property="enabledCapabilities"  column="enabled_capabilities"   />
+        <result property="displayOrder"         column="display_order"          />
+        <result property="lastAuthorizedTime"   column="last_authorized_time"   />
+        <result property="lastSyncTime"         column="last_sync_time"         />
+        <result property="requestLogCount"      column="request_log_count"      />
+        <result property="createBy"             column="create_by"              />
+        <result property="createTime"           column="create_time"            />
+        <result property="updateBy"             column="update_by"              />
+        <result property="updateTime"           column="update_time"            />
+        <result property="remark"               column="remark"                 />
+    </resultMap>
+
+    <resultMap type="UpstreamWarehouseSyncItem" id="WarehouseSyncResult">
+        <id     property="connectionCode" column="connection_code" />
+        <id     property="warehouseCode"  column="warehouse_code"  />
+        <result property="warehouseName"  column="warehouse_name"  />
+        <result property="countryCode"    column="country_code"    />
+        <result property="status"         column="status"          />
+        <result property="syncBatchId"    column="sync_batch_id"   />
+        <result property="firstSeenTime"  column="first_seen_time" />
+        <result property="lastSeenTime"   column="last_seen_time"  />
+        <result property="updateTime"     column="update_time"     />
+    </resultMap>
+
+    <resultMap type="UpstreamLogisticsChannelSyncItem" id="LogisticsChannelSyncResult">
+        <id     property="connectionCode" column="connection_code" />
+        <id     property="warehouseCode"  column="warehouse_code"  />
+        <id     property="channelCode"    column="channel_code"    />
+        <result property="channelName"    column="channel_name"    />
+        <result property="status"         column="status"          />
+        <result property="syncBatchId"    column="sync_batch_id"   />
+        <result property="firstSeenTime"  column="first_seen_time" />
+        <result property="lastSeenTime"   column="last_seen_time"  />
+        <result property="updateTime"     column="update_time"     />
+    </resultMap>
+
+    <resultMap type="UpstreamSkuSyncItem" id="SkuSyncResult">
+        <id     property="connectionCode"      column="connection_code"       />
+        <id     property="masterSku"           column="master_sku"            />
+        <result property="masterProductName"   column="master_product_name"   />
+        <result property="status"              column="status"                />
+        <result property="searchText"          column="search_text"           />
+        <result property="syncBatchId"         column="sync_batch_id"         />
+        <result property="firstSeenTime"       column="first_seen_time"       />
+        <result property="lastSeenTime"        column="last_seen_time"        />
+        <result property="updateTime"          column="update_time"           />
+        <result property="pairingStatus"       column="pairing_status"        />
+        <result property="skuPairingId"        column="sku_pairing_id"        />
+        <result property="systemSku"           column="system_sku"            />
+        <result property="systemSkuName"       column="system_sku_name"       />
+    </resultMap>
+
+    <resultMap type="UpstreamWarehousePairing" id="WarehousePairingResult">
+        <id     property="warehousePairingId"   column="warehouse_pairing_id"   />
+        <result property="connectionCode"       column="connection_code"        />
+        <result property="upstreamWarehouseCode" column="upstream_warehouse_code" />
+        <result property="upstreamWarehouseName" column="upstream_warehouse_name" />
+        <result property="systemWarehouseCode" column="system_warehouse_code"  />
+        <result property="systemWarehouseName" column="system_warehouse_name"  />
+        <result property="status"              column="status"                 />
+        <result property="createBy"            column="create_by"              />
+        <result property="createTime"          column="create_time"            />
+        <result property="updateBy"            column="update_by"              />
+        <result property="updateTime"          column="update_time"            />
+        <result property="remark"              column="remark"                 />
+    </resultMap>
+
+    <resultMap type="UpstreamLogisticsChannelPairing" id="LogisticsChannelPairingResult">
+        <id     property="logisticsChannelPairingId" column="logistics_channel_pairing_id" />
+        <result property="connectionCode"            column="connection_code"              />
+        <result property="upstreamChannelCode"       column="upstream_channel_code"        />
+        <result property="upstreamChannelName"       column="upstream_channel_name"        />
+        <result property="systemChannelCode"         column="system_channel_code"          />
+        <result property="systemChannelName"         column="system_channel_name"          />
+        <result property="status"                    column="status"                       />
+        <result property="createBy"                  column="create_by"                    />
+        <result property="createTime"                column="create_time"                  />
+        <result property="updateBy"                  column="update_by"                    />
+        <result property="updateTime"                column="update_time"                  />
+        <result property="remark"                    column="remark"                       />
+    </resultMap>
+
+    <resultMap type="UpstreamSkuPairing" id="SkuPairingResult">
+        <id     property="skuPairingId" column="sku_pairing_id" />
+        <result property="connectionCode" column="connection_code" />
+        <result property="masterSku" column="master_sku" />
+        <result property="systemSku" column="system_sku" />
+        <result property="systemSkuName" column="system_sku_name" />
+        <result property="customerName" column="customer_name" />
+        <result property="createBy" column="create_by" />
+        <result property="createTime" column="create_time" />
+        <result property="updateBy" column="update_by" />
+        <result property="updateTime" column="update_time" />
+        <result property="remark" column="remark" />
+    </resultMap>
+
+    <resultMap type="UpstreamRequestLog" id="RequestLogResult">
+        <id     property="requestLogId" column="request_log_id" />
+        <result property="connectionCode" column="connection_code" />
+        <result property="traceId" column="trace_id" />
+        <result property="operation" column="operation" />
+        <result property="endpoint" column="endpoint" />
+        <result property="requestTime" column="request_time" />
+        <result property="responseTime" column="response_time" />
+        <result property="durationMs" column="duration_ms" />
+        <result property="requestPayloadRedacted" column="request_payload_redacted" />
+        <result property="responsePayloadRedacted" column="response_payload_redacted" />
+        <result property="externalErrorCode" column="external_error_code" />
+        <result property="externalErrorMessage" column="external_error_message" />
+        <result property="status" column="status" />
+        <result property="createTime" column="create_time" />
+    </resultMap>
+
+    <resultMap type="UpstreamSkuSyncState" id="SkuSyncStateResult">
+        <id     property="connectionCode" column="connection_code" />
+        <result property="status" column="status" />
+        <result property="syncBatchId" column="sync_batch_id" />
+        <result property="lastStartedTime" column="last_started_time" />
+        <result property="lastFinishedTime" column="last_finished_time" />
+        <result property="lastSuccessTime" column="last_success_time" />
+        <result property="lastErrorMessage" column="last_error_message" />
+        <result property="nextSyncTime" column="next_sync_time" />
+        <result property="updateTime" column="update_time" />
+    </resultMap>
+
+    <select id="selectConnectionList" parameterType="UpstreamSystemConnection" resultMap="ConnectionResult">
+        select *
+        from upstream_system_connection
+        where 1 = 1
+        <if test="connectionCode != null and connectionCode != ''">
+            and connection_code like concat('%', #{connectionCode}, '%')
+        </if>
+        <if test="masterWarehouseName != null and masterWarehouseName != ''">
+            and master_warehouse_name like concat('%', #{masterWarehouseName}, '%')
+        </if>
+        <if test="status != null and status != ''">
+            and status = #{status}
+        </if>
+        order by display_order asc, last_authorized_time desc, create_time desc
+    </select>
+
+    <select id="selectConnectionByCode" parameterType="String" resultMap="ConnectionResult">
+        select *
+        from upstream_system_connection
+        where connection_code = #{connectionCode}
+        limit 1
+    </select>
+
+    <select id="selectMaxDisplayOrder" resultType="Integer">
+        select coalesce(max(display_order), 0) from upstream_system_connection
+    </select>
+
+    <insert id="insertConnection" parameterType="UpstreamSystemConnection">
+        insert into upstream_system_connection(
+            connection_code, system_kind, master_warehouse_name, settlement_type,
+            app_key_mask, app_secret_mask, app_key_ciphertext, app_secret_ciphertext,
+            credential_key_id, status, credential_status, enabled_capabilities,
+            display_order, last_authorized_time, last_sync_time, request_log_count,
+            create_by, create_time, remark
+        ) values (
+            #{connectionCode}, #{systemKind}, #{masterWarehouseName}, #{settlementType},
+            #{appKeyMask}, #{appSecretMask}, #{appKeyCiphertext}, #{appSecretCiphertext},
+            #{credentialKeyId}, #{status}, #{credentialStatus}, #{enabledCapabilities},
+            #{displayOrder}, #{lastAuthorizedTime}, #{lastSyncTime}, #{requestLogCount},
+            #{createBy}, sysdate(), #{remark}
+        )
+    </insert>
+
+    <update id="updateConnectionInfo" parameterType="UpstreamSystemConnection">
+        update upstream_system_connection
+        set master_warehouse_name = #{masterWarehouseName},
+            settlement_type = #{settlementType},
+            update_by = #{updateBy},
+            update_time = sysdate(),
+            remark = #{remark}
+        where connection_code = #{connectionCode}
+    </update>
+
+    <update id="updateConnectionCredentials" parameterType="UpstreamSystemConnection">
+        update upstream_system_connection
+        set app_key_mask = #{appKeyMask},
+            app_secret_mask = #{appSecretMask},
+            app_key_ciphertext = #{appKeyCiphertext},
+            app_secret_ciphertext = #{appSecretCiphertext},
+            credential_key_id = #{credentialKeyId},
+            credential_status = #{credentialStatus},
+            last_authorized_time = #{lastAuthorizedTime},
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where connection_code = #{connectionCode}
+    </update>
+
+    <update id="updateConnectionStatus">
+        update upstream_system_connection
+        set status = #{status},
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where connection_code = #{connectionCode}
+    </update>
+
+    <update id="updateConnectionSyncSummary">
+        update upstream_system_connection c
+        set c.last_sync_time = sysdate(),
+            c.request_log_count = (select count(1) from upstream_system_request_log l where l.connection_code = #{connectionCode}),
+            c.update_time = sysdate()
+        where c.connection_code = #{connectionCode}
+    </update>
+
+    <insert id="insertRequestLog" parameterType="UpstreamRequestLog" useGeneratedKeys="true" keyProperty="requestLogId">
+        insert into upstream_system_request_log(
+            connection_code, trace_id, operation, endpoint, request_time, response_time,
+            duration_ms, request_payload_redacted, response_payload_redacted,
+            external_error_code, external_error_message, status, create_time
+        ) values (
+            #{connectionCode}, #{traceId}, #{operation}, #{endpoint}, #{requestTime}, #{responseTime},
+            #{durationMs}, #{requestPayloadRedacted}, #{responsePayloadRedacted},
+            #{externalErrorCode}, #{externalErrorMessage}, #{status}, sysdate()
+        )
+    </insert>
+
+    <select id="selectRequestLogList" resultMap="RequestLogResult">
+        select *
+        from upstream_system_request_log
+        where connection_code = #{connectionCode}
+        order by create_time desc, request_log_id desc
+    </select>
+
+    <insert id="upsertWarehouseSyncItem" parameterType="UpstreamWarehouseSyncItem">
+        insert into upstream_system_warehouse_candidate(
+            connection_code, warehouse_code, warehouse_name, country_code, status,
+            sync_batch_id, first_seen_time, last_seen_time, update_time
+        ) values (
+            #{connectionCode}, #{warehouseCode}, #{warehouseName}, #{countryCode}, #{status},
+            #{syncBatchId}, sysdate(), sysdate(), sysdate()
+        )
+        on duplicate key update
+            warehouse_name = values(warehouse_name),
+            country_code = values(country_code),
+            status = values(status),
+            sync_batch_id = values(sync_batch_id),
+            last_seen_time = sysdate(),
+            update_time = sysdate()
+    </insert>
+
+    <update id="markMissingWarehouses">
+        update upstream_system_warehouse_candidate
+        set status = 'MISSING',
+            update_time = sysdate()
+        where connection_code = #{connectionCode}
+          and sync_batch_id &lt;&gt; #{syncBatchId}
+    </update>
+
+    <select id="selectWarehouseSyncList" resultMap="WarehouseSyncResult">
+        select *
+        from upstream_system_warehouse_candidate
+        where connection_code = #{connectionCode}
+        <if test="status != null and status != ''">
+            and status = #{status}
+        </if>
+        order by status asc, warehouse_code asc
+    </select>
+
+    <select id="selectWarehouseSyncItem" resultMap="WarehouseSyncResult">
+        select *
+        from upstream_system_warehouse_candidate
+        where connection_code = #{connectionCode}
+          and warehouse_code = #{warehouseCode}
+        limit 1
+    </select>
+
+    <select id="selectWarehousePairingList" resultMap="WarehousePairingResult">
+        select *
+        from upstream_system_warehouse_pairing
+        where connection_code = #{connectionCode}
+        order by create_time desc, warehouse_pairing_id desc
+    </select>
+
+    <insert id="insertWarehousePairing" parameterType="UpstreamWarehousePairing" useGeneratedKeys="true" keyProperty="warehousePairingId">
+        insert into upstream_system_warehouse_pairing(
+            connection_code, upstream_warehouse_code, upstream_warehouse_name,
+            system_warehouse_code, system_warehouse_name, status,
+            create_by, create_time, remark
+        ) values (
+            #{connectionCode}, #{upstreamWarehouseCode}, #{upstreamWarehouseName},
+            #{systemWarehouseCode}, #{systemWarehouseName}, #{status},
+            #{createBy}, sysdate(), #{remark}
+        )
+    </insert>
+
+    <delete id="deleteWarehousePairing">
+        delete from upstream_system_warehouse_pairing where warehouse_pairing_id = #{warehousePairingId}
+    </delete>
+
+    <insert id="upsertLogisticsChannelSyncItem" parameterType="UpstreamLogisticsChannelSyncItem">
+        insert into upstream_system_logistics_channel_candidate(
+            connection_code, warehouse_code, channel_code, channel_name, status,
+            sync_batch_id, first_seen_time, last_seen_time, update_time
+        ) values (
+            #{connectionCode}, #{warehouseCode}, #{channelCode}, #{channelName}, #{status},
+            #{syncBatchId}, sysdate(), sysdate(), sysdate()
+        )
+        on duplicate key update
+            channel_name = values(channel_name),
+            status = values(status),
+            sync_batch_id = values(sync_batch_id),
+            last_seen_time = sysdate(),
+            update_time = sysdate()
+    </insert>
+
+    <update id="markMissingLogisticsChannels">
+        update upstream_system_logistics_channel_candidate
+        set status = 'MISSING',
+            update_time = sysdate()
+        where connection_code = #{connectionCode}
+          and sync_batch_id &lt;&gt; #{syncBatchId}
+    </update>
+
+    <select id="selectLogisticsChannelSyncList" resultMap="LogisticsChannelSyncResult">
+        select *
+        from upstream_system_logistics_channel_candidate
+        where connection_code = #{connectionCode}
+        <if test="status != null and status != ''">
+            and status = #{status}
+        </if>
+        order by channel_code asc, warehouse_code asc
+    </select>
+
+    <select id="selectLogisticsChannelSyncItem" resultMap="LogisticsChannelSyncResult">
+        select *
+        from upstream_system_logistics_channel_candidate
+        where connection_code = #{connectionCode}
+          and channel_code = #{channelCode}
+        order by status asc, warehouse_code asc
+        limit 1
+    </select>
+
+    <select id="selectLogisticsChannelPairingList" resultMap="LogisticsChannelPairingResult">
+        select *
+        from upstream_system_logistics_channel_pairing
+        where connection_code = #{connectionCode}
+        order by upstream_channel_code asc, create_time desc
+    </select>
+
+    <insert id="insertLogisticsChannelPairing" parameterType="UpstreamLogisticsChannelPairing" useGeneratedKeys="true" keyProperty="logisticsChannelPairingId">
+        insert into upstream_system_logistics_channel_pairing(
+            connection_code, upstream_channel_code, upstream_channel_name,
+            system_channel_code, system_channel_name, status,
+            create_by, create_time, remark
+        ) values (
+            #{connectionCode}, #{upstreamChannelCode}, #{upstreamChannelName},
+            #{systemChannelCode}, #{systemChannelName}, #{status},
+            #{createBy}, sysdate(), #{remark}
+        )
+    </insert>
+
+    <delete id="deleteLogisticsChannelPairing">
+        delete from upstream_system_logistics_channel_pairing where logistics_channel_pairing_id = #{logisticsChannelPairingId}
+    </delete>
+
+    <insert id="upsertSkuSyncItem" parameterType="UpstreamSkuSyncItem">
+        insert into upstream_system_sku_candidate(
+            connection_code, master_sku, master_product_name, status, search_text,
+            sync_batch_id, first_seen_time, last_seen_time, update_time
+        ) values (
+            #{connectionCode}, #{masterSku}, #{masterProductName}, #{status}, #{searchText},
+            #{syncBatchId}, sysdate(), sysdate(), sysdate()
+        )
+        on duplicate key update
+            master_product_name = values(master_product_name),
+            status = values(status),
+            search_text = values(search_text),
+            sync_batch_id = values(sync_batch_id),
+            last_seen_time = sysdate(),
+            update_time = sysdate()
+    </insert>
+
+    <insert id="batchUpsertSkuSyncItems">
+        insert into upstream_system_sku_candidate(
+            connection_code, master_sku, master_product_name, status, search_text,
+            sync_batch_id, first_seen_time, last_seen_time, update_time
+        ) values
+        <foreach collection="items" item="item" separator=",">
+            (
+                #{item.connectionCode}, #{item.masterSku}, #{item.masterProductName}, #{item.status}, #{item.searchText},
+                #{item.syncBatchId}, sysdate(), sysdate(), sysdate()
+            )
+        </foreach>
+        on duplicate key update
+            master_product_name = values(master_product_name),
+            status = values(status),
+            search_text = values(search_text),
+            sync_batch_id = values(sync_batch_id),
+            last_seen_time = sysdate(),
+            update_time = sysdate()
+    </insert>
+
+    <update id="markMissingSkus">
+        update upstream_system_sku_candidate
+        set status = 'MISSING',
+            update_time = sysdate()
+        where connection_code = #{connectionCode}
+          and sync_batch_id &lt;&gt; #{syncBatchId}
+    </update>
+
+    <select id="selectSkuSyncList" resultMap="SkuSyncResult">
+        select c.*,
+               case when p.sku_pairing_id is null then 'UNASSIGNED' else 'PAIRED' end as pairing_status,
+               p.sku_pairing_id,
+               p.system_sku,
+               p.system_sku_name
+        from upstream_system_sku_candidate c
+        left join upstream_system_sku_pairing p
+               on p.connection_code = c.connection_code
+              and p.master_sku = c.master_sku
+        where c.connection_code = #{connectionCode}
+        <if test="status != null and status != ''">
+            and c.status = #{status}
+        </if>
+        <if test="keyword != null and keyword != ''">
+            and c.search_text like concat('%', #{keyword}, '%')
+        </if>
+        order by c.update_time desc, c.master_sku asc
+    </select>
+
+    <select id="selectSkuSyncItem" resultMap="SkuSyncResult">
+        select *
+        from upstream_system_sku_candidate
+        where connection_code = #{connectionCode}
+          and master_sku = #{masterSku}
+        limit 1
+    </select>
+
+    <select id="selectSkuPairingList" resultMap="SkuPairingResult">
+        select *
+        from upstream_system_sku_pairing
+        where connection_code = #{connectionCode}
+        order by create_time desc, sku_pairing_id desc
+    </select>
+
+    <select id="selectSkuPairingById" resultMap="SkuPairingResult">
+        select *
+        from upstream_system_sku_pairing
+        where sku_pairing_id = #{skuPairingId}
+        limit 1
+    </select>
+
+    <insert id="insertSkuPairing" parameterType="UpstreamSkuPairing" useGeneratedKeys="true" keyProperty="skuPairingId">
+        insert into upstream_system_sku_pairing(
+            connection_code, master_sku, system_sku, system_sku_name, customer_name,
+            create_by, create_time, remark
+        ) values (
+            #{connectionCode}, #{masterSku}, #{systemSku}, #{systemSkuName}, #{customerName},
+            #{createBy}, sysdate(), #{remark}
+        )
+    </insert>
+
+    <delete id="deleteSkuPairing">
+        delete from upstream_system_sku_pairing where sku_pairing_id = #{skuPairingId}
+    </delete>
+
+    <insert id="upsertSkuSyncState" parameterType="UpstreamSkuSyncState">
+        insert into upstream_system_sku_sync_state(
+            connection_code, status, sync_batch_id, last_started_time, last_finished_time,
+            last_success_time, last_error_message, next_sync_time, update_time
+        ) values (
+            #{connectionCode}, #{status}, #{syncBatchId}, #{lastStartedTime}, #{lastFinishedTime},
+            #{lastSuccessTime}, #{lastErrorMessage}, #{nextSyncTime}, sysdate()
+        )
+        on duplicate key update
+            status = values(status),
+            sync_batch_id = values(sync_batch_id),
+            last_started_time = values(last_started_time),
+            last_finished_time = values(last_finished_time),
+            last_success_time = values(last_success_time),
+            last_error_message = values(last_error_message),
+            next_sync_time = values(next_sync_time),
+            update_time = sysdate()
+    </insert>
+
+    <select id="selectSkuSyncState" resultMap="SkuSyncStateResult">
+        select *
+        from upstream_system_sku_sync_state
+        where connection_code = #{connectionCode}
+        limit 1
+    </select>
+
+    <insert id="insertSkuPairingAuditEvent" parameterType="UpstreamSkuPairingAuditEvent" useGeneratedKeys="true" keyProperty="auditEventId">
+        insert into upstream_system_sku_pairing_audit_event(
+            connection_code, master_sku, system_sku, event_type, operator,
+            event_time, before_snapshot, after_snapshot, remark
+        ) values (
+            #{connectionCode}, #{masterSku}, #{systemSku}, #{eventType}, #{operator},
+            sysdate(), #{beforeSnapshot}, #{afterSnapshot}, #{remark}
+        )
+    </insert>
+
+</mapper>

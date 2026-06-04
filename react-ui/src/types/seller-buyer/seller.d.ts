@@ -32,6 +32,8 @@ declare namespace API.Partner {
     attachmentSizeBytes?: number;
     attachmentFileUrl?: string;
     accountCount?: number;
+    accountBalance?: number | string;
+    balanceCurrency?: string;
     lastLoginTime?: string;
     createBy?: string;
     createTime?: string;
@@ -52,6 +54,10 @@ declare namespace API.Partner {
     status?: string;
     countryCode?: string;
     city?: string;
+    balanceMin?: string;
+    balanceMax?: string;
+    createTimeRange?: string[];
+    lastLoginTimeRange?: string[];
     pageNum?: number;
     pageSize?: number;
     current?: number;

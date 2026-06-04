@@ -36,6 +36,22 @@ E:\Urili-Ruoyi\
 - React 前端：`http://127.0.0.1:8001`。
 - 默认登录：`admin / admin123`。
 
+## 本机后端启动方式
+
+- 本机后端默认通过 `start-backend-local.ps1` 启动或重启。
+- `start-backend-local.ps1` 从 `.env.local` 读取 `RUOYI_*` 运行变量，再启动 `RuoYi-Vue/ruoyi-admin/target/ruoyi-admin.jar`。
+- `.env.local` 保存远程 MySQL/Redis 连接信息和 token secret，只允许本机使用，禁止提交、复制到报告或在聊天中明文输出。
+- `.env.local` 和 `start-backend-local.ps1` 已被 `.gitignore` 忽略；如果新对话看不到文件，先检查是否被本地清理或工作区未同步。
+- 后端停止或 jar 重新打包后，优先使用：
+
+```powershell
+cd E:\Urili-Ruoyi
+.\start-backend-local.ps1 -Restart
+```
+
+- 如果 8080 已经监听但不确定是否为当前 jar，也使用 `-Restart`。
+- 不要直接运行 `java -jar .\ruoyi-admin\target\ruoyi-admin.jar`，除非当前 shell 已确认包含完整 `RUOYI_DB_*`、`RUOYI_REDIS_*` 和 `RUOYI_TOKEN_SECRET` 环境变量。
+
 ## 数据源确认规则
 
 - 执行 SQL、查询数据、启动后端、排查登录或权限问题之前，必须先读取当前激活配置，确认目标 MySQL 和 Redis 是远端还是本地。
@@ -282,7 +298,9 @@ docker compose --profile local-infra up -d
 
 cd E:\Urili-Ruoyi\RuoYi-Vue
 mvn -DskipTests install
-java -jar .\ruoyi-admin\target\ruoyi-admin.jar
+
+cd E:\Urili-Ruoyi
+.\start-backend-local.ps1 -Restart
 
 cd E:\Urili-Ruoyi\react-ui
 npm install

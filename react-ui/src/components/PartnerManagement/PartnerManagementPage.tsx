@@ -26,8 +26,10 @@ import {
   type ProColumns,
 } from '@ant-design/pro-components';
 import {
+  DollarOutlined,
   EditOutlined,
   KeyOutlined,
+  LoginOutlined,
   PlusOutlined,
   TeamOutlined,
   UploadOutlined,
@@ -64,6 +66,9 @@ type PartnerService = {
   listAccounts: (id: number) => Promise<{ code: number; msg: string; data: PortalAccountRecord[] }>;
   addAccount: (id: number, data: any) => Promise<API.Result>;
   resetPassword: (data: any) => Promise<API.Result>;
+  resetDefaultPassword: (data: any) => Promise<API.Result>;
+  resetOwnerPassword: (id: number) => Promise<API.Result>;
+  directLogin: (id: number) => Promise<API.Partner.DirectLoginApiResult>;
 };
 
 export type PartnerModuleConfig = {
@@ -79,6 +84,8 @@ export type PartnerModuleConfig = {
   levelField: string;
   accountIdField: string;
   ownerIdField: string;
+  balanceTitle: string;
+  showRechargePlaceholder?: boolean;
   levelDictType: string;
   accountRoleDictType: string;
   services: PartnerService;
@@ -139,6 +146,26 @@ const formGridStyle: React.CSSProperties = {
   columnGap: 20,
 };
 
+const compactCellTextStyle: React.CSSProperties = {
+  display: 'block',
+  whiteSpace: 'normal',
+  wordBreak: 'break-word',
+  lineHeight: 1.35,
+};
+
+const compactSubTextStyle: React.CSSProperties = {
+  display: 'block',
+  whiteSpace: 'normal',
+  wordBreak: 'break-word',
+  lineHeight: 1.35,
+};
+
+const compactOperationStyle: React.CSSProperties = {
+  columnGap: 4,
+  rowGap: 0,
+  flexWrap: 'wrap',
+};
+
 function getStatusOptions(statusOptions: DictValueEnumObj) {
   return Object.keys(statusOptions).length > 0 ? statusOptions : fallbackStatusOptions;
 }
@@ -182,6 +209,64 @@ function filterSelectOption(
   const value = option?.value == null ? '' : String(option.value);
   const searchText = option?.searchText || `${value} ${label}`;
   return keyword === '' || searchText.toLowerCase().includes(keyword);
+}
+
+function getRangeValue(value: unknown) {
+  return Array.isArray(value) ? value : [];
+}
+
+function buildListParams(params: Record<string, any>, current?: number, pageSize?: number) {
+  const { createTimeRange, lastLoginTimeRange, balanceMin, balanceMax, ...rest } = params;
+  const createRange = getRangeValue(createTimeRange);
+  const lastLoginRange = getRangeValue(lastLoginTimeRange);
+  const next: Record<string, any> = {
+    ...rest,
+    pageNum: current,
+    pageSize,
+  };
+
+  if (createRange[0]) {
+    next['params[createBeginTime]'] = createRange[0];
+  }
+  if (createRange[1]) {
+    next['params[createEndTime]'] = createRange[1];
+  }
+  if (lastLoginRange[0]) {
+    next['params[lastLoginBeginTime]'] = lastLoginRange[0];
+  }
+  if (lastLoginRange[1]) {
+    next['params[lastLoginEndTime]'] = lastLoginRange[1];
+  }
+  if (balanceMin !== undefined && balanceMin !== '') {
+    next['params[balanceMin]'] = balanceMin;
+  }
+  if (balanceMax !== undefined && balanceMax !== '') {
+    next['params[balanceMax]'] = balanceMax;
+  }
+
+  return next;
+}
+
+function formatBalance(record: PartnerRecord) {
+  const currency = record.balanceCurrency || 'USD';
+  const value = Number(record.accountBalance ?? 0);
+  return `${currency} ${Number.isFinite(value) ? value.toFixed(2) : '0.00'}`;
+}
+
+function formatDateTimeText(value: unknown) {
+  if (!value) {
+    return '-';
+  }
+  const text = String(value).trim();
+  if (!text || text.toLowerCase() === 'invalid date') {
+    return '-';
+  }
+  return text.replace('T', ' ').replace(/\.\d{3}Z?$/, '');
+}
+
+function renderCompactText(value: unknown) {
+  const text = value == null || value === '' ? '-' : String(value);
+  return <Typography.Text style={compactCellTextStyle}>{text}</Typography.Text>;
 }
 
 function getStatusTag(value?: string, statusOptions: DictValueEnumObj = fallbackStatusOptions) {
@@ -334,8 +419,6 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
   const actionRef = useRef<ActionType>(null);
   const [partnerForm] = Form.useForm<PartnerFormValues>();
   const [accountForm] = Form.useForm<PortalAccountRecord & { confirmPassword?: string }>();
-  const [resetPwdForm] = Form.useForm<PortalAccountRecord & { confirmPassword?: string }>();
-  const resetPassword = Form.useWatch('password', resetPwdForm);
   const accountPassword = Form.useWatch('password', accountForm);
 
   const [statusOptions, setStatusOptions] = useState<DictValueEnumObj>({});
@@ -346,11 +429,9 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
   const [partnerModalOpen, setPartnerModalOpen] = useState(false);
   const [accountListOpen, setAccountListOpen] = useState(false);
   const [accountModalOpen, setAccountModalOpen] = useState(false);
-  const [resetPwdModalOpen, setResetPwdModalOpen] = useState(false);
   const [currentPartner, setCurrentPartner] = useState<PartnerRecord>();
   const [accounts, setAccounts] = useState<PortalAccountRecord[]>([]);
   const [accountsLoading, setAccountsLoading] = useState(false);
-  const [currentAccount, setCurrentAccount] = useState<PortalAccountRecord>();
   const [attachmentFileList, setAttachmentFileList] = useState<AttachmentUploadFile[]>([]);
 
   const permPrefix = `${config.moduleKey}:admin`;
@@ -503,43 +584,59 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
     }
   };
 
-  const openResetPwdModal = (record: PortalAccountRecord) => {
-    setCurrentAccount(record);
-    resetPwdForm.resetFields();
-    resetPwdForm.setFieldsValue({
-      userId: record.userId,
-      password: '',
-      confirmPassword: '',
+  const handleResetAccountDefaultPassword = (record: PortalAccountRecord) => {
+    modal.confirm({
+      title: `确认重置账号 ${record.userName || '-'} 的密码吗？`,
+      content: '密码将重置为默认密码 U12346。',
+      onOk: async () => {
+        const resp = await config.services.resetDefaultPassword({ userId: record.userId });
+        if (resp.code === 200) {
+          message.success('密码已重置为默认密码 U12346');
+          return;
+        }
+        message.error(resp.msg || '密码重置失败');
+      },
     });
-    setResetPwdModalOpen(true);
   };
 
-  const handleResetPassword = async () => {
-    const values = await resetPwdForm.validateFields();
-    const hide = message.loading('正在重置密码');
+  const handleResetOwnerPassword = (record: PartnerRecord) => {
+    const partnerId = getValue(record, config.idField);
+    if (!partnerId) {
+      return;
+    }
+    modal.confirm({
+      title: `确认重置${config.label}主账号密码吗？`,
+      content: '密码将重置为默认密码 U12346。',
+      onOk: async () => {
+        const resp = await config.services.resetOwnerPassword(partnerId);
+        if (resp.code === 200) {
+          message.success('主账号密码已重置为默认密码 U12346');
+          return;
+        }
+        message.error(resp.msg || '密码重置失败');
+      },
+    });
+  };
+
+  const handleDirectLogin = async (record: PartnerRecord) => {
+    const partnerId = getValue(record, config.idField);
+    if (!partnerId) {
+      return;
+    }
+    const hide = message.loading('正在生成免密登录链接');
     try {
-      const resp = await config.services.resetPassword({
-        userId: currentAccount?.userId,
-        password: values.password,
-      });
+      const resp = await config.services.directLogin(partnerId);
       hide();
-      if (resp.code === 200) {
-        message.success('密码已重置');
-        setResetPwdModalOpen(false);
+      if (resp.code === 200 && resp.data?.loginUrl) {
+        window.open(resp.data.loginUrl, '_blank', 'noopener,noreferrer');
+        message.success(`免密登录链接已生成，有效期 ${resp.data.expireMinutes || 30} 分钟`);
         return;
       }
-      message.error(resp.msg || '密码重置失败');
+      message.error(resp.msg || '免密登录链接生成失败');
     } catch {
       hide();
-      message.error('密码重置失败，请重试');
+      message.error('免密登录链接生成失败，请重试');
     }
-  };
-
-  const checkResetConfirmPassword = (_rule: unknown, value: string) => {
-    if (value === resetPassword) {
-      return Promise.resolve();
-    }
-    return Promise.reject(new Error('两次密码输入不一致'));
   };
 
   const checkAccountConfirmPassword = (_rule: unknown, value: string) => {
@@ -559,37 +656,36 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
       title: `内部${config.label}编号`,
       dataIndex: config.noField,
       valueType: 'text',
-      width: 220,
-      renderText: (value) => value || '-',
+      width: 96,
+      render: (_, record) => renderCompactText(getValue(record, config.noField)),
     },
     {
       title: `${config.label}代码`,
       dataIndex: config.codeField,
       valueType: 'text',
-      ellipsis: true,
-      width: 150,
+      width: 82,
+      render: (_, record) => renderCompactText(getValue(record, config.codeField)),
     },
     {
       title: `${config.label}名称`,
       dataIndex: config.nameField,
       valueType: 'text',
-      ellipsis: true,
-      width: 220,
+      width: 128,
+      render: (_, record) => renderCompactText(getValue(record, config.nameField)),
     },
     {
       title: `${config.label}简称`,
       dataIndex: config.shortNameField,
       valueType: 'text',
-      ellipsis: true,
-      width: 150,
+      width: 82,
+      render: (_, record) => renderCompactText(getValue(record, config.shortNameField)),
     },
     {
       title: '登录账号',
       dataIndex: 'username',
       valueType: 'text',
-      ellipsis: true,
-      width: 160,
-      renderText: (value) => value || '-',
+      width: 98,
+      render: (_, record) => renderCompactText(record.username),
     },
     {
       title: '公司名称',
@@ -610,18 +706,61 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
       dataIndex: config.levelField,
       valueType: 'select',
       valueEnum: levelValueEnum,
-      width: 100,
+      width: 64,
       render: (_, record) => <Tag color="blue">{levelValueEnum[getValue(record, config.levelField)]?.label || getValue(record, config.levelField) || '-'}</Tag>,
     },
+    {
+      title: config.balanceTitle,
+      dataIndex: 'accountBalance',
+      search: false,
+      width: 92,
+      render: (_, record) => (
+        <Space direction="vertical" size={0}>
+          <span>{formatBalance(record)}</span>
+          <Tag>占位</Tag>
+        </Space>
+      ),
+    },
+    {
+      title: `${config.balanceTitle}最小`,
+      dataIndex: 'balanceMin',
+      valueType: 'digit',
+      hideInTable: true,
+      fieldProps: { min: 0, precision: 2 },
+    },
+    {
+      title: `${config.balanceTitle}最大`,
+      dataIndex: 'balanceMax',
+      valueType: 'digit',
+      hideInTable: true,
+      fieldProps: { min: 0, precision: 2 },
+    },
+    ...(config.showRechargePlaceholder
+      ? [
+          {
+            title: '充值',
+            dataIndex: 'rechargePlaceholder',
+            search: false,
+            width: 64,
+            render: () => (
+              <Tag icon={<DollarOutlined />} color="default">
+                待接入
+              </Tag>
+            ),
+          } as ProColumns<PartnerRecord>,
+        ]
+      : []),
     {
       title: '联系人',
       dataIndex: 'contactName',
       search: false,
-      width: 210,
+      width: 120,
       render: (_, record) => (
         <Space direction="vertical" size={0}>
-          <span>{record.contactName || '-'}</span>
-          <Typography.Text type="secondary">{record.phone || record.contactPhone || record.email || record.contactEmail || '-'}</Typography.Text>
+          <Typography.Text style={compactCellTextStyle}>{record.contactName || '-'}</Typography.Text>
+          <Typography.Text style={compactSubTextStyle} type="secondary">
+            {record.phone || record.contactPhone || record.email || record.contactEmail || '-'}
+          </Typography.Text>
         </Space>
       ),
     },
@@ -629,7 +768,7 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
       title: '账号数',
       dataIndex: 'accountCount',
       search: false,
-      width: 90,
+      width: 56,
       align: 'right',
     },
     {
@@ -637,7 +776,7 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
       dataIndex: 'status',
       valueType: 'select',
       valueEnum: statusValueEnum,
-      width: 100,
+      width: 76,
       render: (_, record) => (
         <Switch
           checked={record.status === '0'}
@@ -649,47 +788,80 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
       ),
     },
     {
-      title: '创建时间',
-      dataIndex: 'createTime',
-      valueType: 'dateTime',
+      title: '时间',
+      dataIndex: 'timeInfo',
       search: false,
-      width: 165,
+      width: 132,
+      render: (_, record) => (
+        <Space direction="vertical" size={0}>
+          <Typography.Text style={compactCellTextStyle}>{formatDateTimeText(record.createTime)}</Typography.Text>
+          <Typography.Text style={compactSubTextStyle} type="secondary">
+            {formatDateTimeText(record.lastLoginTime)}
+          </Typography.Text>
+        </Space>
+      ),
+    },
+    {
+      title: '创建时间',
+      dataIndex: 'createTimeRange',
+      valueType: 'dateRange',
+      hideInTable: true,
     },
     {
       title: '最后登录时间',
-      dataIndex: 'lastLoginTime',
-      valueType: 'dateTime',
-      search: false,
-      width: 165,
-      renderText: (value) => value || '-',
+      dataIndex: 'lastLoginTimeRange',
+      valueType: 'dateRange',
+      hideInTable: true,
     },
     {
       title: '操作',
       dataIndex: 'option',
       valueType: 'option',
-      width: 210,
-      render: (_, record) => [
-        <Button
-          type="link"
-          size="small"
-          key="edit"
-          icon={<EditOutlined />}
-          hidden={!access.hasPerms(`${permPrefix}:edit`)}
-          onClick={() => void openPartnerModal(record)}
-        >
-          编辑
-        </Button>,
-        <Button
-          type="link"
-          size="small"
-          key="accounts"
-          icon={<TeamOutlined />}
-          hidden={!access.hasPerms(`${permPrefix}:query`)}
-          onClick={() => void loadAccounts(record)}
-        >
-          账号
-        </Button>,
-      ],
+      width: 152,
+      render: (_, record) => (
+        <Space size={0} style={compactOperationStyle} wrap>
+          <Button
+            type="link"
+            size="small"
+            key="directLogin"
+            icon={<LoginOutlined />}
+            hidden={!access.hasPerms(`${permPrefix}:directLogin`)}
+            onClick={() => void handleDirectLogin(record)}
+          >
+            登录{config.label}端
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            key="resetOwnerPwd"
+            icon={<KeyOutlined />}
+            hidden={!access.hasPerms(`${permPrefix}:resetPwd`)}
+            onClick={() => handleResetOwnerPassword(record)}
+          >
+            重置主账号
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            key="edit"
+            icon={<EditOutlined />}
+            hidden={!access.hasPerms(`${permPrefix}:edit`)}
+            onClick={() => void openPartnerModal(record)}
+          >
+            编辑
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            key="accounts"
+            icon={<TeamOutlined />}
+            hidden={!access.hasPerms(`${permPrefix}:query`)}
+            onClick={() => void loadAccounts(record)}
+          >
+            账号
+          </Button>
+        </Space>
+      ),
     },
   ];
 
@@ -717,9 +889,9 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
           key="resetPwd"
           icon={<KeyOutlined />}
           hidden={!access.hasPerms(`${permPrefix}:resetPwd`)}
-          onClick={() => openResetPwdModal(record)}
+          onClick={() => handleResetAccountDefaultPassword(record)}
         >
-          重置密码
+          重置默认密码
         </Button>,
       ],
     },
@@ -733,7 +905,7 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
         headerTitle={config.title}
         search={getPersistedProTableSearch({ labelWidth: 112 })}
         columns={columns}
-        scroll={{ x: 1925 }}
+        tableLayout="auto"
         toolBarRender={() => [
           <Button
             type="primary"
@@ -748,11 +920,7 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
         request={(params) => {
           const { current, pageSize, ...rest } = params;
           return config.services
-            .list({
-              ...rest,
-              pageNum: current,
-              pageSize,
-            })
+            .list(buildListParams(rest, current, pageSize))
             .then((res) => ({
               data: res.rows || [],
               total: res.total || 0,
@@ -956,31 +1124,6 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
         </ProForm>
       </Modal>
 
-      <Modal
-        width={560}
-        title="重置密码"
-        open={resetPwdModalOpen}
-        destroyOnHidden
-        onOk={handleResetPassword}
-        onCancel={() => setResetPwdModalOpen(false)}
-      >
-        <ProForm form={resetPwdForm} submitter={false} layout="horizontal">
-          <Typography.Paragraph>
-            请输入账号 {currentAccount?.userName || '-'} 的新密码。
-          </Typography.Paragraph>
-          <ProFormText name="userId" hidden />
-          <ProFormText.Password
-            name="password"
-            label="新密码"
-            rules={[{ required: true, message: '新密码不能为空' }]}
-          />
-          <ProFormText.Password
-            name="confirmPassword"
-            label="确认密码"
-            rules={[{ required: true, message: '确认密码不能为空' }, { validator: checkResetConfirmPassword }]}
-          />
-        </ProForm>
-      </Modal>
     </PageContainer>
   );
 };

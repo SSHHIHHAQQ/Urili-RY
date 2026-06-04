@@ -31,6 +31,7 @@
         <jwt.version>0.9.1</jwt.version>
         <jaxb-api.version>2.3.1</jaxb-api.version>
         <springdoc.version>3.0.2</springdoc.version>
+        <tencent.cos.version>5.6.269</tencent.cos.version>
     </properties>
 
     <!-- 依赖声明 -->
@@ -91,6 +92,13 @@
                 <groupId>org.springdoc</groupId>
                 <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
                 <version>${springdoc.version}</version>
+            </dependency>
+
+            <!-- 腾讯云对象存储 COS -->
+            <dependency>
+                <groupId>com.qcloud</groupId>
+                <artifactId>cos_api</artifactId>
+                <version>${tencent.cos.version}</version>
             </dependency>
 
             <!-- io常用工具类 -->
@@ -177,6 +185,13 @@
                 <version>${ruoyi.version}</version>
             </dependency>
 
+            <!-- 外部系统接入模块-->
+            <dependency>
+                <groupId>com.ruoyi</groupId>
+                <artifactId>integration</artifactId>
+                <version>${ruoyi.version}</version>
+            </dependency>
+
             <!-- 通用工具-->
             <dependency>
                 <groupId>com.ruoyi</groupId>
@@ -193,6 +208,7 @@
         <module>ruoyi-system</module>
         <module>seller</module>
         <module>buyer</module>
+        <module>integration</module>
         <module>ruoyi-quartz</module>
         <module>ruoyi-generator</module>
         <module>ruoyi-common</module>

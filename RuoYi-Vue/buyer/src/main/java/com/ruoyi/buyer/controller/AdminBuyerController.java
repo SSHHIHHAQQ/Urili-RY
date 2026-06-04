@@ -92,4 +92,28 @@ public class AdminBuyerController extends BaseController
     {
         return toAjax(buyerService.resetBuyerAccountPassword(account));
     }
+
+    @PreAuthorize("@ss.hasPermi('buyer:admin:resetPwd')")
+    @Log(title = "买家账号", businessType = BusinessType.UPDATE)
+    @PutMapping("/accounts/resetDefaultPwd")
+    public AjaxResult resetDefaultPassword(@RequestBody BuyerAccount account)
+    {
+        return toAjax(buyerService.resetBuyerAccountDefaultPassword(account));
+    }
+
+    @PreAuthorize("@ss.hasPermi('buyer:admin:resetPwd')")
+    @Log(title = "买家主账号", businessType = BusinessType.UPDATE)
+    @PutMapping("/{buyerId}/resetOwnerPwd")
+    public AjaxResult resetOwnerPassword(@PathVariable("buyerId") Long buyerId)
+    {
+        return toAjax(buyerService.resetBuyerOwnerPassword(buyerId));
+    }
+
+    @PreAuthorize("@ss.hasPermi('buyer:admin:directLogin')")
+    @Log(title = "买家免密登录", businessType = BusinessType.OTHER)
+    @PostMapping("/{buyerId}/directLogin")
+    public AjaxResult directLogin(@PathVariable("buyerId") Long buyerId)
+    {
+        return success(buyerService.createBuyerDirectLogin(buyerId));
+    }
 }

@@ -290,6 +290,9 @@ values
     (2204, '卖家重置密码', 2011, 5, '#', '', '', '',
      1, 0, 'F', '0', '0', 'seller:admin:resetPwd', '#', 'admin',
      sysdate(), '', null, ''),
+    (2205, '卖家免密登录', 2011, 6, '#', '', '', '',
+     1, 0, 'F', '0', '0', 'seller:admin:directLogin', '#', 'admin',
+     sysdate(), '', null, ''),
     (2210, '买家查询', 2012, 1, '#', '', '', '',
      1, 0, 'F', '0', '0', 'buyer:admin:query', '#', 'admin',
      sysdate(), '', null, ''),
@@ -304,6 +307,9 @@ values
      sysdate(), '', null, ''),
     (2214, '买家重置密码', 2012, 5, '#', '', '', '',
      1, 0, 'F', '0', '0', 'buyer:admin:resetPwd', '#', 'admin',
+     sysdate(), '', null, ''),
+    (2215, '买家免密登录', 2012, 6, '#', '', '', '',
+     1, 0, 'F', '0', '0', 'buyer:admin:directLogin', '#', 'admin',
      sysdate(), '', null, '')
 on duplicate key update
     menu_name = values(menu_name),
@@ -323,3 +329,15 @@ on duplicate key update
     update_by = 'admin',
     update_time = sysdate(),
     remark = values(remark);
+
+insert into sys_config
+    (config_name, config_key, config_value, config_type, create_by, create_time, update_by, update_time, remark)
+select '卖家端前端地址', 'portal.seller.web.url', 'http://127.0.0.1:8001/seller/direct-login',
+       'Y', 'admin', sysdate(), '', null, '管理端免密登录卖家端地址，占位配置'
+where not exists (select 1 from sys_config where config_key = 'portal.seller.web.url');
+
+insert into sys_config
+    (config_name, config_key, config_value, config_type, create_by, create_time, update_by, update_time, remark)
+select '买家端前端地址', 'portal.buyer.web.url', 'http://127.0.0.1:8001/buyer/direct-login',
+       'Y', 'admin', sysdate(), '', null, '管理端免密登录买家端地址，占位配置'
+where not exists (select 1 from sys_config where config_key = 'portal.buyer.web.url');

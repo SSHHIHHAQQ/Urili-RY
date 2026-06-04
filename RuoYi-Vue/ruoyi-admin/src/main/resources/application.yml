@@ -9,7 +9,16 @@ ruoyi:
   # 文件路径 示例（ Windows配置D:/ruoyi/uploadPath，Linux配置 /home/ruoyi/uploadPath）
   profile: D:/ruoyi/uploadPath
   file-storage:
-    type: local
+    type: ${RUOYI_FILE_STORAGE_TYPE:local}
+    cos:
+      secret-id: ${TENCENT_COS_SECRET_ID:}
+      secret-key: ${TENCENT_COS_SECRET_KEY:}
+      bucket: ${TENCENT_COS_BUCKET:}
+      region: ${TENCENT_COS_REGION:}
+      endpoint: ${TENCENT_COS_ENDPOINT:}
+      key-prefix: ${TENCENT_COS_KEY_PREFIX:profile}
+      public-read: ${TENCENT_COS_PUBLIC_READ:false}
+      url-expiration-seconds: ${TENCENT_COS_URL_EXPIRATION_SECONDS:300}
   # 获取ip地址开关
   addressEnabled: false
   # 验证码类型 math 数字计算 char 字符验证
@@ -37,6 +46,7 @@ server:
 logging:
   level:
     com.ruoyi: debug
+    com.ruoyi.integration.mapper: warn
     org.springframework: warn
 
 # 用户配置

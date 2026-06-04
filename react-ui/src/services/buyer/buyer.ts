@@ -71,3 +71,25 @@ export async function resetAdminBuyerAccountPassword(data: Pick<API.Partner.Buye
     data,
   });
 }
+
+export async function resetAdminBuyerAccountDefaultPassword(data: Pick<API.Partner.BuyerAccount, 'userId'>) {
+  return request<API.Result>('/api/buyer/admin/buyers/accounts/resetDefaultPwd', {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json;charset=UTF-8',
+    },
+    data,
+  });
+}
+
+export async function resetAdminBuyerOwnerPassword(buyerId: number) {
+  return request<API.Result>(`/api/buyer/admin/buyers/${buyerId}/resetOwnerPwd`, {
+    method: 'PUT',
+  });
+}
+
+export async function createAdminBuyerDirectLogin(buyerId: number) {
+  return request<API.Partner.DirectLoginApiResult>(`/api/buyer/admin/buyers/${buyerId}/directLogin`, {
+    method: 'POST',
+  });
+}

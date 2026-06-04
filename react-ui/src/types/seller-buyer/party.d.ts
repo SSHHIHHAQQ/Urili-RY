@@ -23,4 +23,19 @@ declare namespace API.Partner {
     updateTime?: string;
     remark?: string;
   }
+
+  export interface DirectLoginResult {
+    token: string;
+    loginUrl: string;
+    expireMinutes: number;
+    expireTime: string;
+    userId: number;
+    username: string;
+  }
+
+  export interface DirectLoginApiResult {
+    code: number;
+    msg: string;
+    data: DirectLoginResult;
+  }
 }

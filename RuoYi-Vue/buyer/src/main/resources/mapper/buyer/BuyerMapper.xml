@@ -31,6 +31,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="attachmentFileUrl"   column="attachment_file_url"   />
         <result property="accountCount"        column="account_count"         />
         <result property="lastLoginTime"       column="last_login_time"       />
+        <result property="accountBalance"      column="account_balance"       />
+        <result property="balanceCurrency"     column="balance_currency"      />
         <result property="createBy"            column="create_by"             />
         <result property="createTime"          column="create_time"           />
         <result property="updateBy"            column="update_by"             />
@@ -66,7 +68,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                b.attachment_size_bytes, b.attachment_file_url, b.create_by, b.create_time,
                b.update_by, b.update_time, b.remark,
                coalesce(account_stat.account_count, 0) as account_count,
-               owner.login_date as last_login_time
+               owner.login_date as last_login_time,
+               cast(0.00 as decimal(18,2)) as account_balance,
+               'USD' as balance_currency
     </sql>
 
     <sql id="buyerJoins">
@@ -127,6 +131,24 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         </if>
         <if test="city != null and city != ''">
             and b.city like concat('%', #{city}, '%')
+        </if>
+        <if test="params.createBeginTime != null and params.createBeginTime != ''">
+            and date_format(b.create_time,'%Y%m%d') &gt;= date_format(#{params.createBeginTime},'%Y%m%d')
+        </if>
+        <if test="params.createEndTime != null and params.createEndTime != ''">
+            and date_format(b.create_time,'%Y%m%d') &lt;= date_format(#{params.createEndTime},'%Y%m%d')
+        </if>
+        <if test="params.lastLoginBeginTime != null and params.lastLoginBeginTime != ''">
+            and date_format(owner.login_date,'%Y%m%d') &gt;= date_format(#{params.lastLoginBeginTime},'%Y%m%d')
+        </if>
+        <if test="params.lastLoginEndTime != null and params.lastLoginEndTime != ''">
+            and date_format(owner.login_date,'%Y%m%d') &lt;= date_format(#{params.lastLoginEndTime},'%Y%m%d')
+        </if>
+        <if test="params.balanceMin != null and params.balanceMin != ''">
+            and cast(0.00 as decimal(18,2)) &gt;= cast(#{params.balanceMin} as decimal(18,2))
+        </if>
+        <if test="params.balanceMax != null and params.balanceMax != ''">
+            and cast(0.00 as decimal(18,2)) &lt;= cast(#{params.balanceMax} as decimal(18,2))
         </if>
         order by b.create_time desc, b.buyer_id desc
     </select>

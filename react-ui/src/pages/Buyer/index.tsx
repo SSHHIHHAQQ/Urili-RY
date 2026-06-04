@@ -3,10 +3,13 @@ import {
   addAdminBuyer,
   addAdminBuyerAccount,
   changeAdminBuyerStatus,
+  createAdminBuyerDirectLogin,
   getAdminBuyer,
   getAdminBuyerAccounts,
   getAdminBuyerList,
+  resetAdminBuyerAccountDefaultPassword,
   resetAdminBuyerAccountPassword,
+  resetAdminBuyerOwnerPassword,
   updateAdminBuyer,
 } from '@/services/buyer/buyer';
 
@@ -23,6 +26,8 @@ const buyerConfig: PartnerModuleConfig = {
   levelField: 'buyerLevel',
   accountIdField: 'buyerAccountId',
   ownerIdField: 'buyerId',
+  balanceTitle: '账户余额',
+  showRechargePlaceholder: true,
   levelDictType: 'buyer_level',
   accountRoleDictType: 'buyer_account_role',
   services: {
@@ -34,6 +39,9 @@ const buyerConfig: PartnerModuleConfig = {
     listAccounts: getAdminBuyerAccounts,
     addAccount: addAdminBuyerAccount,
     resetPassword: resetAdminBuyerAccountPassword,
+    resetDefaultPassword: resetAdminBuyerAccountDefaultPassword,
+    resetOwnerPassword: resetAdminBuyerOwnerPassword,
+    directLogin: createAdminBuyerDirectLogin,
   },
 };
 

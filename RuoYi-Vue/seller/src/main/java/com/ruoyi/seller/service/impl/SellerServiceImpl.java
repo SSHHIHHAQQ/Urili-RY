@@ -12,6 +12,8 @@ import com.ruoyi.seller.domain.Seller;
 import com.ruoyi.seller.domain.SellerAccount;
 import com.ruoyi.seller.mapper.SellerMapper;
 import com.ruoyi.seller.service.ISellerService;
+import com.ruoyi.system.domain.PortalDirectLoginResult;
+import com.ruoyi.system.service.support.PortalDirectLoginSupport;
 import com.ruoyi.system.service.support.PartnerSupport;
 import com.ruoyi.system.service.support.PortalAccountSupport;
 
@@ -30,6 +32,9 @@ public class SellerServiceImpl implements ISellerService
 
     @Autowired
     private PortalAccountSupport accountSupport;
+
+    @Autowired
+    private PortalDirectLoginSupport directLoginSupport;
 
     @Override
     public List<Seller> selectSellerList(Seller seller)
@@ -141,6 +146,48 @@ public class SellerServiceImpl implements ISellerService
         }
         selectSellerById(current.getSellerId());
         return accountSupport.resetPassword(account.getUserId(), account.getPassword());
+    }
+
+    @Override
+    public int resetSellerAccountDefaultPassword(SellerAccount account)
+    {
+        if (account.getUserId() == null)
+        {
+            throw new ServiceException("用户ID不能为空");
+        }
+        SellerAccount current = sellerMapper.selectSellerAccountByUserId(account.getUserId());
+        if (current == null)
+        {
+            throw new ServiceException("卖家账号不存在");
+        }
+        selectSellerById(current.getSellerId());
+        return accountSupport.resetPassword(account.getUserId(), PartnerSupport.DEFAULT_OWNER_PASSWORD);
+    }
+
+    @Override
+    public int resetSellerOwnerPassword(Long sellerId)
+    {
+        selectSellerById(sellerId);
+        SellerAccount owner = sellerMapper.selectOwnerSellerAccountBySellerId(sellerId);
+        if (owner == null || owner.getUserId() == null)
+        {
+            throw new ServiceException("卖家主账号不存在");
+        }
+        return accountSupport.resetPassword(owner.getUserId(), PartnerSupport.DEFAULT_OWNER_PASSWORD);
+    }
+
+    @Override
+    public PortalDirectLoginResult createSellerDirectLogin(Long sellerId)
+    {
+        Seller seller = selectSellerById(sellerId);
+        SellerAccount owner = sellerMapper.selectOwnerSellerAccountBySellerId(sellerId);
+        if (!PartnerSupport.STATUS_NORMAL.equals(seller.getStatus()))
+        {
+            throw new ServiceException("卖家已停用，不能免密登录");
+        }
+        return directLoginSupport.createToken("seller", sellerId, seller.getSellerNo(), owner,
+            PortalDirectLoginSupport.SELLER_WEB_URL_CONFIG_KEY,
+            "http://127.0.0.1:8001/seller/direct-login");
     }
 
     private void normalizeSeller(Seller seller)

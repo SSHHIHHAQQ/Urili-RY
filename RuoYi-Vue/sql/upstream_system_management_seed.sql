@@ -1,0 +1,283 @@
+-- Upstream system management seed for the RuoYi validation project.
+-- Scope: integration tables, dictionaries, menu entries, and permissions.
+-- Sensitive credentials are not stored in this script. Save credentials through the backend API so they are encrypted.
+
+set names utf8mb4;
+
+create table if not exists upstream_system_connection (
+  connection_code        varchar(64)   not null                  comment '主仓接入编号',
+  system_kind            varchar(32)   not null default 'LINGXING_WMS' comment '上游系统类型',
+  master_warehouse_name  varchar(200)  not null                  comment '主仓显示名称',
+  settlement_type        varchar(32)   not null                  comment '结算类型',
+  app_key_mask           varchar(64)   not null default ''       comment '脱敏后的appKey',
+  app_secret_mask        varchar(64)   not null default ''       comment '脱敏后的appSecret',
+  app_key_ciphertext     text          not null                  comment '加密后的appKey',
+  app_secret_ciphertext  text          not null                  comment '加密后的appSecret',
+  credential_key_id      varchar(64)   not null default 'default' comment '加密密钥版本',
+  status                 varchar(16)   not null default 'ENABLED' comment '接入状态',
+  credential_status      varchar(16)   not null default 'CONFIGURED' comment '凭证状态',
+  enabled_capabilities   varchar(500)  not null default ''       comment '启用能力JSON',
+  display_order          int           not null default 0        comment '显示排序',
+  last_authorized_time   datetime                                comment '最近授权成功时间',
+  last_sync_time         datetime                                comment '最近同步时间',
+  request_log_count      int           not null default 0        comment '请求日志数量摘要',
+  create_by              varchar(64)   default ''                comment '创建者',
+  create_time            datetime                                comment '创建时间',
+  update_by              varchar(64)   default ''                comment '更新者',
+  update_time            datetime                                comment '更新时间',
+  remark                 varchar(500)  default ''                comment '备注',
+  primary key (connection_code),
+  unique key uk_upstream_connection_kind_code (system_kind, connection_code),
+  key idx_upstream_connection_order (display_order, last_authorized_time),
+  key idx_upstream_connection_status (status)
+) engine=innodb comment='上游系统主仓接入表';
+
+create table if not exists upstream_system_warehouse_candidate (
+  connection_code   varchar(64)   not null                 comment '主仓接入编号',
+  warehouse_code    varchar(100)  not null                 comment '领星仓库代码',
+  warehouse_name    varchar(200)  not null                 comment '领星仓库名称',
+  country_code      varchar(32)   default ''               comment '国家/地区代码',
+  status            varchar(16)   not null default 'ACTIVE' comment '同步清单状态',
+  sync_batch_id     varchar(64)   not null                 comment '同步批次号',
+  first_seen_time   datetime      not null                 comment '首次发现时间',
+  last_seen_time    datetime      not null                 comment '最近发现时间',
+  update_time       datetime      not null                 comment '更新时间',
+  primary key (connection_code, warehouse_code),
+  key idx_upstream_wh_candidate_status (connection_code, status)
+) engine=innodb comment='领星仓库同步清单';
+
+create table if not exists upstream_system_warehouse_pairing (
+  warehouse_pairing_id    bigint(20)    not null auto_increment comment '仓库配对ID',
+  connection_code         varchar(64)   not null                comment '主仓接入编号',
+  upstream_warehouse_code varchar(100)  not null                comment '领星仓库代码',
+  upstream_warehouse_name varchar(200)  not null                comment '领星仓库名称快照',
+  system_warehouse_code   varchar(64)   not null                comment '系统仓库代码',
+  system_warehouse_name   varchar(200)  not null                comment '系统仓库名称快照',
+  status                  varchar(16)   not null default 'ACTIVE' comment '配对状态',
+  create_by               varchar(64)   default ''              comment '创建者',
+  create_time             datetime                              comment '创建时间',
+  update_by               varchar(64)   default ''              comment '更新者',
+  update_time             datetime                              comment '更新时间',
+  remark                  varchar(500)  default ''              comment '备注',
+  primary key (warehouse_pairing_id),
+  unique key uk_upstream_wh_pairing_system (system_warehouse_code),
+  unique key uk_upstream_wh_pairing_upstream (connection_code, upstream_warehouse_code),
+  key idx_upstream_wh_pairing_connection (connection_code)
+) engine=innodb comment='系统仓库与领星仓库配对表';
+
+create table if not exists upstream_system_logistics_channel_candidate (
+  connection_code   varchar(64)   not null                 comment '主仓接入编号',
+  warehouse_code    varchar(100)  not null                 comment '领星仓库代码',
+  channel_code      varchar(100)  not null                 comment '领星物流渠道代码',
+  channel_name      varchar(200)  not null                 comment '领星物流渠道名称',
+  status            varchar(16)   not null default 'ACTIVE' comment '同步清单状态',
+  sync_batch_id     varchar(64)   not null                 comment '同步批次号',
+  first_seen_time   datetime      not null                 comment '首次发现时间',
+  last_seen_time    datetime      not null                 comment '最近发现时间',
+  update_time       datetime      not null                 comment '更新时间',
+  primary key (connection_code, warehouse_code, channel_code),
+  key idx_upstream_channel_candidate_code (connection_code, channel_code),
+  key idx_upstream_channel_candidate_status (connection_code, status)
+) engine=innodb comment='领星物流渠道同步清单';
+
+create table if not exists upstream_system_logistics_channel_pairing (
+  logistics_channel_pairing_id bigint(20)   not null auto_increment comment '物流渠道配对ID',
+  connection_code              varchar(64)  not null                comment '主仓接入编号',
+  upstream_channel_code        varchar(100) not null                comment '领星物流渠道代码',
+  upstream_channel_name        varchar(200) not null                comment '领星物流渠道名称快照',
+  system_channel_code          varchar(64)  not null                comment '系统物流渠道代码',
+  system_channel_name          varchar(200) not null                comment '系统物流渠道名称快照',
+  status                       varchar(16)  not null default 'ACTIVE' comment '配对状态',
+  create_by                    varchar(64)  default ''              comment '创建者',
+  create_time                  datetime                             comment '创建时间',
+  update_by                    varchar(64)  default ''              comment '更新者',
+  update_time                  datetime                             comment '更新时间',
+  remark                       varchar(500) default ''              comment '备注',
+  primary key (logistics_channel_pairing_id),
+  unique key uk_upstream_channel_pairing_system (system_channel_code),
+  key idx_upstream_channel_pairing_upstream (connection_code, upstream_channel_code),
+  key idx_upstream_channel_pairing_connection (connection_code)
+) engine=innodb comment='系统物流渠道与领星渠道配对表';
+
+create table if not exists upstream_system_sku_candidate (
+  connection_code       varchar(64)   not null                 comment '主仓接入编号',
+  master_sku            varchar(128)  not null                 comment '领星masterSku',
+  master_product_name   varchar(255)  not null                 comment '领星产品名称',
+  status                varchar(16)   not null default 'ACTIVE' comment '同步清单状态',
+  search_text           text          not null                 comment '搜索文本',
+  sync_batch_id         varchar(64)   not null                 comment '同步批次号',
+  first_seen_time       datetime      not null                 comment '首次发现时间',
+  last_seen_time        datetime      not null                 comment '最近发现时间',
+  update_time           datetime      not null                 comment '更新时间',
+  primary key (connection_code, master_sku),
+  key idx_upstream_sku_candidate_status (connection_code, status),
+  key idx_upstream_sku_candidate_search (connection_code, master_sku, master_product_name)
+) engine=innodb comment='领星SKU同步清单';
+
+create table if not exists upstream_system_sku_pairing (
+  sku_pairing_id   bigint(20)    not null auto_increment comment 'SKU配对ID',
+  connection_code  varchar(64)   not null                comment '主仓接入编号',
+  master_sku       varchar(128)  not null                comment '领星masterSku',
+  system_sku       varchar(128)  not null                comment '系统SKU',
+  system_sku_name  varchar(255)  not null                comment '系统SKU名称快照',
+  customer_name    varchar(200)  default ''              comment '客户名称快照',
+  create_by        varchar(64)   default ''              comment '创建者',
+  create_time      datetime                              comment '创建时间',
+  update_by        varchar(64)   default ''              comment '更新者',
+  update_time      datetime                              comment '更新时间',
+  remark           varchar(500)  default ''              comment '备注',
+  primary key (sku_pairing_id),
+  unique key uk_upstream_sku_pairing_master (connection_code, master_sku),
+  unique key uk_upstream_sku_pairing_system (connection_code, system_sku),
+  key idx_upstream_sku_pairing_connection (connection_code)
+) engine=innodb comment='系统SKU与领星masterSku配对表';
+
+create table if not exists upstream_system_sku_sync_state (
+  connection_code       varchar(64)  not null                 comment '主仓接入编号',
+  status                varchar(16)  not null default 'NEVER' comment '同步状态',
+  sync_batch_id         varchar(64)  default null             comment '同步批次号',
+  last_started_time     datetime                              comment '最近开始同步时间',
+  last_finished_time    datetime                              comment '最近结束同步时间',
+  last_success_time     datetime                              comment '最近同步成功时间',
+  last_error_message    varchar(500) default ''               comment '最近失败原因',
+  next_sync_time        datetime                              comment '下次计划同步时间',
+  update_time           datetime                              comment '更新时间',
+  primary key (connection_code)
+) engine=innodb comment='SKU同步状态表';
+
+create table if not exists upstream_system_request_log (
+  request_log_id             bigint(20)   not null auto_increment comment '请求日志ID',
+  connection_code            varchar(64)  not null                comment '主仓接入编号',
+  trace_id                   varchar(64)  not null                comment '请求追踪号',
+  operation                  varchar(64)  not null                comment '业务操作名称',
+  endpoint                   varchar(255) not null                comment '领星接口地址',
+  request_time               datetime                             comment '请求发起时间',
+  response_time              datetime                             comment '响应返回时间',
+  duration_ms                bigint                                comment '请求耗时毫秒',
+  request_payload_redacted   longtext                              comment '脱敏请求内容',
+  response_payload_redacted  longtext                              comment '脱敏响应内容',
+  external_error_code        varchar(64)  default ''              comment '外部错误码',
+  external_error_message     varchar(500) default ''              comment '外部错误信息',
+  status                     varchar(16)  not null                comment '请求结果状态',
+  create_time                datetime                             comment '创建时间',
+  primary key (request_log_id),
+  key idx_upstream_request_log_connection (connection_code),
+  key idx_upstream_request_log_trace (trace_id),
+  key idx_upstream_request_log_created (create_time)
+) engine=innodb comment='上游系统请求日志表';
+
+create table if not exists upstream_system_sku_pairing_audit_event (
+  audit_event_id  bigint(20)   not null auto_increment comment '审计事件ID',
+  connection_code varchar(64)  not null                comment '主仓接入编号',
+  master_sku      varchar(128) not null                comment '领星masterSku',
+  system_sku      varchar(128) not null                comment '系统SKU',
+  event_type      varchar(32)  not null                comment '事件类型',
+  operator        varchar(64)  default ''              comment '操作人',
+  event_time      datetime                             comment '操作时间',
+  before_snapshot longtext                             comment '变更前快照',
+  after_snapshot  longtext                             comment '变更后快照',
+  remark          varchar(500) default ''              comment '备注',
+  primary key (audit_event_id),
+  key idx_upstream_sku_audit_connection (connection_code, event_time),
+  key idx_upstream_sku_audit_sku (connection_code, master_sku, system_sku)
+) engine=innodb comment='SKU配对审计事件表';
+
+insert into sys_dict_type
+    (dict_name, dict_type, status, create_by, create_time, update_by, update_time, remark)
+select '上游系统类型', 'upstream_system_kind', '0', 'admin', sysdate(), '', null, '上游系统类型'
+where not exists (select 1 from sys_dict_type where dict_type = 'upstream_system_kind');
+
+insert into sys_dict_data
+    (dict_sort, dict_label, dict_value, dict_type, css_class, list_class, is_default, status, create_by, create_time, update_by, update_time, remark)
+select 1, '领星WMS', 'LINGXING_WMS', 'upstream_system_kind', '', '', 'Y', '0', 'admin', sysdate(), '', null, '上游系统类型'
+where not exists (select 1 from sys_dict_data where dict_type = 'upstream_system_kind' and dict_value = 'LINGXING_WMS');
+
+insert into sys_dict_type
+    (dict_name, dict_type, status, create_by, create_time, update_by, update_time, remark)
+select '上游接入状态', 'upstream_connection_status', '0', 'admin', sysdate(), '', null, '上游接入状态'
+where not exists (select 1 from sys_dict_type where dict_type = 'upstream_connection_status');
+
+insert into sys_dict_data
+    (dict_sort, dict_label, dict_value, dict_type, css_class, list_class, is_default, status, create_by, create_time, update_by, update_time, remark)
+select seed.dict_sort, seed.dict_label, seed.dict_value, 'upstream_connection_status', '', seed.list_class, seed.is_default, '0', 'admin', sysdate(), '', null, '上游接入状态'
+from (
+    select 1 as dict_sort, '启用' as dict_label, 'ENABLED' as dict_value, 'primary' as list_class, 'Y' as is_default
+    union all select 2, '停用', 'DISABLED', 'default', 'N'
+) seed
+where not exists (select 1 from sys_dict_data d where d.dict_type = 'upstream_connection_status' and d.dict_value = seed.dict_value);
+
+insert into sys_dict_type
+    (dict_name, dict_type, status, create_by, create_time, update_by, update_time, remark)
+select '同步清单状态', 'upstream_sync_item_status', '0', 'admin', sysdate(), '', null, '同步清单状态'
+where not exists (select 1 from sys_dict_type where dict_type = 'upstream_sync_item_status');
+
+insert into sys_dict_data
+    (dict_sort, dict_label, dict_value, dict_type, css_class, list_class, is_default, status, create_by, create_time, update_by, update_time, remark)
+select seed.dict_sort, seed.dict_label, seed.dict_value, 'upstream_sync_item_status', '', seed.list_class, seed.is_default, '0', 'admin', sysdate(), '', null, '同步清单状态'
+from (
+    select 1 as dict_sort, '正常' as dict_label, 'ACTIVE' as dict_value, 'success' as list_class, 'Y' as is_default
+    union all select 2, '上游缺失', 'MISSING', 'warning', 'N'
+) seed
+where not exists (select 1 from sys_dict_data d where d.dict_type = 'upstream_sync_item_status' and d.dict_value = seed.dict_value);
+
+insert into sys_dict_type
+    (dict_name, dict_type, status, create_by, create_time, update_by, update_time, remark)
+select '上游结算类型', 'upstream_settlement_type', '0', 'admin', sysdate(), '', null, '上游结算类型'
+where not exists (select 1 from sys_dict_type where dict_type = 'upstream_settlement_type');
+
+insert into sys_dict_data
+    (dict_sort, dict_label, dict_value, dict_type, css_class, list_class, is_default, status, create_by, create_time, update_by, update_time, remark)
+select seed.dict_sort, seed.dict_label, seed.dict_value, 'upstream_settlement_type', '', '', seed.is_default, '0', 'admin', sysdate(), '', null, '上游结算类型'
+from (
+    select 1 as dict_sort, '上游应付' as dict_label, 'UPSTREAM_PAYABLE' as dict_value, 'Y' as is_default
+    union all select 2, '平台垫付', 'PLATFORM_ADVANCE', 'N'
+) seed
+where not exists (select 1 from sys_dict_data d where d.dict_type = 'upstream_settlement_type' and d.dict_value = seed.dict_value);
+
+insert into sys_menu
+    (menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
+     is_frame, is_cache, menu_type, visible, status, perms, icon, create_by,
+     create_time, update_by, update_time, remark)
+values
+    (2031, '上游系统管理', 2030, 1, 'upstream-system', 'UpstreamSystem/index', '', 'UpstreamSystem',
+     1, 0, 'C', '0', '0', 'integration:upstream:list', 'ApiOutlined', 'admin',
+     sysdate(), '', null, '领星主仓接入、同步清单和配对管理'),
+    (2300, '上游系统查询', 2031, 1, '#', '', '', '',
+     1, 0, 'F', '0', '0', 'integration:upstream:query', '#', 'admin',
+     sysdate(), '', null, ''),
+    (2301, '上游系统新增', 2031, 2, '#', '', '', '',
+     1, 0, 'F', '0', '0', 'integration:upstream:add', '#', 'admin',
+     sysdate(), '', null, ''),
+    (2302, '上游系统修改', 2031, 3, '#', '', '', '',
+     1, 0, 'F', '0', '0', 'integration:upstream:edit', '#', 'admin',
+     sysdate(), '', null, ''),
+    (2303, '上游系统授权', 2031, 4, '#', '', '', '',
+     1, 0, 'F', '0', '0', 'integration:upstream:credential', '#', 'admin',
+     sysdate(), '', null, ''),
+    (2304, '上游系统同步', 2031, 5, '#', '', '', '',
+     1, 0, 'F', '0', '0', 'integration:upstream:sync', '#', 'admin',
+     sysdate(), '', null, ''),
+    (2305, '上游系统配对', 2031, 6, '#', '', '', '',
+     1, 0, 'F', '0', '0', 'integration:upstream:pair', '#', 'admin',
+     sysdate(), '', null, ''),
+    (2306, '请求日志查看', 2031, 7, '#', '', '', '',
+     1, 0, 'F', '0', '0', 'integration:upstream:log', '#', 'admin',
+     sysdate(), '', null, '')
+on duplicate key update
+    menu_name = values(menu_name),
+    parent_id = values(parent_id),
+    order_num = values(order_num),
+    path = values(path),
+    component = values(component),
+    query = values(query),
+    route_name = values(route_name),
+    is_frame = values(is_frame),
+    is_cache = values(is_cache),
+    menu_type = values(menu_type),
+    visible = values(visible),
+    status = values(status),
+    perms = values(perms),
+    icon = values(icon),
+    update_by = 'admin',
+    update_time = sysdate(),
+    remark = values(remark);
