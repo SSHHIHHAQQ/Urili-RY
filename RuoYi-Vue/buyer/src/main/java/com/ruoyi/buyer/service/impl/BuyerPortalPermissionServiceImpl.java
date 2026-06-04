@@ -7,6 +7,7 @@ import java.util.Set;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.ruoyi.common.constant.HttpStatus;
 import com.ruoyi.buyer.domain.Buyer;
 import com.ruoyi.buyer.domain.BuyerAccount;
 import com.ruoyi.buyer.mapper.BuyerMapper;
@@ -323,6 +324,10 @@ public class BuyerPortalPermissionServiceImpl implements IBuyerPortalPermissionS
         if (!PartnerSupport.STATUS_NORMAL.equals(account.getStatus()))
         {
             throw new ServiceException("买家端账号已停用");
+        }
+        if (buyerMapper.countOnlineBuyerSession(session.getSubjectId(), session.getAccountId(), session.getTokenId()) <= 0)
+        {
+            throw new ServiceException("登录状态已失效", HttpStatus.UNAUTHORIZED);
         }
         return account;
     }

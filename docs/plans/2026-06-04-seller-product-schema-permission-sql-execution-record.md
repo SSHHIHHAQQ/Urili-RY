@@ -92,3 +92,7 @@
 - 卖家端商品 Schema 只读模板已经具备标准形态：端内路径、seller token 鉴权、端内权限点、`PortalSessionContext`、`PortalLog`、product schema 复用、端内 DTO 脱敏。
 - 本切片只落卖家端，未新增 buyer endpoint、buyer 权限、buyer 前端 service 或买家端验证。
 - 后续 buyer 端复制时，只替换 terminal、路径、权限点、日志 title 和 seed 表名，不重新设计 schema 逻辑。
+
+## 后续历史说明
+
+本记录中的 seller schema 字段数 `0` 是当时远程库商品配置的历史快照。后续买家端复制验证和商品分类接口验证时，已选中有配置的启用可发布类目，seller/buyer schema 回归验证均能返回字段数据。当前运行库状态以最新目标追踪检查点为准。

@@ -439,7 +439,7 @@ export default function AttributeLibrary({ access }: AttributeLibraryProps) {
                 <ProFormText name="unit" label="单位" />
                 <ProFormDigit
                   name="valuePrecision"
-                  label="数值精度"
+                  label="小数位数"
                   min={0}
                   max={8}
                 />

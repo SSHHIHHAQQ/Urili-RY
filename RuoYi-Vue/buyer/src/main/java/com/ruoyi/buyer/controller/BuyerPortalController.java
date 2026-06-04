@@ -40,7 +40,6 @@ import com.ruoyi.system.service.support.PortalSessionContext;
 /**
  * Buyer terminal session endpoints.
  */
-@Anonymous
 @RestController
 @RequestMapping("/buyer")
 public class BuyerPortalController extends BaseController
@@ -57,6 +56,7 @@ public class BuyerPortalController extends BaseController
     private IBuyerPortalDeptService deptService;
 
     @GetMapping("/getInfo")
+    @Anonymous
     @PortalPreAuthorize(terminal = "buyer")
     @PortalLog(terminal = "buyer", title = "买家端用户信息", businessType = BusinessType.OTHER, isSaveResponseData = false)
     public AjaxResult getInfo()
@@ -66,6 +66,7 @@ public class BuyerPortalController extends BaseController
     }
 
     @GetMapping("/getRouters")
+    @Anonymous
     @PortalPreAuthorize(terminal = "buyer")
     @PortalLog(terminal = "buyer", title = "买家端菜单", businessType = BusinessType.OTHER, isSaveResponseData = false)
     public AjaxResult getRouters()
@@ -75,6 +76,7 @@ public class BuyerPortalController extends BaseController
     }
 
     @PostMapping("/logout")
+    @Anonymous
     @PortalPreAuthorize(terminal = "buyer")
     @PortalLog(terminal = "buyer", title = "买家端退出登录", businessType = BusinessType.OTHER, isSaveResponseData = false)
     public AjaxResult logout()
@@ -84,6 +86,7 @@ public class BuyerPortalController extends BaseController
     }
 
     @GetMapping("/profile")
+    @Anonymous
     @PortalPreAuthorize(terminal = "buyer")
     @PortalLog(terminal = "buyer", title = "买家端主体资料", businessType = BusinessType.OTHER, isSaveResponseData = false)
     public AjaxResult profile()
@@ -93,6 +96,7 @@ public class BuyerPortalController extends BaseController
     }
 
     @GetMapping("/account/profile")
+    @Anonymous
     @PortalPreAuthorize(terminal = "buyer")
     @PortalLog(terminal = "buyer", title = "买家端账号资料", businessType = BusinessType.OTHER, isSaveResponseData = false)
     public AjaxResult accountProfile()
@@ -102,6 +106,7 @@ public class BuyerPortalController extends BaseController
     }
 
     @PutMapping("/account/password")
+    @Anonymous
     @PortalPreAuthorize(terminal = "buyer")
     @PortalLog(terminal = "buyer", title = "买家端修改密码", businessType = BusinessType.UPDATE, isSaveResponseData = false)
     public AjaxResult updatePassword(@RequestBody PortalPasswordChangeRequest request)
@@ -111,6 +116,7 @@ public class BuyerPortalController extends BaseController
     }
 
     @GetMapping("/accounts")
+    @Anonymous
     @PortalPreAuthorize(terminal = "buyer", hasPermi = "buyer:account:list")
     @PortalLog(terminal = "buyer", title = "买家端账号列表", businessType = BusinessType.OTHER, isSaveResponseData = false)
     public AjaxResult accounts()
@@ -125,6 +131,7 @@ public class BuyerPortalController extends BaseController
     }
 
     @GetMapping("/depts")
+    @Anonymous
     @PortalPreAuthorize(terminal = "buyer", hasPermi = "buyer:dept:list")
     @PortalLog(terminal = "buyer", title = "买家端部门列表", businessType = BusinessType.OTHER, isSaveResponseData = false)
     public AjaxResult depts()
@@ -139,6 +146,7 @@ public class BuyerPortalController extends BaseController
     }
 
     @GetMapping("/roles")
+    @Anonymous
     @PortalPreAuthorize(terminal = "buyer", hasPermi = "buyer:role:list")
     @PortalLog(terminal = "buyer", title = "买家端角色列表", businessType = BusinessType.OTHER, isSaveResponseData = false)
     public AjaxResult roles()
@@ -153,6 +161,7 @@ public class BuyerPortalController extends BaseController
     }
 
     @GetMapping("/account/login-logs")
+    @Anonymous
     @PortalPreAuthorize(terminal = "buyer")
     @PortalLog(terminal = "buyer", title = "买家端登录日志", businessType = BusinessType.OTHER, isSaveResponseData = false)
     public TableDataInfo accountLoginLogs(PortalLoginLog log)
@@ -166,6 +175,7 @@ public class BuyerPortalController extends BaseController
     }
 
     @GetMapping("/account/oper-logs")
+    @Anonymous
     @PortalPreAuthorize(terminal = "buyer")
     @PortalLog(terminal = "buyer", title = "买家端操作日志", businessType = BusinessType.OTHER, isSaveResponseData = false)
     public TableDataInfo accountOperLogs(PortalOperLog log)
@@ -179,6 +189,7 @@ public class BuyerPortalController extends BaseController
     }
 
     @GetMapping("/account/sessions")
+    @Anonymous
     @PortalPreAuthorize(terminal = "buyer")
     @PortalLog(terminal = "buyer", title = "买家端会话列表", businessType = BusinessType.OTHER, isSaveResponseData = false)
     public TableDataInfo accountSessions()

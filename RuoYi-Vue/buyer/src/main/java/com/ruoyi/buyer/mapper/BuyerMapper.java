@@ -61,6 +61,9 @@ public interface BuyerMapper
     public List<String> selectOnlineBuyerSessionTokenIds(@Param("buyerId") Long buyerId,
             @Param("buyerAccountId") Long buyerAccountId);
 
+    public int countOnlineBuyerSession(@Param("buyerId") Long buyerId,
+            @Param("buyerAccountId") Long buyerAccountId, @Param("tokenId") String tokenId);
+
     public int forceLogoutBuyerSessions(@Param("buyerId") Long buyerId,
             @Param("buyerAccountId") Long buyerAccountId);
 

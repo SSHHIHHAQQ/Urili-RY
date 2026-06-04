@@ -2,14 +2,14 @@ import { PlusOutlined } from '@ant-design/icons';
 import {
   type ActionType,
   ModalForm,
-  type ProColumns,
   ProFormDigit,
   ProFormSelect,
   ProFormText,
   ProFormTextArea,
   ProTable,
 } from '@ant-design/pro-components';
-import { Button, Empty, Form, Modal, Tree } from 'antd';
+import { Button, Form, Modal } from 'antd';
+import type { Key } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   deleteCategoryAttribute,
@@ -20,6 +20,7 @@ import {
   saveCategoryAttribute,
 } from '@/services/product/product';
 import { message } from '@/utils/feedback';
+import { getPersistedProTableSearch } from '@/utils/proTableSearch';
 import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 import { buildCategoryTree, toCategoryTreeData } from '../../categoryTree';
 import {
@@ -27,12 +28,18 @@ import {
   attributeTypeOptions,
   optionArrayToValueEnum,
   ruleModeOptions,
-  ruleModeValueEnum,
   statusOptions,
-  statusValueEnum,
   yesNoOptions,
-  yesNoValueEnum,
 } from '../../constants';
+import CategoryTreeFilterPanel from './CategoryTreeFilterPanel';
+import { buildCategoryAttributeColumns } from './categoryAttributeColumns';
+import {
+  collectCategoryKeys,
+  collectCategoryOptions,
+  filterCategoryAttributeRows,
+  filterCategoryTree,
+  findCategoryInTree,
+} from './categoryAttributeFilterUtils';
 
 type AccessLike = {
   hasPerms: (permission: string) => boolean;
@@ -71,14 +78,54 @@ export default function CategoryAttributeTemplate({
   const [categories, setCategories] = useState<API.Product.Category[]>([]);
   const [attributes, setAttributes] = useState<API.Product.Attribute[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<number>();
+  const [categoryKeyword, setCategoryKeyword] = useState('');
+  const [categoryStatus, setCategoryStatus] = useState('0');
+  const [categoryLevel, setCategoryLevel] = useState('ALL');
+  const [leafOnly, setLeafOnly] = useState(false);
+  const [expandedCategoryKeys, setExpandedCategoryKeys] = useState<Key[]>([]);
+  const [autoExpandParent, setAutoExpandParent] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [currentRule, setCurrentRule] =
     useState<API.Product.CategoryAttribute>();
 
   const categoryTree = useMemo(() => buildCategoryTree(categories), [categories]);
-  const treeData = useMemo(() => toCategoryTreeData(categoryTree), [categoryTree]);
+  const filteredCategoryTree = useMemo(
+    () =>
+      filterCategoryTree(categoryTree, {
+        keyword: categoryKeyword,
+        status: categoryStatus,
+        level: categoryLevel,
+        leafOnly,
+      }),
+    [categoryKeyword, categoryLevel, categoryStatus, categoryTree, leafOnly],
+  );
+  const treeData = useMemo(
+    () => toCategoryTreeData(filteredCategoryTree),
+    [filteredCategoryTree],
+  );
+  const visibleCategoryKeys = useMemo(
+    () => collectCategoryKeys(filteredCategoryTree),
+    [filteredCategoryTree],
+  );
+  const sourceCategoryOptions = useMemo(
+    () => collectCategoryOptions(categoryTree),
+    [categoryTree],
+  );
+  const categoryLevelOptions = useMemo(() => {
+    const levels = Array.from(
+      new Set(categories.map((item) => item.categoryLevel).filter(Boolean)),
+    ).sort((a, b) => Number(a) - Number(b));
+    return [
+      { label: '全部层级', value: 'ALL' },
+      ...levels.map((level) => ({ label: `${level}级类目`, value: String(level) })),
+    ];
+  }, [categories]);
   const attributeTypeValueEnum = useMemo(
     () => optionArrayToValueEnum(attributeTypeOptions),
+    [],
+  );
+  const attributeGroupValueEnum = useMemo(
+    () => optionArrayToValueEnum(attributeGroupOptions),
     [],
   );
 
@@ -93,14 +140,16 @@ export default function CategoryAttributeTemplate({
 
   const loadBaseData = async () => {
     const [categoryResp, attributeResp] = await Promise.all([
-      getCategoryList({ status: '0' }),
+      getCategoryList(),
       getEnabledAttributeList(),
     ]);
     const categoryRows = categoryResp.data || [];
     setCategories(categoryRows);
     setAttributes(attributeResp.data || []);
-    if (!selectedCategoryId && categoryRows[0]?.categoryId) {
-      setSelectedCategoryId(categoryRows[0].categoryId);
+    const firstNormalCategory = categoryRows.find((item) => item.status === '0');
+    const firstCategoryId = firstNormalCategory?.categoryId || categoryRows[0]?.categoryId;
+    if (!selectedCategoryId && firstCategoryId) {
+      setSelectedCategoryId(firstCategoryId);
     }
   };
 
@@ -112,6 +161,17 @@ export default function CategoryAttributeTemplate({
     directActionRef.current?.reload();
     schemaActionRef.current?.reload();
   }, [selectedCategoryId]);
+
+  useEffect(() => {
+    setExpandedCategoryKeys(visibleCategoryKeys);
+    setAutoExpandParent(true);
+  }, [categoryKeyword, categoryLevel, categoryStatus, leafOnly, visibleCategoryKeys]);
+
+  useEffect(() => {
+    if (selectedCategoryId && !findCategoryInTree(filteredCategoryTree, selectedCategoryId)) {
+      setSelectedCategoryId(undefined);
+    }
+  }, [filteredCategoryTree, selectedCategoryId]);
 
   useEffect(() => {
     if (!modalOpen) {
@@ -176,120 +236,23 @@ export default function CategoryAttributeTemplate({
     });
   };
 
-  const baseColumns: ProColumns<API.Product.CategoryAttribute>[] = [
-    {
-      title: '属性名称',
-      dataIndex: 'attributeName',
-      width: 150,
-    },
-    {
-      title: '属性编码',
-      dataIndex: 'attributeCode',
-      width: 150,
-    },
-    {
-      title: '类型',
-      dataIndex: 'attributeType',
-      valueEnum: attributeTypeValueEnum,
-      fieldProps: SEARCHABLE_SELECT_PROPS,
-      width: 110,
-    },
-    {
-      title: '规则',
-      dataIndex: 'ruleMode',
-      valueEnum: ruleModeValueEnum,
-      fieldProps: SEARCHABLE_SELECT_PROPS,
-      width: 110,
-    },
-    {
-      title: '必填',
-      dataIndex: 'requiredFlag',
-      valueEnum: yesNoValueEnum,
-      fieldProps: SEARCHABLE_SELECT_PROPS,
-      width: 80,
-    },
-    {
-      title: '展示',
-      dataIndex: 'visibleFlag',
-      valueEnum: yesNoValueEnum,
-      fieldProps: SEARCHABLE_SELECT_PROPS,
-      width: 80,
-    },
-    {
-      title: '可编辑',
-      dataIndex: 'editableFlag',
-      valueEnum: yesNoValueEnum,
-      fieldProps: SEARCHABLE_SELECT_PROPS,
-      width: 90,
-    },
-    {
-      title: '可筛选',
-      dataIndex: 'filterableFlag',
-      valueEnum: yesNoValueEnum,
-      fieldProps: SEARCHABLE_SELECT_PROPS,
-      width: 90,
-    },
-    {
-      title: '分组',
-      dataIndex: 'groupCode',
-      width: 110,
-    },
-    {
-      title: '排序',
-      dataIndex: 'sortOrder',
-      width: 80,
-    },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      valueEnum: statusValueEnum,
-      fieldProps: SEARCHABLE_SELECT_PROPS,
-      width: 90,
-    },
-  ];
-
-  const directColumns: ProColumns<API.Product.CategoryAttribute>[] = [
-    ...baseColumns,
-    {
-      title: '操作',
-      valueType: 'option',
-      width: 130,
-      render: (_, record) => [
-        <Button
-          key="edit"
-          type="link"
-          size="small"
-          hidden={!access.hasPerms('product:categoryAttribute:edit')}
-          onClick={() => openEditRule(record)}
-        >
-          编辑
-        </Button>,
-        <Button
-          key="delete"
-          type="link"
-          size="small"
-          danger
-          hidden={!access.hasPerms('product:categoryAttribute:edit')}
-          onClick={() => removeRule(record)}
-        >
-          移除
-        </Button>,
-      ],
-    },
-  ];
-
-  const schemaColumns: ProColumns<API.Product.CategoryAttribute>[] = [
-    {
-      title: '来源类目',
-      dataIndex: 'sourceCategoryName',
-      width: 150,
-    },
-    ...baseColumns,
-  ];
-
-  if (!categoryTree.length) {
-    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />;
-  }
+  const { directColumns, schemaColumns } = useMemo(
+    () =>
+      buildCategoryAttributeColumns({
+        access,
+        attributeTypeValueEnum,
+        attributeGroupValueEnum,
+        sourceCategoryOptions,
+        onEditRule: openEditRule,
+        onRemoveRule: removeRule,
+      }),
+    [
+      access,
+      attributeGroupValueEnum,
+      attributeTypeValueEnum,
+      sourceCategoryOptions,
+    ],
+  );
 
   return (
     <>
@@ -303,21 +266,35 @@ export default function CategoryAttributeTemplate({
       >
         <div
           style={{
-            minHeight: 640,
+            height: 'calc(100vh - 260px)',
+            minHeight: 520,
             padding: 16,
             border: '1px solid #f0f0f0',
             borderRadius: 6,
             background: '#fff',
+            overflow: 'hidden',
           }}
         >
-          <Tree
+          <CategoryTreeFilterPanel
             treeData={treeData}
-            selectedKeys={selectedCategoryId ? [selectedCategoryId] : []}
-            defaultExpandAll
-            onSelect={(keys) => {
-              const key = keys[0];
-              if (key) setSelectedCategoryId(Number(key));
+            selectedCategoryId={selectedCategoryId}
+            expandedCategoryKeys={expandedCategoryKeys}
+            autoExpandParent={autoExpandParent}
+            visibleCategoryKeys={visibleCategoryKeys}
+            categoryKeyword={categoryKeyword}
+            categoryStatus={categoryStatus}
+            categoryLevel={categoryLevel}
+            categoryLevelOptions={categoryLevelOptions}
+            leafOnly={leafOnly}
+            onCategoryKeywordChange={setCategoryKeyword}
+            onCategoryStatusChange={setCategoryStatus}
+            onCategoryLevelChange={setCategoryLevel}
+            onLeafOnlyChange={setLeafOnly}
+            onExpandedCategoryKeysChange={(keys, nextAutoExpandParent) => {
+              setExpandedCategoryKeys(keys);
+              setAutoExpandParent(nextAutoExpandParent);
             }}
+            onSelectCategory={setSelectedCategoryId}
           />
         </div>
         <div style={{ minWidth: 0 }}>
@@ -326,14 +303,17 @@ export default function CategoryAttributeTemplate({
             rowKey="categoryAttributeId"
             headerTitle="本类目规则"
             columns={directColumns}
-            search={false}
+            search={getPersistedProTableSearch({ labelWidth: 90 }, 'product-category-attribute-direct')}
             pagination={false}
-            request={async () => {
+            request={async (params) => {
               if (!selectedCategoryId) {
                 return { data: [], success: true };
               }
               const resp = await getCategoryAttributeList(selectedCategoryId);
-              return { data: resp.data || [], success: resp.code === 200 };
+              return {
+                data: filterCategoryAttributeRows(resp.data || [], params, selectedCategoryId),
+                success: resp.code === 200,
+              };
             }}
             toolBarRender={() => [
               <Button
@@ -355,14 +335,17 @@ export default function CategoryAttributeTemplate({
             }
             headerTitle="继承预览"
             columns={schemaColumns}
-            search={false}
+            search={getPersistedProTableSearch({ labelWidth: 90 }, 'product-category-attribute-schema')}
             pagination={false}
-            request={async () => {
+            request={async (params) => {
               if (!selectedCategoryId) {
                 return { data: [], success: true };
               }
               const resp = await getCategorySchema(selectedCategoryId);
-              return { data: resp.data || [], success: resp.code === 200 };
+              return {
+                data: filterCategoryAttributeRows(resp.data || [], params, selectedCategoryId),
+                success: resp.code === 200,
+              };
             }}
           />
         </div>

@@ -65,7 +65,10 @@
 | 前端直登入口与端内工作台 | 第一版已完成 | 当前 `react-ui/` 已落地 `/seller/direct-login`、`/buyer/direct-login`、`/seller/portal`、`/buyer/portal`；该工作台是验证型入口，后续物理拆分可迁移模板 |
 | 端内当前账号日志接口 | 已完成 | 已落地 seller/buyer 当前账号登录日志、操作日志只读接口；查询范围由 `PortalSessionContext` 推导，不能被前端参数扩大 |
 | 端内当前账号会话接口 | 已完成 | 已落地 seller/buyer 当前账号会话只读接口；查询范围由 `PortalSessionContext` 推导，只返回当前端账号自己的会话，不返回 `tokenId`、JWT、Redis key 或密码字段 |
-| 端内商品 Schema 只读接口 | 已完成 | 已落地 seller/buyer 端商品 schema 只读接口；buyer 按卖家模板复制，只替换 terminal、路径、权限点、日志 title、seed 表名和验证主体 |
+| 端内商品分类与 Schema 只读接口 | 已完成 | 已落地 seller/buyer 端可发布商品分类列表和商品 schema 只读接口；buyer 按卖家模板复制，只替换 terminal、路径、权限点、日志 title、seed 表名和验证主体 |
+| 免密登录响应日志脱敏 | 已完成 | 管理端 seller/buyer directLogin 的 `@Log` 已关闭响应体记录；真实验证 `sys_oper_log` 未写入 `token` / `loginUrl` / `directLoginToken` |
+| Portal Controller 匿名放行硬化 | 已完成 | `SellerPortalController` / `BuyerPortalController` 已移除类级 `@Anonymous`，12 个 seller 映射和 12 个 buyer 映射均改为方法级 `@Anonymous` + `@PortalPreAuthorize` |
+| 卖家端 DB 会话权威鉴权模板 | 已完成 | seller 端 `@PortalPreAuthorize` 鉴权时已回查 `seller_session` 的 `status/logout_time/expire_time`；实测只改 DB session 失效且保留 Redis token 时，旧 seller token 调 `/seller/getInfo` 返回 `401` |
 | 前端三端物理拆分 | 未开始 | 当前仍在 `react-ui/` 中验证 seller/buyer 直登页和工作台模板，尚未复制 `seller-ui` / `buyer-ui` |
 | 旧实现迁移 | 第二批已完成 | 旧 `PortalAccountSupport` / `PortalAccountMapper` 已移除；迁移脚本已删除账号表旧 `user_id` 列；早期复用 `sys_user` 的历史方案文档已标记过期 |
 
@@ -190,6 +193,8 @@
 - [x] 改造免密代入生成和消费。
 - [x] 增加端内权限读取、端类型校验和菜单数据范围校验。
 - [x] 增加端内接口级权限注解、切面和统一校验器。
+- [x] 卖家端 `@PortalPreAuthorize` 鉴权接入 `seller_session` 在线状态兜底校验。
+- [ ] 买家端按卖家模板复制 `buyer_session` 在线状态兜底校验。
 - [ ] 端内业务接口逐步接入数据范围校验。
 
 完成标准：
@@ -246,6 +251,8 @@
 | 残留点 | 说明 | 处理方式 |
 | --- | --- | --- |
 | 端内权限业务鉴权未全面接入 | `getInfo` / `getRouters` 已读取端内角色、权限和菜单；后续真实业务接口仍需逐步使用端 token 推导主体范围 | 后续业务接口开发时逐接口接入 |
+| 买家端 DB 会话权威鉴权尚未复制 | 卖家端已先形成 `seller_session` 兜底模板；买家端 `BuyerPortalPermissionServiceImpl` 仍需按模板增加 `buyer_session` 在线状态校验 | 卖家模板验收后复制买家，只替换 mapper、表名、字段名和错误文案 |
+| 管理端会话列表能力不完整 | 管理端已有主体/账号强制踢出接口，但还没有按主体/账号查看当前端内 session 列表的管理端接口；当前只有端内“当前账号自己的会话列表” | 后续补管理端 seller/buyer session 列表查询，不和端内当前账号会话接口混用 |
 | 管理端同构 UI 模板已形成 | 卖家侧先做标准样板，买家侧只替换端类型、文案、路由、权限、字段配置和 service；账号、部门、角色、菜单、审计弹窗已按此方式接入 | 后续已确定模式的管理端 UI 直接套模板推进，不再逐页重新设计 |
 | 端内真实业务接口范围控制仍需逐步接入 | 管理端审计弹窗已可查看登录日志、操作日志和 ticket；`seller_oper_log` / `buyer_oper_log` 第一批写入链路已接入端内 `getInfo` / `getRouters` | 后续真实端内业务接口必须从 token 推导主体范围，并继续使用 `@PortalLog` 写入端内操作日志 |
 | 前端三端物理拆分仍未开始 | 当前仍以 `react-ui/` 作为管理端验证入口；真正 `admin-ui` / `seller-ui` / `buyer-ui` 物理拆分尚未落地 | 等账号、端入口、菜单域、权限模型和管理端控制权继续稳定后再拆目录 |
@@ -256,6 +263,8 @@
 
 建议顺序：
 
+- 将本轮卖家端 DB 会话权威鉴权模板复制到买家端，保持只替换 mapper、表名、字段名和 terminal。
+- 补管理端 seller/buyer 端内 session 列表查询接口，让强制踢出前后能在管理端可视化查看。
 - 继续把后续真实卖家端/买家端业务接口接入端 token 主体推导，不信任前端传入的 `sellerId` / `buyerId`。
 - 真实端内接口继续接入 `@PortalPreAuthorize` 和 `@PortalLog`，让权限校验、数据范围和操作日志形成默认模板。
 - 新增管理端同构 UI 时，优先复用当前 `PartnerManagement` 模板和 service 配置注入方式。
@@ -1842,3 +1851,146 @@
 - seller/buyer 商品 Schema 只读接口已形成同构模板；后续端内商品相关只读入口继续优先按这一套模板推进。
 - 权限 seed 当前会把该只读权限授予 active 端内角色；后续如果引入更细的角色授权策略，应把 seed 从“所有 active 角色”调整为明确角色清单。
 - 远程库存在已软删除的 owner 角色历史数据；本轮 DML 已执行成功，但后续 seed 继续写 owner 角色时应先检查唯一约束和软删除数据，避免历史脏数据造成冲突。
+
+## 2026-06-04 端内商品分类只读接口与免密日志脱敏检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，按“卖家模板先做、验收后复制买家”的方式补齐商品 Schema 的前置分类列表入口，并修复管理端免密登录响应日志可能记录明文 token 的风险。
+
+已完成：
+
+- 在 `product` 模块新增端内商品分类 DTO：`PortalProductCategory`。
+- 卖家端新增 `GET /seller/product/categories`。
+- 买家端新增 `GET /buyer/product/categories`。
+- 两个分类接口均使用方法级 `@Anonymous`。
+- 卖家端分类接口使用 `@PortalPreAuthorize(terminal = "seller", hasPermi = "seller:product:category:list")`。
+- 买家端分类接口使用 `@PortalPreAuthorize(terminal = "buyer", hasPermi = "buyer:product:category:list")`。
+- 两个分类接口均使用 `@PortalLog(..., isSaveResponseData = false)` 写入端内操作日志，但不记录响应体。
+- 两个分类接口均从 `PortalSessionContext.requireSession(...)` 确认当前端会话。
+- 商品分类查询复用 `IProductConfigService.selectCategoryList(...)`，后端强制 `status=0` 和 `publishEnabled=Y`。
+- 新增权限 seed：`RuoYi-Vue/sql/20260604_portal_product_category_permission_seed.sql`。
+- 新增 SQL 执行记录：`docs/plans/2026-06-04-portal-product-category-permission-sql-execution-record.md`。
+- 管理端卖家/买家 directLogin 的 `@Log` 均增加 `isSaveResponseData=false`，避免把一次性明文 token 和 loginUrl 写入 `sys_oper_log.json_result`。
+
+远程库执行结果：
+
+- 第一次临时 Java SQL 执行器因 BOM 编码导致 `javac` 失败，未连接数据库、未执行 SQL。
+- 使用无 BOM 临时执行器重新执行 `20260604_portal_product_category_permission_seed.sql` 成功。
+- 执行语句数：`4`。
+- `seller_menu` 中 `seller:product:category:list` 数量：`1`。
+- `seller_role_menu` 中该权限绑定数量：`3`。
+- `buyer_menu` 中 `buyer:product:category:list` 数量：`1`。
+- `buyer_role_menu` 中该权限绑定数量：`1`。
+- 当前启用且可发布商品分类数量：`160`。
+
+验证结果：
+
+- `mvn -DskipTests compile`：通过。
+- 停止旧 8080 后端进程后执行 `mvn -DskipTests package`：通过。
+- 中途曾因一个新 Java 进程占用 `ruoyi-admin.jar` 导致一次 package repackage 重命名失败；停止占用进程后重包通过。
+- `.\start-backend-local.ps1`：返回成功，8080 正常监听。
+- `/captchaImage`：`code=200`，`captchaEnabled=false`。
+- 管理端登录：`code=200`。
+- 管理端生成卖家端免密票据：`code=200`。
+- 管理端生成买家端免密票据：`code=200`。
+- 卖家端消费免密票据：`code=200`，`terminal=seller`。
+- 买家端消费免密票据：`code=200`，`terminal=buyer`。
+- seller token 调 `GET /seller/product/categories`：业务 `code=200`，返回 `160` 个分类。
+- buyer token 调 `GET /buyer/product/categories`：业务 `code=200`，返回 `160` 个分类。
+- seller/buyer 分类响应中 `publishEnabled != Y` 的数量均为 `0`。
+- seller/buyer 分类响应敏感 key 命中数均为 `0`，未发现 `password`、`token`、`tokenId`、`createBy`、`updateBy`、`remark`、`delFlag`。
+- admin token 调 seller/buyer 分类接口：业务 `code=401`。
+- 无 token 调 seller/buyer 分类接口：业务 `code=401`。
+- seller token 调 buyer 分类接口：业务 `code=401`。
+- buyer token 调 seller 分类接口：业务 `code=401`。
+- 伪造 `sellerId`、`buyerId`、`accountId`、`subjectId`、`terminal` 查询参数不能改变返回范围，返回数量差异为 `0`。
+- 本轮 directLogin 后，`sys_oper_log` 中卖家免密登录日志行数为 `1`，买家免密登录日志行数为 `1`。
+- 本轮 directLogin 操作日志中命中 `token`、`loginUrl`、`directLoginToken` 的行数为 `0`。
+- 验证后已调用 `POST /seller/logout` 和 `POST /buyer/logout` 清理本轮 portal token。
+
+当前判断：
+
+- 端内商品分类只读接口补齐了商品 Schema 读取前的合法 `categoryId` 来源。
+- seller/buyer 端商品只读接口继续保持同构模板：端 token 鉴权、端内权限点、端内 DTO、后端强制过滤、跨端拒绝和脱敏响应。
+- directLogin 响应日志脱敏已修复本轮发现的高风险点；历史 `sys_oper_log` 是否曾记录过旧 token，需要单独安全审计，不在本切片里做数据清理。
+- `SellerPortalController` / `BuyerPortalController` 类级 `@Anonymous` 硬化问题已在后续检查点处理，当前状态以最新检查点为准。
+
+## 2026-06-04 Portal Controller 匿名放行硬化检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，修复 seller/buyer 主 portal controller 类级 `@Anonymous` 带来的后续扩展风险：如果新增端内方法漏挂 `@PortalPreAuthorize`，类级匿名会先让请求通过若依外层登录过滤。
+
+已完成：
+
+- `SellerPortalController` 移除类级 `@Anonymous`。
+- `BuyerPortalController` 移除类级 `@Anonymous`。
+- `SellerPortalController` 的 12 个映射方法均补充方法级 `@Anonymous`，并保留原 `@PortalPreAuthorize`。
+- `BuyerPortalController` 的 12 个映射方法均补充方法级 `@Anonymous`，并保留原 `@PortalPreAuthorize`。
+- 本轮不改业务逻辑、不改路径、不改权限点、不执行 DDL/DML。
+
+静态检查：
+
+- `SellerPortalController`：`classAnonymous=false`，`mappings=12`，`missingAnonymous=0`，`missingPortalPreAuthorize=0`。
+- `BuyerPortalController`：`classAnonymous=false`，`mappings=12`，`missingAnonymous=0`，`missingPortalPreAuthorize=0`。
+
+验证结果：
+
+- 数据源确认：后端激活 `druid`，MySQL/Redis 均通过 `RUOYI_*` 运行变量读取；本轮不输出 `.env.local` 凭证。
+- `mvn -DskipTests compile`：通过。
+- 停止旧 8080 后端进程后执行 `mvn -DskipTests package`：通过。
+- `.\start-backend-local.ps1`：返回成功，8080 正常监听。
+- `/captchaImage`：`code=200`，`captchaEnabled=false`。
+- 管理端登录：`code=200`。
+- 管理端生成卖家端免密票据：`code=200`。
+- 管理端生成买家端免密票据：`code=200`。
+- 卖家端消费免密票据：`code=200`，`terminal=seller`。
+- 买家端消费免密票据：`code=200`，`terminal=buyer`。
+- seller token 调 `/seller/getInfo`、`/seller/getRouters`、`/seller/profile`、`/seller/accounts`、`/seller/account/sessions`：均可访问，其中主体资料返回 `terminal=seller`，账号列表返回 `1` 条，会话列表返回 `59` 条。
+- buyer token 调 `/buyer/getInfo`、`/buyer/getRouters`、`/buyer/profile`、`/buyer/accounts`、`/buyer/account/sessions`：均可访问，其中主体资料返回 `terminal=buyer`，账号列表返回 `1` 条，会话列表返回 `42` 条。
+- 无 token 调 `/seller/getInfo`：业务 `code=401`。
+- 无 token 调 `/buyer/getInfo`：业务 `code=401`。
+- buyer token 调 `/seller/getInfo`：业务 `code=401`。
+- seller token 调 `/buyer/getInfo`：业务 `code=401`。
+- 验证后已调用 `POST /seller/logout` 和 `POST /buyer/logout` 清理本轮 portal token。
+
+当前判断：
+
+- seller/buyer 主 portal controller 已从“类级匿名 + 方法级权限”收敛为“方法级匿名 + 方法级权限”。
+- 该模式保留 portal token 可进入若依外层过滤的必要放行，同时避免新增方法因类级匿名被无意公开。
+- 后续新增 seller/buyer portal 端受保护接口时，必须方法级同时声明 `@Anonymous` 和 `@PortalPreAuthorize`；只声明其中一个都不算符合模板。
+
+## 2026-06-04 卖家端 DB 会话权威鉴权模板检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，按“卖家模板先做，验收通过后复制买家”的节奏，只处理一类问题：seller 端 portal 鉴权不能只依赖 Redis session，还要以 `seller_session` 的在线状态作为兜底权威。
+
+已完成：
+
+- `SellerMapper` 新增 `countOnlineSellerSession(...)`。
+- `SellerMapper.xml` 新增 `countOnlineSellerSession` 查询，按 `seller_id`、`seller_account_id`、`token_id`、`status='0'`、`logout_time is null`、`expire_time >= sysdate()` 判断当前 session 是否仍在线。
+- `SellerPortalPermissionServiceImpl.assertActiveSellerSession(...)` 在校验卖家主体状态、卖家账号状态后，增加 `seller_session` 在线状态校验。
+- 本轮不改 buyer 代码，不新增 DDL，不新增权限点，不改前端。
+- 新增执行记录：`docs/plans/2026-06-04-seller-db-session-authority-execution-record.md`。
+
+验证结果：
+
+- 数据源确认：后端激活 `druid`，MySQL/Redis 均通过 `RUOYI_*` 运行变量读取；本轮不输出 `.env.local` 凭证。
+- `mvn -DskipTests compile`：通过。
+- 停止旧 8080 后端进程后执行 `mvn -DskipTests package`：通过。
+- `.\start-backend-local.ps1 -Restart`：后端启动成功，8080 正常监听。
+- `/captchaImage`：`code=200`，`captchaEnabled=false`。
+- 管理端登录：`code=200`。
+- 管理端卖家列表：`code=200`。
+- 管理端生成卖家端免密票据：`code=200`。
+- 卖家端消费免密票据：`code=200`，`terminal=seller`。
+- seller token 初次调用 `/seller/getInfo`：`code=200`。
+- 受控远程 DML：仅将本轮新建测试 session 对应 `seller_session` 行更新为 `status='1'`、`logout_time=sysdate()`，影响行数 `1`；Redis token 保持不变。
+- DB session 失效后，旧 seller token 再调 `/seller/getInfo`：业务 `code=401`，消息为“登录状态已失效”。
+- 受控远程 DML：将同一测试 session 临时恢复为 `status='0'`、`logout_time=null`，影响行数 `1`，随后调用 `/seller/logout` 正常清理 Redis 和 DB session。
+- `/seller/logout`：`code=200`。
+- logout 后旧 seller token 再调 `/seller/getInfo`：业务 `code=401`。
+- 最后通过管理端 `DELETE /seller/admin/sellers/{sellerId}/sessions` 清理本轮早期脚本失败遗留的同卖家测试 session，返回 `code=200`，影响行数 `1`。
+
+当前判断：
+
+- 卖家端已经形成 DB 会话权威鉴权模板：Redis token 仍是入口缓存，但只要 `seller_session` 已失效，受 `@PortalPreAuthorize(terminal = "seller", ...)` 保护的 seller 接口会拒绝旧 token。
+- 当前实现没有新增表字段，`seller_session` 现有 `status/logout_time/expire_time` 字段足够承载该规则。
+- buyer 端尚未复制该模板，后续应只替换 mapper、表名、字段名和 terminal，不重新设计。
+- 管理端强制踢出执行链已能让 token 失效，但管理端 session 列表查询仍不完整，需后续补齐。

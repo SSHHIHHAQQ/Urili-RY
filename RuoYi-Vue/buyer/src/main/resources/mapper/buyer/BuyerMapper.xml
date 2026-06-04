@@ -458,6 +458,17 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         </if>
     </select>
 
+    <select id="countOnlineBuyerSession" resultType="int">
+        select count(1)
+        from buyer_session
+        where buyer_id = #{buyerId}
+          and buyer_account_id = #{buyerAccountId}
+          and token_id = #{tokenId}
+          and status = '0'
+          and logout_time is null
+          and expire_time >= sysdate()
+    </select>
+
     <update id="forceLogoutBuyerSessions">
         update buyer_session
         set status = '1',

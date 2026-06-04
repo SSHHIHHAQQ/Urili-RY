@@ -470,6 +470,6 @@ buyer-ui/
 
 ## 下一步建议
 
-当前已完成第一批管理端卖家/买家账号改造、远程库迁移、卖家端/买家端真实登录与 token 消费改造、管理端维护 `seller_menu` / `buyer_menu`、`seller_role` / `buyer_role`、`seller_dept` / `buyer_dept` 的第一批后端接口，以及端账号绑定端内角色和端内 `getInfo` / `getRouters` 权限菜单读取闭环。详细执行和验证证据见 `docs/plans/2026-06-04-three-terminal-isolation-goal-tracker.md`。
+当前已完成第一批管理端卖家/买家账号改造、远程库迁移、卖家端/买家端真实登录与 token 消费改造、管理端维护 `seller_menu` / `buyer_menu`、`seller_role` / `buyer_role`、`seller_dept` / `buyer_dept` 的第一批后端接口，以及端账号绑定端内角色和端内 `getInfo` / `getRouters` 权限菜单读取闭环。第一套真实端内商品只读接口模板已落地，包含可发布商品分类列表和商品 Schema 读取。详细执行和验证证据见 `docs/plans/2026-06-04-three-terminal-isolation-goal-tracker.md`。
 
 下一步建议继续进入端内真实业务接口范围控制和管理端 UI 收口：端账号维护弹窗、端账号 `dept_id` 页面绑定、账号角色绑定、端内部门维护、端内角色维护、端内菜单维护、免密代入审计票据 `portal_direct_login_ticket`、管理端强制踢出能力、登录日志查询、操作日志查询、ticket 审计列表、`seller_oper_log` / `buyer_oper_log` 第一批真实写入链路、端内接口级权限注解 `@PortalPreAuthorize` 和统一权限校验器均已落地；后续重点让真实端内业务接口从端 token 推导主体范围，不相信前端传入 `sellerId` / `buyerId`，并继续使用 `@PortalPreAuthorize` 做端内权限校验、使用 `@PortalLog` 写入端内操作日志。管理端 UI 已确认的同构模式直接模板化推进：卖家侧先做标准样板，买家侧只替换端类型、文案、路由、权限标识、字段配置和 service。

@@ -61,6 +61,9 @@ public interface SellerMapper
     public List<String> selectOnlineSellerSessionTokenIds(@Param("sellerId") Long sellerId,
             @Param("sellerAccountId") Long sellerAccountId);
 
+    public int countOnlineSellerSession(@Param("sellerId") Long sellerId,
+            @Param("sellerAccountId") Long sellerAccountId, @Param("tokenId") String tokenId);
+
     public int forceLogoutSellerSessions(@Param("sellerId") Long sellerId,
             @Param("sellerAccountId") Long sellerAccountId);
 

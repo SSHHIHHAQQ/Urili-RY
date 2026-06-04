@@ -104,27 +104,32 @@
   - 导入只支持新增和更新，不支持导入删除；删除仍必须走页面操作和后端业务校验。
   - 本阶段明确不包含 SKU、多 SKU、库存、价格、商品发布、商品审核和外部平台属性同步。
 
-### 端内商品 Schema 只读模板
+### 端内商品分类与 Schema 只读模板
 
 - 位置：
   - `RuoYi-Vue/product/src/main/java/com/ruoyi/product/controller/ProductPortalSchemaController.java`
+  - `RuoYi-Vue/product/src/main/java/com/ruoyi/product/domain/PortalProductCategory.java`
   - `RuoYi-Vue/product/src/main/java/com/ruoyi/product/domain/PortalProductCategorySchemaItem.java`
   - `RuoYi-Vue/product/src/main/java/com/ruoyi/product/domain/PortalProductAttributeOption.java`
+  - `RuoYi-Vue/sql/20260604_portal_product_category_permission_seed.sql`
   - `RuoYi-Vue/sql/20260604_seller_product_schema_permission_seed.sql`
   - `RuoYi-Vue/sql/20260604_buyer_product_schema_permission_seed.sql`
 - 当前用途：
   - 作为 seller/buyer 端真实业务接口的第一套标准模板。
+  - 卖家端、买家端只读获取启用且可发布的商品分类，用于选择 `categoryId`。
   - 卖家端只读获取商品发布所需的类目属性 schema。
   - 买家端只读获取商品浏览、筛选或商品详情所需的类目属性 schema。
   - 只消费 `product` 模块配置，不维护平台商品分类、属性库或类目属性规则。
 - 复用规则：
   - 已按“先验收卖家模板，再复制买家”的节奏落地；后续同构端内商品接口继续按模板化推进。
+  - 商品分类列表统一复用 `IProductConfigService.selectCategoryList(...)`，后端强制 `status=0` 和 `publishEnabled=Y`，不要让前端筛掉不可发布分类。
   - schema 计算统一复用 `IProductConfigService.previewCategorySchema(categoryId)`，不要在 seller/buyer Service、Controller 或前端重复手写继承合并逻辑。
-  - 端内接口必须使用 `@PortalPreAuthorize` 校验 terminal 和端内权限；卖家端权限点为 `seller:product:schema:query`，买家端权限点为 `buyer:product:schema:query`。
+  - 端内接口必须使用 `@PortalPreAuthorize` 校验 terminal 和端内权限；分类列表权限为 `seller:product:category:list` / `buyer:product:category:list`，schema 权限为 `seller:product:schema:query` / `buyer:product:schema:query`。
   - 端内接口需要匿名放行给若依外层登录过滤，再由 `@PortalPreAuthorize` 做端 token 鉴权；`@Anonymous` 应下沉到明确的方法级入口，不做类级匿名。
   - 端内接口必须从 `PortalSessionContext.requireSession(...)` 获取当前端身份；不得信任前端传入的 `sellerId`、`buyerId`、`accountId`、`subjectId` 或 `terminal`。
   - 端内 schema 只返回启用类目、可发布类目、启用属性规则和可见属性规则；属性选项只返回启用选项。
   - 响应 DTO 只返回端内表单需要的字段，不返回 `createBy`、`updateBy`、`remark`、密码、token、Redis key 或后台审计字段。
+  - 当前权限 seed 会授予 active 端内角色；如果后续改成明确角色清单，必须同步更新 SQL 执行记录和本台账。
   - 后续维护 seller/buyer 端同构接口时，只替换 terminal、路径、权限点、日志 title、seed 表名和验证主体，不重新设计。
 
 ### PartnerSupport
@@ -235,9 +240,14 @@
   - 让 `SellerPortalPermissionServiceImpl` / `BuyerPortalPermissionServiceImpl` 以同一接口接入权限校验。
   - `PortalPreAuthorizeAspect` 会把校验通过的 `PortalLoginSession` 写入 `PortalSessionContext`，供当前请求内 Controller、Service 和日志切面复用。
   - 当前已覆盖 `/seller/getInfo`、`/seller/getRouters`、`/buyer/getInfo`、`/buyer/getRouters`。
+  - 卖家端已在权限服务中回查 `seller_session` 在线状态，Redis token 只是入口缓存；DB session 失效后，seller 端受保护接口必须拒绝旧 token。
 - 复用规则：
+  - seller/buyer portal 端受保护接口必须方法级同时声明 `@Anonymous` 和 `@PortalPreAuthorize`：`@Anonymous` 只负责放行若依外层登录过滤，`@PortalPreAuthorize` 负责端 token、terminal 和权限校验。
+  - 不要在 seller/buyer portal controller 上使用类级 `@Anonymous`；新增方法如果漏挂 `@PortalPreAuthorize`，类级匿名会让接口无意公开。
   - 后续卖家端真实业务接口优先使用 `@PortalPreAuthorize(terminal = "seller", ...)`。
   - 后续买家端真实业务接口优先使用 `@PortalPreAuthorize(terminal = "buyer", ...)`。
+  - seller 端 `@PortalPreAuthorize` 鉴权必须继续经过 `SellerPortalPermissionServiceImpl.assertActiveSellerSession(...)`，并以 `seller_session.status='0'`、`logout_time is null`、`expire_time >= sysdate()` 作为当前会话仍有效的 DB 兜底判断。
+  - buyer 端复制该模板时，只替换 `BuyerMapper`、`buyer_session`、`buyer_id`、`buyer_account_id` 和 terminal，不重新设计会话规则。
   - 不要在 Controller 或 Service 里重复手写 token 解析、权限集合读取、`*:*:*` 判断和端类型判断。
   - 端内接口需要当前主体或账号时，优先从 `PortalSessionContext.requireSession("seller" / "buyer")` 获取 `subjectId`、`accountId` 和 `terminal`。
   - 端内主动退出也必须先经过 `@PortalPreAuthorize`，再用 `PortalSessionContext` 中的当前会话删除对应 Redis token 和更新当前 session 行；不要让前端传 `tokenId`、`sellerId`、`buyerId` 或 `accountId` 决定退出范围。

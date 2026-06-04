@@ -7,6 +7,7 @@ import java.util.Set;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.ruoyi.common.constant.HttpStatus;
 import com.ruoyi.common.constant.UserConstants;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
@@ -323,6 +324,10 @@ public class SellerPortalPermissionServiceImpl implements ISellerPortalPermissio
         if (!PartnerSupport.STATUS_NORMAL.equals(account.getStatus()))
         {
             throw new ServiceException("卖家端账号已停用");
+        }
+        if (sellerMapper.countOnlineSellerSession(session.getSubjectId(), session.getAccountId(), session.getTokenId()) <= 0)
+        {
+            throw new ServiceException("登录状态已失效", HttpStatus.UNAUTHORIZED);
         }
         return account;
     }
