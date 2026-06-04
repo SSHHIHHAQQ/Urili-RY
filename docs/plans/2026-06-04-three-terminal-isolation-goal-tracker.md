@@ -1573,3 +1573,106 @@
 - 端内当前账号修改密码已形成闭环：端 token 校验、当前账号范围、旧密码校验、新密码写入、跨端拒绝、旧密码失效、新密码生效、恢复默认密码和端内操作日志均已验证。
 - 该能力不需要 DDL；本轮真实 DML 只发生在被选中卖家/买家端账号的密码重置、修改和恢复上，最终已恢复默认密码。
 - 后续卖家端/买家端个人中心或安全设置页面直接调用 `sellerPortalSessionService.updatePassword` / `buyerPortalSessionService.updatePassword`，页面不要传 `sellerId`、`buyerId`、`accountId`，也不要记录旧密码、新密码或确认密码。
+
+## 2026-06-04 三端前端直登入口与端内工作台检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，按“已确认模式模板化复制”的方式，先在当前 `react-ui/` 管理端验证入口中补齐卖家端、买家端直登录地页和端内工作台页。当前阶段仍不复制 `seller-ui` / `buyer-ui`，只准备后续物理拆分可复用的入口代码。
+
+已完成：
+
+- 新增 `react-ui/src/pages/Portal/terminal.ts`：
+  - 集中维护 `seller` / `buyer` 的端名称、首页路径和 service 映射。
+  - 统一封装免密登录成功后的端 token 持久化和清理。
+- 新增 `react-ui/src/pages/Portal/DirectLogin/index.tsx`：
+  - 同一个页面同时承载 `/seller/direct-login` 和 `/buyer/direct-login`。
+  - 从 URL 读取 `directLoginToken` 后调用对应端的 `directLogin`。
+  - 成功后只写入对应端本地 token key，并跳转到对应端工作台。
+  - 失败时只清理对应端 token，不影响管理端 `access_token`。
+- 新增 `react-ui/src/pages/Portal/Home/index.tsx`：
+  - 同一个页面同时承载 `/seller/portal` 和 `/buyer/portal`。
+  - 从对应端 token 调用 `getInfo`、主体资料、当前账号资料、端内账号、端内部门和端内角色接口。
+  - 提供端内主动退出和修改当前账号密码入口。
+  - 页面不传 `sellerId`、`buyerId`、`accountId` 作为权限边界。
+- `react-ui/config/routes.ts` 新增静态路由：
+  - `/seller/direct-login`
+  - `/buyer/direct-login`
+  - `/seller/portal`
+  - `/buyer/portal`
+- 卖家端与买家端没有分别重写页面；只通过 `terminal` 配置、文案、路径和 service 映射区分。
+
+验证结果：
+
+- `npm run tsc`：通过。
+- `mvn -DskipTests compile`：通过。
+- 停止 8080 当前后端进程后执行 `mvn -DskipTests package`：通过，已重新打包 `ruoyi-admin.jar`。
+- `.\start-backend-local.ps1`：通过，8080 正常监听，`http://127.0.0.1:8080/` 探活返回 200。
+- Playwright 真实页面验证：
+  - 管理端生成卖家端免密票据后，打开 `/seller/direct-login?directLoginToken=...`，最终进入 `/seller/portal`。
+  - 管理端生成买家端免密票据后，打开 `/buyer/direct-login?directLoginToken=...`，最终进入 `/buyer/portal`。
+  - 浏览器 localStorage 中卖家端、买家端 token 分别写入对应 key。
+  - 页面能展示当前端主体、当前账号、端内角色、端内部门、端内账号和权限标识。
+  - 页面端内退出后调用 `/seller/logout` / `/buyer/logout` 返回 `code=200`。
+- 截图留存：
+  - `output/playwright/seller-portal-loaded.png`
+  - `output/playwright/buyer-portal-loaded.png`
+- 本轮未执行 DDL。
+- 本轮真实 DML 仅包含：生成并消费卖家端、买家端免密票据，写入对应端登录日志、操作日志和会话记录；验证结束后已调用端内退出清理本轮端 token。
+
+当前判断：
+
+- 端内直登入口和工作台已经形成第一版前端模板：卖家端先成样板，买家端只替换 terminal 配置、路径、文案和 service。
+- 后续三端物理拆分时，可直接迁移 `Portal/terminal.ts`、`Portal/DirectLogin`、`Portal/Home` 的模式到卖家端、买家端独立前端；管理端仍保留若依 `sys_*` 登录和菜单体系。
+- 该工作台目前是验证型入口，不是最终业务门户；后续正式卖家端/买家端页面应继续复用端 token、端内 service 和 `PortalSessionContext` 后端边界。
+
+## 2026-06-04 端内当前账号日志只读接口检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，补齐卖家端、买家端当前账号查看自己登录日志和操作日志的只读能力。该能力只服务端内当前账号，不提供管理端筛全量日志的能力。
+
+已完成：
+
+- 卖家端新增：
+  - `GET /seller/account/login-logs`
+  - `GET /seller/account/oper-logs`
+- 买家端新增：
+  - `GET /buyer/account/login-logs`
+  - `GET /buyer/account/oper-logs`
+- 四个接口均使用 `@PortalPreAuthorize` 校验端 token。
+- 四个接口均从 `PortalSessionContext.requireSession(...)` 推导当前 `subjectId` 和 `accountId`。
+- 即使前端传入 `subjectId` 或 `accountId` 查询参数，后端也会覆盖为当前 token 的主体和账号范围。
+- 四个接口复用既有 seller/buyer 日志 mapper 和 service 列表方法，不新增日志表、不改 SQL。
+- `react-ui/src/services/portal/session.ts` 新增：
+  - `getPortalLoginLogs`
+  - `getPortalOperLogs`
+  - `sellerPortalSessionService.getLoginLogs`
+  - `sellerPortalSessionService.getOperLogs`
+  - `buyerPortalSessionService.getLoginLogs`
+  - `buyerPortalSessionService.getOperLogs`
+
+验证结果：
+
+- `npm run tsc`：通过。
+- `mvn -DskipTests compile`：通过。
+- 停止 8080 当前后端进程后执行 `mvn -DskipTests package`：通过，已重新打包 `ruoyi-admin.jar`。
+- `.\start-backend-local.ps1`：通过，8080 正常监听。
+- 真实接口烟测：
+  - 管理端登录：`code=200`。
+  - 卖家端免密登录：`sellerSubjectNo=SAF030002`，`accountId=8`。
+  - 买家端免密登录：`buyerSubjectNo=BAF030001`，`accountId=2`。
+  - `GET /seller/account/login-logs` 返回 `code=200`，`total=55`。
+  - `GET /seller/account/oper-logs` 返回 `code=200`，`total=39`。
+  - `GET /buyer/account/login-logs` 返回 `code=200`，`total=38`。
+  - `GET /buyer/account/oper-logs` 返回 `code=200`，`total=38`。
+  - 卖家 token 访问 `/buyer/account/login-logs` 返回 body `code=401`。
+  - 买家 token 访问 `/seller/account/oper-logs` 返回 body `code=401`。
+  - 卖家登录日志抽样 10 行，`subjectId/accountId` 越界数量 0。
+  - 卖家操作日志抽样 10 行，`subjectId/accountId` 越界数量 0。
+  - 买家登录日志抽样 10 行，`subjectId/accountId` 越界数量 0。
+  - 买家操作日志抽样 10 行，`subjectId/accountId` 越界数量 0。
+- 本轮未执行 DDL。
+- 本轮真实 DML 仅包含：为烟测生成并消费卖家端、买家端免密票据，写入对应端登录日志、操作日志和会话记录；烟测结束后已调用端内退出清理本轮端 token。
+
+当前判断：
+
+- 当前账号日志只读接口已形成模板：接口从端 token 推导主体和账号，查询参数不能扩大范围，跨端 token 在业务 body 中返回 `code=401`。
+- 后续卖家端/买家端个人中心或安全中心日志页直接调用 `sellerPortalSessionService.getLoginLogs` / `getOperLogs` 和 `buyerPortalSessionService.getLoginLogs` / `getOperLogs`。
+- 管理端日志审计仍继续使用 `/seller/admin/sellers/loginLogs/list`、`/seller/admin/sellers/operLogs/list`、`/buyer/admin/buyers/loginLogs/list`、`/buyer/admin/buyers/operLogs/list`，不要和端内当前账号日志接口混用。

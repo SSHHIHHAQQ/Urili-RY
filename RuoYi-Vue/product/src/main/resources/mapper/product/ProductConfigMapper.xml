@@ -102,10 +102,35 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         left join product_attribute a on a.attribute_id = ca.attribute_id
     </sql>
 
-    <select id="selectCategoryList" parameterType="ProductCategory" resultMap="CategoryResult">
-        select c.*,
-               (select count(1) from product_category child where child.parent_id = c.category_id and child.del_flag = '0') as children_count
+    <sql id="categorySelect">
+        select c.category_id,
+               c.parent_id,
+               c.ancestors,
+               c.category_code,
+               c.category_name,
+               c.category_level,
+               case when ifnull(child.children_count, 0) > 0 then 'N' else 'Y' end as publish_enabled,
+               c.sort_order,
+               c.schema_version,
+               c.status,
+               c.del_flag,
+               ifnull(child.children_count, 0) as children_count,
+               c.create_by,
+               c.create_time,
+               c.update_by,
+               c.update_time,
+               c.remark
         from product_category c
+        left join (
+            select parent_id, count(1) as children_count
+            from product_category
+            where del_flag = '0'
+            group by parent_id
+        ) child on child.parent_id = c.category_id
+    </sql>
+
+    <select id="selectCategoryList" parameterType="ProductCategory" resultMap="CategoryResult">
+        <include refid="categorySelect"/>
         where c.del_flag = '0'
         <if test="keyword != null and keyword != ''">
             and (c.category_code like concat('%', #{keyword}, '%') or c.category_name like concat('%', #{keyword}, '%'))
@@ -123,25 +148,29 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             and c.status = #{status}
         </if>
         <if test="publishEnabled != null and publishEnabled != ''">
-            and c.publish_enabled = #{publishEnabled}
+            <choose>
+                <when test="publishEnabled == 'Y'">
+                    and ifnull(child.children_count, 0) = 0
+                </when>
+                <otherwise>
+                    and ifnull(child.children_count, 0) > 0
+                </otherwise>
+            </choose>
         </if>
         order by c.parent_id asc, c.sort_order asc, c.category_id asc
     </select>
 
     <select id="selectCategoryById" resultMap="CategoryResult">
-        select c.*,
-               (select count(1) from product_category child where child.parent_id = c.category_id and child.del_flag = '0') as children_count
-        from product_category c
+        <include refid="categorySelect"/>
         where c.category_id = #{categoryId}
           and c.del_flag = '0'
         limit 1
     </select>
 
     <select id="selectCategoryByCode" resultMap="CategoryResult">
-        select *
-        from product_category
-        where category_code = #{categoryCode}
-          and del_flag = '0'
+        <include refid="categorySelect"/>
+        where c.category_code = #{categoryCode}
+          and c.del_flag = '0'
         limit 1
     </select>
 
@@ -195,6 +224,15 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             update_by = #{updateBy},
             update_time = sysdate(),
             remark = #{remark}
+        where category_id = #{categoryId}
+          and del_flag = '0'
+    </update>
+
+    <update id="updateCategoryPublishEnabled">
+        update product_category
+        set publish_enabled = #{publishEnabled},
+            update_by = #{updateBy},
+            update_time = sysdate()
         where category_id = #{categoryId}
           and del_flag = '0'
     </update>
