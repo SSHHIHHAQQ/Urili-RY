@@ -183,14 +183,19 @@
 
 - 位置：
   - `react-ui/src/pages/UpstreamSystem/components/ConnectionModal.tsx`
+  - `react-ui/src/pages/UpstreamSystem/components/ConnectionSidebar.tsx`
+  - `react-ui/src/pages/UpstreamSystem/components/ConnectionSummary.tsx`
   - `react-ui/src/pages/UpstreamSystem/components/PairingModal.tsx`
+  - `react-ui/src/pages/UpstreamSystem/components/SkuSyncPanel.tsx`
   - `react-ui/src/pages/UpstreamSystem/components/SyncTabs.tsx`
   - `react-ui/src/services/integration/upstreamSystem.ts`
   - `react-ui/src/types/integration/upstream-system.d.ts`
 - 当前用途：
   - 管理端“上游系统管理”菜单页面。
   - 主仓接入新增/编辑/授权、真实同步、仓库/物流渠道/SKU 配对和请求日志查看。
+  - 左侧主仓工作台、主仓排序、SKU-only 同步和 SKU 同步状态查看。
 - 复用规则：
   - 后续新增外部系统管理页面时，优先复用 modal、类型和 service 分层方式。
   - 页面文案使用“同步清单”，不要在用户界面展示“候选”。
   - 表格列、状态文本、接口类型继续集中维护，不要在页面内复制大段 option 或状态映射。
+  - 分页接口进入 `startPage()` 后，Service 不要再先做 `selectOne` 预查，避免污染 PageHelper 上下文。

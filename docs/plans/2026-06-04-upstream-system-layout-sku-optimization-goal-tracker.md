@@ -2,7 +2,7 @@
 
 日期：2026-06-04
 
-状态：进行中。
+状态：已完成。
 
 ## 总目标
 
@@ -22,20 +22,20 @@
 
 | 序号 | 事项 | 状态 | 完成标准 |
 | --- | --- | --- | --- |
-| 1 | 目标追踪 | 进行中 | 生成本文件并持续更新 |
-| 2 | 当前代码核对 | 进行中 | 核对若依现有 Controller/Service/Mapper/API/React 页面，避免重复实现 |
-| 3 | 左侧主仓列表 | 未开始 | 页面改为左侧主仓列表选择，支持搜索、分组、选中态 |
-| 4 | 右侧基本信息 | 未开始 | 右上展示当前主仓摘要和操作按钮，随左侧选择变化 |
-| 5 | 右侧配置 Tabs | 未开始 | 保留仓库、物流渠道、SKU、请求日志 Tabs，并随当前主仓变化 |
-| 6 | 主仓排序 | 未开始 | 新增若依风格排序接口和左侧调整位置交互，保存 `display_order` |
-| 7 | SKU 同步摘要 | 未开始 | SKU Tab 展示状态、上次同步、下次同步 |
-| 8 | SKU 搜索增强 | 未开始 | 支持全部、领星 masterSku、产品名、系统 SKU、客户字段筛选 |
-| 9 | SKU 客户字段 | 未开始 | SKU 配对弹窗展示并保存 `customerName` |
-| 10 | SKU-only 同步 | 未开始 | 新增只同步 SKU 的后端接口和前端按钮 |
-| 11 | 并发保护 | 未开始 | 避免同一主仓重复触发 SKU 同步 |
-| 12 | 权限同步 | 未开始 | 新增/调整接口继续使用若依 `@PreAuthorize`、菜单按钮权限和前端权限控制 |
-| 13 | 文档记录 | 未开始 | 更新复用台账和阶段总结 Markdown |
-| 14 | 验证 | 未开始 | 后端构建、前端 tsc/build/lint、新页面浏览器验证、接口验证 |
+| 1 | 目标追踪 | 已完成 | 生成本文件并持续更新 |
+| 2 | 当前代码核对 | 已完成 | 核对若依现有 Controller/Service/Mapper/API/React 页面，避免重复实现 |
+| 3 | 左侧主仓列表 | 已完成 | 页面改为左侧主仓列表选择，支持搜索、分组、选中态 |
+| 4 | 右侧基本信息 | 已完成 | 右上展示当前主仓摘要和操作按钮，随左侧选择变化 |
+| 5 | 右侧配置 Tabs | 已完成 | 保留仓库、物流渠道、SKU、请求日志 Tabs，并随当前主仓变化 |
+| 6 | 主仓排序 | 已完成 | 新增若依风格排序接口和左侧调整位置交互，保存 `display_order` |
+| 7 | SKU 同步摘要 | 已完成 | SKU Tab 展示状态、上次同步、下次同步 |
+| 8 | SKU 搜索增强 | 已完成 | 支持全部、领星 masterSku、产品名、系统 SKU、客户字段筛选 |
+| 9 | SKU 客户字段 | 已完成 | SKU 配对弹窗展示并保存 `customerName` |
+| 10 | SKU-only 同步 | 已完成 | 新增只同步 SKU 的后端接口和前端按钮 |
+| 11 | 并发保护 | 已完成 | 避免同一主仓重复触发 SKU 同步 |
+| 12 | 权限同步 | 已完成 | 新增/调整接口继续使用若依 `@PreAuthorize`、菜单按钮权限和前端权限控制 |
+| 13 | 文档记录 | 已完成 | 更新复用台账和阶段总结 Markdown |
+| 14 | 验证 | 已完成 | 后端构建、前端 tsc/build/lint、新页面浏览器验证、接口验证 |
 
 ## 暂缓项
 
@@ -54,3 +54,14 @@
 - 浏览器打开 `http://127.0.0.1:8001/overseas-warehouse-service/upstream-system`
 - `admin` 账号可访问和操作；无权限账号接口仍返回 403
 - 真实 `LX-CA012` 数据不丢失，凭证不明文输出
+
+## 完成记录
+
+- 后端新增排序接口 `PUT /integration/admin/upstream-systems/order`，复用 `integration:upstream:edit` 权限。
+- 后端新增 SKU-only 同步接口 `POST /integration/admin/upstream-systems/{connectionCode}/skus/sync`，复用 `integration:upstream:sync` 权限。
+- SKU 列表新增 `field`、`keyword`、`pairingStatus`、`status` 查询组合，客户名称来自 SKU 配对表。
+- 修复分页接口内预查 `selectOne` 污染 PageHelper 的问题，SKU 列表不再先调用 `selectConnectionByCode`。
+- 前端改为左侧主仓列表、右侧摘要和 Tabs 工作台布局。
+- SKU Tab 已展示同步状态、上次成功、下次同步、字段筛选、配对状态筛选、同步状态筛选、客户名称列和“同步SKU”按钮。
+- 真实 `LX-CA012` 执行 SKU-only 同步成功，返回 SKU 数量 5401。
+- 浏览器验证截图：`logs/upstream-system-browser-verify.png`。
