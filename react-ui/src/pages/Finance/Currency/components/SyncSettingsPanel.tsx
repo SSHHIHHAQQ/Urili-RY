@@ -14,6 +14,7 @@ import { Button, Descriptions, Space, Tag, Typography } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { message } from '@/utils/feedback';
 import { getPersistedProTableSearch } from '@/utils/proTableSearch';
+import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 import {
   getSyncConfig,
   getSyncLogList,
@@ -317,6 +318,7 @@ export default function SyncSettingsPanel({
           colProps={{ xs: 24, md: 12 }}
           options={[{ label: '人民币 (CNY)', value: 'CNY' }]}
           readonly
+          fieldProps={SEARCHABLE_SELECT_PROPS}
         />
         <ProFormText
           name="showApiApplicationName"
@@ -349,6 +351,7 @@ export default function SyncSettingsPanel({
           label="启用状态"
           colProps={{ xs: 24, md: 12 }}
           valueEnum={statusValueEnum}
+          fieldProps={SEARCHABLE_SELECT_PROPS}
         />
         <ProFormTextArea name="remark" label="备注" colProps={{ xs: 24 }} />
       </ModalForm>

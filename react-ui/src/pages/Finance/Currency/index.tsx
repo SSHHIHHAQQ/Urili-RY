@@ -19,6 +19,7 @@ import { useEffect, useRef, useState } from 'react';
 import { getDictSelectOption } from '@/services/system/dict';
 import { message } from '@/utils/feedback';
 import { getPersistedProTableSearch } from '@/utils/proTableSearch';
+import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 import {
   addCurrency,
   deleteCurrency,
@@ -173,6 +174,7 @@ export default function FinanceCurrencyPage() {
       dataIndex: 'status',
       valueType: 'select',
       valueEnum: statusValueEnum,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       width: 100,
     },
     {
@@ -180,6 +182,7 @@ export default function FinanceCurrencyPage() {
       dataIndex: 'isDefault',
       valueType: 'select',
       valueEnum: yesNoValueEnum,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       width: 90,
     },
     {
@@ -374,8 +377,7 @@ export default function FinanceCurrencyPage() {
           disabled={!!currentCurrency}
           rules={[{ required: true }]}
           fieldProps={{
-            showSearch: true,
-            optionFilterProp: 'label',
+            ...SEARCHABLE_SELECT_PROPS,
             onChange: (_, option: any) => {
               if (!currentCurrency && option?.label) {
                 currencyFormRef.current?.setFieldValue('currencyName', option.label);
@@ -395,12 +397,14 @@ export default function FinanceCurrencyPage() {
           options={baseCurrencyOptions}
           readonly
           rules={[{ required: true }]}
+          fieldProps={SEARCHABLE_SELECT_PROPS}
         />
         <ProFormDigit name="officialRate" label="官方汇率" min={0} />
         <ProFormSelect
           name="adjustmentMode"
           label="调整方式"
           options={adjustmentModeOptions}
+          fieldProps={SEARCHABLE_SELECT_PROPS}
         />
         <ProFormDependency name={['adjustmentMode']}>
           {({ adjustmentMode }) => {
@@ -432,9 +436,10 @@ export default function FinanceCurrencyPage() {
           name="roundingMode"
           label="舍入方式"
           options={roundingModeOptions}
+          fieldProps={SEARCHABLE_SELECT_PROPS}
         />
-        <ProFormSelect name="isDefault" label="默认币种" valueEnum={yesNoValueEnum} />
-        <ProFormSelect name="status" label="状态" valueEnum={statusValueEnum} />
+        <ProFormSelect name="isDefault" label="默认币种" valueEnum={yesNoValueEnum} fieldProps={SEARCHABLE_SELECT_PROPS} />
+        <ProFormSelect name="status" label="状态" valueEnum={statusValueEnum} fieldProps={SEARCHABLE_SELECT_PROPS} />
         <ProFormTextArea name="remark" label="备注" />
       </ModalForm>
 
