@@ -49,10 +49,10 @@ public class ProductImportTemplateService
     private List<ProductCategoryImportRow> categoryExamples()
     {
         return List.of(
-            categoryRow("apparel", "服装", "", "N", 10, "0", "顶级分类，不直接发布商品"),
-            categoryRow("apparel_tshirt", "T恤", "apparel", "Y", 10, "0", "叶子类目，卖家后续可发布商品"),
-            categoryRow("electronics", "电器", "", "N", 20, "0", "顶级分类，不直接发布商品"),
-            categoryRow("electronics_battery", "带电池电器", "electronics", "Y", 10, "0",
+            categoryRow("apparel", "服装", "", 10, "0", "顶级分类；有子级后系统自动判定为不可发布"),
+            categoryRow("apparel_tshirt", "T恤", "apparel", 10, "0", "叶子类目；无子级时系统自动判定为可发布"),
+            categoryRow("electronics", "电器", "", 20, "0", "顶级分类；是否可发布不需要人工填写"),
+            categoryRow("electronics_battery", "带电池电器", "electronics", 10, "0",
                 "父级编码必须在前面行或系统中已存在"));
     }
 
@@ -86,8 +86,6 @@ public class ProductImportTemplateService
             helpRow(template, "分类名称", "是", "展示名称；同一父级下不建议重复", "T恤", "同一父级下重复名称"),
             helpRow(template, "父级分类编码", "否", "顶级分类留空；子分类填写父级分类编码", "apparel",
                 "父级不存在，或父级行写在子级后面"),
-            helpRow(template, "可发布", "是", "填写 是 / 否；是表示叶子类目可发布商品，否表示仅作为分组", "是",
-                "可发布类目下面继续新增子类目"),
             helpRow(template, "排序", "否", "数字越小越靠前；不填按 0 处理", "10", "填写非数字文本"),
             helpRow(template, "状态", "是", "填写 正常 / 停用", "正常", "填写“启用”等非模板下拉值"),
             helpRow(template, "备注", "否", "内部说明，不参与编码唯一性判断", "叶子类目", "写入需要系统判断的业务规则"));
@@ -127,14 +125,13 @@ public class ProductImportTemplateService
             helpRow(template, "备注", "否", "内部说明，不参与编码唯一性判断", "常用材质", "写入需要系统判断的业务规则"));
     }
 
-    private ProductCategoryImportRow categoryRow(String code, String name, String parentCode, String publishEnabled,
-        Integer sortOrder, String status, String remark)
+    private ProductCategoryImportRow categoryRow(String code, String name, String parentCode, Integer sortOrder,
+        String status, String remark)
     {
         ProductCategoryImportRow row = new ProductCategoryImportRow();
         row.setCategoryCode(code);
         row.setCategoryName(name);
         row.setParentCategoryCode(parentCode);
-        row.setPublishEnabled(publishEnabled);
         row.setSortOrder(sortOrder);
         row.setStatus(status);
         row.setRemark(remark);

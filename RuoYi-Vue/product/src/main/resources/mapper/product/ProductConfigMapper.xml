@@ -149,7 +149,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         </if>
         <if test="publishEnabled != null and publishEnabled != ''">
             <choose>
-                <when test="publishEnabled == 'Y'">
+                <when test='publishEnabled == "Y"'>
                     and ifnull(child.children_count, 0) = 0
                 </when>
                 <otherwise>

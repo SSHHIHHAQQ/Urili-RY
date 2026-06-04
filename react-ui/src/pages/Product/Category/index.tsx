@@ -28,7 +28,7 @@ import { getPersistedProTableSearch } from '@/utils/proTableSearch';
 import { SEARCHABLE_SELECT_PROPS, SEARCHABLE_TREE_SELECT_PROPS } from '@/utils/selectSearch';
 import { buildCategoryTree, toCategoryTreeSelectData } from '../categoryTree';
 import ProductImportModal from '../components/ProductImportModal';
-import { statusOptions, statusValueEnum, yesNoOptions, yesNoValueEnum } from '../constants';
+import { statusOptions, statusValueEnum, yesNoValueEnum } from '../constants';
 
 function resultOk(resp: API.Result, successText: string) {
   if (resp.code === 200) {
@@ -41,7 +41,6 @@ function resultOk(resp: API.Result, successText: string) {
 
 const defaultCategoryValues: Partial<API.Product.Category> = {
   parentId: 0,
-  publishEnabled: 'N',
   sortOrder: 0,
   status: '0',
 };
@@ -152,10 +151,9 @@ export default function ProductCategoryPage() {
     {
       title: '可发布',
       dataIndex: 'publishEnabled',
-      valueType: 'select',
       valueEnum: yesNoValueEnum,
-      fieldProps: SEARCHABLE_SELECT_PROPS,
       width: 100,
+      search: false,
     },
     {
       title: '状态',
@@ -204,9 +202,7 @@ export default function ProductCategoryPage() {
               {
                 key: 'addChild',
                 label: '新增下级',
-                disabled:
-                  !access.hasPerms('product:category:add') ||
-                  record.publishEnabled === 'Y',
+                disabled: !access.hasPerms('product:category:add'),
               },
               {
                 key: 'delete',
@@ -305,13 +301,6 @@ export default function ProductCategoryPage() {
           name="categoryName"
           label="分类名称"
           rules={[{ required: true, message: '请输入分类名称' }]}
-        />
-        <ProFormSelect
-          name="publishEnabled"
-          label="可发布"
-          options={yesNoOptions}
-          fieldProps={SEARCHABLE_SELECT_PROPS}
-          rules={[{ required: true, message: '请选择是否可发布' }]}
         />
         <ProFormDigit name="sortOrder" label="排序" min={0} />
         <ProFormSelect
