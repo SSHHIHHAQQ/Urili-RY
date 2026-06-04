@@ -5,6 +5,7 @@ import type { TableInfo } from '../data';
 import styles from '../style.module.css';
 import type { DataNode } from 'antd/es/tree';
 import { ProForm, ProFormRadio, ProFormSelect, ProFormText } from '@ant-design/pro-components';
+import { SEARCHABLE_SELECT_PROPS, SEARCHABLE_TREE_SELECT_PROPS } from '@/utils/selectSearch';
 
 export type GenInfoProps = {
   values?: any;
@@ -104,6 +105,7 @@ const GenInfo: React.FC<GenInfoProps> = (props) => {
               <Col span={12} order={1}>
                 <ProFormSelect
                   fieldProps={{
+                    ...SEARCHABLE_SELECT_PROPS,
                     onChange: (val) => {
                       setTlpType(val as string);
                     },
@@ -146,6 +148,7 @@ const GenInfo: React.FC<GenInfoProps> = (props) => {
                   label="父菜单"
                 >
                   <TreeSelect
+                    {...SEARCHABLE_TREE_SELECT_PROPS}
                     style={{ width: '74%' }}
                     defaultValue={props.values.parentMenuId}
                     treeData={menuData}
@@ -195,6 +198,7 @@ const GenInfo: React.FC<GenInfoProps> = (props) => {
                     name="treeCode"
                     label="树编码字段"
                     options={treeColumns}
+                    fieldProps={SEARCHABLE_SELECT_PROPS}
                     rules={[
                       {
                         required: tlpType === 'tree',
@@ -208,6 +212,7 @@ const GenInfo: React.FC<GenInfoProps> = (props) => {
                     name="treeParentCode"
                     label="树父编码字段"
                     options={treeColumns}
+                    fieldProps={SEARCHABLE_SELECT_PROPS}
                     rules={[
                       {
                         required: tlpType === 'tree',
@@ -223,6 +228,7 @@ const GenInfo: React.FC<GenInfoProps> = (props) => {
                     name="treeName"
                     label="树名称字段"
                     options={treeColumns}
+                    fieldProps={SEARCHABLE_SELECT_PROPS}
                     rules={[
                       {
                         required: tlpType === 'tree',
@@ -248,6 +254,7 @@ const GenInfo: React.FC<GenInfoProps> = (props) => {
                       },
                     ]}
                     fieldProps={{
+                      ...SEARCHABLE_SELECT_PROPS,
                       onChange: (val) => {
                         form.setFieldsValue({
                           subTableFkName: '',
@@ -277,6 +284,7 @@ const GenInfo: React.FC<GenInfoProps> = (props) => {
                     name="subTableFkName"
                     options={subTablesColumnOptions}
                     label="子表关联的外键名"
+                    fieldProps={SEARCHABLE_SELECT_PROPS}
                     rules={[
                       {
                         required: tlpType === 'sub',

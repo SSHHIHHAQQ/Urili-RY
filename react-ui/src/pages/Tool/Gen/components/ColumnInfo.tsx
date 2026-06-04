@@ -5,6 +5,7 @@ import type { FormInstance } from 'antd';
 import { history } from '@umijs/max';
 import styles from '../style.module.css';
 import { EditableProTable, ProColumns } from '@ant-design/pro-components';
+import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 
 export type ColumnInfoProps = {
   parentType?: string;
@@ -61,6 +62,7 @@ const ColumnInfo: React.FC<ColumnInfoProps> = (props) => {
       title: 'Java类型',
       dataIndex: 'javaType',
       valueType: 'select',
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       valueEnum: {
         Long: {
           text: 'Long',
@@ -91,6 +93,7 @@ const ColumnInfo: React.FC<ColumnInfoProps> = (props) => {
       dataIndex: 'isInsert',
       valueType: 'select',
       fieldProps: {
+        ...SEARCHABLE_SELECT_PROPS,
         options: booleanEnum,
       },
       render: (_, record) => {
@@ -102,6 +105,7 @@ const ColumnInfo: React.FC<ColumnInfoProps> = (props) => {
       dataIndex: 'isEdit',
       valueType: 'select',
       fieldProps: {
+        ...SEARCHABLE_SELECT_PROPS,
         options: booleanEnum,
       },
       render: (_, record) => {
@@ -113,6 +117,7 @@ const ColumnInfo: React.FC<ColumnInfoProps> = (props) => {
       dataIndex: 'isList',
       valueType: 'select',
       fieldProps: {
+        ...SEARCHABLE_SELECT_PROPS,
         options: booleanEnum,
       },
       render: (_, record) => {
@@ -124,6 +129,7 @@ const ColumnInfo: React.FC<ColumnInfoProps> = (props) => {
       dataIndex: 'isQuery',
       valueType: 'select',
       fieldProps: {
+        ...SEARCHABLE_SELECT_PROPS,
         options: booleanEnum,
       },
       render: (_, record) => {
@@ -134,6 +140,7 @@ const ColumnInfo: React.FC<ColumnInfoProps> = (props) => {
       title: '查询方式',
       dataIndex: 'queryType',
       valueType: 'select',
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       valueEnum: {
         EQ: {
           text: '=',
@@ -166,6 +173,7 @@ const ColumnInfo: React.FC<ColumnInfoProps> = (props) => {
       dataIndex: 'isRequired',
       valueType: 'select',
       fieldProps: {
+        ...SEARCHABLE_SELECT_PROPS,
         options: booleanEnum,
       },
       render: (_, record) => {
@@ -177,6 +185,7 @@ const ColumnInfo: React.FC<ColumnInfoProps> = (props) => {
       dataIndex: 'htmlType',
       search: false,
       valueType: 'select',
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       valueEnum: {
         input: {
           text: '文本框',
@@ -213,6 +222,7 @@ const ColumnInfo: React.FC<ColumnInfoProps> = (props) => {
       search: false,
       valueType: 'select',
       fieldProps: {
+        ...SEARCHABLE_SELECT_PROPS,
         options: dictData,
       },
       render: (text) => {
