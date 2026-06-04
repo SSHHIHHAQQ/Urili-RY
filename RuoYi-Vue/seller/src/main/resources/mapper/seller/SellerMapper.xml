@@ -64,6 +64,40 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="remark"          column="remark"            />
     </resultMap>
 
+    <resultMap type="PortalLoginLog" id="SellerLoginLogResult">
+        <id     property="infoId"        column="info_id"           />
+        <result property="subjectId"     column="seller_id"         />
+        <result property="accountId"     column="seller_account_id" />
+        <result property="userName"      column="user_name"         />
+        <result property="ipaddr"        column="ipaddr"            />
+        <result property="loginLocation" column="login_location"    />
+        <result property="browser"       column="browser"           />
+        <result property="os"            column="os"                />
+        <result property="status"        column="status"            />
+        <result property="msg"           column="msg"               />
+        <result property="loginTime"     column="login_time"        />
+    </resultMap>
+
+    <resultMap type="PortalOperLog" id="SellerOperLogResult">
+        <id     property="operId"        column="oper_id"           />
+        <result property="subjectId"     column="seller_id"         />
+        <result property="accountId"     column="seller_account_id" />
+        <result property="title"         column="title"             />
+        <result property="businessType"  column="business_type"     />
+        <result property="method"        column="method"            />
+        <result property="requestMethod" column="request_method"    />
+        <result property="operName"      column="oper_name"         />
+        <result property="operUrl"       column="oper_url"          />
+        <result property="operIp"        column="oper_ip"           />
+        <result property="operLocation"  column="oper_location"     />
+        <result property="operParam"     column="oper_param"        />
+        <result property="jsonResult"    column="json_result"       />
+        <result property="status"        column="status"            />
+        <result property="errorMsg"      column="error_msg"         />
+        <result property="operTime"      column="oper_time"         />
+        <result property="costTime"      column="cost_time"         />
+    </resultMap>
+
     <sql id="selectSellerColumns">
         select s.seller_id, s.seller_no, s.seller_code, s.seller_name,
                s.seller_short_name, s.seller_type, s.seller_level, s.status,
@@ -324,6 +358,66 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             #{browser}, #{os}, #{status}, #{msg}, #{loginTime}
         )
     </insert>
+
+    <select id="selectSellerLoginLogList" parameterType="PortalLoginLog" resultMap="SellerLoginLogResult">
+        select l.info_id, l.seller_id, l.seller_account_id, l.user_name, l.ipaddr,
+               l.login_location, l.browser, l.os, l.status, l.msg, l.login_time
+        from seller_login_log l
+        where 1 = 1
+        <if test="subjectId != null">
+            and l.seller_id = #{subjectId}
+        </if>
+        <if test="accountId != null">
+            and l.seller_account_id = #{accountId}
+        </if>
+        <if test="userName != null and userName != ''">
+            and l.user_name like concat('%', #{userName}, '%')
+        </if>
+        <if test="ipaddr != null and ipaddr != ''">
+            and l.ipaddr like concat('%', #{ipaddr}, '%')
+        </if>
+        <if test="status != null and status != ''">
+            and l.status = #{status}
+        </if>
+        <if test="params.beginTime != null and params.beginTime != ''">
+            and date_format(l.login_time,'%Y%m%d') &gt;= date_format(#{params.beginTime},'%Y%m%d')
+        </if>
+        <if test="params.endTime != null and params.endTime != ''">
+            and date_format(l.login_time,'%Y%m%d') &lt;= date_format(#{params.endTime},'%Y%m%d')
+        </if>
+        order by l.login_time desc, l.info_id desc
+    </select>
+
+    <select id="selectSellerOperLogList" parameterType="PortalOperLog" resultMap="SellerOperLogResult">
+        select l.oper_id, l.seller_id, l.seller_account_id, l.title, l.business_type,
+               l.method, l.request_method, l.oper_name, l.oper_url, l.oper_ip,
+               l.oper_location, l.oper_param, l.json_result, l.status, l.error_msg,
+               l.oper_time, l.cost_time
+        from seller_oper_log l
+        where 1 = 1
+        <if test="subjectId != null">
+            and l.seller_id = #{subjectId}
+        </if>
+        <if test="accountId != null">
+            and l.seller_account_id = #{accountId}
+        </if>
+        <if test="title != null and title != ''">
+            and l.title like concat('%', #{title}, '%')
+        </if>
+        <if test="operName != null and operName != ''">
+            and l.oper_name like concat('%', #{operName}, '%')
+        </if>
+        <if test="status != null">
+            and l.status = #{status}
+        </if>
+        <if test="params.beginTime != null and params.beginTime != ''">
+            and date_format(l.oper_time,'%Y%m%d') &gt;= date_format(#{params.beginTime},'%Y%m%d')
+        </if>
+        <if test="params.endTime != null and params.endTime != ''">
+            and date_format(l.oper_time,'%Y%m%d') &lt;= date_format(#{params.endTime},'%Y%m%d')
+        </if>
+        order by l.oper_time desc, l.oper_id desc
+    </select>
 
     <insert id="insertSellerSession" parameterType="PortalLoginSession">
         insert into seller_session(

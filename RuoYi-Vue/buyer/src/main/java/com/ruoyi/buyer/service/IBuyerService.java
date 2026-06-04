@@ -4,8 +4,11 @@ import java.util.List;
 import com.ruoyi.common.core.domain.model.LoginBody;
 import com.ruoyi.buyer.domain.Buyer;
 import com.ruoyi.buyer.domain.BuyerAccount;
+import com.ruoyi.system.domain.PortalDirectLoginTicket;
 import com.ruoyi.system.domain.PortalDirectLoginResult;
+import com.ruoyi.system.domain.PortalLoginLog;
 import com.ruoyi.system.domain.PortalLoginResult;
+import com.ruoyi.system.domain.PortalOperLog;
 
 /**
  * 买家Service接口
@@ -38,7 +41,13 @@ public interface IBuyerService
 
     public int forceLogoutBuyerAccountSessions(Long buyerId, Long buyerAccountId);
 
-    public PortalDirectLoginResult createBuyerDirectLogin(Long buyerId);
+    public PortalDirectLoginResult createBuyerDirectLogin(Long buyerId, String reason);
+
+    public List<PortalLoginLog> selectBuyerLoginLogList(PortalLoginLog log);
+
+    public List<PortalOperLog> selectBuyerOperLogList(PortalOperLog log);
+
+    public List<PortalDirectLoginTicket> selectBuyerDirectLoginTicketList(PortalDirectLoginTicket ticket);
 
     public PortalLoginResult loginBuyer(LoginBody loginBody);
 

@@ -21,7 +21,9 @@ declare namespace API.System {
     updateBy?: string;
     updateTime?: string;
     remark?: string;
-    pageSize?: string;
+    pageNum?: number;
+    pageSize?: number;
+    current?: number;
     currentPage?: string;
     filter?: string;
     sorter?: string;

@@ -6,7 +6,7 @@ set names utf8mb4;
 
 create table if not exists upstream_system_connection (
   connection_code        varchar(64)   not null                  comment '主仓接入编号',
-  system_kind            varchar(32)   not null default 'LINGXING_WMS' comment '上游系统类型',
+  system_kind            varchar(32)   not null default 'lingxing-wms' comment '上游系统类型',
   master_warehouse_name  varchar(200)  not null                  comment '主仓显示名称',
   settlement_type        varchar(32)   not null                  comment '结算类型',
   app_key_mask           varchar(64)   not null default ''       comment '脱敏后的appKey',
@@ -189,8 +189,8 @@ where not exists (select 1 from sys_dict_type where dict_type = 'upstream_system
 
 insert into sys_dict_data
     (dict_sort, dict_label, dict_value, dict_type, css_class, list_class, is_default, status, create_by, create_time, update_by, update_time, remark)
-select 1, '领星WMS', 'LINGXING_WMS', 'upstream_system_kind', '', '', 'Y', '0', 'admin', sysdate(), '', null, '上游系统类型'
-where not exists (select 1 from sys_dict_data where dict_type = 'upstream_system_kind' and dict_value = 'LINGXING_WMS');
+select 1, '领星WMS', 'lingxing-wms', 'upstream_system_kind', '', '', 'Y', '0', 'admin', sysdate(), '', null, '上游系统类型'
+where not exists (select 1 from sys_dict_data where dict_type = 'upstream_system_kind' and dict_value = 'lingxing-wms');
 
 insert into sys_dict_type
     (dict_name, dict_type, status, create_by, create_time, update_by, update_time, remark)
@@ -229,8 +229,8 @@ insert into sys_dict_data
     (dict_sort, dict_label, dict_value, dict_type, css_class, list_class, is_default, status, create_by, create_time, update_by, update_time, remark)
 select seed.dict_sort, seed.dict_label, seed.dict_value, 'upstream_settlement_type', '', '', seed.is_default, '0', 'admin', sysdate(), '', null, '上游结算类型'
 from (
-    select 1 as dict_sort, '上游应付' as dict_label, 'UPSTREAM_PAYABLE' as dict_value, 'Y' as is_default
-    union all select 2, '平台垫付', 'PLATFORM_ADVANCE', 'N'
+    select 1 as dict_sort, '上游仓（应付）' as dict_label, 'upstream-payable' as dict_value, 'Y' as is_default
+    union all select 2, '自营仓（应收）', 'self-operated-receivable', 'N'
 ) seed
 where not exists (select 1 from sys_dict_data d where d.dict_type = 'upstream_settlement_type' and d.dict_value = seed.dict_value);
 

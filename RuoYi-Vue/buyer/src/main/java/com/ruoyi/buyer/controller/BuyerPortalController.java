@@ -6,11 +6,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import com.ruoyi.buyer.service.IBuyerPortalPermissionService;
 import com.ruoyi.common.annotation.Anonymous;
-import com.ruoyi.common.constant.HttpStatus;
+import com.ruoyi.common.annotation.PortalLog;
+import com.ruoyi.common.annotation.PortalPreAuthorize;
 import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
+import com.ruoyi.common.enums.BusinessType;
 import com.ruoyi.system.domain.PortalLoginSession;
-import com.ruoyi.system.service.support.PortalTokenSupport;
+import com.ruoyi.system.service.support.PortalSessionContext;
 
 /**
  * Buyer terminal session endpoints.
@@ -21,30 +23,23 @@ import com.ruoyi.system.service.support.PortalTokenSupport;
 public class BuyerPortalController extends BaseController
 {
     @Autowired
-    private PortalTokenSupport portalTokenSupport;
-
-    @Autowired
     private IBuyerPortalPermissionService permissionService;
 
     @GetMapping("/getInfo")
+    @PortalPreAuthorize(terminal = "buyer")
+    @PortalLog(terminal = "buyer", title = "买家端用户信息", businessType = BusinessType.OTHER, isSaveResponseData = false)
     public AjaxResult getInfo()
     {
-        PortalLoginSession session = portalTokenSupport.getSession("buyer");
-        if (session == null)
-        {
-            return AjaxResult.error(HttpStatus.UNAUTHORIZED, "登录状态已失效");
-        }
+        PortalLoginSession session = PortalSessionContext.requireSession("buyer");
         return success(permissionService.selectPortalPermissionInfo(session));
     }
 
     @GetMapping("/getRouters")
+    @PortalPreAuthorize(terminal = "buyer")
+    @PortalLog(terminal = "buyer", title = "买家端菜单", businessType = BusinessType.OTHER, isSaveResponseData = false)
     public AjaxResult getRouters()
     {
-        PortalLoginSession session = portalTokenSupport.getSession("buyer");
-        if (session == null)
-        {
-            return AjaxResult.error(HttpStatus.UNAUTHORIZED, "登录状态已失效");
-        }
+        PortalLoginSession session = PortalSessionContext.requireSession("buyer");
         return success(permissionService.selectPortalMenuTree(session));
     }
 }

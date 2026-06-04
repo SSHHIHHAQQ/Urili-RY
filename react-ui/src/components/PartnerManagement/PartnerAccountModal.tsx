@@ -3,6 +3,8 @@ import { useAccess } from '@umijs/max';
 import {
   App,
   Button,
+  Dropdown,
+  Flex,
   Form,
   Input,
   Modal,
@@ -13,10 +15,12 @@ import {
   TreeSelect,
   Typography,
 } from 'antd';
+import type { MenuProps } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { PlusOutlined } from '@ant-design/icons';
+import { DownOutlined, PlusOutlined } from '@ant-design/icons';
 import { getDictSelectOption } from '@/services/system/dict';
 import type { PartnerModuleConfig } from './PartnerManagementPage';
+import PartnerAccountRoleModal from './PartnerAccountRoleModal';
 
 type PartnerRecord = Record<string, any>;
 type AccountRecord = API.Partner.PortalAccountBase & Record<string, any>;
@@ -197,6 +201,8 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
   const [accountRoleOptions, setAccountRoleOptions] = useState<SelectOption[]>(fallbackAccountRoleOptions);
   const [accountFormOpen, setAccountFormOpen] = useState(false);
   const [currentAccount, setCurrentAccount] = useState<AccountRecord>();
+  const [roleModalOpen, setRoleModalOpen] = useState(false);
+  const [roleAccount, setRoleAccount] = useState<AccountRecord>();
 
   const partnerId = Number(getValue(partner, config.idField) || 0);
   const partnerName = getValue(partner, config.nameField) || getValue(partner, config.codeField) || '';
@@ -260,6 +266,16 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
   const closeAccountForm = () => {
     setAccountFormOpen(false);
     setCurrentAccount(undefined);
+  };
+
+  const openAccountRoleModal = (account: AccountRecord) => {
+    setRoleAccount(account);
+    setRoleModalOpen(true);
+  };
+
+  const closeAccountRoleModal = () => {
+    setRoleModalOpen(false);
+    setRoleAccount(undefined);
   };
 
   const handleAccountSubmit = async () => {
@@ -364,53 +380,75 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
       dataIndex: 'timeInfo',
       width: 176,
       render: (_, record) => (
-        <Space direction="vertical" size={0}>
+        <Flex vertical gap={0}>
           <Typography.Text style={compactCellTextStyle}>{formatDateTimeText(record.createTime)}</Typography.Text>
           <Typography.Text style={compactSubTextStyle} type="secondary">
             {formatDateTimeText(record.lastLoginTime)}
           </Typography.Text>
-        </Space>
+        </Flex>
       ),
     },
     {
       title: '操作',
       dataIndex: 'option',
-      width: 160,
-      render: (_, record) => (
-        <Space size={4}>
-          <Button
-            type="link"
-            size="small"
-            hidden={!access.hasPerms(`${permPrefix}:edit`)}
-            onClick={() => openAccountForm(record)}
-          >
-            编辑
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            hidden={!access.hasPerms(`${permPrefix}:resetPwd`)}
-            onClick={() => handleResetPassword(record)}
-          >
-            重置密码
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            hidden={!access.hasPerms(`${permPrefix}:forceLogout`)}
-            onClick={() => handleForceLogoutAccount(record)}
-          >
-            强制踢出
-          </Button>
-        </Space>
-      ),
+      width: 190,
+      render: (_, record) => {
+        const moreItems = [
+          access.hasPerms(`${permPrefix}:resetPwd`)
+            ? { key: 'resetPwd', label: '重置密码' }
+            : null,
+          access.hasPerms(`${permPrefix}:forceLogout`)
+            ? { key: 'forceLogout', label: '强制踢出' }
+            : null,
+        ].filter(Boolean) as MenuProps['items'];
+
+        return (
+          <Space size={4}>
+            <Button
+              type="link"
+              size="small"
+              hidden={!access.hasPerms(`${permPrefix}:edit`)}
+              onClick={() => openAccountForm(record)}
+            >
+              编辑
+            </Button>
+            <Button
+              type="link"
+              size="small"
+              hidden={!access.hasPerms(`${permPrefix}:role:edit`)}
+              onClick={() => openAccountRoleModal(record)}
+            >
+              分配角色
+            </Button>
+            {moreItems && moreItems.length > 0 ? (
+              <Dropdown
+                menu={{
+                  items: moreItems,
+                  onClick: ({ key }) => {
+                    if (key === 'resetPwd') {
+                      handleResetPassword(record);
+                    }
+                    if (key === 'forceLogout') {
+                      handleForceLogoutAccount(record);
+                    }
+                  },
+                }}
+              >
+                <Button type="link" size="small">
+                  更多 <DownOutlined />
+                </Button>
+              </Dropdown>
+            ) : null}
+          </Space>
+        );
+      },
     },
   ];
 
   return (
     <>
       <Modal
-        width={920}
+        width={1000}
         title={`${config.label}账号 - ${partnerName || '-'}`}
         open={open}
         destroyOnHidden
@@ -438,6 +476,20 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
           )}
         />
       </Modal>
+
+      <PartnerAccountRoleModal
+        config={config}
+        partnerId={partnerId}
+        account={roleAccount}
+        open={roleModalOpen}
+        onOpenChange={(nextOpen) => {
+          if (nextOpen) {
+            setRoleModalOpen(true);
+            return;
+          }
+          closeAccountRoleModal();
+        }}
+      />
 
       <Modal
         width={640}

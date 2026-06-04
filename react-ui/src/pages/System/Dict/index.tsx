@@ -311,16 +311,17 @@ const DictTableList: React.FC = () => {
               <FormattedMessage id="pages.searchTable.export" defaultMessage="导出" />
             </Button>,
           ]}
-          request={(params) =>
-            getDictTypeList({ ...params } as API.System.DictTypeListParams).then((res) => {
+          request={(params) => {
+            const { current, pageSize, ...rest } = params;
+            return getDictTypeList({ ...rest, pageNum: current, pageSize } as API.System.DictTypeListParams).then((res) => {
               const result = {
                 data: res.rows,
                 total: res.total,
                 success: true,
               };
               return result;
-            })
-          }
+            });
+          }}
           columns={columns}
           rowSelection={{
             onChange: (_, selectedRows) => {

@@ -6,6 +6,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import com.ruoyi.common.constant.Constants;
 import com.ruoyi.common.constant.UserConstants;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.StringUtils;
@@ -119,6 +120,51 @@ public class PortalPermissionSupport
     public static List<PortalTreeSelect> buildMenuTreeSelect(List<PortalMenu> menus)
     {
         return buildMenuTree(menus).stream().map(PortalTreeSelect::new).collect(Collectors.toList());
+    }
+
+    public static boolean hasAllPermissions(Set<String> permissions, String[] requiredPermissions)
+    {
+        if (requiredPermissions == null || requiredPermissions.length == 0)
+        {
+            return true;
+        }
+        if (permissions == null || permissions.isEmpty())
+        {
+            return false;
+        }
+        for (String permission : requiredPermissions)
+        {
+            if (StringUtils.isNotEmpty(permission) && !hasPermission(permissions, permission))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public static boolean hasAnyPermission(Set<String> permissions, String[] anyPermissions)
+    {
+        if (anyPermissions == null || anyPermissions.length == 0)
+        {
+            return true;
+        }
+        if (permissions == null || permissions.isEmpty())
+        {
+            return false;
+        }
+        for (String permission : anyPermissions)
+        {
+            if (StringUtils.isNotEmpty(permission) && hasPermission(permissions, permission))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasPermission(Set<String> permissions, String permission)
+    {
+        return permissions.contains(Constants.ALL_PERMISSION) || permissions.contains(StringUtils.trim(permission));
     }
 
     private static void recursionFn(List<PortalMenu> list, PortalMenu t)

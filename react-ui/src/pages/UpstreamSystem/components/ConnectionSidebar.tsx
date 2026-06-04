@@ -5,10 +5,11 @@ import {
   PlusOutlined,
   SaveOutlined,
 } from '@ant-design/icons';
-import { Button, Empty, Input, Space, Spin, Tooltip, Typography } from 'antd';
+import { Button, Empty, Input, Spin, Tooltip, Typography } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { systemKindText } from '../constants';
 import { statusTag } from '../helpers';
+import styles from '../style.module.css';
 
 type ConnectionSidebarProps = {
   access: { hasPerms: (permission: string) => boolean };
@@ -96,81 +97,64 @@ export default function ConnectionSidebar({
     return (
       <div
         key={connection.connectionCode}
+        className={`${styles.connectionItem} ${
+          active ? styles.connectionItemActive : ''
+        }`}
         onClick={() => onSelect(connection)}
-        style={{
-          borderRadius: 6,
-          cursor: 'pointer',
-          marginBottom: 4,
-          padding: '8px 10px',
-          background: active ? '#e6f4ff' : 'transparent',
-          border: active ? '1px solid #91caff' : '1px solid transparent',
-        }}
       >
-        <Space
-          align="start"
-          style={{ width: '100%', justifyContent: 'space-between' }}
-        >
-          <Space direction="vertical" size={2} style={{ minWidth: 0 }}>
-            <Typography.Text strong ellipsis style={{ maxWidth: 170 }}>
+        <div className={styles.connectionItemMain}>
+          <div className={styles.connectionItemTitle}>
+            <Typography.Text strong ellipsis>
               {connection.masterWarehouseName}
             </Typography.Text>
-            <Typography.Text
-              type="secondary"
-              ellipsis
-              style={{ maxWidth: 170, fontSize: 12 }}
-            >
+          </div>
+          <div className={styles.connectionItemCode}>
+            <Typography.Text type="secondary" ellipsis>
               {connection.connectionCode}
             </Typography.Text>
-            {statusTag(connection.status)}
-          </Space>
-          {ordering ? (
-            <Space size={0}>
-              <Tooltip title="上移">
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<ArrowUpOutlined />}
-                  disabled={draftIndex <= 0}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    moveConnection(connection.connectionCode, -1);
-                  }}
-                />
-              </Tooltip>
-              <Tooltip title="下移">
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<ArrowDownOutlined />}
-                  disabled={
-                    draftIndex < 0 || draftIndex >= draftConnections.length - 1
-                  }
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    moveConnection(connection.connectionCode, 1);
-                  }}
-                />
-              </Tooltip>
-            </Space>
-          ) : null}
-        </Space>
+          </div>
+          {statusTag(connection.status)}
+        </div>
+        {ordering ? (
+          <div className={styles.connectionOrderActions}>
+            <Tooltip title="上移">
+              <Button
+                type="text"
+                size="small"
+                icon={<ArrowUpOutlined />}
+                disabled={draftIndex <= 0}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  moveConnection(connection.connectionCode, -1);
+                }}
+              />
+            </Tooltip>
+            <Tooltip title="下移">
+              <Button
+                type="text"
+                size="small"
+                icon={<ArrowDownOutlined />}
+                disabled={
+                  draftIndex < 0 || draftIndex >= draftConnections.length - 1
+                }
+                onClick={(event) => {
+                  event.stopPropagation();
+                  moveConnection(connection.connectionCode, 1);
+                }}
+              />
+            </Tooltip>
+          </div>
+        ) : null}
       </div>
     );
   };
 
   return (
-    <div
-      style={{
-        background: '#fff',
-        border: '1px solid #f0f0f0',
-        borderRadius: 6,
-        padding: 12,
-      }}
-    >
-      <Space direction="vertical" size={10} style={{ width: '100%' }}>
-        <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+    <div className={styles.sidebar}>
+      <div className={styles.sidebarHeader}>
+        <div className={styles.sidebarTitleLine}>
           <Typography.Text strong>主仓接入</Typography.Text>
-          <Space size={4}>
+          <div className={styles.sidebarActions}>
             <Tooltip title={ordering ? '保存排序' : '调整排序'}>
               <Button
                 icon={ordering ? <SaveOutlined /> : <MenuOutlined />}
@@ -200,8 +184,10 @@ export default function ConnectionSidebar({
                 onClick={onCreate}
               />
             </Tooltip>
-          </Space>
-        </Space>
+          </div>
+        </div>
+      </div>
+      <div className={styles.sidebarSearch}>
         {ordering ? (
           <Button
             block
@@ -221,6 +207,8 @@ export default function ConnectionSidebar({
             onChange={(event) => setKeyword(event.target.value)}
           />
         )}
+      </div>
+      <div className={styles.sidebarBody}>
         <Spin spinning={loading}>
           {groups.length === 0 ? (
             <Empty
@@ -228,22 +216,30 @@ export default function ConnectionSidebar({
               description="暂无主仓"
             />
           ) : (
-            <Space direction="vertical" size={8} style={{ width: '100%' }}>
+            <div>
               {groups.map(([groupName, rows]) => (
-                <div key={groupName}>
+                <div className={styles.connectionGroup} key={groupName}>
                   <Typography.Text
                     type="secondary"
-                    style={{ display: 'block', fontSize: 12, margin: '6px 0' }}
+                    className={styles.connectionGroupLabel}
                   >
                     {groupName}
                   </Typography.Text>
                   {rows.map(renderConnection)}
                 </div>
               ))}
-            </Space>
+            </div>
           )}
         </Spin>
-      </Space>
+      </div>
+      <div className={styles.sidebarFooter}>
+        <Typography.Text type="secondary">
+          共 {visibleConnections.length} 个主仓
+        </Typography.Text>
+        {ordering ? (
+          <Typography.Text type="secondary">排序中</Typography.Text>
+        ) : null}
+      </div>
     </div>
   );
 }

@@ -199,6 +199,13 @@
                 <version>${ruoyi.version}</version>
             </dependency>
 
+            <!-- 商品模块-->
+            <dependency>
+                <groupId>com.ruoyi</groupId>
+                <artifactId>product</artifactId>
+                <version>${ruoyi.version}</version>
+            </dependency>
+
             <!-- 通用工具-->
             <dependency>
                 <groupId>com.ruoyi</groupId>
@@ -217,6 +224,7 @@
         <module>buyer</module>
         <module>integration</module>
         <module>finance</module>
+        <module>product</module>
         <module>ruoyi-quartz</module>
         <module>ruoyi-generator</module>
         <module>ruoyi-common</module>

@@ -83,7 +83,9 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
     @Transactional
     public int insertConnection(UpstreamConnectionRequest request)
     {
-        String connectionCode = StringUtils.defaultIfBlank(request.getConnectionCode(), generateConnectionCode(request.getMasterWarehouseName()));
+        String systemKind = normalizeSystemKind(request.getSystemKind());
+        String connectionCode = StringUtils.defaultIfBlank(trimOptional(request.getConnectionCode()),
+            generateConnectionCode(request.getMasterWarehouseName()));
         if (upstreamSystemMapper.selectConnectionByCode(connectionCode) != null)
         {
             throw new ServiceException("主仓接入编号已存在");
@@ -94,9 +96,9 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
 
         UpstreamSystemConnection connection = new UpstreamSystemConnection();
         connection.setConnectionCode(connectionCode);
-        connection.setSystemKind(UpstreamSystemConstants.SYSTEM_KIND_LINGXING_WMS);
+        connection.setSystemKind(systemKind);
         connection.setMasterWarehouseName(trimRequired(request.getMasterWarehouseName(), "主仓名称不能为空"));
-        connection.setSettlementType(trimRequired(request.getSettlementType(), "结算类型不能为空").toUpperCase());
+        connection.setSettlementType(normalizeSettlementType(request.getSettlementType()));
         connection.setAppKeyMask(UpstreamMaskUtils.mask(appKey));
         connection.setAppSecretMask(UpstreamMaskUtils.mask(appSecret));
         connection.setAppKeyCiphertext(secretCipherSupport.encrypt(appKey));
@@ -121,7 +123,7 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
         UpstreamSystemConnection connection = new UpstreamSystemConnection();
         connection.setConnectionCode(connectionCode);
         connection.setMasterWarehouseName(trimRequired(request.getMasterWarehouseName(), "主仓名称不能为空"));
-        connection.setSettlementType(trimRequired(request.getSettlementType(), "结算类型不能为空").toUpperCase());
+        connection.setSettlementType(normalizeSettlementType(request.getSettlementType()));
         connection.setUpdateBy(SecurityUtils.getUsername());
         connection.setRemark(trimOptional(request.getRemark()));
         return upstreamSystemMapper.updateConnectionInfo(connection);
@@ -641,12 +643,43 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
 
     private String generateConnectionCode(String masterWarehouseName)
     {
-        String seed = StringUtils.defaultIfBlank(masterWarehouseName, "LINGXING").replaceAll("[^A-Za-z0-9]", "").toUpperCase();
-        if (seed.length() > 16)
+        String seed = StringUtils.defaultIfBlank(masterWarehouseName, "MASTER")
+            .trim()
+            .replaceAll("\\s+", "-")
+            .replaceAll("[^0-9A-Za-z\\u4e00-\\u9fa5-]", "");
+        if (seed.length() > 24)
         {
-            seed = seed.substring(0, 16);
+            seed = seed.substring(0, 24);
         }
-        return "LX-" + seed + "-" + System.currentTimeMillis();
+        String suffix = UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        return "LX-" + StringUtils.defaultIfBlank(seed, "MASTER") + "-" + suffix;
+    }
+
+    private String normalizeSystemKind(String value)
+    {
+        String trimmed = StringUtils.defaultIfBlank(value, UpstreamSystemConstants.SYSTEM_KIND_LINGXING_WMS).trim();
+        if (UpstreamSystemConstants.SYSTEM_KIND_LINGXING_WMS.equals(trimmed)
+            || UpstreamSystemConstants.SYSTEM_KIND_LINGXING_WMS_LEGACY.equals(trimmed))
+        {
+            return UpstreamSystemConstants.SYSTEM_KIND_LINGXING_WMS;
+        }
+        throw new ServiceException("暂不支持的上游系统类型：" + trimmed);
+    }
+
+    private String normalizeSettlementType(String value)
+    {
+        String trimmed = trimRequired(value, "结算类型不能为空");
+        if (UpstreamSystemConstants.SETTLEMENT_TYPE_UPSTREAM_PAYABLE.equals(trimmed)
+            || "UPSTREAM_PAYABLE".equals(trimmed))
+        {
+            return UpstreamSystemConstants.SETTLEMENT_TYPE_UPSTREAM_PAYABLE;
+        }
+        if (UpstreamSystemConstants.SETTLEMENT_TYPE_SELF_OPERATED_RECEIVABLE.equals(trimmed)
+            || "PLATFORM_ADVANCE".equals(trimmed))
+        {
+            return UpstreamSystemConstants.SETTLEMENT_TYPE_SELF_OPERATED_RECEIVABLE;
+        }
+        throw new ServiceException("暂不支持的结算类型：" + trimmed);
     }
 
     private String trimRequired(String value, String message)

@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import com.ruoyi.common.constant.Constants;
+import com.ruoyi.common.constant.HttpStatus;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.core.redis.RedisCache;
 import com.ruoyi.common.utils.ServletUtils;
@@ -136,7 +137,7 @@ public class PortalTokenSupport
         PortalLoginSession session = getSession(expectedTerminal);
         if (session == null)
         {
-            throw new ServiceException("登录状态已失效");
+            throw new ServiceException("登录状态已失效", HttpStatus.UNAUTHORIZED);
         }
         return session;
     }

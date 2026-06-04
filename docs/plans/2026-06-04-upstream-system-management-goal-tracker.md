@@ -19,6 +19,7 @@
 - 菜单位置：按当前若依工程位置放在“海外仓服务设置”下。
 - 页面文案：使用“同步清单”，不使用“候选”。
 - MySQL 搜索方案：第一版使用 `like + 普通索引`；本次真实 SKU 5400 条分页查询可用。
+- code 口径修正：上游系统类型和结算类型沿用旧项目 code，新增主仓时显式选择上游系统类型。
 
 ## 范围内工作
 
@@ -41,7 +42,8 @@
 | 15 | React 页面 | 已完成 | 已拆分为页面、组件、service、types、constants、helpers |
 | 16 | 复用台账 | 已完成 | 已更新 `docs/architecture/reuse-ledger.md` |
 | 17 | 构建与测试 | 已完成 | 后端 Maven、前端 tsc/build、新增目录 lint、真实同步、权限和浏览器联调已验证 |
-| 18 | 阶段总结 | 进行中 | 待生成本次首版落地总结 Markdown |
+| 18 | code 口径修正 | 已完成 | `systemKind` 改为新增时可选；结算类型回到 `upstream-payable`、`self-operated-receivable`；编号生成回到 `LX-{主仓名前缀}-{8位随机后缀}` |
+| 19 | 阶段总结 | 进行中 | 待生成本次首版落地总结 Markdown |
 
 ## 范围外工作
 
@@ -62,6 +64,10 @@
 | 前端类型检查 | `npm run tsc` | 已通过 |
 | 新增目录 lint | `npx biome lint src/pages/UpstreamSystem src/services/integration src/types/integration` | 已通过 |
 | 前端构建 | `npm run build` | 已通过 |
+| code 口径修正后端编译 | `mvn -pl integration -am -DskipTests package` | 已通过 |
+| code 口径修正前端检查 | `npx biome check --write src/pages/UpstreamSystem src/types/integration/upstream-system.d.ts`、`npm run build` | 已通过 |
+| code 口径修正类型检查 | `npm run tsc` | 曾通过；补充旧值归一化后再次运行时被无关 `PartnerAuditModal.tsx` 类型错误阻断 |
+| code 口径浏览器验证 | 新增/编辑主仓弹窗显示“上游系统类型”，默认/归一为“领星WMS”；结算类型默认/归一为“上游仓（应付）” | 已通过 |
 | 全量前端 lint | `npm run biome:lint` | 未通过，失败来自历史文件 `src/app.tsx`、`src/components/IconSelector/*` 等，不是本次新增目录 |
 | 浏览器验证 | 登录管理端并打开“海外仓服务设置 / 上游系统管理” | 已通过 |
 | 真实授权和同步 | 使用真实 `LX-CA012` 调用授权和同步 | 已通过，仓库 1、渠道 7、SKU 5400 |
@@ -71,5 +77,7 @@
 
 ## 残留事项
 
-- `UpstreamSystemServiceImpl.java` 当前 565 行，超过 500 行阈值；首版保留在一个 Service 中是为了集中事务、同步状态、配对约束和审计写入。后续如果加入订单、库存、费用或更多外部系统，应拆出同步任务服务、配对服务和请求日志查询服务。
+- `UpstreamSystemServiceImpl.java` 当前 699 行，超过 500 行阈值；首版保留在一个 Service 中是为了集中事务、同步状态、配对约束和审计写入。后续如果加入订单、库存、费用或更多外部系统，应拆出同步任务服务、配对服务和请求日志查询服务。
 - 全量 `biome:lint` 仍有历史问题，未在本次任务中清理，避免改动无关文件。
+- `RuoYi-Vue/sql/20260604_upstream_system_code_correction.sql` 已生成但未直接执行远端数据库；执行前需按数据源确认规则单独记录。
+- 最新一次 `npm run tsc` 失败来自无关 `src/components/PartnerManagement/PartnerAuditModal.tsx` 与 partner service 类型不匹配；本次未处理该模块。

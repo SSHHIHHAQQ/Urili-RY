@@ -35,6 +35,7 @@ declare namespace API.Integration {
 
   export interface ConnectionSaveRequest {
     connectionCode?: string;
+    systemKind: string;
     masterWarehouseName: string;
     settlementType: string;
     appKey: string;

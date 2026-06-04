@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.PortalOperLogMapper">
+
+    <insert id="insertSellerOperLog" parameterType="PortalOperLog">
+        insert into seller_oper_log(
+            seller_id, seller_account_id, title, business_type, method,
+            request_method, oper_name, oper_url, oper_ip, oper_location,
+            oper_param, json_result, status, error_msg, cost_time, oper_time
+        ) values (
+            #{subjectId}, #{accountId}, #{title}, #{businessType}, #{method},
+            #{requestMethod}, #{operName}, #{operUrl}, #{operIp}, #{operLocation},
+            #{operParam}, #{jsonResult}, #{status}, #{errorMsg}, #{costTime}, sysdate()
+        )
+    </insert>
+
+    <insert id="insertBuyerOperLog" parameterType="PortalOperLog">
+        insert into buyer_oper_log(
+            buyer_id, buyer_account_id, title, business_type, method,
+            request_method, oper_name, oper_url, oper_ip, oper_location,
+            oper_param, json_result, status, error_msg, cost_time, oper_time
+        ) values (
+            #{subjectId}, #{accountId}, #{title}, #{businessType}, #{method},
+            #{requestMethod}, #{operName}, #{operUrl}, #{operIp}, #{operLocation},
+            #{operParam}, #{jsonResult}, #{status}, #{errorMsg}, #{costTime}, sysdate()
+        )
+    </insert>
+</mapper>

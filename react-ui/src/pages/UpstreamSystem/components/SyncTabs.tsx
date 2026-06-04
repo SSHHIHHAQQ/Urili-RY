@@ -15,6 +15,7 @@ import {
   getWarehouseSyncList,
 } from '@/services/integration/upstreamSystem';
 import { resultOk, statusTag } from '../helpers';
+import styles from '../style.module.css';
 import type { LogisticsRow, PairingModalState, WarehouseRow } from '../types';
 import SkuSyncPanel from './SkuSyncPanel';
 
@@ -210,83 +211,95 @@ export default function SyncTabs({
   ];
 
   return (
-    <Space direction="vertical" style={{ width: '100%' }} size={12}>
+    <div className={`${styles.syncTabs} upstream-sync-tabs`}>
       <Tabs
         items={[
           {
             key: 'warehouse',
             label: '领星仓库同步清单',
             children: (
-              <ProTable<WarehouseRow>
-                actionRef={warehouseActionRef}
-                rowKey="warehouseCode"
-                columns={warehouseColumns}
-                search={false}
-                request={async () => {
-                  const [syncResp, pairingResp] = await Promise.all([
-                    getWarehouseSyncList(selectedCode),
-                    getWarehousePairings(selectedCode),
-                  ]);
-                  const pairingMap = new Map(
-                    (pairingResp.data || []).map((item) => [
-                      item.upstreamWarehouseCode,
-                      item,
-                    ]),
-                  );
-                  const rows = (syncResp.data || []).map((item) => ({
-                    ...item,
-                    ...(pairingMap.get(item.warehouseCode) || {}),
-                  }));
-                  return { data: rows, success: syncResp.code === 200 };
-                }}
-                pagination={{ pageSize: 10 }}
-              />
+              <div className={styles.tablePane}>
+                <ProTable<WarehouseRow>
+                  actionRef={warehouseActionRef}
+                  className={`${styles.fillTable} upstream-fill-table`}
+                  rowKey="warehouseCode"
+                  columns={warehouseColumns}
+                  search={false}
+                  options={false}
+                  toolBarRender={false}
+                  scroll={{ x: 1100 }}
+                  request={async () => {
+                    const [syncResp, pairingResp] = await Promise.all([
+                      getWarehouseSyncList(selectedCode),
+                      getWarehousePairings(selectedCode),
+                    ]);
+                    const pairingMap = new Map(
+                      (pairingResp.data || []).map((item) => [
+                        item.upstreamWarehouseCode,
+                        item,
+                      ]),
+                    );
+                    const rows = (syncResp.data || []).map((item) => ({
+                      ...item,
+                      ...(pairingMap.get(item.warehouseCode) || {}),
+                    }));
+                    return { data: rows, success: syncResp.code === 200 };
+                  }}
+                  pagination={{ pageSize: 10 }}
+                />
+              </div>
             ),
           },
           {
             key: 'logistics',
             label: '领星物流渠道同步清单',
             children: (
-              <ProTable<LogisticsRow>
-                actionRef={logisticsActionRef}
-                rowKey="channelCode"
-                columns={logisticsColumns}
-                search={false}
-                request={async () => {
-                  const [syncResp, pairingResp] = await Promise.all([
-                    getLogisticsChannelSyncList(selectedCode),
-                    getLogisticsChannelPairings(selectedCode),
-                  ]);
-                  const groups = new Map<string, LogisticsRow>();
-                  (syncResp.data || []).forEach((item) => {
-                    const current = groups.get(item.channelCode);
-                    if (current) {
-                      current.warehouseCodes = Array.from(
-                        new Set(
-                          `${current.warehouseCodes},${item.warehouseCode}`.split(
-                            ',',
+              <div className={styles.tablePane}>
+                <ProTable<LogisticsRow>
+                  actionRef={logisticsActionRef}
+                  className={`${styles.fillTable} upstream-fill-table`}
+                  rowKey="channelCode"
+                  columns={logisticsColumns}
+                  search={false}
+                  options={false}
+                  toolBarRender={false}
+                  scroll={{ x: 1000 }}
+                  request={async () => {
+                    const [syncResp, pairingResp] = await Promise.all([
+                      getLogisticsChannelSyncList(selectedCode),
+                      getLogisticsChannelPairings(selectedCode),
+                    ]);
+                    const groups = new Map<string, LogisticsRow>();
+                    (syncResp.data || []).forEach((item) => {
+                      const current = groups.get(item.channelCode);
+                      if (current) {
+                        current.warehouseCodes = Array.from(
+                          new Set(
+                            `${current.warehouseCodes},${item.warehouseCode}`.split(
+                              ',',
+                            ),
                           ),
-                        ),
-                      ).join(',');
-                    } else {
-                      groups.set(item.channelCode, {
-                        ...item,
-                        warehouseCodes: item.warehouseCode,
-                        pairings: [],
-                      });
-                    }
-                  });
-                  const rows = Array.from(groups.values()).map((row) => ({
-                    ...row,
-                    pairings: (pairingResp.data || []).filter(
-                      (pairing) =>
-                        pairing.upstreamChannelCode === row.channelCode,
-                    ),
-                  }));
-                  return { data: rows, success: syncResp.code === 200 };
-                }}
-                pagination={{ pageSize: 10 }}
-              />
+                        ).join(',');
+                      } else {
+                        groups.set(item.channelCode, {
+                          ...item,
+                          warehouseCodes: item.warehouseCode,
+                          pairings: [],
+                        });
+                      }
+                    });
+                    const rows = Array.from(groups.values()).map((row) => ({
+                      ...row,
+                      pairings: (pairingResp.data || []).filter(
+                        (pairing) =>
+                          pairing.upstreamChannelCode === row.channelCode,
+                      ),
+                    }));
+                    return { data: rows, success: syncResp.code === 200 };
+                  }}
+                  pagination={{ pageSize: 10 }}
+                />
+              </div>
             ),
           },
           {
@@ -308,6 +321,7 @@ export default function SyncTabs({
             children: (
               <ProTable<API.Integration.RequestLog>
                 actionRef={logActionRef}
+                className={`${styles.fillTable} upstream-fill-table`}
                 rowKey="requestLogId"
                 columns={logColumns}
                 request={async (params) => {
@@ -320,11 +334,14 @@ export default function SyncTabs({
                 }}
                 pagination={{ pageSize: 10 }}
                 search={false}
+                options={false}
+                toolBarRender={false}
+                scroll={{ x: 1100 }}
               />
             ),
           },
         ]}
       />
-    </Space>
+    </div>
   );
 }

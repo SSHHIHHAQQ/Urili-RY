@@ -22,6 +22,7 @@ import com.ruoyi.system.domain.PortalMenu;
 import com.ruoyi.system.domain.PortalPermissionInfo;
 import com.ruoyi.system.domain.PortalRole;
 import com.ruoyi.system.domain.PortalTreeSelect;
+import com.ruoyi.system.service.IPortalPermissionCheckService;
 import com.ruoyi.system.service.support.PartnerSupport;
 import com.ruoyi.system.service.support.PortalPermissionSupport;
 
@@ -29,7 +30,7 @@ import com.ruoyi.system.service.support.PortalPermissionSupport;
  * Seller terminal permission service.
  */
 @Service
-public class SellerPortalPermissionServiceImpl implements ISellerPortalPermissionService
+public class SellerPortalPermissionServiceImpl implements ISellerPortalPermissionService, IPortalPermissionCheckService
 {
     @Autowired
     private SellerPortalPermissionMapper permissionMapper;
@@ -263,6 +264,18 @@ public class SellerPortalPermissionServiceImpl implements ISellerPortalPermissio
     {
         assertActiveSellerSession(session);
         return PortalPermissionSupport.buildMenuTree(permissionMapper.selectSellerAccountMenuList(session.getSubjectId(), session.getAccountId()));
+    }
+
+    @Override
+    public String terminal()
+    {
+        return "seller";
+    }
+
+    @Override
+    public Set<String> selectPermissions(PortalLoginSession session)
+    {
+        return selectPortalPermissionInfo(session).getPermissions();
     }
 
     private void insertRoleMenus(PortalRole role)

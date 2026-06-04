@@ -5,7 +5,13 @@ package com.ruoyi.integration.support;
  */
 public final class UpstreamSystemConstants
 {
-    public static final String SYSTEM_KIND_LINGXING_WMS = "LINGXING_WMS";
+    public static final String SYSTEM_KIND_LINGXING_WMS = "lingxing-wms";
+
+    public static final String SYSTEM_KIND_LINGXING_WMS_LEGACY = "LINGXING_WMS";
+
+    public static final String SETTLEMENT_TYPE_UPSTREAM_PAYABLE = "upstream-payable";
+
+    public static final String SETTLEMENT_TYPE_SELF_OPERATED_RECEIVABLE = "self-operated-receivable";
 
     public static final String STATUS_ENABLED = "ENABLED";
 

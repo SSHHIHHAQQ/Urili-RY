@@ -15,12 +15,15 @@ import com.ruoyi.seller.mapper.SellerMapper;
 import com.ruoyi.seller.mapper.SellerPortalDeptMapper;
 import com.ruoyi.seller.service.ISellerService;
 import com.ruoyi.system.domain.PortalDept;
+import com.ruoyi.system.domain.PortalDirectLoginTicket;
 import com.ruoyi.system.domain.PortalDirectLoginResult;
 import com.ruoyi.system.domain.PortalDirectLoginToken;
 import com.ruoyi.system.domain.PortalLoginIssue;
 import com.ruoyi.system.domain.PortalLoginLog;
 import com.ruoyi.system.domain.PortalLoginResult;
 import com.ruoyi.system.domain.PortalLoginSession;
+import com.ruoyi.system.domain.PortalOperLog;
+import com.ruoyi.system.mapper.PortalDirectLoginTicketMapper;
 import com.ruoyi.system.service.support.PortalDirectLoginSupport;
 import com.ruoyi.system.service.support.PortalTokenSupport;
 import com.ruoyi.system.service.support.PartnerSupport;
@@ -38,6 +41,9 @@ public class SellerServiceImpl implements ISellerService
 
     @Autowired
     private SellerPortalDeptMapper deptMapper;
+
+    @Autowired
+    private PortalDirectLoginTicketMapper ticketMapper;
 
     @Autowired
     private PortalDirectLoginSupport directLoginSupport;
@@ -226,7 +232,7 @@ public class SellerServiceImpl implements ISellerService
     }
 
     @Override
-    public PortalDirectLoginResult createSellerDirectLogin(Long sellerId)
+    public PortalDirectLoginResult createSellerDirectLogin(Long sellerId, String reason)
     {
         Seller seller = selectSellerById(sellerId);
         SellerAccount owner = sellerMapper.selectOwnerSellerAccountBySellerId(sellerId);
@@ -234,9 +240,29 @@ public class SellerServiceImpl implements ISellerService
         {
             throw new ServiceException("卖家已停用，不能免密登录");
         }
-        return directLoginSupport.createToken("seller", sellerId, seller.getSellerNo(), owner,
+        return directLoginSupport.createToken("seller", sellerId, seller.getSellerNo(), owner, reason,
             PortalDirectLoginSupport.SELLER_WEB_URL_CONFIG_KEY,
             "http://127.0.0.1:8001/seller/direct-login");
+    }
+
+    @Override
+    public List<PortalLoginLog> selectSellerLoginLogList(PortalLoginLog log)
+    {
+        return sellerMapper.selectSellerLoginLogList(log);
+    }
+
+    @Override
+    public List<PortalOperLog> selectSellerOperLogList(PortalOperLog log)
+    {
+        return sellerMapper.selectSellerOperLogList(log);
+    }
+
+    @Override
+    public List<PortalDirectLoginTicket> selectSellerDirectLoginTicketList(PortalDirectLoginTicket ticket)
+    {
+        PortalDirectLoginTicket query = ticket == null ? new PortalDirectLoginTicket() : ticket;
+        query.setTerminal("seller");
+        return ticketMapper.selectPortalDirectLoginTicketList(query);
     }
 
     @Override

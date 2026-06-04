@@ -10,6 +10,9 @@ public class UpstreamConnectionRequest
 {
     private String connectionCode;
 
+    @Size(max = 32, message = "上游系统类型长度不能超过32个字符")
+    private String systemKind;
+
     @NotBlank(message = "主仓名称不能为空")
     @Size(max = 200, message = "主仓名称长度不能超过200个字符")
     private String masterWarehouseName;
@@ -28,6 +31,8 @@ public class UpstreamConnectionRequest
 
     public String getConnectionCode() { return connectionCode; }
     public void setConnectionCode(String connectionCode) { this.connectionCode = connectionCode; }
+    public String getSystemKind() { return systemKind; }
+    public void setSystemKind(String systemKind) { this.systemKind = systemKind; }
     public String getMasterWarehouseName() { return masterWarehouseName; }
     public void setMasterWarehouseName(String masterWarehouseName) { this.masterWarehouseName = masterWarehouseName; }
     public String getSettlementType() { return settlementType; }

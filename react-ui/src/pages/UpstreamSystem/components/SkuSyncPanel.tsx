@@ -1,13 +1,10 @@
-import {
-  SearchOutlined,
-  SyncOutlined,
-} from '@ant-design/icons';
+import { SearchOutlined, SyncOutlined } from '@ant-design/icons';
 import {
   type ActionType,
   type ProColumns,
   ProTable,
 } from '@ant-design/pro-components';
-import { Button, Input, Popconfirm, Select, Space, Typography } from 'antd';
+import { Button, Input, Popconfirm, Select, Typography } from 'antd';
 import {
   type Dispatch,
   type MutableRefObject,
@@ -28,6 +25,7 @@ import {
   skuSyncItemStatusOptions,
 } from '../constants';
 import { resultOk, statusTag } from '../helpers';
+import styles from '../style.module.css';
 import type { PairingModalState } from '../types';
 
 type SkuSyncPanelProps = {
@@ -169,24 +167,23 @@ export default function SkuSyncPanel({
   };
 
   return (
-    <Space direction="vertical" size={12} style={{ width: '100%' }}>
-      <Space wrap style={{ width: '100%', justifyContent: 'space-between' }}>
-        <Space wrap>
+    <div className={styles.skuPanel}>
+      <div className={styles.skuToolbar}>
+        <div className={styles.skuState}>
+          <Typography.Text type="secondary">同步状态</Typography.Text>
+          {statusTag(syncState?.status || 'NEVER')}
           <Typography.Text>
-            同步状态：{statusTag(syncState?.status || 'NEVER')}
+            上次成功 {syncState?.lastSuccessTime || '-'}
           </Typography.Text>
           <Typography.Text type="secondary">
-            上次成功：{syncState?.lastSuccessTime || '-'}
-          </Typography.Text>
-          <Typography.Text type="secondary">
-            下次同步：{syncState?.nextSyncTime || '-'}
+            下次同步 {syncState?.nextSyncTime || '-'}
           </Typography.Text>
           {syncState?.lastErrorMessage ? (
             <Typography.Text type="danger">
               错误：{syncState.lastErrorMessage}
             </Typography.Text>
           ) : null}
-        </Space>
+        </div>
         <Button
           type="primary"
           icon={<SyncOutlined />}
@@ -196,8 +193,8 @@ export default function SkuSyncPanel({
         >
           同步SKU
         </Button>
-      </Space>
-      <Space wrap>
+      </div>
+      <div className={styles.skuFilters}>
         <Select
           style={{ width: 160 }}
           options={skuSearchFieldOptions}
@@ -230,9 +227,10 @@ export default function SkuSyncPanel({
           value={syncStatus}
           onChange={setSyncStatus}
         />
-      </Space>
+      </div>
       <ProTable<API.Integration.SkuSyncItem>
         actionRef={actionRef}
+        className={`${styles.fillTable} upstream-fill-table`}
         rowKey="masterSku"
         columns={skuColumns}
         params={{
@@ -259,8 +257,10 @@ export default function SkuSyncPanel({
         }}
         pagination={{ pageSize: 10 }}
         search={false}
+        options={false}
+        scroll={{ x: 1400 }}
         toolBarRender={false}
       />
-    </Space>
+    </div>
   );
 }

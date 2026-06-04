@@ -76,6 +76,28 @@
 
 ## 后端内部复用
 
+### product 商品配置模块
+
+- 位置：
+  - `RuoYi-Vue/product`
+  - `RuoYi-Vue/sql/20260604_product_category_attribute_seed.sql`
+  - `react-ui/src/pages/Product/Category/index.tsx`
+  - `react-ui/src/pages/Product/Attribute/index.tsx`
+  - `react-ui/src/services/product/product.ts`
+  - `react-ui/src/types/product/product.d.ts`
+- 当前用途：
+  - 管理端维护多级商品分类树。
+  - 管理端维护平台级商品属性库和属性自定义选项。
+  - 管理端维护类目属性配置，并预览按祖先链继承合并后的发布 schema。
+- 复用规则：
+  - `product` 是商品共享基础域，不是 admin / seller / buyer 之外的第四个端。
+  - 管理端配置入口使用 `/product/admin/**`，权限走若依 `sys_menu` / `sys_role`。
+  - 后续卖家端商品发布入口必须放在 `seller` 端模块，只读消费 product schema，不维护平台配置。
+  - 后续买家端分类浏览、筛选项和商品详情入口必须放在 `buyer` 端模块，只读消费 product 分类和筛选 schema。
+  - 商品属性类型、选项来源、类目属性规则模式等 code 由 SQL 初始化字典或 `pages/Product/constants.ts` 集中维护，不要在页面里复制状态映射。
+  - 类目属性规则统一通过 `IProductConfigService.previewCategorySchema(categoryId)` 计算，不要在前端或其他模块手写继承合并逻辑。
+  - 本阶段明确不包含 SKU、多 SKU、库存、价格、商品发布、商品审核和外部平台属性同步。
+
 ### PartnerSupport
 
 - 位置：`RuoYi-Vue/ruoyi-system/src/main/java/com/ruoyi/system/service/support/PartnerSupport.java`
@@ -132,7 +154,7 @@
   - 免密代入必须经过 `PortalDirectLoginSupport` 和该 ticket mapper，不要在 seller/buyer service 或前端里临时生成直登 token。
   - 卖家端和买家端共用这一张平台审计票据表，不分别复制 `seller_direct_login_ticket` / `buyer_direct_login_ticket`。
   - 后续管理端审计列表应读取 `portal_direct_login_ticket`，而不是读取 Redis payload。
-  - 后续如增加“代入原因”，应写入 `reason` 字段，不要另开临时备注字段。
+  - 管理端生成免密代入票据时必须填写“代入原因”，并通过 `PortalDirectLoginSupport` 写入 `reason` 字段，不要另开临时备注字段或绕过公共支撑。
 
 ### PortalTokenSupport
 
@@ -143,11 +165,13 @@
   - token claim 包含 `terminal`、端登录 key 和用户名；登录返回包含 `terminal`、`subjectId`、`subjectNo`、`accountId`。
   - 构建 `PortalLoginSession` 和 `PortalLoginLog`，由 seller/buyer 模块分别写入自己的会话表和登录日志表。
   - 解析卖家端/买家端请求头中的端 token，并按期望端类型读取 Redis 会话。
+  - 批量删除端内 Redis token，供管理端强制踢出卖家/买家主体或账号在线会话。
 - 复用规则：
   - 只用于卖家端、买家端这类端内登录身份建立。
   - 不要把它用于管理端若依登录；管理端继续使用若依 `TokenService`。
   - 新增 seller/buyer 端内接口时，应从端 token 解析出的身份推导数据范围，不要相信前端传入的 `sellerId` / `buyerId`。
   - 它只提供端内会话身份；端内角色、权限和菜单读取由 seller/buyer 模块自己的 PermissionService 完成，不在 token 工具里直接查业务权限表。
+  - 强制踢出必须复用 `PortalTokenSupport.deleteLoginTokens` 删除 Redis token，不要在 seller/buyer service 中拼接 `portal_login_tokens:` key。
 
 ### PortalPermissionSupport
 
@@ -160,6 +184,29 @@
   - 后续新增卖家端/买家端菜单、角色、端内权限读取时优先复用该支撑类。
   - 该类只放两端共用的无状态校验和树处理，不直接读写 `seller_*` / `buyer_*` 表。
   - 端内权限数据访问仍必须留在 seller/buyer 模块自己的 Mapper 和 Service 中。
+
+### PortalPreAuthorize / PortalPermissionChecker / PortalSessionContext
+
+- 位置：
+  - `RuoYi-Vue/ruoyi-common/src/main/java/com/ruoyi/common/annotation/PortalPreAuthorize.java`
+  - `RuoYi-Vue/ruoyi-framework/src/main/java/com/ruoyi/framework/aspectj/PortalPreAuthorizeAspect.java`
+  - `RuoYi-Vue/ruoyi-system/src/main/java/com/ruoyi/system/service/support/PortalPermissionChecker.java`
+  - `RuoYi-Vue/ruoyi-system/src/main/java/com/ruoyi/system/service/support/PortalSessionContext.java`
+  - `RuoYi-Vue/ruoyi-system/src/main/java/com/ruoyi/system/service/IPortalPermissionCheckService.java`
+- 当前用途：
+  - 为卖家端、买家端接口提供统一的端内权限注解。
+  - 统一解析端 token、校验 terminal、读取端内权限集合。
+  - 支持全部权限要求、任一权限要求和若依超级权限 `*:*:*`。
+  - 让 `SellerPortalPermissionServiceImpl` / `BuyerPortalPermissionServiceImpl` 以同一接口接入权限校验。
+  - `PortalPreAuthorizeAspect` 会把校验通过的 `PortalLoginSession` 写入 `PortalSessionContext`，供当前请求内 Controller、Service 和日志切面复用。
+  - 当前已覆盖 `/seller/getInfo`、`/seller/getRouters`、`/buyer/getInfo`、`/buyer/getRouters`。
+- 复用规则：
+  - 后续卖家端真实业务接口优先使用 `@PortalPreAuthorize(terminal = "seller", ...)`。
+  - 后续买家端真实业务接口优先使用 `@PortalPreAuthorize(terminal = "buyer", ...)`。
+  - 不要在 Controller 或 Service 里重复手写 token 解析、权限集合读取、`*:*:*` 判断和端类型判断。
+  - 端内接口需要当前主体或账号时，优先从 `PortalSessionContext.requireSession("seller" / "buyer")` 获取 `subjectId`、`accountId` 和 `terminal`。
+  - 管理端接口继续使用若依 `@PreAuthorize("@ss.hasPermi(...)")`，不要把管理端后台权限迁移到 `@PortalPreAuthorize`。
+  - 接口涉及端内业务数据时，权限注解只负责“能不能访问该操作”；数据范围仍必须从端 token 推导 `sellerId` / `buyerId`，不能相信前端传入主体 ID。
 
 ### PortalDeptSupport
 
@@ -198,7 +245,7 @@
   - 管理端 `sys_menu` 只保存这些后台接口的按钮权限，不保存卖家端/买家端真实菜单。
   - 卖家端角色不得写入 `sys_role`，买家端角色不得写入 `sys_role`。
   - 卖家端菜单不得写入 `sys_menu`，买家端菜单不得写入 `sys_menu`。
-  - 后续前端页面接入时，应调用这些接口，不要复用系统菜单 `/system/menu` 或系统角色 `/system/role` 页面直接改端内权限。
+  - 管理端账号弹窗已接入账号角色绑定接口；后续菜单、角色独立配置页面接入时，应继续调用这些接口，不要复用系统菜单 `/system/menu` 或系统角色 `/system/role` 页面直接改端内权限。
   - 端内 `getInfo` / `getRouters` 必须从端 token 推导 `sellerId` / `buyerId` 和 `accountId`，不能相信前端传入主体 ID。
 
 ### 卖家/买家端部门管理接口
@@ -250,6 +297,19 @@
 
 ## 前端表格与表单
 
+### 管理端同构 UI 模板化推进
+
+- 当前用途：
+  - 管理端卖家管理和买家管理。
+  - 后续同构的卖家/买家控制弹窗、只读审计列表、配置页和相邻管理入口。
+- 复用规则：
+  - 已确认过的同构模式不再每次重新设计。
+  - 先把卖家侧做成标准样板并完成验证，再复制成买家侧。
+  - 买家侧只替换端类型、页面文案、路由、权限标识、字段配置和 service。
+  - 通用表格、表单、弹窗、审计 tab 优先抽到 `react-ui/src/components/PartnerManagement/`。
+  - seller/buyer 差异必须进入 `PartnerModuleConfig` 或独立 service，不要在公共组件里写大量 `if seller else buyer` 分支。
+  - 模板化不等于跳过验证；复制后仍至少运行 TypeScript 检查，并做卖家、买家两个入口的冒烟验证。
+
 ### ProTable 筛选区展开状态
 
 - 位置：`react-ui/src/utils/proTableSearch.ts`
@@ -290,6 +350,94 @@
   - 卖家入口必须在 `react-ui/src/pages/Seller/`。
   - 买家入口必须在 `react-ui/src/pages/Buyer/`。
   - 不要恢复 `CustomerManagementPage(kind)` 作为主入口。
+
+### PartnerAccountModal / PartnerAccountRoleModal
+
+- 位置：
+  - `react-ui/src/components/PartnerManagement/PartnerAccountModal.tsx`
+  - `react-ui/src/components/PartnerManagement/PartnerAccountRoleModal.tsx`
+  - `react-ui/src/services/seller/seller.ts`
+  - `react-ui/src/services/buyer/buyer.ts`
+- 当前用途：
+  - 管理端卖家账号列表、新增、编辑、部门树绑定、重置默认密码、强制踢出。
+  - 管理端买家账号列表、新增、编辑、部门树绑定、重置默认密码、强制踢出。
+  - 管理端卖家/买家端账号角色绑定。
+- 复用规则：
+  - 后续同类主体账号管理 UI 先复用 `PartnerAccountModal`，通过 `PartnerModuleConfig.services` 注入接口，不要在页面内拼接 seller/buyer 路径。
+  - 账号角色绑定先复用 `PartnerAccountRoleModal`，只替换 `getAccountRoles` / `assignAccountRoles` service。
+  - 已确认的模式可模板化复制：卖家先做一套，买家只替换字段配置和 service。
+  - 账号行直接展示最多两个高频操作；更多低频操作继续收进 Ant Design `Dropdown`。
+  - `PartnerAccountModal.tsx` 已接近 500 行，后续继续扩账号管理时优先拆账号表格、账号表单或操作区，不要继续把独立配置页塞进该文件。
+
+### PartnerDeptModal
+
+- 位置：
+  - `react-ui/src/components/PartnerManagement/PartnerDeptModal.tsx`
+  - `react-ui/src/services/seller/seller.ts`
+  - `react-ui/src/services/buyer/buyer.ts`
+- 当前用途：
+  - 管理端维护卖家端部门 `seller_dept`。
+  - 管理端维护买家端部门 `buyer_dept`。
+  - 支持端内部门列表、新增、编辑、删除和上级部门选择。
+- 复用规则：
+  - 后续端内部门维护继续复用 `PartnerDeptModal`，不要在卖家页、买家页分别复制部门表格和表单。
+  - 卖家/买家只通过 `PartnerModuleConfig.services` 替换 `listDepts`、`getDeptTree`、`addDept`、`updateDept`、`removeDept`。
+  - 主体行“部门”入口放在“更多”菜单内，不直接扩宽主体列表操作列。
+  - 不允许使用系统部门 `/system/dept` 或 `sys_dept` 维护卖家端、买家端内部部门。
+
+### PartnerMenuModal
+
+- 位置：
+  - `react-ui/src/components/PartnerManagement/PartnerMenuModal.tsx`
+  - `react-ui/src/services/seller/seller.ts`
+  - `react-ui/src/services/buyer/buyer.ts`
+- 当前用途：
+  - 管理端维护卖家端全局菜单 `seller_menu`。
+  - 管理端维护买家端全局菜单 `buyer_menu`。
+  - 支持端内菜单列表、新增、编辑、删除和上级菜单选择。
+  - 维护菜单名称、菜单类型、路由、组件、权限标识、显示状态、菜单状态和缓存/外链字段。
+- 复用规则：
+  - 后续端内菜单维护继续复用 `PartnerMenuModal`，不要复制系统菜单 `/system/menu` 页面。
+  - 卖家/买家只通过 `PartnerModuleConfig.services` 替换 `listMenus`、`getMenu`、`addMenu`、`updateMenu`、`removeMenu` 和 `getMenuTree`。
+  - 管理端工具栏“菜单配置”入口按 `seller:admin:menu:list` / `buyer:admin:menu:list` 权限展示。
+  - 端内菜单不允许写入 `sys_menu`，也不允许调用 `/system/menu` 接口维护卖家端、买家端菜单。
+  - 当前菜单配置是端维度全局配置，不挂在单个卖家/买家主体下；角色弹窗再按主体绑定角色菜单权限。
+
+### PartnerRoleModal
+
+- 位置：
+  - `react-ui/src/components/PartnerManagement/PartnerRoleModal.tsx`
+  - `react-ui/src/services/seller/seller.ts`
+  - `react-ui/src/services/buyer/buyer.ts`
+- 当前用途：
+  - 管理端维护某个卖家主体下的端内角色 `seller_role`。
+  - 管理端维护某个买家主体下的端内角色 `buyer_role`。
+  - 维护角色名称、权限字符、显示顺序、状态、备注和菜单权限树。
+  - 角色菜单关系分别写入 `seller_role_menu` / `buyer_role_menu`。
+- 复用规则：
+  - 后续端内角色维护继续复用 `PartnerRoleModal`，不要在卖家页、买家页分别复制角色表格和表单。
+  - 卖家/买家只通过 `PartnerModuleConfig.services` 替换 `listRoles`、`getRole`、`addRole`、`updateRole`、`changeRoleStatus`、`removeRoles`、`getMenuTree` 和 `getRoleMenuTree`。
+  - 主体行“角色”入口放在“更多”菜单内，按 `seller:admin:role:list` / `buyer:admin:role:list` 权限展示。
+  - 端内角色不允许写入 `sys_role`，端内菜单权限树不允许读取 `/system/menu`；必须分别读取 `seller_menu` / `buyer_menu`。
+  - 当前角色维护是主体维度的角色弹窗；端维度菜单配置复用 `PartnerMenuModal`。
+
+### PartnerAuditModal
+
+- 位置：
+  - `react-ui/src/components/PartnerManagement/PartnerAuditModal.tsx`
+  - `react-ui/src/services/seller/seller.ts`
+  - `react-ui/src/services/buyer/buyer.ts`
+- 当前用途：
+  - 管理端查看卖家端审计数据。
+  - 管理端查看买家端审计数据。
+  - 统一承载登录日志、操作日志、免密票据三个只读 tab。
+  - 支持工具栏全局审计入口，也支持主体行内“更多 -> 审计”按当前主体过滤。
+- 复用规则：
+  - 后续同类主体审计 UI 继续复用 `PartnerAuditModal`，只通过 `PartnerModuleConfig.services` 替换 `listLoginLogs`、`listOperLogs`、`listDirectLoginTickets`。
+  - 审计列表默认只读，不在该弹窗内增加删除、清空、导出等写操作；如后续需要导出，应先补权限点和审计记录。
+  - 免密票据查询必须在后端 service 层强制 terminal，不能只靠前端传参区分 seller/buyer。
+  - `seller_oper_log` / `buyer_oper_log` 已接入第一批真实写入链路；后续端内业务接口继续使用 `@PortalLog` 写入端内日志，并复用 `PortalOperLog` 查询对象和该弹窗。
+  - 已确定的 seller/buyer 同构 UI 模式直接模板化复制：seller 做好一套后，buyer 只替换字段配置、权限标识、接口前缀和 service。
 
 ### PlannedPage
 
@@ -372,6 +520,9 @@
   - `RuoYi-Vue/finance`
   - `RuoYi-Vue/sql/currency_configuration_seed.sql`
   - `RuoYi-Vue/sql/20260604_currency_showapi_sync_migration.sql`
+  - `RuoYi-Vue/sql/20260604_currency_rate_sync_job.sql`
+  - `RuoYi-Vue/finance/src/main/java/com/ruoyi/finance/task/CurrencyRateSyncTask.java`
+  - `RuoYi-Vue/finance/src/main/java/com/ruoyi/finance/task/CurrencyRateSyncSchedulePolicy.java`
 - 当前用途：
   - 维护 `finance_currency` 平台可用币种。
   - 追加记录 `finance_currency_rate_history` 汇率历史。
@@ -380,12 +531,15 @@
   - 固定接入 ShowAPI 银行汇率查询作为官方汇率来源。
   - ShowAPI 官方汇率取 `hui_out` 现汇卖出价，不取 `zhesuan` 中行折算价。
   - 使用 `rate_anchor_time` 按北京时间选择当天基准时间之后的第一条官方汇率。
+  - 若依 Quartz 每分钟轻量检查币种汇率同步计划，到 `rate_anchor_time + 1 分钟` 才实际调用外部接口；无基准后数据时每 15 分钟重试一次，最多重试 4 次。
+  - 简化后的同步设置固定 `sync_enabled = 1`，定时同步是否停用由配置 `status` 控制。
 - 复用规则：
   - 后续金额、余额、账单、结算、订单折算等业务需要当前可用币种时，优先读取 `finance_currency` 中启用币种。
   - 官方汇率保存到 `official_rate`，业务当前使用 `effective_rate`。
   - 汇率历史和同步日志只追加，不覆盖。
   - 外部 API 适配层只返回官方汇率候选和官方汇率时间，不能绕过财务模块直接写订单、余额、结算等业务事实表。
   - ShowAPI `appKey` 只能通过后端配置接口加密保存，SQL、Markdown、日志和前端响应不得保存或展示明文。
+  - 后续如果扩展汇率来源或任务调度策略，优先复用 `CurrencyRateSyncTask` 作为 Quartz 入口，不要在前端页面或 Controller 内做轮询重试。
 
 ### LingxingOpenApiClient
 
@@ -406,6 +560,8 @@
   - `react-ui/src/pages/UpstreamSystem/components/PairingModal.tsx`
   - `react-ui/src/pages/UpstreamSystem/components/SkuSyncPanel.tsx`
   - `react-ui/src/pages/UpstreamSystem/components/SyncTabs.tsx`
+  - `react-ui/src/pages/UpstreamSystem/style.module.css`
+  - `react-ui/src/pages/UpstreamSystem/style.css`
   - `react-ui/src/services/integration/upstreamSystem.ts`
   - `react-ui/src/types/integration/upstream-system.d.ts`
 - 当前用途：
@@ -414,6 +570,8 @@
   - 左侧主仓工作台、主仓排序、SKU-only 同步和 SKU 同步状态查看。
 - 复用规则：
   - 后续新增外部系统管理页面时，优先复用 modal、类型和 service 分层方式。
+  - 左侧主仓列表 + 右侧详情/页签的数据工作台布局，样式集中在 `style.module.css` / `style.css`，不要在页面和组件里继续散写大段撑满高度 inline style。
+  - 主数据区必须填满剩余可视高度，表格数据很少时分页器也要压在数据块底部。
   - 页面文案使用“同步清单”，不要在用户界面展示“候选”。
   - 表格列、状态文本、接口类型继续集中维护，不要在页面内复制大段 option 或状态映射。
   - 分页接口进入 `startPage()` 后，Service 不要再先做 `selectOne` 预查，避免污染 PageHelper 上下文。

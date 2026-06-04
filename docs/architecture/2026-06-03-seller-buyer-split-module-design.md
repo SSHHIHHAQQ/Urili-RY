@@ -2,6 +2,8 @@
 
 日期：2026-06-03
 
+> 过期说明：本文是早期分表草案，其中“卖家/买家登录账号继续保存到若依 `sys_user`”的结论已废弃。当前三端独立账号权限方向以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为准。
+
 ## 状态
 
 本文件记录已调整后的规则。根据 `AGENTS.md`，新增业务表前仍需你确认；确认前不落 SQL、Entity、Mapper、Service、Controller、菜单权限或前端页面。

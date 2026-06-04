@@ -9,6 +9,7 @@ import java.time.ZonedDateTime;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,9 +47,21 @@ public class FinanceCurrencyServiceImpl implements IFinanceCurrencyService
 
     private static final String NO = "N";
 
+    private static final String SYNC_ENABLED = "1";
+
     private static final String SOURCE_MANUAL = "MANUAL";
 
     private static final String SOURCE_SYNC = "SYNC";
+
+    private static final String ADJUSTMENT_NONE = "NONE";
+
+    private static final String ADJUSTMENT_MANUAL = "MANUAL";
+
+    private static final String ADJUSTMENT_PERCENT_UP = "PERCENT_UP";
+
+    private static final String ADJUSTMENT_PERCENT_DOWN = "PERCENT_DOWN";
+
+    private static final String ADJUSTMENT_FIXED_DELTA = "FIXED_DELTA";
 
     private static final String SYNC_STATUS_SUCCESS = "SUCCESS";
 
@@ -106,6 +119,8 @@ public class FinanceCurrencyServiceImpl implements IFinanceCurrencyService
     public int insertCurrency(FinanceCurrency currency)
     {
         normalizeCurrency(currency, true);
+        applyEffectiveRate(currency);
+        fillInitialRateTimes(currency);
         if (financeCurrencyMapper.selectCurrencyByCode(currency.getCurrencyCode()) != null)
         {
             throw new ServiceException("币种配置已存在");
@@ -127,17 +142,29 @@ public class FinanceCurrencyServiceImpl implements IFinanceCurrencyService
         String normalizedCode = normalizeCode(currencyCode);
         FinanceCurrency current = selectCurrencyByCode(normalizedCode);
         currency.setCurrencyCode(normalizedCode);
+        currency.setOfficialRateTime(current.getOfficialRateTime());
+        currency.setEffectiveRateTime(current.getEffectiveRateTime());
         normalizeCurrency(currency, false);
+        applyEffectiveRate(currency);
         currency.setCurrencyId(current.getCurrencyId());
         currency.setUpdateBy(currentUsername());
+        Date now = new Date();
+        if (rateChanged(current.getOfficialRate(), currency.getOfficialRate()))
+        {
+            currency.setOfficialRateTime(now);
+        }
+        if (rateSnapshotChanged(current, currency))
+        {
+            currency.setEffectiveRateTime(now);
+        }
         if (YES.equals(currency.getIsDefault()))
         {
             financeCurrencyMapper.clearDefaultCurrency(currency.getCurrencyCode(), currency.getUpdateBy());
         }
         int rows = financeCurrencyMapper.updateCurrency(currency);
-        if (rateChanged(current.getEffectiveRate(), currency.getEffectiveRate()))
+        if (rateSnapshotChanged(current, currency))
         {
-            insertManualHistoryIfNeeded(currency, "人工维护生效汇率");
+            insertManualHistoryIfNeeded(currency, "人工维护汇率规则");
         }
         return rows;
     }
@@ -321,21 +348,21 @@ public class FinanceCurrencyServiceImpl implements IFinanceCurrencyService
     private BigDecimal calculateEffectiveRate(FinanceCurrency currency, BigDecimal officialRate)
     {
         BigDecimal effectiveRate = officialRate;
-        String mode = StringUtils.defaultIfBlank(currency.getAdjustmentMode(), "NONE");
+        String mode = StringUtils.defaultIfBlank(currency.getAdjustmentMode(), ADJUSTMENT_NONE);
         BigDecimal adjustmentValue = currency.getAdjustmentValue();
-        if ("MANUAL".equals(mode) && currency.getEffectiveRate() != null)
+        if (ADJUSTMENT_MANUAL.equals(mode) && currency.getEffectiveRate() != null)
         {
             effectiveRate = currency.getEffectiveRate();
         }
-        else if ("PERCENT_UP".equals(mode) && adjustmentValue != null)
+        else if (ADJUSTMENT_PERCENT_UP.equals(mode) && adjustmentValue != null)
         {
-            effectiveRate = officialRate.multiply(BigDecimal.ONE.add(adjustmentValue));
+            effectiveRate = officialRate.multiply(BigDecimal.ONE.add(toPercent(adjustmentValue)));
         }
-        else if ("PERCENT_DOWN".equals(mode) && adjustmentValue != null)
+        else if (ADJUSTMENT_PERCENT_DOWN.equals(mode) && adjustmentValue != null)
         {
-            effectiveRate = officialRate.multiply(BigDecimal.ONE.subtract(adjustmentValue));
+            effectiveRate = officialRate.multiply(BigDecimal.ONE.subtract(toPercent(adjustmentValue)));
         }
-        else if ("FIXED_DELTA".equals(mode) && adjustmentValue != null)
+        else if (ADJUSTMENT_FIXED_DELTA.equals(mode) && adjustmentValue != null)
         {
             effectiveRate = officialRate.add(adjustmentValue);
         }
@@ -356,22 +383,79 @@ public class FinanceCurrencyServiceImpl implements IFinanceCurrencyService
         }
         currency.setCurrencyName(StringUtils.trimToEmpty(currency.getCurrencyName()));
         currency.setCurrencySymbol(StringUtils.trimToEmpty(currency.getCurrencySymbol()));
-        currency.setBaseCurrencyCode(StringUtils.defaultIfBlank(normalizeCode(currency.getBaseCurrencyCode()), BASE_CURRENCY_CNY));
+        currency.setBaseCurrencyCode(BASE_CURRENCY_CNY);
         currency.setRatePrecision(defaultInt(currency.getRatePrecision(), 8));
         currency.setAmountPrecision(defaultInt(currency.getAmountPrecision(), 2));
         currency.setRoundingMode(normalizeRoundingMode(currency.getRoundingMode()));
-        currency.setAdjustmentMode(StringUtils.defaultIfBlank(currency.getAdjustmentMode(), "NONE").trim().toUpperCase());
+        currency.setAdjustmentMode(normalizeAdjustmentMode(currency.getAdjustmentMode()));
+        normalizeAdjustmentValue(currency);
         currency.setIsDefault(normalizeYesNo(currency.getIsDefault()));
         currency.setStatus(normalizeStatus(currency.getStatus()));
+    }
+
+    private void applyEffectiveRate(FinanceCurrency currency)
+    {
+        String mode = currency.getAdjustmentMode();
+        if (ADJUSTMENT_MANUAL.equals(mode))
+        {
+            if (currency.getEffectiveRate() == null)
+            {
+                throw new ServiceException("人工维护模式请填写生效汇率");
+            }
+            currency.setEffectiveRate(currency.getEffectiveRate()
+                .setScale(defaultInt(currency.getRatePrecision(), 8), resolveRoundingMode(currency.getRoundingMode())));
+            return;
+        }
+        if (currency.getOfficialRate() == null)
+        {
+            currency.setEffectiveRate(null);
+            return;
+        }
+        currency.setEffectiveRate(calculateEffectiveRate(currency, currency.getOfficialRate()));
+    }
+
+    private void fillInitialRateTimes(FinanceCurrency currency)
+    {
         Date now = new Date();
         if (currency.getOfficialRate() != null && currency.getOfficialRateTime() == null)
         {
             currency.setOfficialRateTime(now);
         }
-        if ((currency.getEffectiveRate() != null || inserting) && currency.getEffectiveRateTime() == null)
+        if (currency.getEffectiveRate() != null && currency.getEffectiveRateTime() == null)
         {
             currency.setEffectiveRateTime(now);
         }
+    }
+
+    private String normalizeAdjustmentMode(String adjustmentMode)
+    {
+        String normalized = StringUtils.defaultIfBlank(adjustmentMode, ADJUSTMENT_NONE).trim().toUpperCase();
+        if (!ADJUSTMENT_NONE.equals(normalized) && !ADJUSTMENT_MANUAL.equals(normalized)
+            && !ADJUSTMENT_PERCENT_UP.equals(normalized) && !ADJUSTMENT_PERCENT_DOWN.equals(normalized)
+            && !ADJUSTMENT_FIXED_DELTA.equals(normalized))
+        {
+            throw new ServiceException("调整方式不合法");
+        }
+        return normalized;
+    }
+
+    private void normalizeAdjustmentValue(FinanceCurrency currency)
+    {
+        String mode = currency.getAdjustmentMode();
+        if (ADJUSTMENT_NONE.equals(mode) || ADJUSTMENT_MANUAL.equals(mode))
+        {
+            currency.setAdjustmentValue(null);
+            return;
+        }
+        if (currency.getAdjustmentValue() == null)
+        {
+            throw new ServiceException("当前调整方式请填写调整值");
+        }
+    }
+
+    private BigDecimal toPercent(BigDecimal adjustmentValue)
+    {
+        return adjustmentValue.divide(new BigDecimal("100"), 10, RoundingMode.HALF_UP);
     }
 
     private void normalizeSyncConfig(FinanceCurrencySyncConfig config)
@@ -386,7 +470,7 @@ public class FinanceCurrencyServiceImpl implements IFinanceCurrencyService
         config.setScheduleType("DAILY");
         config.setCronExpression("");
         config.setRateAnchorTime(normalizeRateAnchorTime(config.getRateAnchorTime()));
-        config.setSyncEnabled(StringUtils.defaultIfBlank(config.getSyncEnabled(), "0"));
+        config.setSyncEnabled(SYNC_ENABLED);
         config.setStatus(normalizeStatus(config.getStatus()));
         config.setRemark(StringUtils.trimToEmpty(config.getRemark()));
     }
@@ -455,7 +539,7 @@ public class FinanceCurrencyServiceImpl implements IFinanceCurrencyService
         config.setScheduleType("DAILY");
         config.setCronExpression("");
         config.setRateAnchorTime(DEFAULT_RATE_ANCHOR_TIME);
-        config.setSyncEnabled("0");
+        config.setSyncEnabled(SYNC_ENABLED);
         config.setStatus(STATUS_NORMAL);
         return config;
     }
@@ -612,6 +696,16 @@ public class FinanceCurrencyServiceImpl implements IFinanceCurrencyService
             return true;
         }
         return before.compareTo(after) != 0;
+    }
+
+    private boolean rateSnapshotChanged(FinanceCurrency before, FinanceCurrency after)
+    {
+        return rateChanged(before.getOfficialRate(), after.getOfficialRate())
+            || rateChanged(before.getEffectiveRate(), after.getEffectiveRate())
+            || !StringUtils.equals(before.getAdjustmentMode(), after.getAdjustmentMode())
+            || rateChanged(before.getAdjustmentValue(), after.getAdjustmentValue())
+            || !Objects.equals(before.getRatePrecision(), after.getRatePrecision())
+            || !StringUtils.equals(before.getRoundingMode(), after.getRoundingMode());
     }
 
     private String maskCredential(String credential)

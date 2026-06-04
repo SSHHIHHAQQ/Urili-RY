@@ -1,6 +1,6 @@
 import { type ActionType, PageContainer } from '@ant-design/pro-components';
 import { useAccess } from '@umijs/max';
-import { Empty, Grid, Space } from 'antd';
+import { Empty } from 'antd';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   addLogisticsChannelPairing,
@@ -24,13 +24,14 @@ import ConnectionSummary from './components/ConnectionSummary';
 import PairingModal from './components/PairingModal';
 import SyncTabs from './components/SyncTabs';
 import { resultOk } from './helpers';
+import './style.css';
+import styles from './style.module.css';
 import type { PairingModalState } from './types';
 
 const connectionPageSize = 200;
 
 export default function UpstreamSystemPage() {
   const access = useAccess();
-  const screens = Grid.useBreakpoint();
   const warehouseActionRef = useRef<ActionType>(null);
   const logisticsActionRef = useRef<ActionType>(null);
   const skuActionRef = useRef<ActionType>(null);
@@ -145,16 +146,7 @@ export default function UpstreamSystemPage() {
 
   return (
     <PageContainer>
-      <div
-        style={{
-          alignItems: 'start',
-          display: 'grid',
-          gap: 16,
-          gridTemplateColumns: screens.md
-            ? 'minmax(240px, 280px) minmax(0, 1fr)'
-            : '1fr',
-        }}
-      >
+      <div className={styles.workspace}>
         <ConnectionSidebar
           access={access}
           connections={connections}
@@ -166,11 +158,7 @@ export default function UpstreamSystemPage() {
         />
 
         {selectedConnection ? (
-          <Space
-            direction="vertical"
-            size={16}
-            style={{ minWidth: 0, width: '100%' }}
-          >
+          <div className={styles.detailPane}>
             <ConnectionSummary
               access={access}
               connection={selectedConnection}
@@ -202,16 +190,9 @@ export default function UpstreamSystemPage() {
               skuActionRef={skuActionRef}
               warehouseActionRef={warehouseActionRef}
             />
-          </Space>
+          </div>
         ) : (
-          <div
-            style={{
-              background: '#fff',
-              border: '1px solid #f0f0f0',
-              borderRadius: 6,
-              padding: 48,
-            }}
-          >
+          <div className={styles.emptyPane}>
             <Empty description="暂无主仓接入" />
           </div>
         )}
@@ -236,10 +217,11 @@ export default function UpstreamSystemPage() {
             resp = await addUpstreamConnection(values);
           } else if (connectionModal.mode === 'edit') {
             if (!modalRecord) return false;
-            resp = await updateUpstreamConnection(
-              modalRecord.connectionCode,
-              values,
-            );
+            resp = await updateUpstreamConnection(modalRecord.connectionCode, {
+              masterWarehouseName: values.masterWarehouseName,
+              settlementType: values.settlementType,
+              remark: values.remark,
+            });
           } else {
             if (!modalRecord) return false;
             resp = await updateUpstreamCredentials(

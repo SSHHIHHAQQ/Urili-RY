@@ -11,7 +11,7 @@ import { downLoadXlsx } from '@/utils/downloadfile';
  * */
 
 // 查询字典类型列表
-export async function getDictTypeList(params?: API.DictTypeListParams) {
+export async function getDictTypeList(params?: API.System.DictTypeListParams) {
   return request(`/api/system/dict/type/list`, {
     params: {
       ...params,
@@ -107,7 +107,7 @@ export function exportDictType(params?: API.System.DictTypeListParams) {
 }
 
 // 获取字典选择框列表
-export async function getDictTypeOptionSelect(params?: API.DictTypeListParams) {
+export async function getDictTypeOptionSelect(params?: API.System.DictTypeListParams) {
   return request('/api/system/dict/type/optionselect', {
     params: {
       ...params,

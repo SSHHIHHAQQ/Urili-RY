@@ -4,6 +4,8 @@
 
 状态：已确认并执行。执行记录见 `docs/status/2026-06-03-remote-seller-buyer-migration-execution.md`。
 
+> 过期说明：本文记录的是早期远端迁移方案，其中 `seller_account.user_id` / `buyer_account.user_id` 绑定若依 `sys_user` 的设计已被后续迁移废弃。当前三端独立账号权限方向以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为准。
+
 ## 目标
 
 把远端运行库从旧的 `urili_customer` / `urili_customer_account` 单表客户模型，迁移到当前代码已经使用的四张业务表：

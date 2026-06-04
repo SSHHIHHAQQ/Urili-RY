@@ -1,6 +1,7 @@
 package com.ruoyi.system.mapper;
 
 import java.util.Date;
+import java.util.List;
 import org.apache.ibatis.annotations.Param;
 import com.ruoyi.system.domain.PortalDirectLoginTicket;
 
@@ -10,6 +11,8 @@ import com.ruoyi.system.domain.PortalDirectLoginTicket;
 public interface PortalDirectLoginTicketMapper
 {
     public int insertPortalDirectLoginTicket(PortalDirectLoginTicket ticket);
+
+    public List<PortalDirectLoginTicket> selectPortalDirectLoginTicketList(PortalDirectLoginTicket ticket);
 
     public PortalDirectLoginTicket selectPortalDirectLoginTicketByTokenHash(String tokenHash);
 

@@ -1,0 +1,38 @@
+.upstream-sync-tabs .ant-tabs {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.upstream-sync-tabs .ant-tabs-nav {
+  flex: none;
+  margin-bottom: 12px;
+}
+
+.upstream-sync-tabs .ant-tabs-content-holder,
+.upstream-sync-tabs .ant-tabs-content,
+.upstream-sync-tabs .ant-tabs-tabpane {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  flex-direction: column;
+}
+
+.upstream-sync-tabs .ant-tabs-tabpane-hidden {
+  display: none;
+}
+
+.upstream-fill-table .ant-pro-card {
+  border: 0;
+  box-shadow: none;
+}
+
+.upstream-fill-table .ant-pro-card-body {
+  padding: 0;
+}
+
+.upstream-fill-table .ant-pro-table-list-toolbar {
+  display: none;
+}

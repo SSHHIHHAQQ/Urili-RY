@@ -1,6 +1,11 @@
 import { Form, Input, Modal, Select } from 'antd';
 import { useEffect } from 'react';
-import { settlementOptions } from '@/pages/UpstreamSystem/constants';
+import {
+  normalizeSettlementTypeValue,
+  normalizeSystemKindValue,
+  settlementOptions,
+  systemKindOptions,
+} from '@/pages/UpstreamSystem/constants';
 
 export type ConnectionModalMode = 'create' | 'edit' | 'credential';
 
@@ -32,8 +37,9 @@ export default function ConnectionModal({
       return;
     }
     form.setFieldsValue({
+      systemKind: normalizeSystemKindValue(record?.systemKind),
       masterWarehouseName: record?.masterWarehouseName,
-      settlementType: record?.settlementType || 'UPSTREAM_PAYABLE',
+      settlementType: normalizeSettlementTypeValue(record?.settlementType),
       remark: record?.remark,
     });
   }, [form, open, record]);
@@ -58,10 +64,23 @@ export default function ConnectionModal({
       <Form
         form={form}
         layout="vertical"
-        initialValues={{ settlementType: 'UPSTREAM_PAYABLE' }}
+        initialValues={{
+          systemKind: 'lingxing-wms',
+          settlementType: 'upstream-payable',
+        }}
       >
         {showInfoFields ? (
           <>
+            <Form.Item
+              name="systemKind"
+              label="上游系统类型"
+              rules={[{ required: true, message: '请选择上游系统类型' }]}
+            >
+              <Select
+                disabled={mode !== 'create'}
+                options={systemKindOptions}
+              />
+            </Form.Item>
             <Form.Item
               name="masterWarehouseName"
               label="主仓名称"

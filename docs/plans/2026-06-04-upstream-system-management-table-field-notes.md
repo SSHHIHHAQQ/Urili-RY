@@ -24,9 +24,9 @@
 | 字段 | 中文注释 |
 | --- | --- |
 | `connection_code` | 主仓接入编号。系统内部识别一条接入记录的唯一编码，例如 `LX-CA012-0001`。 |
-| `system_kind` | 上游系统类型。当前主要是 `LINGXING_WMS`，以后如果接 WMS、ERP，也用这个字段区分。 |
+| `system_kind` | 上游系统类型。当前主要是 `lingxing-wms`，以后如果接 WMS、ERP，也用这个字段区分。 |
 | `master_warehouse_name` | 主仓显示名称。给管理后台看的名称，例如“领星-美西主仓”。 |
-| `settlement_type` | 结算类型。说明这条主仓接入以后费用由谁承担或如何结算，保存 code，不保存中文。 |
+| `settlement_type` | 结算类型。说明这条主仓接入以后费用由谁承担或如何结算，保存旧项目 code，例如 `upstream-payable`、`self-operated-receivable`，不保存中文。 |
 | `app_key_mask` | 脱敏后的 appKey。只给页面展示，例如 `abc****xyz`，不能用于真实请求。 |
 | `app_secret_mask` | 脱敏后的 appSecret。只给页面展示，不能用于真实请求。 |
 | `app_key_ciphertext` | 加密后的 appKey。后端调用领星接口时解密使用，前端永远不返回。 |

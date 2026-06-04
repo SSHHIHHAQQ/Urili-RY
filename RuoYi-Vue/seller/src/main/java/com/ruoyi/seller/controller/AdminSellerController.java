@@ -22,6 +22,10 @@ import com.ruoyi.seller.domain.SellerAccount;
 import com.ruoyi.seller.service.ISellerPortalPermissionService;
 import com.ruoyi.seller.service.ISellerService;
 import com.ruoyi.system.domain.PortalAccountRoleAssign;
+import com.ruoyi.system.domain.PortalDirectLoginRequest;
+import com.ruoyi.system.domain.PortalDirectLoginTicket;
+import com.ruoyi.system.domain.PortalLoginLog;
+import com.ruoyi.system.domain.PortalOperLog;
 
 /**
  * 管理端卖家管理
@@ -111,7 +115,7 @@ public class AdminSellerController extends BaseController
     }
 
     @PreAuthorize("@ss.hasPermi('seller:admin:edit')")
-    @Log(title = "鍗栧璐﹀彿", businessType = BusinessType.UPDATE)
+    @Log(title = "卖家账号", businessType = BusinessType.UPDATE)
     @PutMapping("/{sellerId}/accounts")
     public AjaxResult editAccount(@PathVariable("sellerId") Long sellerId, @RequestBody SellerAccount account)
     {
@@ -161,8 +165,36 @@ public class AdminSellerController extends BaseController
     @PreAuthorize("@ss.hasPermi('seller:admin:directLogin')")
     @Log(title = "卖家免密登录", businessType = BusinessType.OTHER)
     @PostMapping("/{sellerId}/directLogin")
-    public AjaxResult directLogin(@PathVariable("sellerId") Long sellerId)
+    public AjaxResult directLogin(@PathVariable("sellerId") Long sellerId,
+            @RequestBody(required = false) PortalDirectLoginRequest request)
     {
-        return success(sellerService.createSellerDirectLogin(sellerId));
+        return success(sellerService.createSellerDirectLogin(sellerId, request == null ? null : request.getReason()));
+    }
+
+    @PreAuthorize("@ss.hasPermi('seller:admin:loginLog:list')")
+    @GetMapping("/loginLogs/list")
+    public TableDataInfo loginLogs(PortalLoginLog log)
+    {
+        startPage();
+        List<PortalLoginLog> list = sellerService.selectSellerLoginLogList(log);
+        return getDataTable(list);
+    }
+
+    @PreAuthorize("@ss.hasPermi('seller:admin:operLog:list')")
+    @GetMapping("/operLogs/list")
+    public TableDataInfo operLogs(PortalOperLog log)
+    {
+        startPage();
+        List<PortalOperLog> list = sellerService.selectSellerOperLogList(log);
+        return getDataTable(list);
+    }
+
+    @PreAuthorize("@ss.hasPermi('seller:admin:ticket:list')")
+    @GetMapping("/directLoginTickets/list")
+    public TableDataInfo directLoginTickets(PortalDirectLoginTicket ticket)
+    {
+        startPage();
+        List<PortalDirectLoginTicket> list = sellerService.selectSellerDirectLoginTicketList(ticket);
+        return getDataTable(list);
     }
 }

@@ -1,12 +1,12 @@
 package com.ruoyi.system.domain;
 
-import java.io.Serializable;
 import java.util.Date;
+import com.ruoyi.common.core.domain.BaseEntity;
 
 /**
  * Auditable one-time direct-login ticket for seller/buyer portals.
  */
-public class PortalDirectLoginTicket implements Serializable
+public class PortalDirectLoginTicket extends BaseEntity
 {
     private static final long serialVersionUID = 1L;
 

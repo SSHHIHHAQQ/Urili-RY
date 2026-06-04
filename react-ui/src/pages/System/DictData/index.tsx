@@ -356,16 +356,17 @@ const DictDataTableList: React.FC = () => {
               <FormattedMessage id="pages.searchTable.export" defaultMessage="导出" />
             </Button>,
           ]}
-          request={(params) =>
-            getDictDataList({ ...params, dictType } as API.System.DictDataListParams).then((res) => {
+          request={(params) => {
+            const { current, pageSize, ...rest } = params;
+            return getDictDataList({ ...rest, dictType, pageNum: current, pageSize } as API.System.DictDataListParams).then((res) => {
               const result = {
                 data: res.rows,
                 total: res.total,
                 success: true,
               };
               return result;
-            })
-          }
+            });
+          }}
           columns={columns}
           rowSelection={{
             onChange: (_, selectedRows) => {

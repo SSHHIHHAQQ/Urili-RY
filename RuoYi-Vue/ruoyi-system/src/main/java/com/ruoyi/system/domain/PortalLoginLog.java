@@ -1,14 +1,17 @@
 package com.ruoyi.system.domain;
 
-import java.io.Serializable;
 import java.util.Date;
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.ruoyi.common.core.domain.BaseEntity;
 
 /**
  * Seller/buyer portal login log fields.
  */
-public class PortalLoginLog implements Serializable
+public class PortalLoginLog extends BaseEntity
 {
     private static final long serialVersionUID = 1L;
+
+    private Long infoId;
 
     private Long subjectId;
 
@@ -28,7 +31,18 @@ public class PortalLoginLog implements Serializable
 
     private String msg;
 
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private Date loginTime;
+
+    public Long getInfoId()
+    {
+        return infoId;
+    }
+
+    public void setInfoId(Long infoId)
+    {
+        this.infoId = infoId;
+    }
 
     public Long getSubjectId()
     {

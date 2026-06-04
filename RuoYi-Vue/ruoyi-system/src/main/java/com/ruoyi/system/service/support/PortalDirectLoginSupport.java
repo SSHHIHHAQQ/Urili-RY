@@ -49,9 +49,10 @@ public class PortalDirectLoginSupport
     private PortalDirectLoginTicketMapper ticketMapper;
 
     public PortalDirectLoginResult createToken(String portalType, Long partnerId, String partnerNo,
-            PortalAccount account, String webUrlConfigKey, String fallbackWebUrl)
+            PortalAccount account, String reason, String webUrlConfigKey, String fallbackWebUrl)
     {
         assertAccountCanLogin(account);
+        String directLoginReason = normalizeReason(reason);
 
         Date now = new Date();
         Date expireTime = new Date(now.getTime() + EXPIRE_MINUTES * 60L * 1000L);
@@ -68,6 +69,7 @@ public class PortalDirectLoginSupport
         ticket.setTargetUserName(account.getUserName());
         ticket.setActingAdminId(actingAdminId);
         ticket.setActingAdminName(actingAdminName);
+        ticket.setReason(directLoginReason);
         ticket.setTokenHash(tokenHash);
         ticket.setExpireTime(expireTime);
         ticket.setStatus(STATUS_ISSUED);
@@ -213,5 +215,15 @@ public class PortalDirectLoginSupport
         {
             throw new ServiceException("免密登录 token 哈希失败");
         }
+    }
+
+    private String normalizeReason(String reason)
+    {
+        String value = PartnerSupport.trimRequired(reason, "免密登录原因不能为空");
+        if (value.length() > 255)
+        {
+            throw new ServiceException("免密登录原因不能超过255个字符");
+        }
+        return value;
     }
 }

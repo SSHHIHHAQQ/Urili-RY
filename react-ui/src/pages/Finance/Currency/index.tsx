@@ -5,6 +5,7 @@ import {
   ModalForm,
   PageContainer,
   type ProColumns,
+  ProFormDependency,
   ProFormDigit,
   type ProFormInstance,
   ProFormSelect,
@@ -44,6 +45,10 @@ const defaultCurrencyValues: Partial<API.Finance.Currency> = {
   status: '0',
 };
 
+const baseCurrencyOptions = [{ label: '人民币 (CNY)', value: 'CNY' }];
+
+const adjustedModeValues = ['PERCENT_UP', 'PERCENT_DOWN', 'FIXED_DELTA'];
+
 function resultOk(resp: API.Result, successText: string) {
   if (resp.code === 200) {
     message.success(successText);
@@ -53,11 +58,18 @@ function resultOk(resp: API.Result, successText: string) {
   return false;
 }
 
-function formatRate(value?: number) {
+function normalizeRatePrecision(precision?: number) {
+  if (precision === undefined || precision === null) {
+    return 8;
+  }
+  return Math.min(Math.max(Number(precision), 0), 10);
+}
+
+function formatRate(value?: number | string, precision?: number) {
   if (value === undefined || value === null) {
     return '-';
   }
-  return Number(value).toFixed(8);
+  return Number(value).toFixed(normalizeRatePrecision(precision));
 }
 
 export default function FinanceCurrencyPage() {
@@ -88,7 +100,7 @@ export default function FinanceCurrencyPage() {
   };
 
   const saveCurrency = async (values: API.Finance.Currency) => {
-    const payload = { ...values };
+    const payload = { ...values, baseCurrencyCode: 'CNY' };
     const resp = currentCurrency
       ? await updateCurrency(currentCurrency.currencyCode, payload)
       : await addCurrency(payload);
@@ -132,6 +144,14 @@ export default function FinanceCurrencyPage() {
     if (ok) actionRef.current?.reload();
   };
 
+  useEffect(() => {
+    if (!modalOpen) {
+      return;
+    }
+    currencyFormRef.current?.resetFields();
+    currencyFormRef.current?.setFieldsValue(currentCurrency || defaultCurrencyValues);
+  }, [currentCurrency, modalOpen]);
+
   const currencyColumns: ProColumns<API.Finance.Currency>[] = [
     {
       title: '关键词',
@@ -173,14 +193,14 @@ export default function FinanceCurrencyPage() {
       dataIndex: 'officialRate',
       width: 130,
       search: false,
-      renderText: formatRate,
+      render: (_, record) => formatRate(record.officialRate, record.ratePrecision),
     },
     {
       title: '生效汇率',
       dataIndex: 'effectiveRate',
       width: 130,
       search: false,
-      renderText: formatRate,
+      render: (_, record) => formatRate(record.effectiveRate, record.ratePrecision),
     },
     {
       title: '调整方式',
@@ -278,13 +298,13 @@ export default function FinanceCurrencyPage() {
       title: '官方汇率',
       dataIndex: 'officialRate',
       width: 130,
-      renderText: formatRate,
+      render: (_, record) => formatRate(record.officialRate, historyCurrency?.ratePrecision),
     },
     {
       title: '生效汇率',
       dataIndex: 'effectiveRate',
       width: 130,
-      renderText: formatRate,
+      render: (_, record) => formatRate(record.effectiveRate, historyCurrency?.ratePrecision),
     },
     { title: '调整方式', dataIndex: 'adjustmentMode', width: 120 },
     { title: '原因', dataIndex: 'changeReason', ellipsis: true },
@@ -337,6 +357,7 @@ export default function FinanceCurrencyPage() {
       />
 
       <ModalForm<API.Finance.Currency>
+        key={currentCurrency?.currencyCode || 'new-currency'}
         formRef={currencyFormRef}
         title={currentCurrency ? '编辑币种' : '新增币种'}
         open={modalOpen}
@@ -370,17 +391,40 @@ export default function FinanceCurrencyPage() {
         <ProFormSelect
           name="baseCurrencyCode"
           label="基准币种"
-          options={currencyOptions}
+          options={baseCurrencyOptions}
+          readonly
           rules={[{ required: true }]}
         />
         <ProFormDigit name="officialRate" label="官方汇率" min={0} />
-        <ProFormDigit name="effectiveRate" label="生效汇率" min={0} />
         <ProFormSelect
           name="adjustmentMode"
           label="调整方式"
           options={adjustmentModeOptions}
         />
-        <ProFormDigit name="adjustmentValue" label="调整值" />
+        <ProFormDependency name={['adjustmentMode']}>
+          {({ adjustmentMode }) => {
+            const mode = adjustmentMode || 'NONE';
+            const manualMode = mode === 'MANUAL';
+            const adjustedMode = adjustedModeValues.includes(mode);
+            return (
+              <>
+                <ProFormDigit
+                  name="effectiveRate"
+                  label="生效汇率"
+                  min={0}
+                  disabled={!manualMode}
+                  tooltip="人工维护模式下填写；其他调整方式由后端按官方汇率和调整值计算"
+                />
+                <ProFormDigit
+                  name="adjustmentValue"
+                  label="调整值"
+                  disabled={!adjustedMode}
+                  tooltip="百分比模式下 1 表示 1%，固定加减值按汇率值填写"
+                />
+              </>
+            );
+          }}
+        </ProFormDependency>
         <ProFormDigit name="ratePrecision" label="汇率精度" min={0} max={10} />
         <ProFormDigit name="amountPrecision" label="金额精度" min={0} max={6} />
         <ProFormSelect

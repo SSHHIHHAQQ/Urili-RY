@@ -7,6 +7,7 @@ import com.ruoyi.buyer.domain.Buyer;
 import com.ruoyi.buyer.domain.BuyerAccount;
 import com.ruoyi.system.domain.PortalLoginLog;
 import com.ruoyi.system.domain.PortalLoginSession;
+import com.ruoyi.system.domain.PortalOperLog;
 
 /**
  * 买家Mapper接口
@@ -46,6 +47,10 @@ public interface BuyerMapper
             @Param("lastLoginIp") String lastLoginIp, @Param("lastLoginTime") Date lastLoginTime);
 
     public int insertBuyerLoginLog(PortalLoginLog log);
+
+    public List<PortalLoginLog> selectBuyerLoginLogList(PortalLoginLog log);
+
+    public List<PortalOperLog> selectBuyerOperLogList(PortalOperLog log);
 
     public int insertBuyerSession(PortalLoginSession session);
 

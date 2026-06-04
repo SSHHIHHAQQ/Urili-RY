@@ -1,6 +1,7 @@
 # 管理端客户字段对齐记录
 
 > 说明：本文记录的是早期 `urili_customer` 单表草稿的字段对齐过程，已被 `docs/architecture/2026-06-03-seller-buyer-split-module-design.md` 的 `seller` / `buyer` 分表规则取代。后续实现以卖家/买家独立模块为准，不再继续扩展本文的客户单表口径。
+> 过期说明：本文中“账号落若依 `sys_user`”的早期口径已废弃。当前三端独立账号权限方向以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为准。
 
 ## 背景
 

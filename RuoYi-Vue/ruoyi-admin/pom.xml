@@ -78,6 +78,12 @@
             <artifactId>finance</artifactId>
         </dependency>
 
+        <!-- 商品模块-->
+        <dependency>
+            <groupId>com.ruoyi</groupId>
+            <artifactId>product</artifactId>
+        </dependency>
+
     </dependencies>
 
     <build>

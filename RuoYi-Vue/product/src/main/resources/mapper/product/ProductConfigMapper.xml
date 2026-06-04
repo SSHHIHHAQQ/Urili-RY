@@ -1,0 +1,432 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.product.mapper.ProductConfigMapper">
+
+    <resultMap type="ProductCategory" id="CategoryResult">
+        <id     property="categoryId"     column="category_id"      />
+        <result property="parentId"       column="parent_id"        />
+        <result property="ancestors"      column="ancestors"        />
+        <result property="categoryCode"   column="category_code"    />
+        <result property="categoryName"   column="category_name"    />
+        <result property="categoryLevel"  column="category_level"   />
+        <result property="publishEnabled" column="publish_enabled"  />
+        <result property="sortOrder"      column="sort_order"       />
+        <result property="schemaVersion"  column="schema_version"   />
+        <result property="status"         column="status"           />
+        <result property="delFlag"        column="del_flag"         />
+        <result property="childrenCount"  column="children_count"   />
+        <result property="createBy"       column="create_by"        />
+        <result property="createTime"     column="create_time"      />
+        <result property="updateBy"       column="update_by"        />
+        <result property="updateTime"     column="update_time"      />
+        <result property="remark"         column="remark"           />
+    </resultMap>
+
+    <resultMap type="ProductAttribute" id="AttributeResult">
+        <id     property="attributeId"     column="attribute_id"      />
+        <result property="attributeCode"   column="attribute_code"    />
+        <result property="attributeName"   column="attribute_name"    />
+        <result property="attributeType"   column="attribute_type"    />
+        <result property="optionSource"    column="option_source"     />
+        <result property="dictType"        column="dict_type"         />
+        <result property="unit"            column="unit"              />
+        <result property="valuePrecision"  column="value_precision"   />
+        <result property="status"          column="status"            />
+        <result property="delFlag"         column="del_flag"          />
+        <result property="createBy"        column="create_by"         />
+        <result property="createTime"      column="create_time"       />
+        <result property="updateBy"        column="update_by"         />
+        <result property="updateTime"      column="update_time"       />
+        <result property="remark"          column="remark"            />
+    </resultMap>
+
+    <resultMap type="ProductAttributeOption" id="OptionResult">
+        <id     property="optionId"     column="option_id"     />
+        <result property="attributeId"  column="attribute_id"  />
+        <result property="optionCode"   column="option_code"   />
+        <result property="optionLabel"  column="option_label"  />
+        <result property="sortOrder"    column="sort_order"    />
+        <result property="defaultFlag"  column="default_flag"  />
+        <result property="status"       column="status"        />
+        <result property="createBy"     column="create_by"     />
+        <result property="createTime"   column="create_time"   />
+        <result property="updateBy"     column="update_by"     />
+        <result property="updateTime"   column="update_time"   />
+        <result property="remark"       column="remark"        />
+    </resultMap>
+
+    <resultMap type="ProductCategoryAttribute" id="CategoryAttributeResult">
+        <id     property="categoryAttributeId" column="category_attribute_id" />
+        <result property="categoryId"          column="category_id"           />
+        <result property="attributeId"         column="attribute_id"          />
+        <result property="ruleMode"            column="rule_mode"             />
+        <result property="requiredFlag"        column="required_flag"         />
+        <result property="visibleFlag"         column="visible_flag"          />
+        <result property="editableFlag"        column="editable_flag"         />
+        <result property="filterableFlag"      column="filterable_flag"       />
+        <result property="groupCode"           column="group_code"            />
+        <result property="sortOrder"           column="sort_order"            />
+        <result property="placeholder"         column="placeholder"           />
+        <result property="helpText"            column="help_text"             />
+        <result property="validationRule"      column="validation_rule"       />
+        <result property="status"              column="status"                />
+        <result property="categoryName"        column="category_name"         />
+        <result property="sourceCategoryName"  column="source_category_name"  />
+        <result property="attributeCode"       column="attribute_code"        />
+        <result property="attributeName"       column="attribute_name"        />
+        <result property="attributeType"       column="attribute_type"        />
+        <result property="optionSource"        column="option_source"         />
+        <result property="dictType"            column="dict_type"             />
+        <result property="unit"                column="unit"                  />
+        <result property="createBy"            column="create_by"             />
+        <result property="createTime"          column="create_time"           />
+        <result property="updateBy"            column="update_by"             />
+        <result property="updateTime"          column="update_time"           />
+        <result property="remark"              column="remark"                />
+    </resultMap>
+
+    <sql id="categoryAttributeSelect">
+        select ca.*,
+               c.category_name,
+               c.category_name as source_category_name,
+               a.attribute_code,
+               a.attribute_name,
+               a.attribute_type,
+               a.option_source,
+               a.dict_type,
+               a.unit
+        from product_category_attribute ca
+        left join product_category c on c.category_id = ca.category_id
+        left join product_attribute a on a.attribute_id = ca.attribute_id
+    </sql>
+
+    <select id="selectCategoryList" parameterType="ProductCategory" resultMap="CategoryResult">
+        select c.*,
+               (select count(1) from product_category child where child.parent_id = c.category_id and child.del_flag = '0') as children_count
+        from product_category c
+        where c.del_flag = '0'
+        <if test="keyword != null and keyword != ''">
+            and (c.category_code like concat('%', #{keyword}, '%') or c.category_name like concat('%', #{keyword}, '%'))
+        </if>
+        <if test="categoryCode != null and categoryCode != ''">
+            and c.category_code like concat('%', #{categoryCode}, '%')
+        </if>
+        <if test="categoryName != null and categoryName != ''">
+            and c.category_name like concat('%', #{categoryName}, '%')
+        </if>
+        <if test="parentId != null">
+            and c.parent_id = #{parentId}
+        </if>
+        <if test="status != null and status != ''">
+            and c.status = #{status}
+        </if>
+        <if test="publishEnabled != null and publishEnabled != ''">
+            and c.publish_enabled = #{publishEnabled}
+        </if>
+        order by c.parent_id asc, c.sort_order asc, c.category_id asc
+    </select>
+
+    <select id="selectCategoryById" resultMap="CategoryResult">
+        select c.*,
+               (select count(1) from product_category child where child.parent_id = c.category_id and child.del_flag = '0') as children_count
+        from product_category c
+        where c.category_id = #{categoryId}
+          and c.del_flag = '0'
+        limit 1
+    </select>
+
+    <select id="selectCategoryByCode" resultMap="CategoryResult">
+        select *
+        from product_category
+        where category_code = #{categoryCode}
+          and del_flag = '0'
+        limit 1
+    </select>
+
+    <select id="countCategoryNameByParent" resultType="int">
+        select count(1)
+        from product_category
+        where parent_id = #{parentId}
+          and category_name = #{categoryName}
+          and del_flag = '0'
+        <if test="excludeCategoryId != null">
+            and category_id &lt;&gt; #{excludeCategoryId}
+        </if>
+    </select>
+
+    <select id="countChildCategories" resultType="int">
+        select count(1)
+        from product_category
+        where parent_id = #{categoryId}
+          and del_flag = '0'
+    </select>
+
+    <select id="countCategoryAttributes" resultType="int">
+        select count(1)
+        from product_category_attribute
+        where category_id = #{categoryId}
+    </select>
+
+    <insert id="insertCategory" parameterType="ProductCategory" useGeneratedKeys="true" keyProperty="categoryId">
+        insert into product_category(
+            parent_id, ancestors, category_code, category_name, category_level,
+            publish_enabled, sort_order, schema_version, status, del_flag,
+            create_by, create_time, remark
+        ) values (
+            #{parentId}, #{ancestors}, #{categoryCode}, #{categoryName}, #{categoryLevel},
+            #{publishEnabled}, #{sortOrder}, #{schemaVersion}, #{status}, '0',
+            #{createBy}, sysdate(), #{remark}
+        )
+    </insert>
+
+    <update id="updateCategory" parameterType="ProductCategory">
+        update product_category
+        set parent_id = #{parentId},
+            ancestors = #{ancestors},
+            category_code = #{categoryCode},
+            category_name = #{categoryName},
+            category_level = #{categoryLevel},
+            publish_enabled = #{publishEnabled},
+            sort_order = #{sortOrder},
+            schema_version = #{schemaVersion},
+            status = #{status},
+            update_by = #{updateBy},
+            update_time = sysdate(),
+            remark = #{remark}
+        where category_id = #{categoryId}
+          and del_flag = '0'
+    </update>
+
+    <update id="deleteCategoryById">
+        update product_category
+        set del_flag = '2',
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where category_id = #{categoryId}
+          and del_flag = '0'
+    </update>
+
+    <update id="increaseCategorySchemaVersion">
+        update product_category
+        set schema_version = schema_version + 1,
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where category_id = #{categoryId}
+          and del_flag = '0'
+    </update>
+
+    <select id="selectAttributeList" parameterType="ProductAttribute" resultMap="AttributeResult">
+        select *
+        from product_attribute
+        where del_flag = '0'
+        <if test="keyword != null and keyword != ''">
+            and (attribute_code like concat('%', #{keyword}, '%') or attribute_name like concat('%', #{keyword}, '%'))
+        </if>
+        <if test="attributeCode != null and attributeCode != ''">
+            and attribute_code like concat('%', #{attributeCode}, '%')
+        </if>
+        <if test="attributeName != null and attributeName != ''">
+            and attribute_name like concat('%', #{attributeName}, '%')
+        </if>
+        <if test="attributeType != null and attributeType != ''">
+            and attribute_type = #{attributeType}
+        </if>
+        <if test="optionSource != null and optionSource != ''">
+            and option_source = #{optionSource}
+        </if>
+        <if test="status != null and status != ''">
+            and status = #{status}
+        </if>
+        order by create_time desc, attribute_id desc
+    </select>
+
+    <select id="selectEnabledAttributeList" resultMap="AttributeResult">
+        select *
+        from product_attribute
+        where del_flag = '0'
+          and status = '0'
+        order by attribute_name asc, attribute_id asc
+    </select>
+
+    <select id="selectAttributeById" resultMap="AttributeResult">
+        select *
+        from product_attribute
+        where attribute_id = #{attributeId}
+          and del_flag = '0'
+        limit 1
+    </select>
+
+    <select id="selectAttributeByCode" resultMap="AttributeResult">
+        select *
+        from product_attribute
+        where attribute_code = #{attributeCode}
+          and del_flag = '0'
+        limit 1
+    </select>
+
+    <insert id="insertAttribute" parameterType="ProductAttribute" useGeneratedKeys="true" keyProperty="attributeId">
+        insert into product_attribute(
+            attribute_code, attribute_name, attribute_type, option_source, dict_type,
+            unit, value_precision, status, del_flag, create_by, create_time, remark
+        ) values (
+            #{attributeCode}, #{attributeName}, #{attributeType}, #{optionSource}, #{dictType},
+            #{unit}, #{valuePrecision}, #{status}, '0', #{createBy}, sysdate(), #{remark}
+        )
+    </insert>
+
+    <update id="updateAttribute" parameterType="ProductAttribute">
+        update product_attribute
+        set attribute_code = #{attributeCode},
+            attribute_name = #{attributeName},
+            attribute_type = #{attributeType},
+            option_source = #{optionSource},
+            dict_type = #{dictType},
+            unit = #{unit},
+            value_precision = #{valuePrecision},
+            status = #{status},
+            update_by = #{updateBy},
+            update_time = sysdate(),
+            remark = #{remark}
+        where attribute_id = #{attributeId}
+          and del_flag = '0'
+    </update>
+
+    <update id="deleteAttributeById">
+        update product_attribute
+        set del_flag = '2',
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where attribute_id = #{attributeId}
+          and del_flag = '0'
+    </update>
+
+    <select id="countAttributeCategoryBindings" resultType="int">
+        select count(1)
+        from product_category_attribute
+        where attribute_id = #{attributeId}
+    </select>
+
+    <select id="selectOptionList" resultMap="OptionResult">
+        select *
+        from product_attribute_option
+        where attribute_id = #{attributeId}
+        order by sort_order asc, option_id asc
+    </select>
+
+    <select id="selectOptionById" resultMap="OptionResult">
+        select *
+        from product_attribute_option
+        where option_id = #{optionId}
+        limit 1
+    </select>
+
+    <select id="countOptionCode" resultType="int">
+        select count(1)
+        from product_attribute_option
+        where attribute_id = #{attributeId}
+          and option_code = #{optionCode}
+        <if test="excludeOptionId != null">
+            and option_id &lt;&gt; #{excludeOptionId}
+        </if>
+    </select>
+
+    <insert id="insertOption" parameterType="ProductAttributeOption" useGeneratedKeys="true" keyProperty="optionId">
+        insert into product_attribute_option(
+            attribute_id, option_code, option_label, sort_order, default_flag,
+            status, create_by, create_time, remark
+        ) values (
+            #{attributeId}, #{optionCode}, #{optionLabel}, #{sortOrder}, #{defaultFlag},
+            #{status}, #{createBy}, sysdate(), #{remark}
+        )
+    </insert>
+
+    <update id="updateOption" parameterType="ProductAttributeOption">
+        update product_attribute_option
+        set option_code = #{optionCode},
+            option_label = #{optionLabel},
+            sort_order = #{sortOrder},
+            default_flag = #{defaultFlag},
+            status = #{status},
+            update_by = #{updateBy},
+            update_time = sysdate(),
+            remark = #{remark}
+        where option_id = #{optionId}
+          and attribute_id = #{attributeId}
+    </update>
+
+    <delete id="deleteOptionById">
+        delete from product_attribute_option
+        where option_id = #{optionId}
+    </delete>
+
+    <select id="selectDirectCategoryAttributeList" resultMap="CategoryAttributeResult">
+        <include refid="categoryAttributeSelect"/>
+        where ca.category_id = #{categoryId}
+        order by ca.sort_order asc, ca.category_attribute_id asc
+    </select>
+
+    <select id="selectCategoryAttributeById" resultMap="CategoryAttributeResult">
+        <include refid="categoryAttributeSelect"/>
+        where ca.category_attribute_id = #{categoryAttributeId}
+        limit 1
+    </select>
+
+    <select id="selectCategoryAttribute" resultMap="CategoryAttributeResult">
+        <include refid="categoryAttributeSelect"/>
+        where ca.category_id = #{categoryId}
+          and ca.attribute_id = #{attributeId}
+        limit 1
+    </select>
+
+    <select id="selectCategoryAttributeRulesByCategoryIds" resultMap="CategoryAttributeResult">
+        <include refid="categoryAttributeSelect"/>
+        where ca.status = '0'
+          and a.status = '0'
+          and a.del_flag = '0'
+          and c.status = '0'
+          and c.del_flag = '0'
+          and ca.category_id in
+        <foreach item="categoryId" collection="categoryIds" open="(" separator="," close=")">
+            #{categoryId}
+        </foreach>
+    </select>
+
+    <insert id="insertCategoryAttribute" parameterType="ProductCategoryAttribute" useGeneratedKeys="true" keyProperty="categoryAttributeId">
+        insert into product_category_attribute(
+            category_id, attribute_id, rule_mode, required_flag, visible_flag,
+            editable_flag, filterable_flag, group_code, sort_order, placeholder,
+            help_text, validation_rule, status, create_by, create_time, remark
+        ) values (
+            #{categoryId}, #{attributeId}, #{ruleMode}, #{requiredFlag}, #{visibleFlag},
+            #{editableFlag}, #{filterableFlag}, #{groupCode}, #{sortOrder}, #{placeholder},
+            #{helpText}, #{validationRule}, #{status}, #{createBy}, sysdate(), #{remark}
+        )
+    </insert>
+
+    <update id="updateCategoryAttribute" parameterType="ProductCategoryAttribute">
+        update product_category_attribute
+        set rule_mode = #{ruleMode},
+            required_flag = #{requiredFlag},
+            visible_flag = #{visibleFlag},
+            editable_flag = #{editableFlag},
+            filterable_flag = #{filterableFlag},
+            group_code = #{groupCode},
+            sort_order = #{sortOrder},
+            placeholder = #{placeholder},
+            help_text = #{helpText},
+            validation_rule = #{validationRule},
+            status = #{status},
+            update_by = #{updateBy},
+            update_time = sysdate(),
+            remark = #{remark}
+        where category_attribute_id = #{categoryAttributeId}
+    </update>
+
+    <delete id="deleteCategoryAttributeById">
+        delete from product_category_attribute
+        where category_attribute_id = #{categoryAttributeId}
+    </delete>
+
+</mapper>

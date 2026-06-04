@@ -4,6 +4,7 @@ import {
   App,
   Button,
   Dropdown,
+  Flex,
   Form,
   Image,
   Input,
@@ -24,8 +25,10 @@ import {
   type ProColumns,
 } from '@ant-design/pro-components';
 import {
+  AuditOutlined,
   DownOutlined,
   DollarOutlined,
+  MenuOutlined,
   PlusOutlined,
   UploadOutlined,
 } from '@ant-design/icons';
@@ -34,6 +37,10 @@ import { uploadCommonFile } from '@/services/common/file';
 import { getDictSelectOption, getDictValueEnum } from '@/services/system/dict';
 import { getPersistedProTableSearch } from '@/utils/proTableSearch';
 import PartnerAccountModal from './PartnerAccountModal';
+import PartnerAuditModal from './PartnerAuditModal';
+import PartnerDeptModal from './PartnerDeptModal';
+import PartnerMenuModal from './PartnerMenuModal';
+import PartnerRoleModal from './PartnerRoleModal';
 
 type PartnerRecord = Record<string, any>;
 type AttachmentUploadFile = UploadFile<API.Partner.PartyAttachment>;
@@ -61,12 +68,34 @@ type PartnerService = {
   getAccounts: (id: number) => Promise<{ code: number; msg?: string; data: API.Partner.PortalAccountBase[] }>;
   addAccount: (id: number, data: API.Partner.PortalAccountBase) => Promise<API.Result>;
   updateAccount: (id: number, data: API.Partner.PortalAccountBase) => Promise<API.Result>;
+  listDepts: (id: number) => Promise<API.Partner.PortalDeptListResult>;
   getDeptTree: (id: number) => Promise<API.Partner.PortalDeptTreeResult>;
+  addDept: (id: number, data: API.Partner.PortalDept) => Promise<API.Result>;
+  updateDept: (id: number, data: API.Partner.PortalDept) => Promise<API.Result>;
+  removeDept: (id: number, deptId: number) => Promise<API.Result>;
+  getMenuTree: () => Promise<API.Partner.PortalMenuTreeResult>;
+  listMenus: (params?: Record<string, any>) => Promise<API.Partner.PortalMenuListResult>;
+  getMenu: (menuId: number) => Promise<API.Partner.PortalMenuInfoResult>;
+  addMenu: (data: API.Partner.PortalMenu) => Promise<API.Result>;
+  updateMenu: (data: API.Partner.PortalMenu) => Promise<API.Result>;
+  removeMenu: (menuId: number) => Promise<API.Result>;
+  getRoleMenuTree: (id: number, roleId: number) => Promise<API.Partner.PortalRoleMenuTreeResult>;
+  listRoles: (id: number, params?: Record<string, any>) => Promise<API.Partner.PortalRolePageResult>;
+  getRole: (id: number, roleId: number) => Promise<API.Partner.PortalRoleInfoResult>;
+  addRole: (id: number, data: API.Partner.PortalRole) => Promise<API.Result>;
+  updateRole: (id: number, data: API.Partner.PortalRole) => Promise<API.Result>;
+  changeRoleStatus: (id: number, data: Pick<API.Partner.PortalRole, 'roleId' | 'status'>) => Promise<API.Result>;
+  removeRoles: (id: number, roleIds: number[]) => Promise<API.Result>;
   resetAccountDefaultPassword: (data: any) => Promise<API.Result>;
   forceLogoutSubject: (id: number) => Promise<API.Result>;
   forceLogoutAccount: (id: number, accountId: number) => Promise<API.Result>;
+  getAccountRoles: (id: number, accountId: number) => Promise<API.Partner.PortalAccountRoleResult>;
+  assignAccountRoles: (id: number, accountId: number, roleIds: number[]) => Promise<API.Result>;
   resetOwnerPassword: (id: number) => Promise<API.Result>;
-  directLogin: (id: number) => Promise<API.Partner.DirectLoginApiResult>;
+  directLogin: (id: number, reason: string) => Promise<API.Partner.DirectLoginApiResult>;
+  listLoginLogs: (params?: Record<string, any>) => Promise<API.Partner.PortalAuditPageResult<API.Partner.PortalLoginLog>>;
+  listOperLogs: (params?: Record<string, any>) => Promise<API.Partner.PortalAuditPageResult<API.Partner.PortalOperLog>>;
+  listDirectLoginTickets: (params?: Record<string, any>) => Promise<API.Partner.PortalAuditPageResult<API.Partner.PortalDirectLoginTicket>>;
 };
 
 export type PartnerModuleConfig = {
@@ -476,6 +505,7 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
   const access = useAccess();
   const actionRef = useRef<ActionType>(null);
   const [partnerForm] = Form.useForm<PartnerFormValues>();
+  const [directLoginForm] = Form.useForm<{ reason?: string }>();
 
   const [statusOptions, setStatusOptions] = useState<DictValueEnumObj>({});
   const [subjectTypeOptions, setSubjectTypeOptions] = useState<SelectOption[]>(fallbackSubjectTypeOptions);
@@ -484,10 +514,20 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
   const [partnerModalOpen, setPartnerModalOpen] = useState(false);
   const [accountModalOpen, setAccountModalOpen] = useState(false);
   const [accountPartner, setAccountPartner] = useState<PartnerRecord>();
+  const [deptModalOpen, setDeptModalOpen] = useState(false);
+  const [deptPartner, setDeptPartner] = useState<PartnerRecord>();
+  const [roleModalOpen, setRoleModalOpen] = useState(false);
+  const [rolePartner, setRolePartner] = useState<PartnerRecord>();
+  const [menuModalOpen, setMenuModalOpen] = useState(false);
+  const [auditModalOpen, setAuditModalOpen] = useState(false);
+  const [auditPartner, setAuditPartner] = useState<PartnerRecord>();
   const [currentPartner, setCurrentPartner] = useState<PartnerRecord>();
   const [attachmentFileList, setAttachmentFileList] = useState<AttachmentUploadFile[]>([]);
 
   const permPrefix = `${config.moduleKey}:admin`;
+  const hasAuditPermission = access.hasPerms(`${permPrefix}:loginLog:list`)
+    || access.hasPerms(`${permPrefix}:operLog:list`)
+    || access.hasPerms(`${permPrefix}:ticket:list`);
   const statusValueEnum = getStatusOptions(statusOptions);
   const levelValueEnum = optionsToValueEnum(levelOptions);
 
@@ -602,20 +642,51 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
     if (!partnerId) {
       return;
     }
-    const hide = message.loading('正在生成免密登录链接');
-    try {
-      const resp = await config.services.directLogin(partnerId);
-      hide();
-      if (resp.code === 200 && resp.data?.loginUrl) {
-        window.open(resp.data.loginUrl, '_blank', 'noopener,noreferrer');
-        message.success(`免密登录链接已生成，有效期 ${resp.data.expireMinutes || 30} 分钟`);
-        return;
-      }
-      message.error(resp.msg || '免密登录链接生成失败');
-    } catch {
-      hide();
-      message.error('免密登录链接生成失败，请重试');
-    }
+    directLoginForm.resetFields();
+    modal.confirm({
+      title: `生成${config.label}端免密登录链接`,
+      okText: '生成并打开',
+      content: (
+        <Form form={directLoginForm} layout="vertical" preserve={false}>
+          <Form.Item
+            name="reason"
+            label="代入原因"
+            rules={[
+              { required: true, whitespace: true, message: '请输入免密登录原因' },
+              { max: 255, message: '代入原因不能超过 255 个字符' },
+            ]}
+          >
+            <Input.TextArea
+              rows={3}
+              maxLength={255}
+              showCount
+              placeholder="例如：协助客户排查订单问题"
+            />
+          </Form.Item>
+        </Form>
+      ),
+      onOk: async () => {
+        const values = await directLoginForm.validateFields();
+        const hide = message.loading('正在生成免密登录链接');
+        try {
+          const resp = await config.services.directLogin(partnerId, values.reason?.trim() || '');
+          if (resp.code === 200 && resp.data?.loginUrl) {
+            window.open(resp.data.loginUrl, '_blank', 'noopener,noreferrer');
+            message.success(`免密登录链接已生成，有效期 ${resp.data.expireMinutes || 30} 分钟`);
+            return;
+          }
+          message.error(resp.msg || '免密登录链接生成失败');
+          throw new Error('DIRECT_LOGIN_FAILED');
+        } catch (error) {
+          if (!(error instanceof Error && error.message === 'DIRECT_LOGIN_FAILED')) {
+            message.error('免密登录链接生成失败，请重试');
+          }
+          throw error;
+        } finally {
+          hide();
+        }
+      },
+    });
   };
 
   const handleForceLogoutSubject = (record: PartnerRecord) => {
@@ -715,10 +786,10 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
       search: false,
       width: 140,
       render: (_, record) => (
-        <Space direction="vertical" size={0}>
+        <Flex vertical gap={0}>
           <span>{formatBalance(record)}</span>
           <Tag>占位</Tag>
-        </Space>
+        </Flex>
       ),
     },
     {
@@ -749,12 +820,12 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
       search: false,
       width: 180,
       render: (_, record) => (
-        <Space direction="vertical" size={0}>
+        <Flex vertical gap={0}>
           <Typography.Text style={compactCellTextStyle}>{record.contactName || '-'}</Typography.Text>
           <Typography.Text style={compactSubTextStyle} type="secondary">
             {record.phone || record.contactPhone || record.email || record.contactEmail || '-'}
           </Typography.Text>
-        </Space>
+        </Flex>
       ),
     },
     {
@@ -779,12 +850,12 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
       search: false,
       width: 170,
       render: (_, record) => (
-        <Space direction="vertical" size={0}>
+        <Flex vertical gap={0}>
           <Typography.Text style={compactCellTextStyle}>{formatDateTimeText(record.createTime)}</Typography.Text>
           <Typography.Text style={compactSubTextStyle} type="secondary">
             {formatDateTimeText(record.lastLoginTime)}
           </Typography.Text>
-        </Space>
+        </Flex>
       ),
     },
     {
@@ -813,6 +884,18 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
             label: `登录${config.label}端`,
           });
         }
+        if (access.hasPerms(`${permPrefix}:dept:list`)) {
+          moreItems.push({
+            key: 'depts',
+            label: '部门',
+          });
+        }
+        if (access.hasPerms(`${permPrefix}:role:list`)) {
+          moreItems.push({
+            key: 'roles',
+            label: '角色',
+          });
+        }
         if (access.hasPerms(`${permPrefix}:resetPwd`)) {
           moreItems.push({
             key: 'resetOwnerPwd',
@@ -823,6 +906,12 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
           moreItems.push({
             key: 'forceLogout',
             label: '强制踢出',
+          });
+        }
+        if (hasAuditPermission) {
+          moreItems.push({
+            key: 'audit',
+            label: '审计',
           });
         }
 
@@ -857,10 +946,19 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
                 onClick: ({ key }) => {
                   if (key === 'directLogin') {
                     void handleDirectLogin(record);
+                  } else if (key === 'depts') {
+                    setDeptPartner(record);
+                    setDeptModalOpen(true);
+                  } else if (key === 'roles') {
+                    setRolePartner(record);
+                    setRoleModalOpen(true);
                   } else if (key === 'resetOwnerPwd') {
                     handleResetOwnerPassword(record);
                   } else if (key === 'forceLogout') {
                     handleForceLogoutSubject(record);
+                  } else if (key === 'audit') {
+                    setAuditPartner(record);
+                    setAuditModalOpen(true);
                   }
                 },
               }}
@@ -886,6 +984,25 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
         tableLayout="fixed"
         toolBarRender={() => [
           <Button
+            key="menus"
+            icon={<MenuOutlined />}
+            hidden={!access.hasPerms(`${permPrefix}:menu:list`)}
+            onClick={() => setMenuModalOpen(true)}
+          >
+            菜单配置
+          </Button>,
+          <Button
+            key="audit"
+            icon={<AuditOutlined />}
+            hidden={!hasAuditPermission}
+            onClick={() => {
+              setAuditPartner(undefined);
+              setAuditModalOpen(true);
+            }}
+          >
+            审计
+          </Button>,
+          <Button
             type="primary"
             key="add"
             icon={<PlusOutlined />}
@@ -907,6 +1024,24 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
         }}
       />
 
+      <PartnerMenuModal
+        config={config}
+        open={menuModalOpen}
+        onOpenChange={setMenuModalOpen}
+      />
+
+      <PartnerAuditModal
+        config={config}
+        open={auditModalOpen}
+        partner={auditPartner}
+        onOpenChange={(open) => {
+          setAuditModalOpen(open);
+          if (!open) {
+            setAuditPartner(undefined);
+          }
+        }}
+      />
+
       <PartnerAccountModal
         config={config}
         open={accountModalOpen}
@@ -915,6 +1050,30 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
           setAccountModalOpen(open);
           if (!open) {
             setAccountPartner(undefined);
+          }
+        }}
+      />
+
+      <PartnerDeptModal
+        config={config}
+        open={deptModalOpen}
+        partner={deptPartner}
+        onOpenChange={(open) => {
+          setDeptModalOpen(open);
+          if (!open) {
+            setDeptPartner(undefined);
+          }
+        }}
+      />
+
+      <PartnerRoleModal
+        config={config}
+        open={roleModalOpen}
+        partner={rolePartner}
+        onOpenChange={(open) => {
+          setRoleModalOpen(open);
+          if (!open) {
+            setRolePartner(undefined);
           }
         }}
       />
@@ -956,7 +1115,7 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
               <Input placeholder="请输入" />
             </Form.Item>
             <Form.Item label="附件">
-              <Space direction="vertical" size={8}>
+              <Flex vertical gap={8}>
                 <Upload
                   accept={ATTACHMENT_ACCEPT}
                   beforeUpload={handleAttachmentBeforeUpload}
@@ -985,7 +1144,7 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
                     </Typography.Link>
                   )
                 ) : null}
-              </Space>
+              </Flex>
             </Form.Item>
 
             <Form.Item label="联系人" name="contactName" rules={[{ required: true, message: '请输入联系人' }]}>

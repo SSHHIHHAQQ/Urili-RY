@@ -15,12 +15,15 @@ import com.ruoyi.buyer.mapper.BuyerMapper;
 import com.ruoyi.buyer.mapper.BuyerPortalDeptMapper;
 import com.ruoyi.buyer.service.IBuyerService;
 import com.ruoyi.system.domain.PortalDept;
+import com.ruoyi.system.domain.PortalDirectLoginTicket;
 import com.ruoyi.system.domain.PortalDirectLoginResult;
 import com.ruoyi.system.domain.PortalDirectLoginToken;
 import com.ruoyi.system.domain.PortalLoginIssue;
 import com.ruoyi.system.domain.PortalLoginLog;
 import com.ruoyi.system.domain.PortalLoginResult;
 import com.ruoyi.system.domain.PortalLoginSession;
+import com.ruoyi.system.domain.PortalOperLog;
+import com.ruoyi.system.mapper.PortalDirectLoginTicketMapper;
 import com.ruoyi.system.service.support.PartnerSupport;
 import com.ruoyi.system.service.support.PortalDirectLoginSupport;
 import com.ruoyi.system.service.support.PortalTokenSupport;
@@ -38,6 +41,9 @@ public class BuyerServiceImpl implements IBuyerService
 
     @Autowired
     private BuyerPortalDeptMapper deptMapper;
+
+    @Autowired
+    private PortalDirectLoginTicketMapper ticketMapper;
 
     @Autowired
     private PortalDirectLoginSupport directLoginSupport;
@@ -226,7 +232,7 @@ public class BuyerServiceImpl implements IBuyerService
     }
 
     @Override
-    public PortalDirectLoginResult createBuyerDirectLogin(Long buyerId)
+    public PortalDirectLoginResult createBuyerDirectLogin(Long buyerId, String reason)
     {
         Buyer buyer = selectBuyerById(buyerId);
         BuyerAccount owner = buyerMapper.selectOwnerBuyerAccountByBuyerId(buyerId);
@@ -234,9 +240,29 @@ public class BuyerServiceImpl implements IBuyerService
         {
             throw new ServiceException("买家已停用，不能免密登录");
         }
-        return directLoginSupport.createToken("buyer", buyerId, buyer.getBuyerNo(), owner,
+        return directLoginSupport.createToken("buyer", buyerId, buyer.getBuyerNo(), owner, reason,
             PortalDirectLoginSupport.BUYER_WEB_URL_CONFIG_KEY,
             "http://127.0.0.1:8001/buyer/direct-login");
+    }
+
+    @Override
+    public List<PortalLoginLog> selectBuyerLoginLogList(PortalLoginLog log)
+    {
+        return buyerMapper.selectBuyerLoginLogList(log);
+    }
+
+    @Override
+    public List<PortalOperLog> selectBuyerOperLogList(PortalOperLog log)
+    {
+        return buyerMapper.selectBuyerOperLogList(log);
+    }
+
+    @Override
+    public List<PortalDirectLoginTicket> selectBuyerDirectLoginTicketList(PortalDirectLoginTicket ticket)
+    {
+        PortalDirectLoginTicket query = ticket == null ? new PortalDirectLoginTicket() : ticket;
+        query.setTerminal("buyer");
+        return ticketMapper.selectPortalDirectLoginTicketList(query);
     }
 
     @Override

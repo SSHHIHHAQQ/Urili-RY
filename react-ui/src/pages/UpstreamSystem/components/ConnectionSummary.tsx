@@ -6,9 +6,11 @@ import {
   StopOutlined,
   SyncOutlined,
 } from '@ant-design/icons';
-import { Button, Descriptions, Popconfirm, Space, Typography } from 'antd';
-import { settlementOptions, systemKindText } from '../constants';
+import { Button, Popconfirm, Tooltip, Typography } from 'antd';
+import type { ReactNode } from 'react';
+import { settlementTypeText, systemKindText } from '../constants';
 import { statusTag } from '../helpers';
+import styles from '../style.module.css';
 
 type ConnectionSummaryProps = {
   access: { hasPerms: (permission: string) => boolean };
@@ -21,7 +23,25 @@ type ConnectionSummaryProps = {
 };
 
 const settlementText = (value?: string) =>
-  settlementOptions.find((item) => item.value === value)?.label || value || '-';
+  settlementTypeText[value || ''] || value || '-';
+type SummaryItemProps = {
+  label: string;
+  value: ReactNode;
+  wide?: boolean;
+};
+
+function SummaryItem({ label, value, wide }: SummaryItemProps) {
+  return (
+    <div
+      className={`${styles.summaryItem} ${wide ? styles.summaryItemWide : ''}`}
+    >
+      <span className={styles.summaryLabel}>{label}</span>
+      <Typography.Text ellipsis className={styles.summaryValue}>
+        <span className={styles.summaryValueText}>{value ?? '-'}</span>
+      </Typography.Text>
+    </div>
+  );
+}
 
 export default function ConnectionSummary({
   access,
@@ -32,60 +52,60 @@ export default function ConnectionSummary({
   onSync,
   onToggleStatus,
 }: ConnectionSummaryProps) {
+  const systemKind =
+    systemKindText[connection.systemKind || ''] || connection.systemKind || '-';
+
   return (
-    <div
-      style={{
-        background: '#fff',
-        border: '1px solid #f0f0f0',
-        borderRadius: 6,
-        padding: 16,
-      }}
-    >
-      <Space
-        align="start"
-        style={{
-          width: '100%',
-          justifyContent: 'space-between',
-          marginBottom: 12,
-        }}
-      >
-        <Space direction="vertical" size={2}>
-          <Typography.Title level={4} style={{ margin: 0 }}>
-            {connection.masterWarehouseName}
-          </Typography.Title>
-          <Typography.Text type="secondary">
-            {connection.connectionCode}
+    <div className={styles.summaryPanel}>
+      <div className={styles.summaryHeader}>
+        <div className={styles.summaryTitleBlock}>
+          <div className={styles.summaryTitleLine}>
+            <Typography.Title level={4} className={styles.summaryTitle}>
+              {connection.masterWarehouseName}
+            </Typography.Title>
+            {statusTag(connection.status)}
+          </div>
+          <Typography.Text type="secondary" className={styles.summarySubtitle}>
+            {connection.connectionCode} · {systemKind}
           </Typography.Text>
-        </Space>
-        <Space wrap>
-          <Button
-            icon={<EditOutlined />}
-            hidden={!access.hasPerms('integration:upstream:edit')}
-            onClick={onEdit}
-          >
-            编辑
-          </Button>
-          <Button
-            icon={<SyncOutlined />}
-            hidden={!access.hasPerms('integration:upstream:sync')}
-            onClick={onSync}
-          >
-            同步
-          </Button>
-          <Button
-            icon={<SafetyCertificateOutlined />}
-            hidden={!access.hasPerms('integration:upstream:sync')}
-            onClick={onAuthorize}
-          >
-            校验授权
-          </Button>
-          <Button
-            icon={<KeyOutlined />}
-            hidden={!access.hasPerms('integration:upstream:credential')}
-            onClick={onCredential}
-          >
-            重新授权
-          </Button>
+        </div>
+        <div className={styles.summaryActions}>
+          <Tooltip title="编辑主仓资料">
+            <Button
+              icon={<EditOutlined />}
+              hidden={!access.hasPerms('integration:upstream:edit')}
+              onClick={onEdit}
+            >
+              编辑
+            </Button>
+          </Tooltip>
+          <Tooltip title="同步仓库、物流渠道和SKU">
+            <Button
+              icon={<SyncOutlined />}
+              hidden={!access.hasPerms('integration:upstream:sync')}
+              onClick={onSync}
+            >
+              同步
+            </Button>
+          </Tooltip>
+          <Tooltip title="校验当前授权是否可用">
+            <Button
+              icon={<SafetyCertificateOutlined />}
+              hidden={!access.hasPerms('integration:upstream:sync')}
+              onClick={onAuthorize}
+            >
+              校验授权
+            </Button>
+          </Tooltip>
+          <Tooltip title="更新 Key 和 Secret">
+            <Button
+              icon={<KeyOutlined />}
+              hidden={!access.hasPerms('integration:upstream:credential')}
+              onClick={onCredential}
+            >
+              重新授权
+            </Button>
+          </Tooltip>
           <Popconfirm
             title={
               connection.status === 'ENABLED'
@@ -108,42 +128,32 @@ export default function ConnectionSummary({
               {connection.status === 'ENABLED' ? '停用' : '启用'}
             </Button>
           </Popconfirm>
-        </Space>
-      </Space>
-      <Descriptions size="small" column={{ xs: 1, sm: 2, md: 3, xl: 4 }}>
-        <Descriptions.Item label="主仓类型">
-          {systemKindText[connection.systemKind || ''] ||
-            connection.systemKind ||
-            '-'}
-        </Descriptions.Item>
-        <Descriptions.Item label="接入状态">
-          {statusTag(connection.status)}
-        </Descriptions.Item>
-        <Descriptions.Item label="授权状态">
-          {statusTag(
+        </div>
+      </div>
+      <div className={styles.summaryGrid}>
+        <SummaryItem
+          label="授权状态"
+          value={statusTag(
             connection.credentialStatus ||
               (connection.appKeyMask ? 'CONFIGURED' : undefined),
           )}
-        </Descriptions.Item>
-        <Descriptions.Item label="结算类型">
-          {settlementText(connection.settlementType)}
-        </Descriptions.Item>
-        <Descriptions.Item label="最近授权">
-          {connection.lastAuthorizedTime || '-'}
-        </Descriptions.Item>
-        <Descriptions.Item label="最近同步">
-          {connection.lastSyncTime || '-'}
-        </Descriptions.Item>
-        <Descriptions.Item label="请求日志数">
-          {connection.requestLogCount ?? 0}
-        </Descriptions.Item>
-        <Descriptions.Item label="Key">
-          {connection.appKeyMask || '-'}
-        </Descriptions.Item>
-        <Descriptions.Item label="备注" span={2}>
-          {connection.remark || '-'}
-        </Descriptions.Item>
-      </Descriptions>
+        />
+        <SummaryItem label="最近同步" value={connection.lastSyncTime || '-'} />
+        <SummaryItem
+          label="最近授权"
+          value={connection.lastAuthorizedTime || '-'}
+        />
+        <SummaryItem
+          label="请求日志数"
+          value={connection.requestLogCount ?? 0}
+        />
+        <SummaryItem
+          label="结算类型"
+          value={settlementText(connection.settlementType)}
+        />
+        <SummaryItem label="Key" value={connection.appKeyMask || '-'} />
+        <SummaryItem label="备注" value={connection.remark || '-'} wide />
+      </div>
     </div>
   );
 }
