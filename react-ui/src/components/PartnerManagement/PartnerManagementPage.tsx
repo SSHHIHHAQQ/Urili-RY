@@ -36,6 +36,7 @@ import type { DictValueEnumObj } from '@/components/DictTag';
 import { uploadCommonFile } from '@/services/common/file';
 import { getDictSelectOption, getDictValueEnum } from '@/services/system/dict';
 import { getPersistedProTableSearch } from '@/utils/proTableSearch';
+import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 import PartnerAccountModal from './PartnerAccountModal';
 import PartnerAuditModal from './PartnerAuditModal';
 import PartnerDeptModal from './PartnerDeptModal';
@@ -238,17 +239,6 @@ function optionsToValueEnum(options: SelectOption[]): DictValueEnumObj {
     acc[option.value] = { text: option.label, label: option.label, value: option.value };
     return acc;
   }, {});
-}
-
-function filterSelectOption(
-  input: string,
-  option?: { label?: React.ReactNode; value?: string | number; searchText?: string },
-) {
-  const keyword = input.trim().toLowerCase();
-  const label = typeof option?.label === 'string' ? option.label : String(option?.label ?? '');
-  const value = option?.value == null ? '' : String(option.value);
-  const searchText = option?.searchText || `${value} ${label}`;
-  return keyword === '' || searchText.toLowerCase().includes(keyword);
 }
 
 function getRangeValue(value: unknown) {
@@ -777,6 +767,7 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
       dataIndex: config.levelField,
       valueType: 'select',
       valueEnum: levelValueEnum,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       width: 96,
       render: (_, record) => <Tag color="blue">{levelValueEnum[getValue(record, config.levelField)]?.label || getValue(record, config.levelField) || '-'}</Tag>,
     },
@@ -795,6 +786,7 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
     {
       title: config.balanceTitle,
       dataIndex: 'balanceRange',
+      colSize: 2,
       valueType: 'digitRange',
       hideInTable: true,
       formItemRender: () => <BalanceRangeInput />,
@@ -833,6 +825,7 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
       dataIndex: 'status',
       valueType: 'select',
       valueEnum: statusValueEnum,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       width: 96,
       render: (_, record) => (
         <Switch
@@ -861,12 +854,14 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
     {
       title: '创建时间',
       dataIndex: 'createTimeRange',
+      colSize: 2,
       valueType: 'dateRange',
       hideInTable: true,
     },
     {
       title: '最后登录时间',
       dataIndex: 'lastLoginTimeRange',
+      colSize: 2,
       valueType: 'dateRange',
       hideInTable: true,
     },
@@ -1092,10 +1087,10 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
               <Input disabled={Boolean(getValue(currentPartner, config.idField) && currentPartner?.username)} placeholder="请输入" />
             </Form.Item>
             <Form.Item label={`${config.label}等级`} name="level" rules={[{ required: true, message: `请选择${config.label}等级` }]}>
-              <Select options={levelOptions} />
+              <Select {...SEARCHABLE_SELECT_PROPS} options={levelOptions} />
             </Form.Item>
             <Form.Item label="主体类型" name="type" rules={[{ required: true, message: '请选择主体类型' }]}>
-              <Select options={subjectTypeOptions} />
+              <Select {...SEARCHABLE_SELECT_PROPS} options={subjectTypeOptions} />
             </Form.Item>
 
             <Form.Item label={`${config.label}全称`} name="name" rules={[{ required: true, message: `请输入${config.label}全称` }]}>
@@ -1172,9 +1167,7 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
             </Form.Item>
             <Form.Item label="国家/地区" name="countryCode" rules={[{ required: true, message: '请选择国家/地区' }]}>
               <Select
-                showSearch
-                filterOption={filterSelectOption}
-                optionFilterProp="label"
+                {...SEARCHABLE_SELECT_PROPS}
                 options={countryRegionOptions}
                 placeholder="请选择国家/地区"
               />

@@ -4,13 +4,12 @@ import {
   ModalForm,
   type ProColumns,
   ProFormDigit,
-  type ProFormInstance,
   ProFormSelect,
   ProFormText,
   ProFormTextArea,
   ProTable,
 } from '@ant-design/pro-components';
-import { Button, Modal } from 'antd';
+import { Button, Form, Modal } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import {
   addAttributeOption,
@@ -59,10 +58,7 @@ export default function AttributeOptionManager({
   onOpenChange,
 }: AttributeOptionManagerProps) {
   const actionRef = useRef<ActionType>(null);
-  const formRef =
-    useRef<ProFormInstance<API.Product.AttributeOption> | undefined>(
-      undefined,
-    );
+  const [form] = Form.useForm<API.Product.AttributeOption>();
   const [optionModalOpen, setOptionModalOpen] = useState(false);
   const [currentOption, setCurrentOption] =
     useState<API.Product.AttributeOption>();
@@ -71,9 +67,9 @@ export default function AttributeOptionManager({
     if (!optionModalOpen) {
       return;
     }
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue(currentOption || defaultOptionValues);
-  }, [optionModalOpen, currentOption]);
+    form.resetFields();
+    form.setFieldsValue(currentOption || defaultOptionValues);
+  }, [currentOption, form, optionModalOpen]);
 
   const openCreateOption = () => {
     setCurrentOption(undefined);
@@ -220,9 +216,9 @@ export default function AttributeOptionManager({
       <ModalForm<API.Product.AttributeOption>
         title={currentOption?.optionId ? '编辑属性选项' : '新增属性选项'}
         open={optionModalOpen}
-        formRef={formRef}
+        form={form}
         modalProps={{
-          destroyOnClose: true,
+          destroyOnHidden: true,
           onCancel: () => setOptionModalOpen(false),
         }}
         onOpenChange={setOptionModalOpen}

@@ -2,7 +2,7 @@ import { Question, SelectLang, AvatarDropdown, AvatarName } from '@/components';
 import { LinkOutlined } from '@ant-design/icons';
 import type { Settings as LayoutSettings } from '@ant-design/pro-components';
 import { SettingDrawer } from '@ant-design/pro-components';
-import { App as AntdApp } from 'antd';
+import { App as AntdApp, ConfigProvider } from 'antd';
 import type { RunTimeLayoutConfig } from '@umijs/max';
 import { history, Link } from '@umijs/max';
 import type { ReactNode } from 'react';
@@ -162,9 +162,11 @@ export const layout: RunTimeLayoutConfig = ({ initialState, setInitialState }) =
 
 export function rootContainer(container: ReactNode) {
   return (
-    <AntdApp>
-      <AntdFeedbackProvider>{container}</AntdFeedbackProvider>
-    </AntdApp>
+    <ConfigProvider select={{ showSearch: true }}>
+      <AntdApp>
+        <AntdFeedbackProvider>{container}</AntdFeedbackProvider>
+      </AntdApp>
+    </ConfigProvider>
   );
 }
 
@@ -224,8 +226,9 @@ const checkRegion = 5 * 60 * 1000;
 export const request: any = {
   ...errorConfig,
   requestInterceptors: [
-    (url: any, options: { headers: any }) => {
-      const headers = options.headers ? options.headers : [];
+    (url: any, options: { headers: Record<string, any> }) => {
+      const headers = options.headers ?? {};
+      options.headers = headers;
       console.log('request ====>:', url);
       const authHeader = headers.Authorization;
       const isToken = headers.isToken;
@@ -234,10 +237,8 @@ export const request: any = {
         if (expireTime) {
           const left = Number(expireTime) - Date.now();
           const refreshToken = getRefreshToken();
-          if (left < checkRegion && refreshToken) {
-            if (left < 0) {
-              clearSessionToken();
-            }
+          if (left < 0) {
+            clearSessionToken();
           } else {
             const accessToken = getAccessToken();
             if (accessToken) {

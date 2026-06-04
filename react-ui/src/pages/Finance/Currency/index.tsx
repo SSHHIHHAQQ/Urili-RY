@@ -220,6 +220,7 @@ export default function FinanceCurrencyPage() {
     {
       title: '生效汇率时间',
       dataIndex: 'effectiveRateTimeRange',
+      colSize: 2,
       valueType: 'dateRange',
       hideInTable: true,
       search: {

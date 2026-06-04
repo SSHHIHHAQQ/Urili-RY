@@ -81,6 +81,7 @@ const OnlineUserTableList: React.FC = () => {
     {
       title: <FormattedMessage id="monitor.online.user.login_time" defaultMessage="登录时间" />,
       dataIndex: 'loginTime',
+      colSize: 2,
       valueType: 'dateRange',
       render: (_, record) => <span>{record.loginTime}</span>,
       search: {

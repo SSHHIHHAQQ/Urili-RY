@@ -17,6 +17,7 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import type { DataNode } from 'antd/es/tree';
 import { PlusOutlined } from '@ant-design/icons';
+import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 import type { PartnerModuleConfig } from './PartnerManagementPage';
 
 type PartnerRecord = Record<string, any>;
@@ -377,7 +378,7 @@ const PartnerRoleModal: React.FC<PartnerRoleModalProps> = ({
             <InputNumber min={0} precision={0} style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item label="状态" name="status" rules={[{ required: true, message: '请选择状态' }]}>
-            <Select options={statusOptions} />
+            <Select {...SEARCHABLE_SELECT_PROPS} options={statusOptions} />
           </Form.Item>
           <Form.Item label="菜单权限">
             <div style={{ maxHeight: 260, overflow: 'auto', border: '1px solid #f0f0f0', padding: 8 }}>

@@ -17,6 +17,7 @@ import {
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { PlusOutlined } from '@ant-design/icons';
+import { SEARCHABLE_SELECT_PROPS, SEARCHABLE_TREE_SELECT_PROPS } from '@/utils/selectSearch';
 import type { PartnerModuleConfig } from './PartnerManagementPage';
 
 type MenuRecord = API.Partner.PortalMenu & Record<string, any>;
@@ -428,11 +429,10 @@ const PartnerMenuModal: React.FC<PartnerMenuModalProps> = ({ config, open, onOpe
         <Form form={form} layout="vertical">
           <Form.Item label="上级菜单" name="parentId" rules={[{ required: true, message: '请选择上级菜单' }]}>
             <TreeSelect
+              {...SEARCHABLE_TREE_SELECT_PROPS}
               treeData={parentTreeData}
               treeDefaultExpandAll
-              showSearch
               placeholder="请选择"
-              filterTreeNode={(input, node) => String(node.title || '').includes(input)}
             />
           </Form.Item>
           <Form.Item label="菜单类型" name="menuType" rules={[{ required: true, message: '请选择菜单类型' }]}>
@@ -482,10 +482,10 @@ const PartnerMenuModal: React.FC<PartnerMenuModalProps> = ({ config, open, onOpe
             <Radio.Group options={cacheOptions} />
           </Form.Item>
           <Form.Item label="显示状态" name="visible" hidden={menuType === 'F'}>
-            <Select options={visibleOptions} />
+            <Select {...SEARCHABLE_SELECT_PROPS} options={visibleOptions} />
           </Form.Item>
           <Form.Item label="菜单状态" name="status" rules={[{ required: true, message: '请选择菜单状态' }]}>
-            <Select options={statusOptions} />
+            <Select {...SEARCHABLE_SELECT_PROPS} options={statusOptions} />
           </Form.Item>
           <Form.Item label="备注" name="remark">
             <Input.TextArea rows={3} placeholder="请输入" />

@@ -61,6 +61,56 @@
   flex: none;
 }
 
+.ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-table-search .ant-form-horizontal .ant-form-item {
+  align-items: stretch;
+  display: flex;
+  flex-direction: column;
+}
+
+.ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-table-search .ant-form-horizontal .ant-form-item-label {
+  flex: none;
+  padding-block-end: 6px;
+  text-align: start;
+  white-space: nowrap;
+  width: 100%;
+}
+
+.ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-table-search .ant-form-horizontal .ant-form-item-label > label {
+  height: auto;
+  color: rgba(0, 0, 0, 0.88);
+}
+
+.ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-table-search .ant-form-horizontal .ant-form-item-control {
+  flex: none;
+  max-width: 100%;
+  min-width: 0;
+  width: 100%;
+}
+
+.ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-table-search .ant-form-horizontal .ant-form-item-control-input,
+.ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-table-search .ant-form-horizontal .ant-form-item-control-input-content {
+  min-width: 0;
+  width: 100%;
+}
+
+.ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-table-search .ant-form-horizontal .ant-form-item-control-input-content > .ant-input,
+.ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-table-search .ant-form-horizontal .ant-form-item-control-input-content > .ant-input-number,
+.ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-table-search .ant-form-horizontal .ant-form-item-control-input-content > .ant-select,
+.ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-table-search .ant-form-horizontal .ant-form-item-control-input-content > .ant-picker,
+.ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-table-search .ant-form-horizontal .ant-form-item-control-input-content > .ant-space-compact {
+  min-width: 160px;
+  width: 100%;
+}
+
+.ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-table-search .ant-form-horizontal .ant-form-item-control-input-content > .ant-picker.ant-picker-range,
+.ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-table-search .ant-form-horizontal .ant-form-item-control-input-content > .ant-space-compact {
+  min-width: 240px;
+}
+
+.ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-table-search .ant-pro-query-filter-actions {
+  margin-block-start: 28px;
+}
+
 .ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-card:not(.ant-pro-table-search) {
   display: flex;
   flex: 1;

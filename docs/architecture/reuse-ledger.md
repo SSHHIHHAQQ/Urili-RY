@@ -111,9 +111,11 @@
   - 卖家/买家编号生成
   - 主体类型、等级、联系地址、附件字段校验
   - 主账号昵称生成
+  - 卖家端/买家端当前账号修改密码字段校验
 - 复用规则：
   - 只放卖家/买家共用的机械逻辑。
   - 不要把它扩成新的“客户模块”。
+  - 后续端内密码修改继续复用 `normalizePasswordChange(...)`，不要在 seller/buyer service 或 React 页面里重复写旧密码、新密码、确认密码校验规则。
 
 ### 卖家/买家端账号表
 
@@ -125,6 +127,7 @@
 - 当前用途：
   - 管理端创建卖家/买家端主账号和子账号。
   - 管理端重置卖家/买家端账号密码。
+  - 卖家端/买家端当前账号自行修改密码。
   - 卖家/买家列表展示主账号、账号数和最后登录时间。
   - 免密登录生成时读取端内主账号 `accountId`。
   - 卖家端/买家端登录成功后更新最后登录 IP 和最后登录时间。
@@ -132,6 +135,8 @@
   - 卖家端账号只读写 `seller_account`，买家端账号只读写 `buyer_account`。
   - 不允许重新引入 `PortalAccountSupport` 或 `PortalAccountMapper` 把端账号绑定回 `sys_user`。
   - 端内角色、菜单、部门、日志和会话分别使用 `seller_*` / `buyer_*` 表。
+  - 端内当前账号修改密码必须从 `PortalSessionContext` 推导主体 ID 和账号 ID，不允许前端传 `sellerId` / `buyerId` / `accountId` 决定修改对象。
+  - 按账号 ID 查询可以读取 `password` 供 Service 内部旧密码校验；管理端列表、端内资料接口和端内账号列表不得返回 `password` 字段。
 
 ### PortalDirectLoginSupport
 
@@ -213,6 +218,8 @@
   - 不要在 Controller 或 Service 里重复手写 token 解析、权限集合读取、`*:*:*` 判断和端类型判断。
   - 端内接口需要当前主体或账号时，优先从 `PortalSessionContext.requireSession("seller" / "buyer")` 获取 `subjectId`、`accountId` 和 `terminal`。
   - 端内主动退出也必须先经过 `@PortalPreAuthorize`，再用 `PortalSessionContext` 中的当前会话删除对应 Redis token 和更新当前 session 行；不要让前端传 `tokenId`、`sellerId`、`buyerId` 或 `accountId` 决定退出范围。
+  - 端内当前账号修改密码也必须先经过 `@PortalPreAuthorize`，再从 `PortalSessionContext` 读取当前会话；请求体只允许包含旧密码、新密码和确认密码，不允许传目标账号 ID。
+  - 涉及密码、token、密钥的端内接口必须关闭响应日志或保证脱敏；`oldPassword`、`newPassword`、`confirmPassword` 不得写入 Markdown、日志或前端状态持久化。
   - `PortalPreAuthorizeAspect` 不依赖 `argNames` 绑定注解参数，统一从 `MethodSignature` 读取 `@PortalPreAuthorize`，避免 Spring AOP 参数名绑定差异导致端内接口 500。
   - 管理端接口继续使用若依 `@PreAuthorize("@ss.hasPermi(...)")`，不要把管理端后台权限迁移到 `@PortalPreAuthorize`。
   - 接口涉及端内业务数据时，权限注解只负责“能不能访问该操作”；数据范围仍必须从端 token 推导 `sellerId` / `buyerId`，不能相信前端传入主体 ID。
@@ -324,14 +331,17 @@
 - 位置：`react-ui/src/utils/proTableSearch.ts`
 - 方法：`getPersistedProTableSearch(config, storageKey?)`
 - 当前用途：
-  - 系统管理、系统监控、工具中心、主体管理等 ProTable 页面筛选区。
+  - 系统管理、系统监控、工具中心、主体管理、财务管理等 ProTable 页面筛选区。
+  - 当前先服务 `react-ui` 管理端；后续拆出 `seller-ui` / `buyer-ui` 后，卖家端和买家端列表页继续复用同一套筛选预设。
 - 复用规则：
-  - 后续新增 ProTable 页面时，使用 `getPersistedProTableSearch({ labelWidth: ... })`，不要直接写散落的 `search={{ ... }}`。
-  - 管理端 ProTable 筛选区默认桌面宽度一行展示 6 个筛选字段；字段超过 6 个时按统一网格自动换行。
+  - 后续新增 ProTable 页面时，使用 `getPersistedProTableSearch(...)`，不要直接写散落的 `search={{ ... }}`。
+  - 三端前端列表页筛选区默认采用 Ant Design Pro 原生 `vertical` 查询布局，也就是字段名在上、输入框在下，避免标签和输入框横向挤压。
+  - 三端前端筛选区必须按内容区宽度响应式降列：宽屏优先一行 6 个字段，中屏自动降为 4 个或 3 个字段，小屏降为 2 个字段；宁可换行，不允许把输入框压缩成不可用的小块。
+  - 日期范围、金额区间、余额区间、库存区间等长控件默认占 2 个筛选格；普通输入框也要保留最小可用宽度。
   - 弹窗内小表格、纯明细表、无查询条件表格等确有理由的场景可显式 `search={false}`，但不要另起一套页面内筛选布局。
   - 同一业务指标的最小/最大查询条件统一做成一个区间字段，例如余额、金额、库存数量；优先使用 Ant Design 原生组合控件和默认输入框样式，不自定义特殊容器，不使用假的禁用输入框，前端提交时再拆成后端需要的最小/最大参数。
-  - 表格操作列同一行超过 2 个操作时，最多保留 2 个高频操作按钮直接展示，其余操作使用 Ant Design `Dropdown` 收进“更多”下拉菜单，不要横向平铺 3 个及以上文字按钮。
-  - 表格操作列的行内操作和“更多”下拉菜单项默认只展示文字，不加操作图标；“更多”作为下拉触发器必须使用 Ant Design 小下箭头提示可展开。
+  - 三端前端表格操作列同一行超过 2 个操作时，最多保留 2 个高频操作按钮直接展示，其余操作使用 Ant Design `Dropdown` 收进“更多”下拉菜单，不要横向平铺 3 个及以上文字按钮。
+  - 三端前端表格操作列的行内操作和“更多”下拉菜单项默认只展示文字，不加操作图标；“更多”作为下拉触发器必须使用 Ant Design 小下箭头提示可展开。
 
 ### 页面级标题
 
@@ -341,9 +351,9 @@
   - 全局让 `PageContainer` 内容区、直接承载的 `ProTable`、卡片和 Tabs 按剩余视口高度撑满。
   - 全局让 ProTable 分页器压在主数据块底部，并在分页器上方显示浅色横向分隔线。
 - 复用规则：
-  - 管理端页面顶部不再展示独立页面标题，也不要在筛选区、表格区上方手写页面级标题。
+  - 三端前端页面顶部不再展示独立页面标题，也不要在筛选区、表格区上方手写页面级标题。
   - 后续新增页面继续使用该全局规则；需要表达局部区域时，使用表格、卡片、抽屉、弹窗自身标题。
-  - 管理端页面的主数据块、表单块或占位块必须填满可视区域；内容不足时由分块高度补齐，不要让页面下半屏暴露空白背景。
+  - 三端前端页面的主数据块、表单块或占位块必须填满可视区域；内容不足时由分块高度补齐，不要让页面下半屏暴露空白背景。
   - 新增页面优先使用 `PageContainer` 直接承载 `ProTable`、`Card`、`ProCard` 或 `Tabs`；如果确实需要额外包裹层，包裹层也要保持纵向 flex 撑满。
   - 表格分页器必须留在主数据块底部，上方保留分隔线；不要在单页里把分页器改回跟随数据行的位置。
   - 全局 Tabs 撑满规则必须保留 `.ant-tabs-tabpane-hidden { display: none; }`，避免未激活页签内容和当前页签叠加显示。
@@ -510,10 +520,11 @@
 - 当前用途：
   - 管理端继续使用原有 `access_token` / `refresh_token` / `expireTime`，避免影响当前 admin 登录。
   - 卖家端、买家端预留独立 token key：`seller_*` / `buyer_*`。
-  - `portal/session.ts` 统一封装卖家端、买家端登录、免密登录、主动退出、`getInfo`、`getRouters`、主体资料、当前账号资料、端内账号只读列表、端内部门只读列表和端内角色只读列表接口。
+  - `portal/session.ts` 统一封装卖家端、买家端登录、免密登录、主动退出、修改当前账号密码、`getInfo`、`getRouters`、主体资料、当前账号资料、端内账号只读列表、端内部门只读列表和端内角色只读列表接口。
 - 复用规则：
   - 后续三端物理拆分时，卖家端、买家端前端优先复用 `setTerminalSessionToken`、`getTerminalAccessToken`、`clearTerminalSessionToken`，不要重新设计 localStorage key。
   - 后续端内页面调用当前账号、主体资料、菜单、权限和退出登录时，优先复用 `sellerPortalSessionService` / `buyerPortalSessionService` 或底层 `portal*` 方法，不要在页面里直接拼 `/seller` / `/buyer` 路径。
+  - 后续端内安全设置或个人中心修改密码时，优先调用 `sellerPortalSessionService.updatePassword` / `buyerPortalSessionService.updatePassword`；页面不要传主体 ID、账号 ID，也不要持久化旧密码、新密码或确认密码。
   - 当前 `react-ui/` 仍是管理端验证入口；该基础层只为后续物理拆分降低重复改造，不代表现在立即复制 `seller-ui` / `buyer-ui`。
 
 ### PlannedPage

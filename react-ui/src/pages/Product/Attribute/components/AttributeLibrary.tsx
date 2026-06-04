@@ -5,13 +5,12 @@ import {
   type ProColumns,
   ProFormDependency,
   ProFormDigit,
-  type ProFormInstance,
   ProFormSelect,
   ProFormText,
   ProFormTextArea,
   ProTable,
 } from '@ant-design/pro-components';
-import { Button, Dropdown, Modal } from 'antd';
+import { Button, Dropdown, Form, Modal } from 'antd';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   addAttribute,
@@ -63,8 +62,7 @@ function resultOk(resp: API.Result, successText: string) {
 
 export default function AttributeLibrary({ access }: AttributeLibraryProps) {
   const actionRef = useRef<ActionType>(null);
-  const attributeFormRef =
-    useRef<ProFormInstance<API.Product.Attribute> | undefined>(undefined);
+  const [attributeForm] = Form.useForm<API.Product.Attribute>();
   const [attributeModalOpen, setAttributeModalOpen] = useState(false);
   const [attributeImportOpen, setAttributeImportOpen] = useState(false);
   const [optionImportOpen, setOptionImportOpen] = useState(false);
@@ -85,11 +83,9 @@ export default function AttributeLibrary({ access }: AttributeLibraryProps) {
     if (!attributeModalOpen) {
       return;
     }
-    attributeFormRef.current?.resetFields();
-    attributeFormRef.current?.setFieldsValue(
-      currentAttribute || defaultAttributeValues,
-    );
-  }, [attributeModalOpen, currentAttribute]);
+    attributeForm.resetFields();
+    attributeForm.setFieldsValue(currentAttribute || defaultAttributeValues);
+  }, [attributeForm, attributeModalOpen, currentAttribute]);
 
   const openCreateAttribute = () => {
     setCurrentAttribute(undefined);
@@ -312,9 +308,9 @@ export default function AttributeLibrary({ access }: AttributeLibraryProps) {
       <ModalForm<API.Product.Attribute>
         title={currentAttribute?.attributeId ? '编辑商品属性' : '新增商品属性'}
         open={attributeModalOpen}
-        formRef={attributeFormRef}
+        form={attributeForm}
         modalProps={{
-          destroyOnClose: true,
+          destroyOnHidden: true,
           onCancel: () => setAttributeModalOpen(false),
         }}
         onOpenChange={setAttributeModalOpen}

@@ -279,7 +279,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
     <select id="selectSellerAccountById" parameterType="Long" resultMap="SellerAccountResult">
         select a.seller_account_id, a.seller_id, a.dept_id, d.dept_name, a.account_role, a.status, a.status as user_status,
-               a.user_name, a.nick_name, a.email, a.phonenumber, a.last_login_ip, a.last_login_time, a.pwd_update_time,
+               a.user_name, a.nick_name, a.password, a.email, a.phonenumber, a.last_login_ip, a.last_login_time, a.pwd_update_time,
                a.create_by, a.create_time, a.update_by, a.update_time, a.remark
         from seller_account a
         left join seller_dept d on d.seller_dept_id = a.dept_id and d.seller_id = a.seller_id and d.del_flag = '0'

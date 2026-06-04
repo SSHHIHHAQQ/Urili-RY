@@ -16,6 +16,26 @@ export default [
     redirect: '/account/center',
   },
   {
+    path: '/seller/direct-login',
+    layout: false,
+    component: './Portal/DirectLogin',
+  },
+  {
+    path: '/buyer/direct-login',
+    layout: false,
+    component: './Portal/DirectLogin',
+  },
+  {
+    path: '/seller/portal',
+    layout: false,
+    component: './Portal/Home',
+  },
+  {
+    path: '/buyer/portal',
+    layout: false,
+    component: './Portal/Home',
+  },
+  {
     path: '*',
     layout: false,
     component: './404',

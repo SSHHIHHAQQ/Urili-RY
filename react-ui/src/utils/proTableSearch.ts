@@ -3,17 +3,24 @@ import type { ProTableProps } from '@ant-design/pro-components';
 type ProTableSearchConfig = Exclude<ProTableProps<Record<string, unknown>, Record<string, unknown>>['search'], false | undefined>;
 
 const SEARCH_COLLAPSED_STORAGE_PREFIX = 'proTableSearch:collapsed:';
-const SIX_FIELD_SEARCH_SPAN: NonNullable<ProTableSearchConfig['span']> = {
+
+const RESPONSIVE_VERTICAL_SEARCH_SPAN: NonNullable<ProTableSearchConfig['span']> = {
   xs: 24,
   sm: 12,
-  md: 8,
-  lg: 4,
-  xl: 4,
+  md: 12,
+  lg: 8,
+  xl: 6,
   xxl: 4,
 };
-const DEFAULT_PRO_TABLE_SEARCH_LAYOUT: Pick<ProTableSearchConfig, 'defaultFormItemsNumber' | 'span'> = {
+const DEFAULT_PRO_TABLE_SEARCH_LAYOUT: Pick<
+  ProTableSearchConfig,
+  'defaultFormItemsNumber' | 'labelWidth' | 'layout' | 'searchGutter' | 'span'
+> = {
   defaultFormItemsNumber: 6,
-  span: SIX_FIELD_SEARCH_SPAN,
+  labelWidth: 'auto',
+  layout: 'vertical',
+  searchGutter: [24, 16],
+  span: RESPONSIVE_VERTICAL_SEARCH_SPAN,
 };
 
 function getSearchStorageKey(storageKey?: string) {
@@ -40,10 +47,18 @@ export function getPersistedProTableSearch(
 ): ProTableSearchConfig {
   const key = getSearchStorageKey(storageKey);
   const onCollapse = config.onCollapse;
+  const layout = config.layout ?? DEFAULT_PRO_TABLE_SEARCH_LAYOUT.layout;
 
   return {
-    ...DEFAULT_PRO_TABLE_SEARCH_LAYOUT,
     ...config,
+    defaultFormItemsNumber: config.defaultFormItemsNumber ?? DEFAULT_PRO_TABLE_SEARCH_LAYOUT.defaultFormItemsNumber,
+    labelWidth:
+      layout === 'horizontal'
+        ? config.labelWidth
+        : DEFAULT_PRO_TABLE_SEARCH_LAYOUT.labelWidth,
+    layout,
+    searchGutter: config.searchGutter ?? DEFAULT_PRO_TABLE_SEARCH_LAYOUT.searchGutter,
+    span: config.span ?? DEFAULT_PRO_TABLE_SEARCH_LAYOUT.span,
     defaultCollapsed: getPersistedCollapsed(key),
     onCollapse: (collapsed) => {
       if (typeof window !== 'undefined') {

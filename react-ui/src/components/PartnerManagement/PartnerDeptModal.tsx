@@ -16,6 +16,7 @@ import {
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { PlusOutlined } from '@ant-design/icons';
+import { SEARCHABLE_SELECT_PROPS, SEARCHABLE_TREE_SELECT_PROPS } from '@/utils/selectSearch';
 import type { PartnerModuleConfig } from './PartnerManagementPage';
 
 type PartnerRecord = Record<string, any>;
@@ -332,12 +333,11 @@ const PartnerDeptModal: React.FC<PartnerDeptModalProps> = ({
         <Form form={form} layout="vertical">
           <Form.Item label="上级部门" name="parentId">
             <TreeSelect
-              showSearch
+              {...SEARCHABLE_TREE_SELECT_PROPS}
               treeDefaultExpandAll
               placeholder="请选择"
               treeData={parentTreeData}
               fieldNames={{ label: 'label', value: 'id', children: 'children' }}
-              treeNodeFilterProp="label"
             />
           </Form.Item>
           <Form.Item label="部门名称" name="deptName" rules={[{ required: true, message: '请输入部门名称' }]}>
@@ -356,7 +356,7 @@ const PartnerDeptModal: React.FC<PartnerDeptModalProps> = ({
             <Input placeholder="请输入" />
           </Form.Item>
           <Form.Item label="状态" name="status" rules={[{ required: true, message: '请选择状态' }]}>
-            <Select options={statusOptions} />
+            <Select {...SEARCHABLE_SELECT_PROPS} options={statusOptions} />
           </Form.Item>
         </Form>
       </Modal>

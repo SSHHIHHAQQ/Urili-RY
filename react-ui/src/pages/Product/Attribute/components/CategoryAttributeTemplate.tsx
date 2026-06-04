@@ -4,13 +4,12 @@ import {
   ModalForm,
   type ProColumns,
   ProFormDigit,
-  type ProFormInstance,
   ProFormSelect,
   ProFormText,
   ProFormTextArea,
   ProTable,
 } from '@ant-design/pro-components';
-import { Button, Empty, Modal, Tree } from 'antd';
+import { Button, Empty, Form, Modal, Tree } from 'antd';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   deleteCategoryAttribute,
@@ -67,10 +66,7 @@ export default function CategoryAttributeTemplate({
 }: CategoryAttributeTemplateProps) {
   const directActionRef = useRef<ActionType>(null);
   const schemaActionRef = useRef<ActionType>(null);
-  const formRef =
-    useRef<ProFormInstance<API.Product.CategoryAttribute> | undefined>(
-      undefined,
-    );
+  const [form] = Form.useForm<API.Product.CategoryAttribute>();
   const [categories, setCategories] = useState<API.Product.Category[]>([]);
   const [attributes, setAttributes] = useState<API.Product.Attribute[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<number>();
@@ -120,13 +116,13 @@ export default function CategoryAttributeTemplate({
     if (!modalOpen) {
       return;
     }
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({
+    form.resetFields();
+    form.setFieldsValue({
       ...defaultRuleValues,
       categoryId: selectedCategoryId,
       ...currentRule,
     });
-  }, [currentRule, modalOpen, selectedCategoryId]);
+  }, [currentRule, form, modalOpen, selectedCategoryId]);
 
   const openCreateRule = () => {
     if (!selectedCategoryId) {
@@ -367,8 +363,8 @@ export default function CategoryAttributeTemplate({
       <ModalForm<API.Product.CategoryAttribute>
         title={currentRule?.categoryAttributeId ? '编辑本类目规则' : '新增本类目规则'}
         open={modalOpen}
-        formRef={formRef}
-        modalProps={{ destroyOnClose: true, onCancel: () => setModalOpen(false) }}
+        form={form}
+        modalProps={{ destroyOnHidden: true, onCancel: () => setModalOpen(false) }}
         onOpenChange={setModalOpen}
         onFinish={saveRule}
       >

@@ -19,6 +19,7 @@ import type { MenuProps } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { DownOutlined, PlusOutlined } from '@ant-design/icons';
 import { getDictSelectOption } from '@/services/system/dict';
+import { SEARCHABLE_SELECT_PROPS, SEARCHABLE_TREE_SELECT_PROPS } from '@/utils/selectSearch';
 import type { PartnerModuleConfig } from './PartnerManagementPage';
 import PartnerAccountRoleModal from './PartnerAccountRoleModal';
 
@@ -106,17 +107,6 @@ function normalizeDictSelectOptions(
   });
 
   return normalized.length > 0 ? normalized : fallback;
-}
-
-function filterSelectOption(
-  input: string,
-  option?: { label?: React.ReactNode; value?: string | number; searchText?: string },
-) {
-  const keyword = input.trim().toLowerCase();
-  const label = typeof option?.label === 'string' ? option.label : String(option?.label ?? '');
-  const value = option?.value == null ? '' : String(option.value);
-  const searchText = option?.searchText || `${value} ${label}`;
-  return keyword === '' || searchText.toLowerCase().includes(keyword);
 }
 
 function getValue(record: PartnerRecord | undefined, field: string) {
@@ -514,20 +504,19 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
           ) : null}
           <Form.Item label="部门" name="deptId">
             <TreeSelect
+              {...SEARCHABLE_TREE_SELECT_PROPS}
               allowClear
-              showSearch
               treeDefaultExpandAll
               placeholder="请选择"
               treeData={deptTree}
               fieldNames={{ label: 'label', value: 'id', children: 'children' }}
-              treeNodeFilterProp="label"
             />
           </Form.Item>
           <Form.Item label="账号角色" name="accountRole" rules={[{ required: true, message: '请选择账号角色' }]}>
-            <Select options={roleSelectOptions} showSearch filterOption={filterSelectOption} />
+            <Select {...SEARCHABLE_SELECT_PROPS} options={roleSelectOptions} />
           </Form.Item>
           <Form.Item label="状态" name="status" rules={[{ required: true, message: '请选择状态' }]}>
-            <Select options={statusOptions} />
+            <Select {...SEARCHABLE_SELECT_PROPS} options={statusOptions} />
           </Form.Item>
           <Form.Item label="手机" name="phonenumber">
             <Input placeholder="请输入" />

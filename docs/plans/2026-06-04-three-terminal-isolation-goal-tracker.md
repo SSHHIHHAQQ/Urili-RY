@@ -1517,3 +1517,59 @@
 - 端内主动退出已形成闭环：端 token 校验、跨端拒绝、当前会话退出、Redis token 删除、旧 token 失效、登录日志和操作日志均已验证。
 - 后续卖家端/买家端真实前端退出按钮直接调用 `sellerPortalSessionService.logout` / `buyerPortalSessionService.logout`，成功后清理对应端本地 token；不要在页面内重新拼路径或自行传会话 ID。
 - 已确认的 seller/buyer 同构部分继续模板化推进：卖家侧先形成标准样板并完成验证，买家侧只替换端类型、文案、路由、权限标识、字段配置和 service，不再逐页重新设计。
+
+## 2026-06-04 端内当前账号修改密码接口检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，补齐卖家端、买家端账号体系独立后的“当前端账号自行修改密码”能力。该能力必须只修改当前端账号自己的密码：卖家端写 `seller_account.password`，买家端写 `buyer_account.password`，不复用也不改写管理端 `sys_user`。
+
+已完成：
+
+- 新增 `PortalPasswordChangeRequest`，作为卖家端/买家端统一的修改密码请求对象。
+- `PartnerSupport` 新增 `normalizePasswordChange(...)`：
+  - 统一校验旧密码、新密码、确认密码。
+  - 新密码长度沿用若依 `UserConstants.PASSWORD_MIN_LENGTH` / `PASSWORD_MAX_LENGTH`。
+  - 校验新密码和确认密码一致。
+- 卖家端新增 `PUT /seller/account/password`：
+  - 使用 `@PortalPreAuthorize(terminal = "seller")` 校验当前端 token。
+  - 使用 `PortalSessionContext.requireSession("seller")` 推导当前 `sellerId` 和 `sellerAccountId`。
+  - 只允许修改当前 token 对应的 `seller_account`。
+  - 使用 `@PortalLog(..., isSaveResponseData = false)` 写入 `seller_oper_log`。
+- 买家端新增 `PUT /buyer/account/password`，按同一模板只允许修改当前 token 对应的 `buyer_account`，并写入 `buyer_oper_log`。
+- `SellerMapper.xml` / `BuyerMapper.xml` 的账号按 ID 查询补充读取 `a.password`，供内部旧密码校验使用。
+- `react-ui/src/services/portal/session.ts` 新增 `updatePortalPassword(...)`，并挂到 `sellerPortalSessionService.updatePassword` / `buyerPortalSessionService.updatePassword`。
+- `react-ui/src/types/seller-buyer/party.d.ts` 新增 `PortalPasswordChangeParams`。
+- `docs/architecture/reuse-ledger.md` 已补充端内当前账号修改密码的复用规则。
+
+修复过程记录：
+
+- 第一次真实烟测发现旧密码校验一直失败，根因是 `selectSellerAccountById` / `selectBuyerAccountById` 原查询没有读取 `password` 字段。
+- 已修复为按 ID 查询时读取密码密文，仅供 Service 内部校验；管理端列表、端内资料接口和端内账号列表仍通过 DTO 输出，不暴露 `password` 字段。
+
+验证结果：
+
+- 数据源确认：tracked YAML 当前通过 `RUOYI_DB_URL`、`RUOYI_DB_USERNAME`、`RUOYI_DB_PASSWORD` 和 `RUOYI_REDIS_*` 环境变量读取 MySQL/Redis 配置；本轮没有输出 `.env.local` 中的凭证、密码或 token secret。
+- `mvn -DskipTests compile`：通过。
+- `npm run tsc`：通过。
+- `mvn -pl ruoyi-system -DargLine="-Djdk.net.URLClassPath.disableClassPathURLCheck=true" test`：通过，新增 `PartnerSupportTest` 覆盖密码修改字段校验。
+- 停止并重启后端：`.\start-backend-local.ps1 -Restart` 通过，`http://127.0.0.1:8080` 探活返回 200。
+- 完整真实接口烟测：
+  - 管理端登录：`code=200`。
+  - 卖家端：`sellerId=9`，`accountId=8`。
+  - 买家端：`buyerId=2`，`accountId=2`。
+  - 烟测前管理端重置卖家/买家端账号默认密码为 `U12346`，并强制清理旧会话。
+  - 卖家端、买家端使用默认密码登录成功。
+  - 旧密码错误时，卖家端和买家端修改密码均被拒绝。
+  - 卖家 token 调用 `/buyer/account/password` 返回 401，买家 token 调用 `/seller/account/password` 返回 401。
+  - 卖家端、买家端使用正确旧密码修改为临时密码均返回 `code=200`。
+  - 修改后默认密码登录失败，临时密码登录成功。
+  - 使用临时密码登录后，已把卖家端和买家端账号密码恢复为默认密码 `U12346`。
+  - 恢复后默认密码登录成功。
+  - `seller_oper_log` 可查到 `/seller/account/password`，烟测读取到 `operId=24`。
+  - `buyer_oper_log` 可查到 `/buyer/account/password`，烟测读取到 `operId=23`。
+  - 烟测后已调用管理端账号级强制踢出接口清理本次会话。
+
+当前判断：
+
+- 端内当前账号修改密码已形成闭环：端 token 校验、当前账号范围、旧密码校验、新密码写入、跨端拒绝、旧密码失效、新密码生效、恢复默认密码和端内操作日志均已验证。
+- 该能力不需要 DDL；本轮真实 DML 只发生在被选中卖家/买家端账号的密码重置、修改和恢复上，最终已恢复默认密码。
+- 后续卖家端/买家端个人中心或安全设置页面直接调用 `sellerPortalSessionService.updatePassword` / `buyerPortalSessionService.updatePassword`，页面不要传 `sellerId`、`buyerId`、`accountId`，也不要记录旧密码、新密码或确认密码。

@@ -4,7 +4,6 @@ import {
   ModalForm,
   PageContainer,
   type ProColumns,
-  type ProFormInstance,
   ProFormDigit,
   ProFormSelect,
   ProFormText,
@@ -13,7 +12,7 @@ import {
   ProTable,
 } from '@ant-design/pro-components';
 import { useAccess } from '@umijs/max';
-import { Button, Dropdown, Modal } from 'antd';
+import { Button, Dropdown, Form, Modal } from 'antd';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   addCategory,
@@ -49,9 +48,7 @@ const defaultCategoryValues: Partial<API.Product.Category> = {
 export default function ProductCategoryPage() {
   const access = useAccess();
   const actionRef = useRef<ActionType>(null);
-  const formRef = useRef<ProFormInstance<API.Product.Category> | undefined>(
-    undefined,
-  );
+  const [form] = Form.useForm<API.Product.Category>();
   const [flatCategories, setFlatCategories] = useState<API.Product.Category[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -77,9 +74,9 @@ export default function ProductCategoryPage() {
     if (!modalOpen) {
       return;
     }
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue(currentCategory || defaultCategoryValues);
-  }, [currentCategory, modalOpen]);
+    form.resetFields();
+    form.setFieldsValue(currentCategory || defaultCategoryValues);
+  }, [currentCategory, form, modalOpen]);
 
   const openCreateModal = (parent?: API.Product.Category) => {
     setCurrentCategory({
@@ -280,8 +277,8 @@ export default function ProductCategoryPage() {
       <ModalForm<API.Product.Category>
         title={currentCategory?.categoryId ? '编辑商品分类' : '新增商品分类'}
         open={modalOpen}
-        formRef={formRef}
-        modalProps={{ destroyOnClose: true, onCancel: () => setModalOpen(false) }}
+        form={form}
+        modalProps={{ destroyOnHidden: true, onCancel: () => setModalOpen(false) }}
         onOpenChange={setModalOpen}
         onFinish={saveCategory}
       >
