@@ -6,6 +6,7 @@ import type { FormInstance } from 'antd';
 import { Button, Modal } from 'antd';
 import { ActionType, FooterToolbar, PageContainer, ProColumns, ProTable } from '@ant-design/pro-components';
 import { getPersistedProTableSearch } from '@/utils/proTableSearch';
+import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 import { PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, ReloadOutlined, DownloadOutlined } from '@ant-design/icons';
 import { getConfigList, removeConfig, addConfig, updateConfig, exportConfig, refreshConfigCache } from '@/services/system/config';
 import UpdateForm from './edit';
@@ -184,6 +185,7 @@ const ConfigTableList: React.FC = () => {
       dataIndex: 'configType',
       valueType: 'select',
       valueEnum: configTypeOptions,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       render: (_, record) => {
         return (<DictTag enums={configTypeOptions} value={record.configType} />);
       },

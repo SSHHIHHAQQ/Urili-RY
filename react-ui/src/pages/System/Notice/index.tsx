@@ -6,6 +6,7 @@ import type { FormInstance } from 'antd';
 import { Button, Modal } from 'antd';
 import { ActionType, FooterToolbar, PageContainer, ProColumns, ProTable } from '@ant-design/pro-components';
 import { getPersistedProTableSearch } from '@/utils/proTableSearch';
+import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 import { PlusOutlined, DeleteOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { getNoticeList, removeNotice, addNotice, updateNotice } from '@/services/system/notice';
 import UpdateForm from './edit';
@@ -147,6 +148,7 @@ const NoticeTableList: React.FC = () => {
       dataIndex: 'noticeType',
       valueType: 'select',
       valueEnum: noticeTypeOptions,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
     },
     {
       title: <FormattedMessage id="system.notice.notice_content" defaultMessage="公告内容" />,
@@ -159,6 +161,7 @@ const NoticeTableList: React.FC = () => {
       dataIndex: 'status',
       valueType: 'select',
       valueEnum: statusOptions,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       render: (_, record) => {
         return (<DictTag enums={statusOptions} value={record.status} />);
       },
