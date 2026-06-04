@@ -18,6 +18,7 @@ import {
   updateAttributeOption,
 } from '@/services/product/product';
 import { message } from '@/utils/feedback';
+import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 import {
   statusOptions,
   statusValueEnum,
@@ -135,12 +136,14 @@ export default function AttributeOptionManager({
       title: '默认',
       dataIndex: 'defaultFlag',
       valueEnum: yesNoValueEnum,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       width: 90,
     },
     {
       title: '状态',
       dataIndex: 'status',
       valueEnum: statusValueEnum,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       width: 90,
     },
     {
@@ -234,9 +237,9 @@ export default function AttributeOptionManager({
           label="选项名称"
           rules={[{ required: true, message: '请输入选项名称' }]}
         />
-        <ProFormSelect name="defaultFlag" label="默认" options={yesNoOptions} />
+        <ProFormSelect name="defaultFlag" label="默认" options={yesNoOptions} fieldProps={SEARCHABLE_SELECT_PROPS} />
         <ProFormDigit name="sortOrder" label="排序" min={0} />
-        <ProFormSelect name="status" label="状态" options={statusOptions} />
+        <ProFormSelect name="status" label="状态" options={statusOptions} fieldProps={SEARCHABLE_SELECT_PROPS} />
         <ProFormTextArea name="remark" label="备注" />
       </ModalForm>
     </>
