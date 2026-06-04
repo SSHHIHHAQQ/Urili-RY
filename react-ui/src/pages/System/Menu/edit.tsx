@@ -13,6 +13,7 @@ import type { DataNode } from 'antd/es/tree';
 import { createIcon } from '@/utils/IconUtil';
 import { DictValueEnumObj } from '@/components/DictTag';
 import IconSelector from '@/components/IconSelector';
+import { SEARCHABLE_SELECT_PROPS, SEARCHABLE_TREE_SELECT_PROPS } from '@/utils/selectSearch';
 
 export type MenuFormData = Record<string, unknown> & Partial<API.System.Menu>;
 
@@ -126,6 +127,7 @@ const MenuForm: React.FC<MenuFormProps> = (props) => {
             },
           ]}
           fieldProps = {{
+            ...SEARCHABLE_TREE_SELECT_PROPS,
             defaultValue: 0
           }}
         />
@@ -164,6 +166,7 @@ const MenuForm: React.FC<MenuFormProps> = (props) => {
           hidden={menuTypeId === 'F'}
           addonBefore={createIcon(menuIconName)}
           fieldProps={{
+            ...SEARCHABLE_SELECT_PROPS,
             onClick: () => {
               setIconSelectorOpen(true);
             },

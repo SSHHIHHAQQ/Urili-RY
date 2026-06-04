@@ -10,6 +10,7 @@ import { Form, Modal} from 'antd';
 import { useIntl, FormattedMessage } from '@umijs/max';
 import type { DataNode } from 'antd/es/tree';
 import { DictValueEnumObj } from '@/components/DictTag';
+import { SEARCHABLE_TREE_SELECT_PROPS } from '@/utils/selectSearch';
 
 export type DeptFormData = Record<string, unknown> & Partial<API.System.Dept>;
 
@@ -103,6 +104,7 @@ const DeptForm: React.FC<DeptFormProps> = (props) => {
           request={async () => {
             return deptTree;
           }}
+          fieldProps={SEARCHABLE_TREE_SELECT_PROPS}
           placeholder="请选择上级部门"
           rules={[
             {

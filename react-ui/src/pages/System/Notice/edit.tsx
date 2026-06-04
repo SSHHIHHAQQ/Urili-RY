@@ -10,6 +10,7 @@ import {
 import { Form, Modal} from 'antd';
 import { useIntl, FormattedMessage } from '@umijs/max';
 import { DictValueEnumObj } from '@/components/DictTag';
+import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 
 export type NoticeFormData = Record<string, unknown> & Partial<API.System.Notice>;
 
@@ -113,6 +114,7 @@ const NoticeForm: React.FC<NoticeFormProps> = (props) => {
           })}
           colProps={{ md: 12, xl: 24 }}
           placeholder="请输入公告类型"
+          fieldProps={SEARCHABLE_SELECT_PROPS}
           rules={[
             {
               required: true,
