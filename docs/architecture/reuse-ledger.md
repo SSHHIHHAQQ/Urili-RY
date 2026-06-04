@@ -104,6 +104,29 @@
   - 导入只支持新增和更新，不支持导入删除；删除仍必须走页面操作和后端业务校验。
   - 本阶段明确不包含 SKU、多 SKU、库存、价格、商品发布、商品审核和外部平台属性同步。
 
+### 端内商品 Schema 只读模板
+
+- 位置：
+  - `RuoYi-Vue/product/src/main/java/com/ruoyi/product/controller/ProductPortalSchemaController.java`
+  - `RuoYi-Vue/product/src/main/java/com/ruoyi/product/domain/PortalProductCategorySchemaItem.java`
+  - `RuoYi-Vue/product/src/main/java/com/ruoyi/product/domain/PortalProductAttributeOption.java`
+  - `RuoYi-Vue/sql/20260604_seller_product_schema_permission_seed.sql`
+  - `RuoYi-Vue/sql/20260604_buyer_product_schema_permission_seed.sql`
+- 当前用途：
+  - 作为 seller/buyer 端真实业务接口的第一套标准模板。
+  - 卖家端只读获取商品发布所需的类目属性 schema。
+  - 买家端只读获取商品浏览、筛选或商品详情所需的类目属性 schema。
+  - 只消费 `product` 模块配置，不维护平台商品分类、属性库或类目属性规则。
+- 复用规则：
+  - 已按“先验收卖家模板，再复制买家”的节奏落地；后续同构端内商品接口继续按模板化推进。
+  - schema 计算统一复用 `IProductConfigService.previewCategorySchema(categoryId)`，不要在 seller/buyer Service、Controller 或前端重复手写继承合并逻辑。
+  - 端内接口必须使用 `@PortalPreAuthorize` 校验 terminal 和端内权限；卖家端权限点为 `seller:product:schema:query`，买家端权限点为 `buyer:product:schema:query`。
+  - 端内接口需要匿名放行给若依外层登录过滤，再由 `@PortalPreAuthorize` 做端 token 鉴权；`@Anonymous` 应下沉到明确的方法级入口，不做类级匿名。
+  - 端内接口必须从 `PortalSessionContext.requireSession(...)` 获取当前端身份；不得信任前端传入的 `sellerId`、`buyerId`、`accountId`、`subjectId` 或 `terminal`。
+  - 端内 schema 只返回启用类目、可发布类目、启用属性规则和可见属性规则；属性选项只返回启用选项。
+  - 响应 DTO 只返回端内表单需要的字段，不返回 `createBy`、`updateBy`、`remark`、密码、token、Redis key 或后台审计字段。
+  - 后续维护 seller/buyer 端同构接口时，只替换 terminal、路径、权限点、日志 title、seed 表名和验证主体，不重新设计。
+
 ### PartnerSupport
 
 - 位置：`RuoYi-Vue/ruoyi-system/src/main/java/com/ruoyi/system/service/support/PartnerSupport.java`

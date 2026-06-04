@@ -25,10 +25,11 @@ public class ProductAttributeImportRow
     @Excel(name = "字典类型", prompt = "选择型属性且选项来源为 SYS_DICT 时必填")
     private String dictType;
 
-    @Excel(name = "单位")
+    @Excel(name = "单位", prompt = "仅 NUMBER 属性可填，例如 cm、kg、g；其他属性留空")
     private String unit;
 
-    @Excel(name = "数值精度", cellType = ColumnType.NUMERIC, defaultValue = "0")
+    @Excel(name = "数值精度", cellType = ColumnType.NUMERIC, defaultValue = "0",
+        prompt = "仅 NUMBER 属性可填，表示保留几位小数，范围 0-8；其他属性填 0 或留空")
     private Integer valuePrecision;
 
     @Excel(name = "状态", readConverterExp = "0=正常,1=停用", combo = { "正常", "停用" }, defaultValue = "正常")

@@ -46,6 +46,8 @@ public class ProductConfigServiceImpl implements IProductConfigService
 
     private static final Set<String> OPTION_ATTRIBUTE_TYPES = Set.of("SINGLE_SELECT", "MULTI_SELECT");
 
+    private static final String ATTRIBUTE_TYPE_NUMBER = "NUMBER";
+
     private static final String RULE_ADD = "ADD";
 
     private static final String RULE_OVERRIDE = "OVERRIDE";
@@ -401,7 +403,7 @@ public class ProductConfigServiceImpl implements IProductConfigService
         }
         attribute.setOptionSource(StringUtils.defaultIfBlank(attribute.getOptionSource(), OPTION_SOURCE_NONE).trim().toUpperCase());
         normalizeAttributeOptionSource(attribute);
-        attribute.setUnit(StringUtils.defaultString(attribute.getUnit()).trim());
+        normalizeAttributeNumberConfig(attribute);
         attribute.setStatus(StringUtils.defaultIfBlank(attribute.getStatus(), STATUS_NORMAL));
         attribute.setRemark(StringUtils.defaultString(attribute.getRemark()));
     }
@@ -430,6 +432,30 @@ public class ProductConfigServiceImpl implements IProductConfigService
             return;
         }
         attribute.setDictType("");
+    }
+
+    private void normalizeAttributeNumberConfig(ProductAttribute attribute)
+    {
+        if (!ATTRIBUTE_TYPE_NUMBER.equals(attribute.getAttributeType()))
+        {
+            if (StringUtils.isNotBlank(attribute.getUnit()))
+            {
+                throw new ServiceException("只有数字属性才允许配置单位");
+            }
+            if (attribute.getValuePrecision() != null && attribute.getValuePrecision() != 0)
+            {
+                throw new ServiceException("只有数字属性才允许配置数值精度");
+            }
+            attribute.setUnit("");
+            attribute.setValuePrecision(0);
+            return;
+        }
+        attribute.setUnit(StringUtils.defaultString(attribute.getUnit()).trim());
+        attribute.setValuePrecision(defaultInt(attribute.getValuePrecision()));
+        if (attribute.getValuePrecision() < 0 || attribute.getValuePrecision() > 8)
+        {
+            throw new ServiceException("数字属性的数值精度必须在 0 到 8 之间");
+        }
     }
 
     private void validateCustomOptionAttribute(ProductAttribute attribute)

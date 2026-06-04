@@ -65,6 +65,7 @@
 | 前端直登入口与端内工作台 | 第一版已完成 | 当前 `react-ui/` 已落地 `/seller/direct-login`、`/buyer/direct-login`、`/seller/portal`、`/buyer/portal`；该工作台是验证型入口，后续物理拆分可迁移模板 |
 | 端内当前账号日志接口 | 已完成 | 已落地 seller/buyer 当前账号登录日志、操作日志只读接口；查询范围由 `PortalSessionContext` 推导，不能被前端参数扩大 |
 | 端内当前账号会话接口 | 已完成 | 已落地 seller/buyer 当前账号会话只读接口；查询范围由 `PortalSessionContext` 推导，只返回当前端账号自己的会话，不返回 `tokenId`、JWT、Redis key 或密码字段 |
+| 端内商品 Schema 只读接口 | 已完成 | 已落地 seller/buyer 端商品 schema 只读接口；buyer 按卖家模板复制，只替换 terminal、路径、权限点、日志 title、seed 表名和验证主体 |
 | 前端三端物理拆分 | 未开始 | 当前仍在 `react-ui/` 中验证 seller/buyer 直登页和工作台模板，尚未复制 `seller-ui` / `buyer-ui` |
 | 旧实现迁移 | 第二批已完成 | 旧 `PortalAccountSupport` / `PortalAccountMapper` 已移除；迁移脚本已删除账号表旧 `user_id` 列；早期复用 `sys_user` 的历史方案文档已标记过期 |
 
@@ -1746,3 +1747,98 @@
 - 查看会话本身会通过 `@PortalLog` 追加一条端内操作日志，这是保留审计行为；接口设置 `isSaveResponseData=false`，不把会话列表写入操作日志响应体。
 - 管理端强制踢出仍继续使用 `/seller/admin/sellers/*/sessions` 和 `/buyer/admin/buyers/*/sessions`，不要和端内当前账号会话接口混用。
 - 后续端内安全中心或个人中心会话页直接调用 `sellerPortalSessionService.getSessions` / `buyerPortalSessionService.getSessions`，页面不要传主体 ID、账号 ID、`tokenId` 或 Redis key。
+
+## 2026-06-04 卖家端商品 Schema 只读标准模板检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，并按最新节奏收敛：先做一套标准卖家模板，验收通过后再复制买家；每个切片只改一类东西，减少返工。
+
+已完成：
+
+- 在 `product` 模块新增卖家端只读入口 `GET /seller/product/categories/{categoryId}/schema`。
+- 接口使用 `@PortalPreAuthorize(terminal = "seller", hasPermi = "seller:product:schema:query")`。
+- 接口使用 `@PortalLog(terminal = "seller", title = "Seller product schema", isSaveResponseData = false)` 写入卖家端操作日志，但不记录响应体。
+- 接口从 `PortalSessionContext.requireSession("seller")` 确认当前请求是卖家端会话。
+- 接口复用 `IProductConfigService.previewCategorySchema(categoryId)`，不在 seller/buyer 模块或前端重复实现类目继承合并逻辑。
+- 新增端内 DTO：`PortalProductCategorySchemaItem`、`PortalProductAttributeOption`，不直接暴露管理端 domain 的 `createBy`、`updateBy`、`remark` 等审计字段。
+- 端内接口只允许启用且可发布的类目，并只返回启用的属性规则和启用的属性选项。
+- 新增卖家端权限 seed：`RuoYi-Vue/sql/20260604_seller_product_schema_permission_seed.sql`。
+- 新增 SQL 执行记录：`docs/plans/2026-06-04-seller-product-schema-permission-sql-execution-record.md`。
+- 本轮已按最新要求删除刚开始误加的 buyer endpoint 和前端 portal product service，当前切片只保留卖家端后端模板。
+
+验证结果：
+
+- 数据源确认：tracked YAML 通过 `RUOYI_*` 环境变量读取远程 MySQL/Redis 配置；本轮不输出 `.env.local` 凭证。
+- 卖家权限 DML：执行成功。
+- `seller_menu` 中 `seller:product:schema:query` 数量：`1`。
+- `seller_role_menu` 中该权限绑定数量：`3`。
+- `mvn -DskipTests compile`：通过。
+- 停止旧 8080 后端进程后执行 `mvn -DskipTests package`：通过。
+- `.\start-backend-local.ps1`：通过，8080 正常监听。
+- `/captchaImage`：`code=200`，`captchaEnabled=false`。
+- 管理端登录：`code=200`。
+- 管理端生成卖家端免密票据：`code=200`。
+- 卖家端消费免密票据：`code=200`，`terminal=seller`。
+- seller token 调 `GET /seller/product/categories/446/schema`：HTTP 200，业务 `code=200`。
+- 当前远程库选中可发布类目的 schema 字段数为 `0`，因此本轮验证的是接口模板、权限和脱敏边界，不代表商品类目属性配置已有内容。
+- 响应敏感 key 检查：未发现 `password`、`token`、`tokenId`、`createBy`、`updateBy`、`remark`、Redis key。
+- admin token 调卖家端 schema：业务 `code=401`。
+- 无 token 调卖家端 schema：业务 `code=401`。
+- 伪造 `sellerId`、`buyerId`、`accountId`、`terminal` 查询参数不能扩大范围。
+- 验证后已调用 `POST /seller/logout` 清理本轮 seller portal token。
+- 本轮未新增 buyer 端接口、buyer 权限、buyer 前端 service 或买家端验证。
+
+当前判断：
+
+- 卖家端商品 Schema 只读接口已经形成可复制的标准模板。
+- buyer 端后续复制时，不重新设计；只替换 terminal、路径、权限点、日志 title、seed 表名和验证主体。
+- 商品 Schema 内容为空是当前远程库业务配置状态问题，后续需要通过商品类目属性绑定数据补齐，不应在本切片里临时插入业务配置数据。
+
+## 2026-06-04 买家端商品 Schema 只读复制检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，并按最新节奏执行：卖家端模板验收后复制买家端；本切片只改端内商品 Schema 只读入口、权限 seed 和执行记录，不扩展前端、不新增业务配置数据。
+
+已完成：
+
+- 在 `product` 模块新增买家端只读入口 `GET /buyer/product/categories/{categoryId}/schema`。
+- 接口使用 `@PortalPreAuthorize(terminal = "buyer", hasPermi = "buyer:product:schema:query")`。
+- 接口使用 `@PortalLog(terminal = "buyer", title = "Buyer product schema", isSaveResponseData = false)` 写入买家端操作日志，但不记录响应体。
+- 接口从 `PortalSessionContext.requireSession("buyer")` 确认当前请求是买家端会话。
+- 接口继续复用 `IProductConfigService.previewCategorySchema(categoryId)`，不在 buyer 模块或前端重复实现类目继承合并逻辑。
+- seller/buyer 两个端内 schema 方法均采用方法级 `@Anonymous`，不使用类级匿名。
+- 端内 DTO 继续复用 `PortalProductCategorySchemaItem`、`PortalProductAttributeOption`，不直接暴露管理端 domain 的审计字段。
+- 端内接口只允许启用且可发布的类目，并只返回启用且可见的属性规则和启用的属性选项。
+- 新增买家端权限 seed：`RuoYi-Vue/sql/20260604_buyer_product_schema_permission_seed.sql`。
+- 新增 SQL 执行记录：`docs/plans/2026-06-04-buyer-product-schema-permission-sql-execution-record.md`。
+
+验证结果：
+
+- 数据源确认：tracked YAML 通过 `RUOYI_*` 环境变量读取远程 MySQL/Redis 配置；本轮不输出 `.env.local` 凭证。
+- 买家权限 DML：执行成功。
+- `buyer_menu` 中 `buyer:product:schema:query` 数量：`1`。
+- `buyer_role_menu` 中该权限绑定数量：`1`。
+- `buyer_role` 当前 active 角色数量：`1`。
+- `buyer_account_role` 中 owner 账号绑定数量：`1`。
+- `mvn -DskipTests compile`：通过。
+- 停止旧 8080 后端进程后执行 `mvn -DskipTests package`：通过。
+- `.\start-backend-local.ps1`：通过，8080 正常监听。
+- `/captchaImage`：`code=200`，`captchaEnabled=false`。
+- 管理端登录：`code=200`。
+- 当前远程库选中启用且可发布类目，管理端 schema 字段数为 `8`。
+- 管理端生成买家端免密票据：`code=200`。
+- 买家端消费免密票据：`code=200`，`terminal=buyer`。
+- buyer token 调买家端 schema：HTTP 200，业务 `code=200`。
+- 买家端 schema 响应字段数为 `8`，必填字段数为 `5`，选项数量为 `40`。
+- 响应敏感 key 检查：未发现 `password`、`token`、`tokenId`、`createBy`、`updateBy`、`remark`、Redis key。
+- admin token 调买家端 schema：业务 `code=401`。
+- 无 token 调买家端 schema：业务 `code=401`。
+- seller token 调买家端 schema：业务 `code=401`。
+- 伪造 `sellerId`、`buyerId`、`accountId`、`subjectId`、`terminal` 查询参数不能扩大范围，响应字段数变化为 `0`。
+- 卖家端回归验证：seller token 调卖家端 schema 返回业务 `code=200`，schema 字段数为 `8`，敏感 key 命中数量为 `0`。
+- 验证后已调用 `POST /buyer/logout` 和 `POST /seller/logout` 清理本轮 portal token。
+
+当前判断：
+
+- 买家端商品 Schema 只读入口已按卖家模板复制完成，只替换 terminal、路径、权限点、日志 title、seed 表名和验证主体。
+- seller/buyer 商品 Schema 只读接口已形成同构模板；后续端内商品相关只读入口继续优先按这一套模板推进。
+- 权限 seed 当前会把该只读权限授予 active 端内角色；后续如果引入更细的角色授权策略，应把 seed 从“所有 active 角色”调整为明确角色清单。
+- 远程库存在已软删除的 owner 角色历史数据；本轮 DML 已执行成功，但后续 seed 继续写 owner 角色时应先检查唯一约束和软删除数据，避免历史脏数据造成冲突。

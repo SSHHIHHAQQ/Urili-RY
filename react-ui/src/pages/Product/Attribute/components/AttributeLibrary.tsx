@@ -30,6 +30,7 @@ import { getPersistedProTableSearch } from '@/utils/proTableSearch';
 import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 import {
   attributeTypeOptions,
+  isNumberAttributeType,
   isOptionAttributeType,
   optionArrayToValueEnum,
   optionSourceOptions,
@@ -51,6 +52,7 @@ type AttributeLibraryProps = {
 const defaultAttributeValues: Partial<API.Product.Attribute> = {
   attributeType: 'TEXT',
   optionSource: 'NONE',
+  unit: '',
   valuePrecision: 0,
   status: '0',
 };
@@ -62,9 +64,7 @@ function normalizeAttributeValues(
   if (!isOptionAttributeType(next.attributeType)) {
     next.optionSource = 'NONE';
     next.dictType = '';
-    return next;
-  }
-  if (
+  } else if (
     next.optionSource !== 'ATTRIBUTE_OPTION' &&
     next.optionSource !== 'SYS_DICT'
   ) {
@@ -72,6 +72,13 @@ function normalizeAttributeValues(
   }
   if (next.optionSource !== 'SYS_DICT') {
     next.dictType = '';
+  }
+  if (!isNumberAttributeType(next.attributeType)) {
+    next.unit = '';
+    next.valuePrecision = 0;
+  } else {
+    next.unit = next.unit || '';
+    next.valuePrecision = next.valuePrecision ?? 0;
   }
   return next;
 }
@@ -356,18 +363,23 @@ export default function AttributeLibrary({ access }: AttributeLibraryProps) {
         onOpenChange={setAttributeModalOpen}
         onValuesChange={(changedValues, allValues) => {
           if ('attributeType' in changedValues) {
+            const resetValues: Partial<API.Product.Attribute> = {};
             if (!isOptionAttributeType(changedValues.attributeType)) {
-              attributeForm.setFieldsValue({ optionSource: 'NONE', dictType: '' });
-              return;
-            }
-            if (
+              resetValues.optionSource = 'NONE';
+              resetValues.dictType = '';
+            } else if (
               allValues.optionSource !== 'ATTRIBUTE_OPTION' &&
               allValues.optionSource !== 'SYS_DICT'
             ) {
-              attributeForm.setFieldsValue({
-                optionSource: 'ATTRIBUTE_OPTION',
-                dictType: '',
-              });
+              resetValues.optionSource = 'ATTRIBUTE_OPTION';
+              resetValues.dictType = '';
+            }
+            if (!isNumberAttributeType(changedValues.attributeType)) {
+              resetValues.unit = '';
+              resetValues.valuePrecision = 0;
+            }
+            if (Object.keys(resetValues).length > 0) {
+              attributeForm.setFieldsValue(resetValues);
             }
           }
           if (
@@ -420,8 +432,21 @@ export default function AttributeLibrary({ access }: AttributeLibraryProps) {
             ) : null
           }
         </ProFormDependency>
-        <ProFormText name="unit" label="单位" />
-        <ProFormDigit name="valuePrecision" label="数值精度" min={0} max={8} />
+        <ProFormDependency name={['attributeType']}>
+          {({ attributeType }) =>
+            isNumberAttributeType(attributeType) ? (
+              <>
+                <ProFormText name="unit" label="单位" />
+                <ProFormDigit
+                  name="valuePrecision"
+                  label="数值精度"
+                  min={0}
+                  max={8}
+                />
+              </>
+            ) : null
+          }
+        </ProFormDependency>
         <ProFormSelect
           name="status"
           label="状态"

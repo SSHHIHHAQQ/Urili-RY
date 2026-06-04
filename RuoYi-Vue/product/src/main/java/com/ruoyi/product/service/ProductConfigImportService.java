@@ -47,6 +47,8 @@ public class ProductConfigImportService
 
     private static final Set<String> OPTION_SOURCES = Set.of("NONE", "ATTRIBUTE_OPTION", "SYS_DICT");
 
+    private static final String ATTRIBUTE_TYPE_NUMBER = "NUMBER";
+
     @Autowired
     private ProductConfigMapper productConfigMapper;
 
@@ -125,6 +127,11 @@ public class ProductConfigImportService
             try
             {
                 ProductCategoryImportRow row = rows.get(index);
+                if (row == null)
+                {
+                    result.addError(rowNum, "导入行为空，请检查模板格式或删除空行");
+                    continue;
+                }
                 ProductCategory category = buildCategory(row);
                 String categoryCode = category.getCategoryCode();
                 if (!rowCodes.add(categoryCode))
@@ -205,7 +212,13 @@ public class ProductConfigImportService
             int rowNum = index + 2;
             try
             {
-                ProductAttribute attribute = buildAttribute(rows.get(index));
+                ProductAttributeImportRow row = rows.get(index);
+                if (row == null)
+                {
+                    result.addError(rowNum, "导入行为空，请检查模板格式或删除空行");
+                    continue;
+                }
+                ProductAttribute attribute = buildAttribute(row);
                 String attributeCode = attribute.getAttributeCode();
                 if (!rowCodes.add(attributeCode))
                 {
@@ -264,6 +277,11 @@ public class ProductConfigImportService
             try
             {
                 ProductAttributeOptionImportRow row = rows.get(index);
+                if (row == null)
+                {
+                    result.addError(rowNum, "导入行为空，请检查模板格式或删除空行");
+                    continue;
+                }
                 String attributeCode = normalizeCode(row.getAttributeCode(), "属性编码不能为空");
                 ProductAttribute attribute = productConfigMapper.selectAttributeByCode(attributeCode);
                 if (attribute == null)
@@ -349,6 +367,7 @@ public class ProductConfigImportService
         validateAttributeOptionSource(attribute);
         attribute.setUnit(StringUtils.defaultString(row.getUnit()).trim());
         attribute.setValuePrecision(defaultInt(row.getValuePrecision()));
+        validateAttributeNumberConfig(attribute);
         attribute.setStatus(normalizeStatus(row.getStatus()));
         attribute.setRemark(StringUtils.defaultString(row.getRemark()).trim());
         return attribute;
@@ -376,6 +395,32 @@ public class ProductConfigImportService
         if (!OPTION_SOURCE_SYS_DICT.equals(attribute.getOptionSource()))
         {
             attribute.setDictType("");
+        }
+    }
+
+    private void validateAttributeNumberConfig(ProductAttribute attribute)
+    {
+        if (!ATTRIBUTE_TYPE_NUMBER.equals(attribute.getAttributeType()))
+        {
+            if (StringUtils.isNotBlank(attribute.getUnit()))
+            {
+                throw new ServiceException("只有 NUMBER 属性才允许填写单位");
+            }
+            if (attribute.getValuePrecision() != null && attribute.getValuePrecision() != 0)
+            {
+                throw new ServiceException("只有 NUMBER 属性才允许填写数值精度");
+            }
+            attribute.setUnit("");
+            attribute.setValuePrecision(0);
+            return;
+        }
+        if (attribute.getValuePrecision() == null)
+        {
+            attribute.setValuePrecision(0);
+        }
+        if (attribute.getValuePrecision() < 0 || attribute.getValuePrecision() > 8)
+        {
+            throw new ServiceException("NUMBER 属性的数值精度必须在 0 到 8 之间");
         }
     }
 

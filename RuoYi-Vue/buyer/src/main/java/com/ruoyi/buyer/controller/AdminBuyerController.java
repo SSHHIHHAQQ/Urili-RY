@@ -163,7 +163,7 @@ public class AdminBuyerController extends BaseController
     }
 
     @PreAuthorize("@ss.hasPermi('buyer:admin:directLogin')")
-    @Log(title = "买家免密登录", businessType = BusinessType.OTHER)
+    @Log(title = "买家免密登录", businessType = BusinessType.OTHER, isSaveResponseData = false)
     @PostMapping("/{buyerId}/directLogin")
     public AjaxResult directLogin(@PathVariable("buyerId") Long buyerId,
             @RequestBody(required = false) PortalDirectLoginRequest request)

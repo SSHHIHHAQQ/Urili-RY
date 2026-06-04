@@ -62,6 +62,10 @@ public class ProductImportTemplateService
             attributeRow("washable", "是否可水洗", "BOOLEAN", "NONE", "", "", 0, "0", "布尔属性，不需要自定义选项"),
             attributeRow("battery_included", "是否带电池", "BOOLEAN", "NONE", "", "", 0, "0",
                 "电器类常见布尔属性"),
+            attributeRow("clothing_length_cm", "衣长", "NUMBER", "NONE", "", "cm", 1, "0",
+                "数字属性，可配置单位和数值精度"),
+            attributeRow("package_weight_g", "包装重量", "NUMBER", "NONE", "", "g", 0, "0",
+                "数字属性，整数值可把数值精度填 0"),
             attributeRow("material", "材质", "SINGLE_SELECT", "ATTRIBUTE_OPTION", "", "", 0, "0",
                 "需要再导入属性选项"),
             attributeRow("origin_country", "原产国", "SINGLE_SELECT", "SYS_DICT", "product_origin_country", "", 0,
@@ -108,8 +112,10 @@ public class ProductImportTemplateService
             helpRow(template, "字典类型", "按条件",
                 "属性类型为 SINGLE_SELECT / MULTI_SELECT 且选项来源为 SYS_DICT 时必填，必须是若依字典类型编码",
                 "product_material", "选项来源不是 SYS_DICT 仍填写字典类型，或填写不存在的字典类型"),
-            helpRow(template, "单位", "否", "数值类属性可填单位，其他类型通常留空", "cm", "布尔或日期属性填写单位"),
-            helpRow(template, "数值精度", "否", "数字属性的小数位；不填按 0 处理", "2", "填写非数字文本"),
+            helpRow(template, "单位", "按条件", "仅 NUMBER 属性可填单位，例如 cm、kg、g；其他属性必须留空", "cm",
+                "TEXT / BOOLEAN / DATE / SINGLE_SELECT / MULTI_SELECT 属性填写单位"),
+            helpRow(template, "数值精度", "按条件", "仅 NUMBER 属性可填，表示保留几位小数；范围 0-8，其他属性填 0 或留空", "2",
+                "非 NUMBER 属性填写非 0 精度，或 NUMBER 属性填写 9 以上"),
             helpRow(template, "状态", "是", "填写 正常 / 停用", "正常", "填写“启用”等非模板下拉值"),
             helpRow(template, "备注", "否", "内部说明，不参与编码唯一性判断", "用于服装类目", "写入需要系统判断的业务规则"));
     }

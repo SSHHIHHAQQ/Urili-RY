@@ -44,6 +44,10 @@ export function isOptionAttributeType(attributeType?: string) {
   return optionAttributeTypes.includes(attributeType || '');
 }
 
+export function isNumberAttributeType(attributeType?: string) {
+  return attributeType === 'NUMBER';
+}
+
 export const ruleModeOptions = [
   { label: '新增本类目属性', value: 'ADD' },
   { label: '调整继承属性', value: 'OVERRIDE' },
