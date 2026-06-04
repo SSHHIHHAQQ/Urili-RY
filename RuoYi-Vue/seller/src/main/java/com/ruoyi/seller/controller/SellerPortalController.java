@@ -14,6 +14,7 @@ import com.ruoyi.common.annotation.PortalLog;
 import com.ruoyi.common.annotation.PortalPreAuthorize;
 import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
+import com.ruoyi.common.core.page.TableDataInfo;
 import com.ruoyi.common.enums.BusinessType;
 import com.ruoyi.seller.domain.Seller;
 import com.ruoyi.seller.domain.SellerAccount;
@@ -23,7 +24,9 @@ import com.ruoyi.seller.service.ISellerPortalPermissionService;
 import com.ruoyi.system.domain.PortalAccountProfile;
 import com.ruoyi.system.domain.PortalDept;
 import com.ruoyi.system.domain.PortalDeptProfile;
+import com.ruoyi.system.domain.PortalLoginLog;
 import com.ruoyi.system.domain.PortalLoginSession;
+import com.ruoyi.system.domain.PortalOperLog;
 import com.ruoyi.system.domain.PortalPasswordChangeRequest;
 import com.ruoyi.system.domain.PortalRole;
 import com.ruoyi.system.domain.PortalRoleProfile;
@@ -141,6 +144,32 @@ public class SellerPortalController extends BaseController
             profiles.add(buildRoleProfile(role));
         }
         return success(profiles);
+    }
+
+    @GetMapping("/account/login-logs")
+    @PortalPreAuthorize(terminal = "seller")
+    @PortalLog(terminal = "seller", title = "卖家端登录日志", businessType = BusinessType.OTHER, isSaveResponseData = false)
+    public TableDataInfo accountLoginLogs(PortalLoginLog log)
+    {
+        PortalLoginSession session = PortalSessionContext.requireSession("seller");
+        PortalLoginLog query = log == null ? new PortalLoginLog() : log;
+        query.setSubjectId(session.getSubjectId());
+        query.setAccountId(session.getAccountId());
+        startPage();
+        return getDataTable(sellerService.selectSellerLoginLogList(query));
+    }
+
+    @GetMapping("/account/oper-logs")
+    @PortalPreAuthorize(terminal = "seller")
+    @PortalLog(terminal = "seller", title = "卖家端操作日志", businessType = BusinessType.OTHER, isSaveResponseData = false)
+    public TableDataInfo accountOperLogs(PortalOperLog log)
+    {
+        PortalLoginSession session = PortalSessionContext.requireSession("seller");
+        PortalOperLog query = log == null ? new PortalOperLog() : log;
+        query.setSubjectId(session.getSubjectId());
+        query.setAccountId(session.getAccountId());
+        startPage();
+        return getDataTable(sellerService.selectSellerOperLogList(query));
     }
 
     private PortalSubjectProfile buildProfile(Seller seller)

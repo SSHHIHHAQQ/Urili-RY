@@ -3,6 +3,7 @@ import { useAccess } from '@umijs/max';
 import { Modal, Space, Tabs, Tag, Typography } from 'antd';
 import { ProTable, type ProColumns } from '@ant-design/pro-components';
 import { getPersistedProTableSearch } from '@/utils/proTableSearch';
+import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 import type { PartnerModuleConfig } from './PartnerManagementPage';
 
 type PartnerRecord = Record<string, any>;
@@ -136,6 +137,7 @@ const PartnerAuditModal: React.FC<PartnerAuditModalProps> = ({
       dataIndex: 'status',
       valueType: 'select',
       valueEnum: loginStatusValueEnum,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       width: 90,
     },
     {
@@ -193,6 +195,7 @@ const PartnerAuditModal: React.FC<PartnerAuditModalProps> = ({
       dataIndex: 'status',
       valueType: 'select',
       valueEnum: operStatusValueEnum,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       width: 90,
     },
     {
@@ -263,6 +266,7 @@ const PartnerAuditModal: React.FC<PartnerAuditModalProps> = ({
       dataIndex: 'status',
       valueType: 'select',
       valueEnum: ticketStatusValueEnum,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       width: 100,
     },
     {
