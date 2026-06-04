@@ -19,11 +19,14 @@ import com.ruoyi.common.annotation.PortalLog;
 import com.ruoyi.common.annotation.PortalPreAuthorize;
 import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
+import com.ruoyi.common.core.page.TableDataInfo;
 import com.ruoyi.common.enums.BusinessType;
 import com.ruoyi.system.domain.PortalAccountProfile;
 import com.ruoyi.system.domain.PortalDept;
 import com.ruoyi.system.domain.PortalDeptProfile;
+import com.ruoyi.system.domain.PortalLoginLog;
 import com.ruoyi.system.domain.PortalLoginSession;
+import com.ruoyi.system.domain.PortalOperLog;
 import com.ruoyi.system.domain.PortalPasswordChangeRequest;
 import com.ruoyi.system.domain.PortalRole;
 import com.ruoyi.system.domain.PortalRoleProfile;
@@ -141,6 +144,32 @@ public class BuyerPortalController extends BaseController
             profiles.add(buildRoleProfile(role));
         }
         return success(profiles);
+    }
+
+    @GetMapping("/account/login-logs")
+    @PortalPreAuthorize(terminal = "buyer")
+    @PortalLog(terminal = "buyer", title = "买家端登录日志", businessType = BusinessType.OTHER, isSaveResponseData = false)
+    public TableDataInfo accountLoginLogs(PortalLoginLog log)
+    {
+        PortalLoginSession session = PortalSessionContext.requireSession("buyer");
+        PortalLoginLog query = log == null ? new PortalLoginLog() : log;
+        query.setSubjectId(session.getSubjectId());
+        query.setAccountId(session.getAccountId());
+        startPage();
+        return getDataTable(buyerService.selectBuyerLoginLogList(query));
+    }
+
+    @GetMapping("/account/oper-logs")
+    @PortalPreAuthorize(terminal = "buyer")
+    @PortalLog(terminal = "buyer", title = "买家端操作日志", businessType = BusinessType.OTHER, isSaveResponseData = false)
+    public TableDataInfo accountOperLogs(PortalOperLog log)
+    {
+        PortalLoginSession session = PortalSessionContext.requireSession("buyer");
+        PortalOperLog query = log == null ? new PortalOperLog() : log;
+        query.setSubjectId(session.getSubjectId());
+        query.setAccountId(session.getAccountId());
+        startPage();
+        return getDataTable(buyerService.selectBuyerOperLogList(query));
     }
 
     private PortalSubjectProfile buildProfile(Buyer buyer)

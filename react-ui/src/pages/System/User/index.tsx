@@ -4,6 +4,7 @@ import { useIntl, FormattedMessage, useAccess } from '@umijs/max';
 import { App, Button, Card, Col, Dropdown, Modal, Row, Switch } from 'antd';
 import { type ActionType, FooterToolbar, PageContainer, type ProColumns, ProTable } from '@ant-design/pro-components';
 import { getPersistedProTableSearch } from '@/utils/proTableSearch';
+import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 import { PlusOutlined, DeleteOutlined, DownOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { getUserList, removeUser, addUser, updateUser, exportUser, getUser, changeUserStatus, updateAuthRole, resetUserPwd } from '@/services/system/user';
 import UpdateForm from './edit';
@@ -212,6 +213,7 @@ const UserTableList: React.FC = () => {
       dataIndex: 'status',
       valueType: 'select',
       valueEnum: statusOptions,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       render: (_, record) => {
         return (
           <Switch
