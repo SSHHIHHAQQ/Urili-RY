@@ -343,6 +343,24 @@
   - 三端前端表格操作列同一行超过 2 个操作时，最多保留 2 个高频操作按钮直接展示，其余操作使用 Ant Design `Dropdown` 收进“更多”下拉菜单，不要横向平铺 3 个及以上文字按钮。
   - 三端前端表格操作列的行内操作和“更多”下拉菜单项默认只展示文字，不加操作图标；“更多”作为下拉触发器必须使用 Ant Design 小下箭头提示可展开。
 
+### 三端可搜索选择器
+
+- 位置：`react-ui/src/utils/selectSearch.ts`
+- 导出：
+  - `SEARCHABLE_SELECT_PROPS`
+  - `SEARCHABLE_TREE_SELECT_PROPS`
+  - `filterSelectOption`
+  - `filterTreeSelectNode`
+- 当前用途：
+  - 管理端普通 `Select`、`ProFormSelect`、`TreeSelect`、`ProFormTreeSelect`。
+  - ProTable 中 `valueType: 'select'` 或 `valueEnum` 生成的查询下拉。
+  - 当前先服务 `react-ui` 管理端；后续拆出 `seller-ui` / `buyer-ui` 后沿用同一套模糊搜索规则。
+- 复用规则：
+  - 三端前端所有业务选择器默认必须可模糊搜索，支持按 label、value/code、title、text、name 等文本匹配。
+  - 新增选择器优先使用 `fieldProps={SEARCHABLE_SELECT_PROPS}` 或 `fieldProps={SEARCHABLE_TREE_SELECT_PROPS}`；普通 Ant Design 组件使用 `<Select {...SEARCHABLE_SELECT_PROPS} />` 或 `<TreeSelect {...SEARCHABLE_TREE_SELECT_PROPS} />`。
+  - 如果已有 `fieldProps` 包含 `onChange`、`options`、`treeData`、`defaultValue` 等配置，必须先展开公共搜索配置，再保留原有配置。
+  - 操作列“更多”这种命令 `Dropdown` 不按可搜索选择器处理。
+
 ### 页面级标题
 
 - 位置：`react-ui/src/global.css`

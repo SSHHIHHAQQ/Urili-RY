@@ -17,9 +17,6 @@ public class ProductCategoryImportRow
     @Excel(name = "父级分类编码", prompt = "顶级分类留空；父级必须已存在或位于本文件前面的行")
     private String parentCategoryCode;
 
-    @Excel(name = "可发布", readConverterExp = "Y=是,N=否", combo = { "是", "否" }, defaultValue = "否")
-    private String publishEnabled;
-
     @Excel(name = "排序", cellType = ColumnType.NUMERIC, defaultValue = "0")
     private Integer sortOrder;
 
@@ -57,16 +54,6 @@ public class ProductCategoryImportRow
     public void setParentCategoryCode(String parentCategoryCode)
     {
         this.parentCategoryCode = parentCategoryCode;
-    }
-
-    public String getPublishEnabled()
-    {
-        return publishEnabled;
-    }
-
-    public void setPublishEnabled(String publishEnabled)
-    {
-        this.publishEnabled = publishEnabled;
     }
 
     public Integer getSortOrder()

@@ -130,12 +130,6 @@ public class ProductConfigImportService
                 }
                 ProductCategory existing = productConfigMapper.selectCategoryByCode(categoryCode);
                 ParentResolveResult parentResult = resolveCategoryParent(row.getParentCategoryCode(), importedByCode);
-                ProductCategory parent = parentResult.getParent();
-                if (parent != null && YES.equals(parent.getPublishEnabled()))
-                {
-                    result.addError(rowNum, "父级分类为可发布叶子类目，不能继续新增下级");
-                    continue;
-                }
                 String parentCode = parentResult.getParentCode();
                 String rowNameKey = parentCode + ":" + category.getCategoryName();
                 if (!rowNames.add(rowNameKey))
@@ -326,7 +320,6 @@ public class ProductConfigImportService
         ProductCategory category = new ProductCategory();
         category.setCategoryCode(normalizeCode(row.getCategoryCode(), "分类编码不能为空"));
         category.setCategoryName(requireTrim(row.getCategoryName(), "分类名称不能为空"));
-        category.setPublishEnabled(normalizeYesNo(row.getPublishEnabled(), NO));
         category.setSortOrder(defaultInt(row.getSortOrder()));
         category.setStatus(normalizeStatus(row.getStatus()));
         category.setRemark(StringUtils.defaultString(row.getRemark()).trim());
@@ -398,11 +391,6 @@ public class ProductConfigImportService
         {
             result.addError(rowNum, "第一版不支持通过导入移动商品分类：" + existing.getCategoryCode());
             return;
-        }
-        if (YES.equals(importing.getPublishEnabled())
-            && productConfigMapper.countChildCategories(existing.getCategoryId()) > 0)
-        {
-            result.addError(rowNum, "只有最末级商品分类可以设置为可发布：" + existing.getCategoryCode());
         }
     }
 

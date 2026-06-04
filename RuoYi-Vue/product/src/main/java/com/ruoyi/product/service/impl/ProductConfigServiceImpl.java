@@ -70,7 +70,6 @@ public class ProductConfigServiceImpl implements IProductConfigService
     {
         normalizeCategory(category);
         ProductCategory parent = resolveParent(category.getParentId());
-        validateParentCanHaveChild(parent);
         fillCategoryTreeFields(category, parent);
         if (productConfigMapper.selectCategoryByCode(category.getCategoryCode()) != null)
         {
@@ -81,8 +80,15 @@ public class ProductConfigServiceImpl implements IProductConfigService
             throw new ServiceException("同级商品分类名称已存在");
         }
         category.setSchemaVersion(1);
-        category.setCreateBy(currentUsername());
-        return productConfigMapper.insertCategory(category);
+        category.setPublishEnabled(YES);
+        String username = currentUsername();
+        category.setCreateBy(username);
+        int rows = productConfigMapper.insertCategory(category);
+        if (parent != null)
+        {
+            productConfigMapper.updateCategoryPublishEnabled(parent.getCategoryId(), NO, username);
+        }
+        return rows;
     }
 
     @Override
@@ -104,10 +110,10 @@ public class ProductConfigServiceImpl implements IProductConfigService
         {
             throw new ServiceException("同级商品分类名称已存在");
         }
-        validatePublishLeaf(category);
         category.setAncestors(current.getAncestors());
         category.setCategoryLevel(current.getCategoryLevel());
         category.setSchemaVersion(current.getSchemaVersion());
+        category.setPublishEnabled(derivedPublishEnabled(category.getCategoryId()));
         category.setUpdateBy(currentUsername());
         return productConfigMapper.updateCategory(category);
     }
@@ -116,7 +122,7 @@ public class ProductConfigServiceImpl implements IProductConfigService
     @Transactional
     public int deleteCategoryById(Long categoryId)
     {
-        selectCategoryById(categoryId);
+        ProductCategory category = selectCategoryById(categoryId);
         if (productConfigMapper.countChildCategories(categoryId) > 0)
         {
             throw new ServiceException("存在下级商品分类，不允许删除");
@@ -125,7 +131,15 @@ public class ProductConfigServiceImpl implements IProductConfigService
         {
             throw new ServiceException("该分类已配置属性，请先移除类目属性配置");
         }
-        return productConfigMapper.deleteCategoryById(categoryId, currentUsername());
+        String username = currentUsername();
+        int rows = productConfigMapper.deleteCategoryById(categoryId, username);
+        Long parentId = category.getParentId();
+        if (parentId != null && !ROOT_PARENT_ID.equals(parentId)
+            && productConfigMapper.countChildCategories(parentId) == 0)
+        {
+            productConfigMapper.updateCategoryPublishEnabled(parentId, YES, username);
+        }
+        return rows;
     }
 
     @Override
@@ -333,7 +347,6 @@ public class ProductConfigServiceImpl implements IProductConfigService
         category.setParentId(category.getParentId() == null ? ROOT_PARENT_ID : category.getParentId());
         category.setCategoryCode(normalizeCode(category.getCategoryCode(), "商品分类编码不能为空"));
         category.setCategoryName(requireTrim(category.getCategoryName(), "商品分类名称不能为空"));
-        category.setPublishEnabled(normalizeYesNo(category.getPublishEnabled(), NO));
         category.setStatus(StringUtils.defaultIfBlank(category.getStatus(), STATUS_NORMAL));
         category.setSortOrder(defaultInt(category.getSortOrder()));
         category.setRemark(StringUtils.defaultString(category.getRemark()));
@@ -361,20 +374,9 @@ public class ProductConfigServiceImpl implements IProductConfigService
         category.setCategoryLevel(defaultInt(parent.getCategoryLevel()) + 1);
     }
 
-    private void validateParentCanHaveChild(ProductCategory parent)
+    private String derivedPublishEnabled(Long categoryId)
     {
-        if (parent != null && YES.equals(parent.getPublishEnabled()))
-        {
-            throw new ServiceException("可发布的叶子类目不能继续添加子类目");
-        }
-    }
-
-    private void validatePublishLeaf(ProductCategory category)
-    {
-        if (YES.equals(category.getPublishEnabled()) && productConfigMapper.countChildCategories(category.getCategoryId()) > 0)
-        {
-            throw new ServiceException("只有最末级商品分类可以设置为可发布");
-        }
+        return productConfigMapper.countChildCategories(categoryId) > 0 ? NO : YES;
     }
 
     private void normalizeAttribute(ProductAttribute attribute)
