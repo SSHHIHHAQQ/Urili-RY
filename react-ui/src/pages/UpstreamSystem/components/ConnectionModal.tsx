@@ -6,6 +6,7 @@ import {
   settlementOptions,
   systemKindOptions,
 } from '@/pages/UpstreamSystem/constants';
+import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 
 export type ConnectionModalMode = 'create' | 'edit' | 'credential';
 
@@ -77,6 +78,7 @@ export default function ConnectionModal({
               rules={[{ required: true, message: '请选择上游系统类型' }]}
             >
               <Select
+                {...SEARCHABLE_SELECT_PROPS}
                 disabled={mode !== 'create'}
                 options={systemKindOptions}
               />
@@ -93,7 +95,7 @@ export default function ConnectionModal({
               label="结算类型"
               rules={[{ required: true, message: '请选择结算类型' }]}
             >
-              <Select options={settlementOptions} />
+              <Select {...SEARCHABLE_SELECT_PROPS} options={settlementOptions} />
             </Form.Item>
             <Form.Item name="remark" label="备注">
               <Input.TextArea rows={3} maxLength={500} />

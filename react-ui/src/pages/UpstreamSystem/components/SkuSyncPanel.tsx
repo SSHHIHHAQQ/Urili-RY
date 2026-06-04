@@ -19,6 +19,7 @@ import {
   syncUpstreamSku,
 } from '@/services/integration/upstreamSystem';
 import { message } from '@/utils/feedback';
+import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 import {
   skuPairingStatusOptions,
   skuSearchFieldOptions,
@@ -196,6 +197,7 @@ export default function SkuSyncPanel({
       </div>
       <div className={styles.skuFilters}>
         <Select
+          {...SEARCHABLE_SELECT_PROPS}
           style={{ width: 160 }}
           options={skuSearchFieldOptions}
           value={searchField}
@@ -216,12 +218,14 @@ export default function SkuSyncPanel({
           onSearch={(value) => setKeyword(value.trim())}
         />
         <Select
+          {...SEARCHABLE_SELECT_PROPS}
           style={{ width: 150 }}
           options={skuPairingStatusOptions}
           value={pairingStatus}
           onChange={setPairingStatus}
         />
         <Select
+          {...SEARCHABLE_SELECT_PROPS}
           style={{ width: 150 }}
           options={skuSyncItemStatusOptions}
           value={syncStatus}
