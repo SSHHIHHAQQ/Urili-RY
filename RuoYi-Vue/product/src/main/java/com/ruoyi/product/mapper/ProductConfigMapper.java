@@ -29,6 +29,9 @@ public interface ProductConfigMapper
 
     int updateCategory(ProductCategory category);
 
+    int updateCategoryPublishEnabled(@Param("categoryId") Long categoryId, @Param("publishEnabled") String publishEnabled,
+        @Param("updateBy") String updateBy);
+
     int deleteCategoryById(@Param("categoryId") Long categoryId, @Param("updateBy") String updateBy);
 
     int increaseCategorySchemaVersion(@Param("categoryId") Long categoryId, @Param("updateBy") String updateBy);
