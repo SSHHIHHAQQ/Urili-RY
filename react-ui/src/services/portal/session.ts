@@ -101,6 +101,28 @@ export async function getPortalRoles(terminal: PortalTerminal) {
   });
 }
 
+export async function getPortalLoginLogs(terminal: PortalTerminal, params?: Record<string, any>) {
+  return request<API.Partner.PortalAuditPageResult<API.Partner.PortalLoginLog>>(
+    buildPortalUrl(terminal, '/account/login-logs'),
+    {
+      method: 'GET',
+      headers: buildPortalAuthHeaders(terminal),
+      params,
+    },
+  );
+}
+
+export async function getPortalOperLogs(terminal: PortalTerminal, params?: Record<string, any>) {
+  return request<API.Partner.PortalAuditPageResult<API.Partner.PortalOperLog>>(
+    buildPortalUrl(terminal, '/account/oper-logs'),
+    {
+      method: 'GET',
+      headers: buildPortalAuthHeaders(terminal),
+      params,
+    },
+  );
+}
+
 export const sellerPortalSessionService = {
   login: (data: API.Partner.PortalLoginParams) => portalLogin('seller', data),
   directLogin: (directLoginToken: string) => portalDirectLogin('seller', directLoginToken),
@@ -113,6 +135,8 @@ export const sellerPortalSessionService = {
   getAccounts: () => getPortalAccounts('seller'),
   getDepts: () => getPortalDepts('seller'),
   getRoles: () => getPortalRoles('seller'),
+  getLoginLogs: (params?: Record<string, any>) => getPortalLoginLogs('seller', params),
+  getOperLogs: (params?: Record<string, any>) => getPortalOperLogs('seller', params),
 };
 
 export const buyerPortalSessionService = {
@@ -127,4 +151,6 @@ export const buyerPortalSessionService = {
   getAccounts: () => getPortalAccounts('buyer'),
   getDepts: () => getPortalDepts('buyer'),
   getRoles: () => getPortalRoles('buyer'),
+  getLoginLogs: (params?: Record<string, any>) => getPortalLoginLogs('buyer', params),
+  getOperLogs: (params?: Record<string, any>) => getPortalOperLogs('buyer', params),
 };

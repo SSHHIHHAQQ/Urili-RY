@@ -6,6 +6,7 @@ import type { FormInstance } from 'antd';
 import { Button, Modal } from 'antd';
 import { ActionType, FooterToolbar, PageContainer, ProColumns, ProTable } from '@ant-design/pro-components';
 import { getPersistedProTableSearch } from '@/utils/proTableSearch';
+import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 import { PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, UnlockOutlined } from '@ant-design/icons';
 import { getLogininforList, removeLogininfor, exportLogininfor, unlockLogininfor, cleanLogininfor } from '@/services/monitor/logininfor';
 import DictTag from '@/components/DictTag';
@@ -149,6 +150,7 @@ const LogininforTableList: React.FC = () => {
       dataIndex: 'status',
       valueType: 'select',
       valueEnum: statusOptions,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       render: (_, record) => {
         return (<DictTag enums={statusOptions} value={record.status} />);
       },
