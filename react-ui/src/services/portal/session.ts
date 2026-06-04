@@ -72,6 +72,14 @@ export async function getPortalAccountProfile(terminal: PortalTerminal) {
   });
 }
 
+export async function updatePortalPassword(terminal: PortalTerminal, data: API.Partner.PortalPasswordChangeParams) {
+  return request<API.Result>(buildPortalUrl(terminal, '/account/password'), {
+    method: 'PUT',
+    headers: buildPortalAuthHeaders(terminal),
+    data,
+  });
+}
+
 export async function getPortalAccounts(terminal: PortalTerminal) {
   return request<API.Partner.PortalAccountListResult>(buildPortalUrl(terminal, '/accounts'), {
     method: 'GET',
@@ -101,6 +109,7 @@ export const sellerPortalSessionService = {
   getRouters: () => getPortalRouters('seller'),
   getSubjectProfile: () => getPortalSubjectProfile('seller'),
   getAccountProfile: () => getPortalAccountProfile('seller'),
+  updatePassword: (data: API.Partner.PortalPasswordChangeParams) => updatePortalPassword('seller', data),
   getAccounts: () => getPortalAccounts('seller'),
   getDepts: () => getPortalDepts('seller'),
   getRoles: () => getPortalRoles('seller'),
@@ -114,6 +123,7 @@ export const buyerPortalSessionService = {
   getRouters: () => getPortalRouters('buyer'),
   getSubjectProfile: () => getPortalSubjectProfile('buyer'),
   getAccountProfile: () => getPortalAccountProfile('buyer'),
+  updatePassword: (data: API.Partner.PortalPasswordChangeParams) => updatePortalPassword('buyer', data),
   getAccounts: () => getPortalAccounts('buyer'),
   getDepts: () => getPortalDepts('buyer'),
   getRoles: () => getPortalRoles('buyer'),
