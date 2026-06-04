@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { Form, Modal } from 'antd';
 import { useIntl } from '@umijs/max';
 import { ProForm, ProFormSelect } from '@ant-design/pro-components';
+import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 
 /* *
  *
@@ -71,6 +72,7 @@ const AuthRoleForm: React.FC<AuthRoleFormProps> = (props) => {
                     })}
                     options={props.roles}
                     placeholder="请选择角色"
+                    fieldProps={SEARCHABLE_SELECT_PROPS}
                     rules={[{ required: true, message: '请选择角色!' }]}
                 />
             </ProForm>

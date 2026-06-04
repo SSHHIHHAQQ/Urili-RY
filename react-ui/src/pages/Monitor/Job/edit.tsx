@@ -11,6 +11,7 @@ import {
 import { Form, Modal } from 'antd';
 import { useIntl, FormattedMessage } from '@umijs/max';
 import { DictOptionType, DictValueEnumObj } from '@/components/DictTag';
+import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 
 /**
  * 定时任务调度 Edit Form
@@ -125,6 +126,7 @@ const JobForm: React.FC<JobFormProps> = (props) => {
           })}
           colProps={{ md: 24 }}
           placeholder="请输入任务组名"
+          fieldProps={SEARCHABLE_SELECT_PROPS}
           rules={[
             {
               required: false,

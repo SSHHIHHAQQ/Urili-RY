@@ -3,6 +3,7 @@ import { Checkbox, Col, Form, Modal, Row, Tree } from 'antd';
 import { FormattedMessage, useIntl } from '@umijs/max';
 import { Key, ProForm, ProFormDigit, ProFormSelect, ProFormText } from '@ant-design/pro-components';
 import type { DataNode } from 'antd/es/tree';
+import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 type CheckboxValueType = string | number | boolean;
 
 /* *
@@ -178,6 +179,7 @@ const DataScopeForm: React.FC<DataScopeFormProps> = (props) => {
                         },
                     ]}
                     fieldProps={{
+                        ...SEARCHABLE_SELECT_PROPS,
                         onChange: (value) => {
                             setDataScopeType(value as string);
                         },

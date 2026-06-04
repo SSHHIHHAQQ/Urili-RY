@@ -10,6 +10,7 @@ import {
 import { Form, Modal} from 'antd';
 import { useIntl, FormattedMessage } from '@umijs/max';
 import { DictValueEnumObj } from '@/components/DictTag';
+import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 
 export type DataFormData = Record<string, unknown> & Partial<API.System.DictData>;
 
@@ -170,6 +171,7 @@ const DictDataForm: React.FC<DataFormProps> = (props) => {
             'warning': '警告',
             'danger': '危险',
           }}
+          fieldProps={SEARCHABLE_SELECT_PROPS}
           rules={[
             {
               required: false,
