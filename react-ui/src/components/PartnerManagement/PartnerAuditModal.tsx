@@ -24,6 +24,17 @@ const compactCellTextStyle: React.CSSProperties = {
   lineHeight: 1.35,
 };
 
+const auditModalWidth = 'min(1480px, calc(100vw - 64px))';
+
+const auditTabsStyle: React.CSSProperties = {
+  minWidth: 0,
+};
+
+const auditTableWrapperStyle: React.CSSProperties = {
+  minWidth: 0,
+  overflow: 'hidden',
+};
+
 const loginStatusValueEnum = {
   '0': { text: '成功', status: 'Success' },
   '1': { text: '失败', status: 'Error' },
@@ -62,6 +73,22 @@ function formatDateTimeText(value: unknown) {
 
 function renderDateTime(value: unknown) {
   return renderCompactText(formatDateTimeText(value));
+}
+
+function getTableScrollX(columns: ProColumns<AuditRecord>[]) {
+  return columns.reduce((total, column) => {
+    if (column.hideInTable) {
+      return total;
+    }
+    if (typeof column.width === 'number') {
+      return total + column.width;
+    }
+    if (typeof column.width === 'string') {
+      const parsedWidth = Number.parseInt(column.width, 10);
+      return Number.isFinite(parsedWidth) ? total + parsedWidth : total + 180;
+    }
+    return total + 180;
+  }, 0);
 }
 
 function buildAuditParams(
@@ -305,23 +332,26 @@ const PartnerAuditModal: React.FC<PartnerAuditModalProps> = ({
     request: (params?: Record<string, any>) => Promise<API.Partner.PortalAuditPageResult<any>>,
     subjectField: 'subjectId' | 'targetSubjectId',
   ) => (
-    <ProTable<AuditRecord>
-      rowKey={(record) => String(record.infoId || record.operId || record.ticketId)}
-      columns={columns}
-      search={getPersistedProTableSearch({ labelWidth: 88 }, `${config.moduleKey}:audit:${tableKey}`)}
-      tableLayout="fixed"
-      pagination={{ pageSize: 10 }}
-      toolBarRender={false}
-      request={(params) => {
-        const { current, pageSize, ...rest } = params;
-        return request(buildAuditParams(rest, current, pageSize, partnerId, subjectField))
-          .then((res) => ({
-            data: res.rows || [],
-            total: res.total || 0,
-            success: res.code === 200,
-          }));
-      }}
-    />
+    <div style={auditTableWrapperStyle}>
+      <ProTable<AuditRecord>
+        rowKey={(record) => String(record.infoId || record.operId || record.ticketId)}
+        columns={columns}
+        search={getPersistedProTableSearch({ labelWidth: 88 }, `${config.moduleKey}:audit:${tableKey}`)}
+        tableLayout="fixed"
+        scroll={{ x: getTableScrollX(columns) }}
+        pagination={{ pageSize: 10 }}
+        toolBarRender={false}
+        request={(params) => {
+          const { current, pageSize, ...rest } = params;
+          return request(buildAuditParams(rest, current, pageSize, partnerId, subjectField))
+            .then((res) => ({
+              data: res.rows || [],
+              total: res.total || 0,
+              success: res.code === 200,
+            }));
+        }}
+      />
+    </div>
   );
 
   const tabItems = [
@@ -365,7 +395,7 @@ const PartnerAuditModal: React.FC<PartnerAuditModalProps> = ({
 
   return (
     <Modal
-      width={1120}
+      width={auditModalWidth}
       title={`${config.label}审计 - ${partnerTitle}`}
       open={open}
       destroyOnHidden
@@ -378,7 +408,7 @@ const PartnerAuditModal: React.FC<PartnerAuditModalProps> = ({
           <Typography.Text>{getValue(partner, config.nameField) || '-'}</Typography.Text>
         </Space>
       ) : null}
-      {tabItems.length > 0 ? <Tabs items={tabItems as any[]} /> : <Typography.Text type="secondary">暂无审计权限</Typography.Text>}
+      {tabItems.length > 0 ? <Tabs items={tabItems as any[]} style={auditTabsStyle} /> : <Typography.Text type="secondary">暂无审计权限</Typography.Text>}
     </Modal>
   );
 };

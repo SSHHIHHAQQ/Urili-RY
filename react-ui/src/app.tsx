@@ -8,7 +8,7 @@ import { history, Link } from '@umijs/max';
 import type { ReactNode } from 'react';
 import defaultSettings from '../config/defaultSettings';
 import { errorConfig } from './requestErrorConfig';
-import { clearSessionToken, getAccessToken, getRefreshToken, getTokenExpireTime } from './access';
+import { clearSessionToken, getAccessToken, getTokenExpireTime } from './access';
 import { getRemoteMenu, getRoutersInfo, getUserInfo, patchRouteWithRemoteMenus, setRemoteMenu } from './services/session';
 import { PageEnum } from './enums/pagesEnums';
 import { AntdFeedbackProvider } from './utils/feedback';
@@ -17,7 +17,11 @@ import './global.css';
 
 const isDev = process.env.NODE_ENV === 'development';
 
+const PORTAL_ROUTE_PREFIXES = ['/seller/direct-login', '/buyer/direct-login', '/seller/portal', '/buyer/portal'];
 
+function isPortalRoute(pathname?: string) {
+  return PORTAL_ROUTE_PREFIXES.some((prefix) => pathname === prefix || pathname?.startsWith(`${prefix}/`));
+}
 
 /**
  * @see  https://umijs.org/zh-CN/plugins/plugin-initial-state
@@ -48,7 +52,7 @@ export async function getInitialState(): Promise<{
     } catch (error) {
       console.log(error);
       clearSessionToken();
-      if (history.location.pathname !== PageEnum.LOGIN) {
+      if (history.location.pathname !== PageEnum.LOGIN && !isPortalRoute(history.location.pathname)) {
         history.push(PageEnum.LOGIN);
       }
     }
@@ -56,7 +60,7 @@ export async function getInitialState(): Promise<{
   };
   // 如果不是登录页面，执行
   const { location } = history;
-  if (location.pathname !== PageEnum.LOGIN) {
+  if (location.pathname !== PageEnum.LOGIN && !isPortalRoute(location.pathname)) {
     const currentUser = await fetchUserInfo();
     return {
       fetchUserInfo,
@@ -101,7 +105,7 @@ export const layout: RunTimeLayoutConfig = ({ initialState, setInitialState }) =
     onPageChange: () => {
       const { location } = history;
       // 如果没有登录，重定向到 login
-      if (!initialState?.currentUser && location.pathname !== PageEnum.LOGIN) {
+      if (!initialState?.currentUser && location.pathname !== PageEnum.LOGIN && !isPortalRoute(location.pathname)) {
         history.push(PageEnum.LOGIN);
       }
     },
@@ -171,6 +175,9 @@ export function rootContainer(container: ReactNode) {
 }
 
 export async function onRouteChange({ location }: { clientRoutes: any; location: any }) {
+  if (isPortalRoute(location.pathname)) {
+    return;
+  }
   const menus = getRemoteMenu();
   if (menus !== null || location.pathname === PageEnum.LOGIN || !getAccessToken()) {
     return;
@@ -200,6 +207,10 @@ export async function patchClientRoutes({ routes }: { routes: any }) {
 
 export function render(oldRender: () => void) {
   // console.log('render get routers', oldRender)
+  if (isPortalRoute(history.location.pathname)) {
+    oldRender();
+    return;
+  }
   const token = getAccessToken();
   if(!token || token?.length === 0) {
     oldRender();
@@ -221,8 +232,6 @@ export function render(oldRender: () => void) {
  * 它基于 axios 和 ahooks 的 useRequest 提供了一套统一的网络请求和错误处理方案。
  * @doc https://umijs.org/docs/max/request#配置
  */
-const checkRegion = 5 * 60 * 1000;
-
 export const request: any = {
   ...errorConfig,
   requestInterceptors: [
@@ -232,11 +241,11 @@ export const request: any = {
       console.log('request ====>:', url);
       const authHeader = headers.Authorization;
       const isToken = headers.isToken;
+      delete headers.isToken;
       if (!authHeader && isToken !== false) {
         const expireTime = getTokenExpireTime();
         if (expireTime) {
           const left = Number(expireTime) - Date.now();
-          const refreshToken = getRefreshToken();
           if (left < 0) {
             clearSessionToken();
           } else {

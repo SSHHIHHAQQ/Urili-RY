@@ -5,6 +5,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -36,7 +37,14 @@ public class ProductConfigServiceImpl implements IProductConfigService
 
     private static final String OPTION_SOURCE_NONE = "NONE";
 
+    private static final String OPTION_SOURCE_ATTRIBUTE_OPTION = "ATTRIBUTE_OPTION";
+
     private static final String OPTION_SOURCE_SYS_DICT = "SYS_DICT";
+
+    private static final Set<String> ATTRIBUTE_TYPES = Set.of("TEXT", "NUMBER", "BOOLEAN", "SINGLE_SELECT",
+        "MULTI_SELECT", "DATE");
+
+    private static final Set<String> OPTION_ATTRIBUTE_TYPES = Set.of("SINGLE_SELECT", "MULTI_SELECT");
 
     private static final String RULE_ADD = "ADD";
 
@@ -134,7 +142,7 @@ public class ProductConfigServiceImpl implements IProductConfigService
         String username = currentUsername();
         int rows = productConfigMapper.deleteCategoryById(categoryId, username);
         Long parentId = category.getParentId();
-        if (parentId != null && !ROOT_PARENT_ID.equals(parentId)
+        if (parentId != null && parentId.longValue() != ROOT_PARENT_ID
             && productConfigMapper.countChildCategories(parentId) == 0)
         {
             productConfigMapper.updateCategoryPublishEnabled(parentId, YES, username);
@@ -225,7 +233,8 @@ public class ProductConfigServiceImpl implements IProductConfigService
     @Transactional
     public int insertOption(Long attributeId, ProductAttributeOption option)
     {
-        selectAttributeById(attributeId);
+        ProductAttribute attribute = selectAttributeById(attributeId);
+        validateCustomOptionAttribute(attribute);
         normalizeOption(attributeId, option);
         if (productConfigMapper.countOptionCode(attributeId, option.getOptionCode(), null) > 0)
         {
@@ -239,6 +248,8 @@ public class ProductConfigServiceImpl implements IProductConfigService
     @Transactional
     public int updateOption(Long attributeId, Long optionId, ProductAttributeOption option)
     {
+        ProductAttribute attribute = selectAttributeById(attributeId);
+        validateCustomOptionAttribute(attribute);
         ProductAttributeOption current = productConfigMapper.selectOptionById(optionId);
         if (current == null || !attributeId.equals(current.getAttributeId()))
         {
@@ -384,14 +395,49 @@ public class ProductConfigServiceImpl implements IProductConfigService
         attribute.setAttributeCode(normalizeCode(attribute.getAttributeCode(), "商品属性编码不能为空"));
         attribute.setAttributeName(requireTrim(attribute.getAttributeName(), "商品属性名称不能为空"));
         attribute.setAttributeType(normalizeEnumCode(attribute.getAttributeType(), "商品属性类型不能为空"));
-        attribute.setOptionSource(StringUtils.defaultIfBlank(attribute.getOptionSource(), OPTION_SOURCE_NONE).trim().toUpperCase());
-        if (!OPTION_SOURCE_SYS_DICT.equals(attribute.getOptionSource()))
+        if (!ATTRIBUTE_TYPES.contains(attribute.getAttributeType()))
         {
-            attribute.setDictType("");
+            throw new ServiceException("商品属性类型不正确：" + attribute.getAttributeType());
         }
+        attribute.setOptionSource(StringUtils.defaultIfBlank(attribute.getOptionSource(), OPTION_SOURCE_NONE).trim().toUpperCase());
+        normalizeAttributeOptionSource(attribute);
         attribute.setUnit(StringUtils.defaultString(attribute.getUnit()).trim());
         attribute.setStatus(StringUtils.defaultIfBlank(attribute.getStatus(), STATUS_NORMAL));
         attribute.setRemark(StringUtils.defaultString(attribute.getRemark()));
+    }
+
+    private void normalizeAttributeOptionSource(ProductAttribute attribute)
+    {
+        String attributeType = attribute.getAttributeType();
+        String optionSource = attribute.getOptionSource();
+        if (!OPTION_ATTRIBUTE_TYPES.contains(attributeType))
+        {
+            if (!OPTION_SOURCE_NONE.equals(optionSource))
+            {
+                throw new ServiceException("文本、数字、布尔、日期属性不允许配置选项来源");
+            }
+            attribute.setOptionSource(OPTION_SOURCE_NONE);
+            attribute.setDictType("");
+            return;
+        }
+        if (!OPTION_SOURCE_ATTRIBUTE_OPTION.equals(optionSource) && !OPTION_SOURCE_SYS_DICT.equals(optionSource))
+        {
+            throw new ServiceException("单选、多选属性必须选择属性自定义选项或若依字典");
+        }
+        if (OPTION_SOURCE_SYS_DICT.equals(optionSource))
+        {
+            attribute.setDictType(requireTrim(attribute.getDictType(), "选项来源为若依字典时，字典类型不能为空"));
+            return;
+        }
+        attribute.setDictType("");
+    }
+
+    private void validateCustomOptionAttribute(ProductAttribute attribute)
+    {
+        if (!OPTION_SOURCE_ATTRIBUTE_OPTION.equals(attribute.getOptionSource()))
+        {
+            throw new ServiceException("只有选项来源为属性自定义选项的属性才能维护选项");
+        }
     }
 
     private void normalizeOption(Long attributeId, ProductAttributeOption option)

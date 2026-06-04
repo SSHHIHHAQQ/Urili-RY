@@ -96,7 +96,7 @@
   - 管理端配置入口使用 `/product/admin/**`，权限走若依 `sys_menu` / `sys_role`。
   - 后续卖家端商品发布入口必须放在 `seller` 端模块，只读消费 product schema，不维护平台配置。
   - 后续买家端分类浏览、筛选项和商品详情入口必须放在 `buyer` 端模块，只读消费 product 分类和筛选 schema。
-  - 商品属性类型、选项来源、类目属性规则模式等 code 由 SQL 初始化字典或 `pages/Product/constants.ts` 集中维护，不要在页面里复制状态映射。
+  - 商品属性类型、选项来源、类目属性规则模式等 code 由 SQL 初始化字典或 `pages/Product/constants.ts` 集中维护，不要在页面里复制状态映射；选择型属性判断统一复用 `isOptionAttributeType(...)`。
   - 类目属性规则统一通过 `IProductConfigService.previewCategorySchema(categoryId)` 计算，不要在前端或其他模块手写继承合并逻辑。
   - 商品配置导入统一使用 `ProductConfigImportService` 和 `ProductImportModal` 的“下载模板、校验、确认导入”流程，不要在分类页、属性页分别复制上传解析和结果表格。
   - 商品配置导入模板统一使用 `ProductImportTemplateService` 输出“正式导入 sheet + 填写示例 sheet + 字段说明 sheet”；第一个 sheet 保持空白，示例只供复制参考，避免误导入。
@@ -144,11 +144,11 @@
 - 当前用途：
   - 管理端为卖家端、买家端生成免密登录 token。
   - 卖家端、买家端登录入口消费免密登录 token。
-  - token 写入 Redis，默认有效期 30 分钟。
+  - 明文一次性 payload 写入 Redis，默认有效期 30 分钟；审计票据写入 `portal_direct_login_ticket`，只保存 `token_hash`，不保存明文 token。
   - 端地址优先读取若依参数配置 `portal.seller.web.url`、`portal.buyer.web.url`，未配置时使用本地验证占位地址。
 - 复用规则：
   - 只复用在卖家端、买家端这类门户入口的免密登录场景。
-  - 只负责生成和消费一次性 token，不负责创建端 session 或绕过目标端权限模型。
+  - 只负责生成和消费一次性 token；目标端消费后仍由 seller/buyer service 创建端 session，不绕过目标端账号、角色、菜单和权限模型。
   - 后续三端拆分后，卖家端/买家端应各自保留 token 消费入口，并读取自己的端账号、角色、菜单和权限体系。
 
 ### PortalDirectLoginTicketMapper
@@ -164,7 +164,7 @@
 - 复用规则：
   - 免密代入必须经过 `PortalDirectLoginSupport` 和该 ticket mapper，不要在 seller/buyer service 或前端里临时生成直登 token。
   - 卖家端和买家端共用这一张平台审计票据表，不分别复制 `seller_direct_login_ticket` / `buyer_direct_login_ticket`。
-  - 后续管理端审计列表应读取 `portal_direct_login_ticket`，而不是读取 Redis payload。
+  - 管理端审计列表已读取 `portal_direct_login_ticket`，后续继续复用该表，不要读取 Redis payload。
   - 管理端生成免密代入票据时必须填写“代入原因”，并通过 `PortalDirectLoginSupport` 写入 `reason` 字段，不要另开临时备注字段或绕过公共支撑。
 
 ### PortalTokenSupport
@@ -367,11 +367,15 @@
 - 当前用途：
   - 全局隐藏 `PageContainer` 自动生成的页面级标题行。
   - 全局让 `PageContainer` 内容区、直接承载的 `ProTable`、卡片和 Tabs 按剩余视口高度撑满。
+  - 全局用高度预算控制列表页：表格主数据区至少保留 60% 的可用高度，上半部分根据视口高度自动缩小 padding、行距和区块间距。
+  - 全局压缩 ProTable 查询按钮行，筛选区高度随字段行数自适应，避免按钮行撑出大块空白。
+  - 全局固定 ProTable 表头，表格数据滚动时表头不跟随数据行一起滚动。
   - 全局让 ProTable 分页器压在主数据块底部，并在分页器上方显示浅色横向分隔线。
 - 复用规则：
   - 三端前端页面顶部不再展示独立页面标题，也不要在筛选区、表格区上方手写页面级标题。
   - 后续新增页面继续使用该全局规则；需要表达局部区域时，使用表格、卡片、抽屉、弹窗自身标题。
   - 三端前端页面的主数据块、表单块或占位块必须填满可视区域；内容不足时由分块高度补齐，不要让页面下半屏暴露空白背景。
+  - 三端前端列表页表格主数据区至少保留 60% 的可用高度；滚动只发生在数据体区域，表头必须固定在表格顶部；筛选区不能因为查询按钮或固定间距单独撑出空白行。
   - 新增页面优先使用 `PageContainer` 直接承载 `ProTable`、`Card`、`ProCard` 或 `Tabs`；如果确实需要额外包裹层，包裹层也要保持纵向 flex 撑满。
   - 表格分页器必须留在主数据块底部，上方保留分隔线；不要在单页里把分页器改回跟随数据行的位置。
   - 全局 Tabs 撑满规则必须保留 `.ant-tabs-tabpane-hidden { display: none; }`，避免未激活页签内容和当前页签叠加显示。
@@ -545,8 +549,29 @@
 - 复用规则：
   - 端内当前账号日志接口必须从 `PortalSessionContext.requireSession(...)` 推导 `subjectId` 和 `accountId`，并覆盖查询对象中的同名字段。
   - 前端传入的 `subjectId`、`accountId` 只能作为无效输入处理，不能扩大查询范围。
+  - 当前账号日志接口分页最大 `pageSize` 为 100；后续如抽公共端内分页工具，应保留该上限。
+  - 查看操作日志本身会写入端内操作日志；端内日志页面不要做高频自动轮询。
   - 管理端审计列表继续使用 `/seller/admin/sellers/*` 和 `/buyer/admin/buyers/*` 下的日志接口；不要把端内当前账号日志接口当成管理端全量审计接口。
   - 后续端内安全中心或个人中心日志页只读取当前账号日志，不允许筛选其他主体或其他账号。
+
+### 端内当前账号会话只读接口
+
+- 位置：
+  - `RuoYi-Vue/ruoyi-system/src/main/java/com/ruoyi/system/domain/PortalSessionProfile.java`
+  - `RuoYi-Vue/seller/src/main/java/com/ruoyi/seller/controller/SellerPortalController.java`
+  - `RuoYi-Vue/buyer/src/main/java/com/ruoyi/buyer/controller/BuyerPortalController.java`
+  - `react-ui/src/services/portal/session.ts`
+  - `react-ui/src/types/seller-buyer/party.d.ts`
+- 当前用途：
+  - 卖家端 `/seller/account/sessions` 返回当前卖家端账号自己的登录会话。
+  - 买家端 `/buyer/account/sessions` 返回当前买家端账号自己的登录会话。
+  - 前端统一通过 `sellerPortalSessionService.getSessions` / `buyerPortalSessionService.getSessions` 调用。
+- 复用规则：
+  - 端内当前账号会话接口必须从 `PortalSessionContext.requireSession(...)` 推导 `subjectId` 和 `accountId`，不允许前端传主体 ID 或账号 ID 扩大查询范围。
+  - 响应不得返回 `tokenId`、JWT、Redis key、密码密文或其他敏感字段。
+  - `PortalSessionProfile.tokenId` 只允许后端内部用于判断 `current`，必须保持不输出给前端。
+  - 当前账号会话接口分页最大 `pageSize` 为 100；后续如抽公共端内分页工具，应保留该上限。
+  - 管理端强制踢出继续使用管理端 session 接口；端内当前账号会话接口只读，不承担踢出能力。
 
 ### 三端前端 session 基础层
 
@@ -557,11 +582,13 @@
 - 当前用途：
   - 管理端继续使用原有 `access_token` / `refresh_token` / `expireTime`，避免影响当前 admin 登录。
   - 卖家端、买家端预留独立 token key：`seller_*` / `buyer_*`。
-  - `portal/session.ts` 统一封装卖家端、买家端登录、免密登录、主动退出、修改当前账号密码、`getInfo`、`getRouters`、主体资料、当前账号资料、端内账号只读列表、端内部门只读列表、端内角色只读列表和当前账号日志只读接口。
+  - `portal/session.ts` 统一封装卖家端、买家端登录、免密登录、主动退出、修改当前账号密码、`getInfo`、`getRouters`、主体资料、当前账号资料、端内账号只读列表、端内部门只读列表、端内角色只读列表、当前账号日志只读接口和当前账号会话只读接口。
 - 复用规则：
   - 后续三端物理拆分时，卖家端、买家端前端优先复用 `setTerminalSessionToken`、`getTerminalAccessToken`、`clearTerminalSessionToken`，不要重新设计 localStorage key。
   - 后续端内页面调用当前账号、主体资料、菜单、权限和退出登录时，优先复用 `sellerPortalSessionService` / `buyerPortalSessionService` 或底层 `portal*` 方法，不要在页面里直接拼 `/seller` / `/buyer` 路径。
+  - `portal/session.ts` 的登录、免密登录和端内请求必须显式设置 `isToken: false`，避免全局请求拦截器注入管理端 token。
   - 后续端内安全设置或个人中心修改密码时，优先调用 `sellerPortalSessionService.updatePassword` / `buyerPortalSessionService.updatePassword`；页面不要传主体 ID、账号 ID，也不要持久化旧密码、新密码或确认密码。
+  - 后续端内安全中心或个人中心展示当前账号会话时，优先调用 `sellerPortalSessionService.getSessions` / `buyerPortalSessionService.getSessions`；页面不要传主体 ID、账号 ID、`tokenId` 或 Redis key。
   - 当前 `react-ui/` 仍是管理端验证入口；该基础层只为后续物理拆分降低重复改造，不代表现在立即复制 `seller-ui` / `buyer-ui`。
 
 ### 三端前端直登入口与端内工作台模板
@@ -578,6 +605,8 @@
 - 复用规则：
   - 已确认的 seller/buyer 同构前端按模板复制：卖家侧做成样板后，买家侧只替换 terminal、文案、路由、权限标识、字段配置和 service。
   - 直登页只能消费 `directLoginToken` 并写入对应端 token key；不能写入或覆盖管理端 `access_token`。
+  - `react-ui/src/app.tsx` 必须把 portal 路由排除在管理端 `getUserInfo()`、动态菜单加载和管理端登录态重定向之外。
+  - 直登页必须校验后端返回的 `terminal` 与 URL 端类型一致，不一致时清理相关端 token 并失败。
   - 工作台或后续端内页面必须通过 `getTerminalAccessToken(terminal)` 读取端 token，不要复用管理端 `getAccessToken()`。
   - 当前工作台是验证型入口；后续正式卖家端/买家端页面可以替换 UI，但必须保留端 token、端 service 和后端 `PortalSessionContext` 权限边界。
 

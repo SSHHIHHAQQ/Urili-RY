@@ -11,6 +11,7 @@ import com.ruoyi.system.domain.PortalLoginResult;
 import com.ruoyi.system.domain.PortalLoginSession;
 import com.ruoyi.system.domain.PortalOperLog;
 import com.ruoyi.system.domain.PortalPasswordChangeRequest;
+import com.ruoyi.system.domain.PortalSessionProfile;
 
 /**
  * 买家Service接口
@@ -50,6 +51,8 @@ public interface IBuyerService
     public List<PortalLoginLog> selectBuyerLoginLogList(PortalLoginLog log);
 
     public List<PortalOperLog> selectBuyerOperLogList(PortalOperLog log);
+
+    public List<PortalSessionProfile> selectBuyerOwnSessionList(PortalLoginSession session);
 
     public List<PortalDirectLoginTicket> selectBuyerDirectLoginTicketList(PortalDirectLoginTicket ticket);
 

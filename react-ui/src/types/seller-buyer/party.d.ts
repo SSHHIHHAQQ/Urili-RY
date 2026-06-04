@@ -346,6 +346,19 @@ declare namespace API.Partner {
     costTime?: number;
   }
 
+  export interface PortalSessionProfile {
+    terminal?: PortalTerminal;
+    subjectId?: number;
+    accountId?: number;
+    userName?: string;
+    loginIp?: string;
+    loginTime?: string;
+    expireTime?: string;
+    logoutTime?: string;
+    status?: string;
+    current?: boolean;
+  }
+
   export interface PortalDirectLoginTicket {
     ticketId?: number;
     terminal?: string;

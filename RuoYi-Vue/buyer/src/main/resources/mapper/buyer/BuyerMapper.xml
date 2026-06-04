@@ -429,6 +429,23 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         )
     </insert>
 
+    <select id="selectBuyerSessionProfileList" resultType="PortalSessionProfile">
+        select token_id as tokenId,
+               'buyer' as terminal,
+               buyer_id as subjectId,
+               buyer_account_id as accountId,
+               user_name as userName,
+               login_ip as loginIp,
+               login_time as loginTime,
+               expire_time as expireTime,
+               logout_time as logoutTime,
+               status
+        from buyer_session
+        where buyer_id = #{buyerId}
+          and buyer_account_id = #{buyerAccountId}
+        order by login_time desc, token_id desc
+    </select>
+
     <select id="selectOnlineBuyerSessionTokenIds" resultType="String">
         select token_id
         from buyer_session

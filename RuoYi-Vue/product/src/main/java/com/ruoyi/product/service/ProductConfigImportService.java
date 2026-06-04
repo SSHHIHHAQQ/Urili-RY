@@ -34,12 +34,16 @@ public class ProductConfigImportService
 
     private static final String NO = "N";
 
+    private static final String OPTION_SOURCE_NONE = "NONE";
+
     private static final String OPTION_SOURCE_ATTRIBUTE_OPTION = "ATTRIBUTE_OPTION";
 
     private static final String OPTION_SOURCE_SYS_DICT = "SYS_DICT";
 
     private static final Set<String> ATTRIBUTE_TYPES = Set.of("TEXT", "NUMBER", "BOOLEAN", "SINGLE_SELECT",
         "MULTI_SELECT", "DATE");
+
+    private static final Set<String> OPTION_ATTRIBUTE_TYPES = Set.of("SINGLE_SELECT", "MULTI_SELECT");
 
     private static final Set<String> OPTION_SOURCES = Set.of("NONE", "ATTRIBUTE_OPTION", "SYS_DICT");
 
@@ -342,15 +346,37 @@ public class ProductConfigImportService
             throw new ServiceException("选项来源不正确：" + attribute.getOptionSource());
         }
         attribute.setDictType(StringUtils.defaultString(row.getDictType()).trim());
-        if (OPTION_SOURCE_SYS_DICT.equals(attribute.getOptionSource()) && StringUtils.isBlank(attribute.getDictType()))
-        {
-            throw new ServiceException("选项来源为 SYS_DICT 时，字典类型不能为空");
-        }
+        validateAttributeOptionSource(attribute);
         attribute.setUnit(StringUtils.defaultString(row.getUnit()).trim());
         attribute.setValuePrecision(defaultInt(row.getValuePrecision()));
         attribute.setStatus(normalizeStatus(row.getStatus()));
         attribute.setRemark(StringUtils.defaultString(row.getRemark()).trim());
         return attribute;
+    }
+
+    private void validateAttributeOptionSource(ProductAttribute attribute)
+    {
+        if (!OPTION_ATTRIBUTE_TYPES.contains(attribute.getAttributeType()))
+        {
+            if (!OPTION_SOURCE_NONE.equals(attribute.getOptionSource()))
+            {
+                throw new ServiceException("TEXT / NUMBER / BOOLEAN / DATE 属性的选项来源必须为 NONE");
+            }
+            attribute.setDictType("");
+            return;
+        }
+        if (OPTION_SOURCE_NONE.equals(attribute.getOptionSource()))
+        {
+            throw new ServiceException("SINGLE_SELECT / MULTI_SELECT 属性必须选择 ATTRIBUTE_OPTION 或 SYS_DICT");
+        }
+        if (OPTION_SOURCE_SYS_DICT.equals(attribute.getOptionSource()) && StringUtils.isBlank(attribute.getDictType()))
+        {
+            throw new ServiceException("选项来源为 SYS_DICT 时，字典类型不能为空");
+        }
+        if (!OPTION_SOURCE_SYS_DICT.equals(attribute.getOptionSource()))
+        {
+            attribute.setDictType("");
+        }
     }
 
     private ProductAttributeOption buildOption(ProductAttributeOptionImportRow row)

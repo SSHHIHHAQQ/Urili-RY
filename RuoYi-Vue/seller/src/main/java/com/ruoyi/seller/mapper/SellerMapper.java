@@ -8,6 +8,7 @@ import com.ruoyi.seller.domain.SellerAccount;
 import com.ruoyi.system.domain.PortalLoginLog;
 import com.ruoyi.system.domain.PortalLoginSession;
 import com.ruoyi.system.domain.PortalOperLog;
+import com.ruoyi.system.domain.PortalSessionProfile;
 
 /**
  * 卖家Mapper接口
@@ -53,6 +54,9 @@ public interface SellerMapper
     public List<PortalOperLog> selectSellerOperLogList(PortalOperLog log);
 
     public int insertSellerSession(PortalLoginSession session);
+
+    public List<PortalSessionProfile> selectSellerSessionProfileList(@Param("sellerId") Long sellerId,
+            @Param("sellerAccountId") Long sellerAccountId);
 
     public List<String> selectOnlineSellerSessionTokenIds(@Param("sellerId") Long sellerId,
             @Param("sellerAccountId") Long sellerAccountId);

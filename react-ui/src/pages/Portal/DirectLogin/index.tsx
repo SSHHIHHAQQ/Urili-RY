@@ -45,9 +45,12 @@ const DirectLoginPage: React.FC = () => {
 
       try {
         const response = await PORTAL_SERVICE[terminal].directLogin(directLoginToken);
-        if (response.code !== 200 || !response.data?.token) {
+        if (response.code !== 200 || !response.data?.token || response.data.terminal !== terminal) {
           clearPortalLogin(terminal);
-          setState({ status: 'error', message: response.msg || '免密登录失败' });
+          if (response.data?.terminal === 'seller' || response.data?.terminal === 'buyer') {
+            clearPortalLogin(response.data.terminal);
+          }
+          setState({ status: 'error', message: response.msg || '免密登录端类型不匹配' });
           return;
         }
         persistPortalLogin(response.data);

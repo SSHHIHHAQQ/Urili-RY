@@ -8,6 +8,7 @@ import com.ruoyi.buyer.domain.BuyerAccount;
 import com.ruoyi.system.domain.PortalLoginLog;
 import com.ruoyi.system.domain.PortalLoginSession;
 import com.ruoyi.system.domain.PortalOperLog;
+import com.ruoyi.system.domain.PortalSessionProfile;
 
 /**
  * 买家Mapper接口
@@ -53,6 +54,9 @@ public interface BuyerMapper
     public List<PortalOperLog> selectBuyerOperLogList(PortalOperLog log);
 
     public int insertBuyerSession(PortalLoginSession session);
+
+    public List<PortalSessionProfile> selectBuyerSessionProfileList(@Param("buyerId") Long buyerId,
+            @Param("buyerAccountId") Long buyerAccountId);
 
     public List<String> selectOnlineBuyerSessionTokenIds(@Param("buyerId") Long buyerId,
             @Param("buyerAccountId") Long buyerAccountId);

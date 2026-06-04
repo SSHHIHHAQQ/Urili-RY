@@ -3,6 +3,15 @@
 }
 
 .ant-pro-page-container {
+  --urili-list-page-block-padding: 12px;
+  --urili-list-section-gap: 10px;
+  --urili-list-search-padding-block-start: 16px;
+  --urili-list-search-padding-block-end: 12px;
+  --urili-list-search-row-gap: 12px;
+  --urili-list-search-label-gap: 4px;
+  --urili-list-search-actions-height: 32px;
+  --urili-list-search-max-height: calc(40% - var(--urili-list-section-gap));
+  --urili-list-table-min-height: 60%;
   display: flex;
   min-height: calc(100vh - 56px);
   flex-direction: column;
@@ -31,6 +40,7 @@
 }
 
 .ant-pro-page-container:has(.ant-pro-table) .ant-pro-page-container-children-container {
+  padding-block: var(--urili-list-page-block-padding);
   overflow: hidden;
 }
 
@@ -57,8 +67,24 @@
   overflow: hidden;
 }
 
+.ant-pro-page-container .ant-pro-page-container-children-container .ant-tabs > .ant-tabs-nav {
+  margin-block-end: var(--urili-list-section-gap);
+}
+
 .ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-table-search {
   flex: none;
+  max-height: var(--urili-list-search-max-height);
+  margin-block-end: var(--urili-list-section-gap);
+  overflow: auto;
+}
+
+.ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-table-search .ant-pro-query-filter {
+  padding-block: var(--urili-list-search-padding-block-start) var(--urili-list-search-padding-block-end);
+}
+
+.ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-table-search .ant-pro-query-filter .ant-row {
+  /* biome-ignore lint/complexity/noImportantStyles: Ant Pro writes row-gap inline from searchGutter; viewport-height compacting needs to override that inline value. */
+  row-gap: var(--urili-list-search-row-gap) !important;
 }
 
 .ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-table-search .ant-form-horizontal .ant-form-item {
@@ -69,7 +95,7 @@
 
 .ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-table-search .ant-form-horizontal .ant-form-item-label {
   flex: none;
-  padding-block-end: 6px;
+  padding-block-end: var(--urili-list-search-label-gap);
   text-align: start;
   white-space: nowrap;
   width: 100%;
@@ -108,13 +134,30 @@
 }
 
 .ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-table-search .ant-pro-query-filter-actions {
-  margin-block-start: 28px;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: var(--urili-list-search-actions-height);
+  height: var(--urili-list-search-actions-height);
+  margin-block-start: 0;
+}
+
+.ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-table-search .ant-pro-query-filter-actions .ant-form-item-control-input {
+  min-height: var(--urili-list-search-actions-height);
+}
+
+.ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-table-search .ant-pro-query-filter-actions .ant-form-item-control-input-content {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-table-search .ant-pro-query-filter-actions .ant-space {
+  align-items: center;
 }
 
 .ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-card:not(.ant-pro-table-search) {
   display: flex;
-  flex: 1;
-  min-height: 0;
+  flex: 1 1 var(--urili-list-table-min-height);
+  min-height: var(--urili-list-table-min-height);
   flex-direction: column;
   overflow: hidden;
 }
@@ -150,10 +193,39 @@
   overflow: auto;
 }
 
+.ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table .ant-table .ant-table-thead > tr > th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #fafafa;
+}
+
 .ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table .ant-table-pagination.ant-pagination {
   width: 100%;
   margin-block-start: auto;
   margin-block-end: 0;
   padding-block-start: 12px;
   border-block-start: 1px solid rgba(5, 5, 5, 0.06);
+}
+
+@media (max-height: 900px) {
+  .ant-pro-page-container:has(.ant-pro-table) {
+    --urili-list-page-block-padding: 10px;
+    --urili-list-section-gap: 8px;
+    --urili-list-search-padding-block-start: 14px;
+    --urili-list-search-padding-block-end: 10px;
+    --urili-list-search-row-gap: 10px;
+    --urili-list-search-label-gap: 4px;
+  }
+}
+
+@media (max-height: 760px) {
+  .ant-pro-page-container:has(.ant-pro-table) {
+    --urili-list-page-block-padding: 8px;
+    --urili-list-section-gap: 8px;
+    --urili-list-search-padding-block-start: 12px;
+    --urili-list-search-padding-block-end: 10px;
+    --urili-list-search-row-gap: 8px;
+    --urili-list-search-label-gap: 3px;
+  }
 }

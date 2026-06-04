@@ -22,6 +22,7 @@ export async function portalLogin(terminal: PortalTerminal, data: API.Partner.Po
     method: 'POST',
     headers: {
       'Content-Type': 'application/json;charset=UTF-8',
+      isToken: false,
     },
     data,
   });
@@ -32,6 +33,7 @@ export async function portalDirectLogin(terminal: PortalTerminal, directLoginTok
     method: 'POST',
     headers: {
       'Content-Type': 'application/json;charset=UTF-8',
+      isToken: false,
     },
     data: { directLoginToken },
   });
@@ -40,42 +42,42 @@ export async function portalDirectLogin(terminal: PortalTerminal, directLoginTok
 export async function portalLogout(terminal: PortalTerminal) {
   return request<API.Result>(buildPortalUrl(terminal, '/logout'), {
     method: 'POST',
-    headers: buildPortalAuthHeaders(terminal),
+    headers: { ...buildPortalAuthHeaders(terminal), isToken: false },
   });
 }
 
 export async function getPortalInfo(terminal: PortalTerminal) {
   return request<API.Partner.PortalPermissionInfoResult>(buildPortalUrl(terminal, '/getInfo'), {
     method: 'GET',
-    headers: buildPortalAuthHeaders(terminal),
+    headers: { ...buildPortalAuthHeaders(terminal), isToken: false },
   });
 }
 
 export async function getPortalRouters(terminal: PortalTerminal) {
   return request<API.GetRoutersResult>(buildPortalUrl(terminal, '/getRouters'), {
     method: 'GET',
-    headers: buildPortalAuthHeaders(terminal),
+    headers: { ...buildPortalAuthHeaders(terminal), isToken: false },
   });
 }
 
 export async function getPortalSubjectProfile(terminal: PortalTerminal) {
   return request<API.Partner.PortalSubjectProfileResult>(buildPortalUrl(terminal, '/profile'), {
     method: 'GET',
-    headers: buildPortalAuthHeaders(terminal),
+    headers: { ...buildPortalAuthHeaders(terminal), isToken: false },
   });
 }
 
 export async function getPortalAccountProfile(terminal: PortalTerminal) {
   return request<API.Partner.PortalAccountProfileResult>(buildPortalUrl(terminal, '/account/profile'), {
     method: 'GET',
-    headers: buildPortalAuthHeaders(terminal),
+    headers: { ...buildPortalAuthHeaders(terminal), isToken: false },
   });
 }
 
 export async function updatePortalPassword(terminal: PortalTerminal, data: API.Partner.PortalPasswordChangeParams) {
   return request<API.Result>(buildPortalUrl(terminal, '/account/password'), {
     method: 'PUT',
-    headers: buildPortalAuthHeaders(terminal),
+    headers: { ...buildPortalAuthHeaders(terminal), isToken: false },
     data,
   });
 }
@@ -83,21 +85,21 @@ export async function updatePortalPassword(terminal: PortalTerminal, data: API.P
 export async function getPortalAccounts(terminal: PortalTerminal) {
   return request<API.Partner.PortalAccountListResult>(buildPortalUrl(terminal, '/accounts'), {
     method: 'GET',
-    headers: buildPortalAuthHeaders(terminal),
+    headers: { ...buildPortalAuthHeaders(terminal), isToken: false },
   });
 }
 
 export async function getPortalDepts(terminal: PortalTerminal) {
   return request<API.Partner.PortalDeptProfileListResult>(buildPortalUrl(terminal, '/depts'), {
     method: 'GET',
-    headers: buildPortalAuthHeaders(terminal),
+    headers: { ...buildPortalAuthHeaders(terminal), isToken: false },
   });
 }
 
 export async function getPortalRoles(terminal: PortalTerminal) {
   return request<API.Partner.PortalRoleProfileListResult>(buildPortalUrl(terminal, '/roles'), {
     method: 'GET',
-    headers: buildPortalAuthHeaders(terminal),
+    headers: { ...buildPortalAuthHeaders(terminal), isToken: false },
   });
 }
 
@@ -106,7 +108,7 @@ export async function getPortalLoginLogs(terminal: PortalTerminal, params?: Reco
     buildPortalUrl(terminal, '/account/login-logs'),
     {
       method: 'GET',
-      headers: buildPortalAuthHeaders(terminal),
+      headers: { ...buildPortalAuthHeaders(terminal), isToken: false },
       params,
     },
   );
@@ -117,7 +119,18 @@ export async function getPortalOperLogs(terminal: PortalTerminal, params?: Recor
     buildPortalUrl(terminal, '/account/oper-logs'),
     {
       method: 'GET',
-      headers: buildPortalAuthHeaders(terminal),
+      headers: { ...buildPortalAuthHeaders(terminal), isToken: false },
+      params,
+    },
+  );
+}
+
+export async function getPortalSessions(terminal: PortalTerminal, params?: Record<string, any>) {
+  return request<API.Partner.PortalAuditPageResult<API.Partner.PortalSessionProfile>>(
+    buildPortalUrl(terminal, '/account/sessions'),
+    {
+      method: 'GET',
+      headers: { ...buildPortalAuthHeaders(terminal), isToken: false },
       params,
     },
   );
@@ -137,6 +150,7 @@ export const sellerPortalSessionService = {
   getRoles: () => getPortalRoles('seller'),
   getLoginLogs: (params?: Record<string, any>) => getPortalLoginLogs('seller', params),
   getOperLogs: (params?: Record<string, any>) => getPortalOperLogs('seller', params),
+  getSessions: (params?: Record<string, any>) => getPortalSessions('seller', params),
 };
 
 export const buyerPortalSessionService = {
@@ -153,4 +167,5 @@ export const buyerPortalSessionService = {
   getRoles: () => getPortalRoles('buyer'),
   getLoginLogs: (params?: Record<string, any>) => getPortalLoginLogs('buyer', params),
   getOperLogs: (params?: Record<string, any>) => getPortalOperLogs('buyer', params),
+  getSessions: (params?: Record<string, any>) => getPortalSessions('buyer', params),
 };

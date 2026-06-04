@@ -49,9 +49,9 @@ public class ProductImportTemplateService
     private List<ProductCategoryImportRow> categoryExamples()
     {
         return List.of(
-            categoryRow("apparel", "服装", "", 10, "0", "顶级分类；有子级后系统自动判定为不可发布"),
-            categoryRow("apparel_tshirt", "T恤", "apparel", 10, "0", "叶子类目；无子级时系统自动判定为可发布"),
-            categoryRow("electronics", "电器", "", 20, "0", "顶级分类；是否可发布不需要人工填写"),
+            categoryRow("apparel", "服装", "", 10, "0", "顶级分类；有子级后自动作为分组"),
+            categoryRow("apparel_tshirt", "T恤", "apparel", 10, "0", "叶子类目；卖家可选择发布商品"),
+            categoryRow("electronics", "电器", "", 20, "0", "顶级分类；无需填写发布状态"),
             categoryRow("electronics_battery", "带电池电器", "electronics", 10, "0",
                 "父级编码必须在前面行或系统中已存在"));
     }
@@ -64,6 +64,8 @@ public class ProductImportTemplateService
                 "电器类常见布尔属性"),
             attributeRow("material", "材质", "SINGLE_SELECT", "ATTRIBUTE_OPTION", "", "", 0, "0",
                 "需要再导入属性选项"),
+            attributeRow("origin_country", "原产国", "SINGLE_SELECT", "SYS_DICT", "product_origin_country", "", 0,
+                "0", "复用若依字典，不需要导入属性选项"),
             attributeRow("size", "尺码", "SINGLE_SELECT", "ATTRIBUTE_OPTION", "", "", 0, "0",
                 "服装类常见选择属性"));
     }
@@ -100,10 +102,12 @@ public class ProductImportTemplateService
             helpRow(template, "属性名称", "是", "展示名称", "是否可水洗", "同一含义重复维护多个属性"),
             helpRow(template, "属性类型", "是", "TEXT / NUMBER / BOOLEAN / SINGLE_SELECT / MULTI_SELECT / DATE",
                 "BOOLEAN", "填写中文类型，例如“单选”"),
-            helpRow(template, "选项来源", "是", "无选项填 NONE；自定义选项填 ATTRIBUTE_OPTION；若依字典填 SYS_DICT",
-                "ATTRIBUTE_OPTION", "选择型属性填 NONE，导致后续没有选项"),
-            helpRow(template, "字典类型", "按条件", "选项来源为 SYS_DICT 时必填，其他来源留空", "product_material",
-                "选项来源不是 SYS_DICT 仍填写字典类型"),
+            helpRow(template, "选项来源", "是",
+                "TEXT / NUMBER / BOOLEAN / DATE 固定填 NONE；SINGLE_SELECT / MULTI_SELECT 填 ATTRIBUTE_OPTION 或 SYS_DICT",
+                "ATTRIBUTE_OPTION", "文本、数字、布尔、日期属性填写 ATTRIBUTE_OPTION 或 SYS_DICT"),
+            helpRow(template, "字典类型", "按条件",
+                "属性类型为 SINGLE_SELECT / MULTI_SELECT 且选项来源为 SYS_DICT 时必填，必须是若依字典类型编码",
+                "product_material", "选项来源不是 SYS_DICT 仍填写字典类型，或填写不存在的字典类型"),
             helpRow(template, "单位", "否", "数值类属性可填单位，其他类型通常留空", "cm", "布尔或日期属性填写单位"),
             helpRow(template, "数值精度", "否", "数字属性的小数位；不填按 0 处理", "2", "填写非数字文本"),
             helpRow(template, "状态", "是", "填写 正常 / 停用", "正常", "填写“启用”等非模板下拉值"),

@@ -2,6 +2,7 @@ package com.ruoyi.seller.controller;
 
 import java.util.ArrayList;
 import java.util.List;
+import com.github.pagehelper.PageHelper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -14,8 +15,11 @@ import com.ruoyi.common.annotation.PortalLog;
 import com.ruoyi.common.annotation.PortalPreAuthorize;
 import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
+import com.ruoyi.common.core.page.PageDomain;
 import com.ruoyi.common.core.page.TableDataInfo;
+import com.ruoyi.common.core.page.TableSupport;
 import com.ruoyi.common.enums.BusinessType;
+import com.ruoyi.common.utils.sql.SqlUtil;
 import com.ruoyi.seller.domain.Seller;
 import com.ruoyi.seller.domain.SellerAccount;
 import com.ruoyi.seller.service.ISellerPortalDeptService;
@@ -41,6 +45,8 @@ import com.ruoyi.system.service.support.PortalSessionContext;
 @RequestMapping("/seller")
 public class SellerPortalController extends BaseController
 {
+    private static final int PORTAL_LIST_MAX_PAGE_SIZE = 100;
+
     @Autowired
     private ISellerPortalPermissionService permissionService;
 
@@ -155,7 +161,7 @@ public class SellerPortalController extends BaseController
         PortalLoginLog query = log == null ? new PortalLoginLog() : log;
         query.setSubjectId(session.getSubjectId());
         query.setAccountId(session.getAccountId());
-        startPage();
+        startPortalListPage();
         return getDataTable(sellerService.selectSellerLoginLogList(query));
     }
 
@@ -168,8 +174,39 @@ public class SellerPortalController extends BaseController
         PortalOperLog query = log == null ? new PortalOperLog() : log;
         query.setSubjectId(session.getSubjectId());
         query.setAccountId(session.getAccountId());
-        startPage();
+        startPortalListPage();
         return getDataTable(sellerService.selectSellerOperLogList(query));
+    }
+
+    @GetMapping("/account/sessions")
+    @PortalPreAuthorize(terminal = "seller")
+    @PortalLog(terminal = "seller", title = "卖家端会话列表", businessType = BusinessType.OTHER, isSaveResponseData = false)
+    public TableDataInfo accountSessions()
+    {
+        PortalLoginSession session = PortalSessionContext.requireSession("seller");
+        startPortalListPage();
+        return getDataTable(sellerService.selectSellerOwnSessionList(session));
+    }
+
+    private void startPortalListPage()
+    {
+        PageDomain pageDomain = TableSupport.buildPageRequest();
+        Integer pageNum = pageDomain.getPageNum();
+        Integer pageSize = pageDomain.getPageSize();
+        if (pageNum == null || pageNum < 1)
+        {
+            pageNum = 1;
+        }
+        if (pageSize == null || pageSize < 1)
+        {
+            pageSize = 10;
+        }
+        if (pageSize > PORTAL_LIST_MAX_PAGE_SIZE)
+        {
+            pageSize = PORTAL_LIST_MAX_PAGE_SIZE;
+        }
+        String orderBy = SqlUtil.escapeOrderBySql(pageDomain.getOrderBy());
+        PageHelper.startPage(pageNum, pageSize, orderBy).setReasonable(pageDomain.getReasonable());
     }
 
     private PortalSubjectProfile buildProfile(Seller seller)

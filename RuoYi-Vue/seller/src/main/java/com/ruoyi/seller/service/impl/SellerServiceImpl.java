@@ -25,6 +25,7 @@ import com.ruoyi.system.domain.PortalLoginResult;
 import com.ruoyi.system.domain.PortalLoginSession;
 import com.ruoyi.system.domain.PortalOperLog;
 import com.ruoyi.system.domain.PortalPasswordChangeRequest;
+import com.ruoyi.system.domain.PortalSessionProfile;
 import com.ruoyi.system.mapper.PortalDirectLoginTicketMapper;
 import com.ruoyi.system.service.support.PortalDirectLoginSupport;
 import com.ruoyi.system.service.support.PortalTokenSupport;
@@ -269,6 +270,23 @@ public class SellerServiceImpl implements ISellerService
     public List<PortalOperLog> selectSellerOperLogList(PortalOperLog log)
     {
         return sellerMapper.selectSellerOperLogList(log);
+    }
+
+    @Override
+    public List<PortalSessionProfile> selectSellerOwnSessionList(PortalLoginSession session)
+    {
+        if (session == null)
+        {
+            throw new ServiceException("登录状态已失效");
+        }
+        selectSellerAccountById(session.getSubjectId(), session.getAccountId());
+        List<PortalSessionProfile> sessions = sellerMapper.selectSellerSessionProfileList(
+            session.getSubjectId(), session.getAccountId());
+        for (PortalSessionProfile profile : sessions)
+        {
+            profile.setCurrent(Objects.equals(session.getTokenId(), profile.getTokenId()));
+        }
+        return sessions;
     }
 
     @Override

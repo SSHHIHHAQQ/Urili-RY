@@ -4,16 +4,19 @@ import {
   Descriptions,
   Empty,
   Form,
+  Grid,
   Input,
   Modal,
   Space,
   Spin,
+  Table,
   Tag,
   Typography,
 } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
 import { LockOutlined, LogoutOutlined, ReloadOutlined } from '@ant-design/icons';
 import { history, useLocation } from '@umijs/max';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getTerminalAccessToken } from '@/access';
 import { message } from '@/utils/feedback';
 import {
@@ -45,18 +48,14 @@ const headerStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
+  flexWrap: 'wrap',
   gap: 16,
   marginBottom: 16,
 };
 
 const gridStyle: React.CSSProperties = {
   display: 'grid',
-  gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
   gap: 16,
-};
-
-const wideGridStyle: React.CSSProperties = {
-  gridColumn: 'span 2',
 };
 
 const fullGridStyle: React.CSSProperties = {
@@ -106,14 +105,31 @@ function renderDeptList(depts?: API.Partner.PortalDeptProfile[]) {
   );
 }
 
+function renderSessionStatus(record: API.Partner.PortalSessionProfile) {
+  if (record.current) {
+    return <Tag color="processing">当前</Tag>;
+  }
+  if (record.logoutTime || record.status === '1') {
+    return <Tag>已退出</Tag>;
+  }
+  if (record.status === '0') {
+    return <Tag color="success">有效</Tag>;
+  }
+  return <Tag>{displayText(record.status)}</Tag>;
+}
+
 const PortalHomePage: React.FC = () => {
   const location = useLocation();
+  const screens = Grid.useBreakpoint();
   const terminal = useMemo(() => getPortalTerminal(location.pathname), [location.pathname]);
   const [loading, setLoading] = useState(true);
+  const [sessionLoading, setSessionLoading] = useState(false);
   const [data, setData] = useState<PortalHomeData>({});
+  const [sessionRows, setSessionRows] = useState<API.Partner.PortalSessionProfile[]>([]);
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [passwordSubmitting, setPasswordSubmitting] = useState(false);
   const [passwordForm] = Form.useForm<PasswordFormValues>();
+  const sessionRequestSeq = useRef(0);
 
   const loadData = useCallback(async (currentTerminal: PortalTerminal) => {
     setLoading(true);
@@ -145,6 +161,27 @@ const PortalHomePage: React.FC = () => {
     }
   }, []);
 
+  const loadSessions = useCallback(async (currentTerminal: PortalTerminal) => {
+    const requestSeq = sessionRequestSeq.current + 1;
+    sessionRequestSeq.current = requestSeq;
+    setSessionLoading(true);
+    try {
+      const response = await PORTAL_SERVICE[currentTerminal].getSessions({ pageNum: 1, pageSize: 5 });
+      if (sessionRequestSeq.current === requestSeq) {
+        setSessionRows(response.rows || []);
+      }
+    } catch (error) {
+      console.log(error);
+      if (sessionRequestSeq.current === requestSeq) {
+        setSessionRows([]);
+      }
+    } finally {
+      if (sessionRequestSeq.current === requestSeq) {
+        setSessionLoading(false);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     if (!terminal) {
       history.replace('/user/login');
@@ -155,7 +192,8 @@ const PortalHomePage: React.FC = () => {
       return;
     }
     loadData(terminal);
-  }, [loadData, terminal]);
+    loadSessions(terminal);
+  }, [loadData, loadSessions, terminal]);
 
   const handleLogout = async () => {
     if (!terminal) {
@@ -197,6 +235,61 @@ const PortalHomePage: React.FC = () => {
 
   const meta = PORTAL_META[terminal];
   const permissions = data.info?.permissions || [];
+  const gridColumns = screens.lg ? 3 : screens.sm ? 2 : 1;
+  const contentGridStyle: React.CSSProperties = {
+    ...gridStyle,
+    gridTemplateColumns: `repeat(${gridColumns}, minmax(240px, 1fr))`,
+  };
+  const wideGridStyle: React.CSSProperties = {
+    gridColumn: gridColumns > 1 ? 'span 2' : '1 / -1',
+  };
+  const descriptionColumns = screens.md ? 2 : 1;
+  const sessionColumns: ColumnsType<API.Partner.PortalSessionProfile> = [
+    {
+      title: '状态',
+      key: 'status',
+      width: 96,
+      render: (_, record) => renderSessionStatus(record),
+    },
+    {
+      title: '登录账号',
+      dataIndex: 'userName',
+      key: 'userName',
+      ellipsis: true,
+      render: displayText,
+    },
+    {
+      title: '登录 IP',
+      dataIndex: 'loginIp',
+      key: 'loginIp',
+      width: 140,
+      responsive: ['sm'],
+      render: displayText,
+    },
+    {
+      title: '登录时间',
+      dataIndex: 'loginTime',
+      key: 'loginTime',
+      width: 180,
+      render: displayText,
+    },
+    {
+      title: '过期时间',
+      dataIndex: 'expireTime',
+      key: 'expireTime',
+      width: 180,
+      responsive: ['md'],
+      render: displayText,
+    },
+    {
+      title: '退出时间',
+      dataIndex: 'logoutTime',
+      key: 'logoutTime',
+      width: 180,
+      responsive: ['md'],
+      render: displayText,
+    },
+  ];
 
   return (
     <div style={pageStyle}>
@@ -209,8 +302,14 @@ const PortalHomePage: React.FC = () => {
             {displayText(data.info?.subjectNo)} / {displayText(data.account?.userName)}
           </Typography.Text>
         </Space>
-        <Space>
-          <Button icon={<ReloadOutlined />} onClick={() => loadData(terminal)}>
+        <Space wrap>
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={() => {
+              loadData(terminal);
+              loadSessions(terminal);
+            }}
+          >
             刷新
           </Button>
           <Button icon={<LockOutlined />} onClick={() => setPasswordOpen(true)}>
@@ -223,9 +322,9 @@ const PortalHomePage: React.FC = () => {
       </div>
 
       <Spin spinning={loading}>
-        <div style={gridStyle}>
+        <div style={contentGridStyle}>
           <Card title="主体资料" bordered={false} style={wideGridStyle}>
-            <Descriptions column={2} size="small">
+            <Descriptions column={descriptionColumns} size="small">
               <Descriptions.Item label="主体编号">{displayText(data.subject?.subjectNo)}</Descriptions.Item>
               <Descriptions.Item label="主体代码">{displayText(data.subject?.subjectCode)}</Descriptions.Item>
               <Descriptions.Item label="主体名称">{displayText(data.subject?.subjectName)}</Descriptions.Item>
@@ -254,6 +353,21 @@ const PortalHomePage: React.FC = () => {
 
           <Card title="端内账号" bordered={false}>
             <Typography.Text>{data.accounts?.length || 0}</Typography.Text>
+          </Card>
+
+          <Card title="当前账号会话" bordered={false} style={fullGridStyle}>
+            <Table<API.Partner.PortalSessionProfile>
+              size="small"
+              rowKey={(record, index) =>
+                `${record.terminal || terminal}-${record.accountId || 0}-${record.loginTime || 'session'}-${index || 0}`
+              }
+              loading={sessionLoading}
+              pagination={false}
+              columns={sessionColumns}
+              dataSource={sessionRows}
+              scroll={{ x: 780 }}
+              locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
+            />
           </Card>
 
           <Card title="权限标识" bordered={false} style={fullGridStyle}>

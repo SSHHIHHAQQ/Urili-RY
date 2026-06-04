@@ -1,4 +1,4 @@
-import { DownOutlined, ImportOutlined, PlusOutlined } from '@ant-design/icons';
+import { ImportOutlined, PlusOutlined } from '@ant-design/icons';
 import {
   type ActionType,
   ModalForm,
@@ -10,7 +10,7 @@ import {
   ProFormTextArea,
   ProTable,
 } from '@ant-design/pro-components';
-import { Button, Dropdown, Form, Modal } from 'antd';
+import { Button, Form, Modal } from 'antd';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   addAttribute,
@@ -24,13 +24,16 @@ import {
   previewAttributeOptionImport,
   updateAttribute,
 } from '@/services/product/product';
+import { getDictTypeOptionSelect } from '@/services/system/dict';
 import { message } from '@/utils/feedback';
 import { getPersistedProTableSearch } from '@/utils/proTableSearch';
 import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 import {
   attributeTypeOptions,
+  isOptionAttributeType,
   optionArrayToValueEnum,
   optionSourceOptions,
+  selectAttributeOptionSourceOptions,
   statusOptions,
   statusValueEnum,
 } from '../../constants';
@@ -52,6 +55,27 @@ const defaultAttributeValues: Partial<API.Product.Attribute> = {
   status: '0',
 };
 
+function normalizeAttributeValues(
+  values?: Partial<API.Product.Attribute>,
+): Partial<API.Product.Attribute> {
+  const next = { ...defaultAttributeValues, ...values };
+  if (!isOptionAttributeType(next.attributeType)) {
+    next.optionSource = 'NONE';
+    next.dictType = '';
+    return next;
+  }
+  if (
+    next.optionSource !== 'ATTRIBUTE_OPTION' &&
+    next.optionSource !== 'SYS_DICT'
+  ) {
+    next.optionSource = 'ATTRIBUTE_OPTION';
+  }
+  if (next.optionSource !== 'SYS_DICT') {
+    next.dictType = '';
+  }
+  return next;
+}
+
 function resultOk(resp: API.Result, successText: string) {
   if (resp.code === 200) {
     message.success(successText);
@@ -70,6 +94,9 @@ export default function AttributeLibrary({ access }: AttributeLibraryProps) {
   const [optionListOpen, setOptionListOpen] = useState(false);
   const [currentAttribute, setCurrentAttribute] = useState<API.Product.Attribute>();
   const [optionAttribute, setOptionAttribute] = useState<API.Product.Attribute>();
+  const [dictTypeOptions, setDictTypeOptions] = useState<
+    { label: string; value: string }[]
+  >([]);
 
   const attributeTypeValueEnum = useMemo(
     () => optionArrayToValueEnum(attributeTypeOptions),
@@ -85,8 +112,27 @@ export default function AttributeLibrary({ access }: AttributeLibraryProps) {
       return;
     }
     attributeForm.resetFields();
-    attributeForm.setFieldsValue(currentAttribute || defaultAttributeValues);
+    attributeForm.setFieldsValue(normalizeAttributeValues(currentAttribute));
   }, [attributeForm, attributeModalOpen, currentAttribute]);
+
+  useEffect(() => {
+    getDictTypeOptionSelect()
+      .then((resp: any) => {
+        if (resp.code !== 200) {
+          return;
+        }
+        const options = (resp.data || [])
+          .filter((item: API.System.DictType) => item.status !== '1')
+          .map((item: API.System.DictType) => ({
+            label: `${item.dictName}（${item.dictType}）`,
+            value: item.dictType,
+          }));
+        setDictTypeOptions(options);
+      })
+      .catch(() => {
+        message.error('字典类型加载失败');
+      });
+  }, []);
 
   const openCreateAttribute = () => {
     setCurrentAttribute(undefined);
@@ -99,7 +145,7 @@ export default function AttributeLibrary({ access }: AttributeLibraryProps) {
   };
 
   const saveAttribute = async (values: API.Product.Attribute) => {
-    const payload = { ...values };
+    const payload = normalizeAttributeValues(values) as API.Product.Attribute;
     const resp = currentAttribute?.attributeId
       ? await updateAttribute(currentAttribute.attributeId, payload)
       : await addAttribute(payload);
@@ -221,26 +267,16 @@ export default function AttributeLibrary({ access }: AttributeLibraryProps) {
         >
           选项
         </Button>,
-        <Dropdown
-          key="more"
-          menu={{
-            items: [
-              {
-                key: 'delete',
-                label: '删除',
-                danger: true,
-                disabled: !access.hasPerms('product:attribute:remove'),
-              },
-            ],
-            onClick: ({ key }) => {
-              if (key === 'delete') removeAttribute(record);
-            },
-          }}
+        <Button
+          key="delete"
+          type="link"
+          size="small"
+          danger
+          hidden={!access.hasPerms('product:attribute:remove')}
+          onClick={() => removeAttribute(record)}
         >
-          <Button type="link" size="small">
-            更多 <DownOutlined />
-          </Button>
-        </Dropdown>,
+          删除
+        </Button>,
       ],
     },
   ];
@@ -318,6 +354,29 @@ export default function AttributeLibrary({ access }: AttributeLibraryProps) {
           onCancel: () => setAttributeModalOpen(false),
         }}
         onOpenChange={setAttributeModalOpen}
+        onValuesChange={(changedValues, allValues) => {
+          if ('attributeType' in changedValues) {
+            if (!isOptionAttributeType(changedValues.attributeType)) {
+              attributeForm.setFieldsValue({ optionSource: 'NONE', dictType: '' });
+              return;
+            }
+            if (
+              allValues.optionSource !== 'ATTRIBUTE_OPTION' &&
+              allValues.optionSource !== 'SYS_DICT'
+            ) {
+              attributeForm.setFieldsValue({
+                optionSource: 'ATTRIBUTE_OPTION',
+                dictType: '',
+              });
+            }
+          }
+          if (
+            'optionSource' in changedValues &&
+            changedValues.optionSource !== 'SYS_DICT'
+          ) {
+            attributeForm.setFieldsValue({ dictType: '' });
+          }
+        }}
         onFinish={saveAttribute}
       >
         <ProFormText
@@ -337,21 +396,27 @@ export default function AttributeLibrary({ access }: AttributeLibraryProps) {
           fieldProps={SEARCHABLE_SELECT_PROPS}
           rules={[{ required: true, message: '请选择属性类型' }]}
         />
-        <ProFormSelect
-          name="optionSource"
-          label="选项来源"
-          options={optionSourceOptions}
-          fieldProps={SEARCHABLE_SELECT_PROPS}
-          rules={[{ required: true, message: '请选择选项来源' }]}
-        />
-        <ProFormDependency name={['optionSource']}>
-          {({ optionSource }) =>
-            optionSource === 'SYS_DICT' ? (
-              <ProFormText
-                name="dictType"
-                label="字典类型"
-                rules={[{ required: true, message: '请输入若依字典类型' }]}
-              />
+        <ProFormDependency name={['attributeType', 'optionSource']}>
+          {({ attributeType, optionSource }) =>
+            isOptionAttributeType(attributeType) ? (
+              <>
+                <ProFormSelect
+                  name="optionSource"
+                  label="选项来源"
+                  options={selectAttributeOptionSourceOptions}
+                  fieldProps={SEARCHABLE_SELECT_PROPS}
+                  rules={[{ required: true, message: '请选择选项来源' }]}
+                />
+                {optionSource === 'SYS_DICT' ? (
+                  <ProFormSelect
+                    name="dictType"
+                    label="字典类型"
+                    options={dictTypeOptions}
+                    fieldProps={SEARCHABLE_SELECT_PROPS}
+                    rules={[{ required: true, message: '请选择若依字典类型' }]}
+                  />
+                ) : null}
+              </>
             ) : null
           }
         </ProFormDependency>

@@ -25,7 +25,6 @@ export const attributeTypeOptions = [
   { label: '单选', value: 'SINGLE_SELECT' },
   { label: '多选', value: 'MULTI_SELECT' },
   { label: '日期', value: 'DATE' },
-  { label: '文件', value: 'FILE' },
 ];
 
 export const optionSourceOptions = [
@@ -33,6 +32,17 @@ export const optionSourceOptions = [
   { label: '属性自定义选项', value: 'ATTRIBUTE_OPTION' },
   { label: '若依字典', value: 'SYS_DICT' },
 ];
+
+export const selectAttributeOptionSourceOptions = [
+  { label: '属性自定义选项', value: 'ATTRIBUTE_OPTION' },
+  { label: '若依字典', value: 'SYS_DICT' },
+];
+
+export const optionAttributeTypes = ['SINGLE_SELECT', 'MULTI_SELECT'];
+
+export function isOptionAttributeType(attributeType?: string) {
+  return optionAttributeTypes.includes(attributeType || '');
+}
 
 export const ruleModeOptions = [
   { label: '新增本类目属性', value: 'ADD' },

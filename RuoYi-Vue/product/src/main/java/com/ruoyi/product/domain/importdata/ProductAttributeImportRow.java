@@ -19,10 +19,10 @@ public class ProductAttributeImportRow
     private String attributeType;
 
     @Excel(name = "选项来源", combo = { "NONE", "ATTRIBUTE_OPTION", "SYS_DICT" },
-        prompt = "必填，填写 NONE / ATTRIBUTE_OPTION / SYS_DICT")
+        prompt = "TEXT/NUMBER/BOOLEAN/DATE 填 NONE；SINGLE_SELECT/MULTI_SELECT 填 ATTRIBUTE_OPTION 或 SYS_DICT")
     private String optionSource;
 
-    @Excel(name = "字典类型", prompt = "选项来源为 SYS_DICT 时必填")
+    @Excel(name = "字典类型", prompt = "选择型属性且选项来源为 SYS_DICT 时必填")
     private String dictType;
 
     @Excel(name = "单位")
