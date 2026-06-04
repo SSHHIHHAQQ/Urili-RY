@@ -26,6 +26,7 @@ import {
 } from '@/services/product/product';
 import { message } from '@/utils/feedback';
 import { getPersistedProTableSearch } from '@/utils/proTableSearch';
+import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 import {
   attributeTypeOptions,
   optionArrayToValueEnum,
@@ -157,6 +158,7 @@ export default function AttributeLibrary({ access }: AttributeLibraryProps) {
       dataIndex: 'attributeType',
       valueType: 'select',
       valueEnum: attributeTypeValueEnum,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       width: 130,
     },
     {
@@ -164,6 +166,7 @@ export default function AttributeLibrary({ access }: AttributeLibraryProps) {
       dataIndex: 'optionSource',
       valueType: 'select',
       valueEnum: optionSourceValueEnum,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       width: 150,
     },
     {
@@ -183,6 +186,7 @@ export default function AttributeLibrary({ access }: AttributeLibraryProps) {
       dataIndex: 'status',
       valueType: 'select',
       valueEnum: statusValueEnum,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       width: 100,
     },
     {
@@ -330,12 +334,14 @@ export default function AttributeLibrary({ access }: AttributeLibraryProps) {
           name="attributeType"
           label="属性类型"
           options={attributeTypeOptions}
+          fieldProps={SEARCHABLE_SELECT_PROPS}
           rules={[{ required: true, message: '请选择属性类型' }]}
         />
         <ProFormSelect
           name="optionSource"
           label="选项来源"
           options={optionSourceOptions}
+          fieldProps={SEARCHABLE_SELECT_PROPS}
           rules={[{ required: true, message: '请选择选项来源' }]}
         />
         <ProFormDependency name={['optionSource']}>
@@ -355,6 +361,7 @@ export default function AttributeLibrary({ access }: AttributeLibraryProps) {
           name="status"
           label="状态"
           options={statusOptions}
+          fieldProps={SEARCHABLE_SELECT_PROPS}
           rules={[{ required: true, message: '请选择状态' }]}
         />
         <ProFormTextArea name="remark" label="备注" />

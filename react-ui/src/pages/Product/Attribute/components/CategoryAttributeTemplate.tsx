@@ -20,6 +20,7 @@ import {
   saveCategoryAttribute,
 } from '@/services/product/product';
 import { message } from '@/utils/feedback';
+import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 import { buildCategoryTree, toCategoryTreeData } from '../../categoryTree';
 import {
   attributeGroupOptions,
@@ -190,36 +191,42 @@ export default function CategoryAttributeTemplate({
       title: '类型',
       dataIndex: 'attributeType',
       valueEnum: attributeTypeValueEnum,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       width: 110,
     },
     {
       title: '规则',
       dataIndex: 'ruleMode',
       valueEnum: ruleModeValueEnum,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       width: 110,
     },
     {
       title: '必填',
       dataIndex: 'requiredFlag',
       valueEnum: yesNoValueEnum,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       width: 80,
     },
     {
       title: '展示',
       dataIndex: 'visibleFlag',
       valueEnum: yesNoValueEnum,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       width: 80,
     },
     {
       title: '可编辑',
       dataIndex: 'editableFlag',
       valueEnum: yesNoValueEnum,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       width: 90,
     },
     {
       title: '可筛选',
       dataIndex: 'filterableFlag',
       valueEnum: yesNoValueEnum,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       width: 90,
     },
     {
@@ -236,6 +243,7 @@ export default function CategoryAttributeTemplate({
       title: '状态',
       dataIndex: 'status',
       valueEnum: statusValueEnum,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       width: 90,
     },
   ];
@@ -373,44 +381,51 @@ export default function CategoryAttributeTemplate({
           label="商品属性"
           options={attributeOptions}
           disabled={!!currentRule?.categoryAttributeId}
+          fieldProps={SEARCHABLE_SELECT_PROPS}
           rules={[{ required: true, message: '请选择商品属性' }]}
         />
         <ProFormSelect
           name="ruleMode"
           label="规则模式"
           options={ruleModeOptions}
+          fieldProps={SEARCHABLE_SELECT_PROPS}
           rules={[{ required: true, message: '请选择规则模式' }]}
         />
         <ProFormSelect
           name="requiredFlag"
           label="必填"
           options={yesNoOptions}
+          fieldProps={SEARCHABLE_SELECT_PROPS}
         />
         <ProFormSelect
           name="visibleFlag"
           label="展示"
           options={yesNoOptions}
+          fieldProps={SEARCHABLE_SELECT_PROPS}
         />
         <ProFormSelect
           name="editableFlag"
           label="可编辑"
           options={yesNoOptions}
+          fieldProps={SEARCHABLE_SELECT_PROPS}
         />
         <ProFormSelect
           name="filterableFlag"
           label="可筛选"
           options={yesNoOptions}
+          fieldProps={SEARCHABLE_SELECT_PROPS}
         />
         <ProFormSelect
           name="groupCode"
           label="属性分组"
           options={attributeGroupOptions}
+          fieldProps={SEARCHABLE_SELECT_PROPS}
         />
         <ProFormDigit name="sortOrder" label="排序" min={0} />
         <ProFormText name="placeholder" label="占位提示" />
         <ProFormText name="helpText" label="帮助文案" />
         <ProFormTextArea name="validationRule" label="校验规则 JSON" />
-        <ProFormSelect name="status" label="状态" options={statusOptions} />
+        <ProFormSelect name="status" label="状态" options={statusOptions} fieldProps={SEARCHABLE_SELECT_PROPS} />
         <ProFormTextArea name="remark" label="备注" />
       </ModalForm>
     </>
