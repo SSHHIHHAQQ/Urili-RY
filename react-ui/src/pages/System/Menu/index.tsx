@@ -5,6 +5,7 @@ import { useIntl, FormattedMessage, useAccess } from '@umijs/max';
 import { Button, Modal } from 'antd';
 import { FooterToolbar, PageContainer, ProTable } from '@ant-design/pro-components';
 import { getPersistedProTableSearch } from '@/utils/proTableSearch';
+import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, PoweroffOutlined, StopOutlined, EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons';
 import { getMenuList, removeMenu, addMenu, updateMenu, cascadeMenuStatus, cascadeMenuVisible } from '@/services/system/menu';
@@ -218,6 +219,7 @@ const MenuTableList: React.FC = () => {
       dataIndex: 'visible',
       valueType: 'select',
       valueEnum: visibleOptions,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       render: (_, record) => {
         return (<DictTag enums={visibleOptions} value={record.visible} />);
       },
@@ -227,6 +229,7 @@ const MenuTableList: React.FC = () => {
       dataIndex: 'status',
       valueType: 'select',
       valueEnum: statusOptions,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       render: (_, record) => {
         return (<DictTag enums={statusOptions} value={record.status} />);
       },
