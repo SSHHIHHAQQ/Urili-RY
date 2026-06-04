@@ -25,6 +25,7 @@ import {
 } from '@/services/product/product';
 import { message } from '@/utils/feedback';
 import { getPersistedProTableSearch } from '@/utils/proTableSearch';
+import { SEARCHABLE_SELECT_PROPS, SEARCHABLE_TREE_SELECT_PROPS } from '@/utils/selectSearch';
 import { buildCategoryTree, toCategoryTreeSelectData } from '../categoryTree';
 import ProductImportModal from '../components/ProductImportModal';
 import { statusOptions, statusValueEnum, yesNoOptions, yesNoValueEnum } from '../constants';
@@ -153,6 +154,7 @@ export default function ProductCategoryPage() {
       dataIndex: 'publishEnabled',
       valueType: 'select',
       valueEnum: yesNoValueEnum,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       width: 100,
     },
     {
@@ -160,6 +162,7 @@ export default function ProductCategoryPage() {
       dataIndex: 'status',
       valueType: 'select',
       valueEnum: statusValueEnum,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       width: 100,
     },
     {
@@ -287,6 +290,7 @@ export default function ProductCategoryPage() {
           label="上级分类"
           disabled={!!currentCategory?.categoryId}
           fieldProps={{
+            ...SEARCHABLE_TREE_SELECT_PROPS,
             treeData: parentTreeData,
             treeDefaultExpandAll: true,
           }}
@@ -306,6 +310,7 @@ export default function ProductCategoryPage() {
           name="publishEnabled"
           label="可发布"
           options={yesNoOptions}
+          fieldProps={SEARCHABLE_SELECT_PROPS}
           rules={[{ required: true, message: '请选择是否可发布' }]}
         />
         <ProFormDigit name="sortOrder" label="排序" min={0} />
@@ -313,6 +318,7 @@ export default function ProductCategoryPage() {
           name="status"
           label="状态"
           options={statusOptions}
+          fieldProps={SEARCHABLE_SELECT_PROPS}
           rules={[{ required: true, message: '请选择状态' }]}
         />
         <ProFormTextArea name="remark" label="备注" />
