@@ -1,6 +1,13 @@
 import { request } from '@umijs/max';
+import { downLoadXlsx } from '@/utils/downloadfile';
 
 const baseUrl = '/api/product/admin';
+
+function buildImportFormData(file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+  return formData;
+}
 
 export async function getCategoryList(params?: Record<string, any>) {
   return request<API.Product.InfoResult<API.Product.Category[]>>(
@@ -37,6 +44,36 @@ export async function deleteCategory(categoryId: number) {
   return request<API.Result>(`${baseUrl}/categories/${categoryId}`, {
     method: 'DELETE',
   });
+}
+
+export function downloadCategoryImportTemplate() {
+  return downLoadXlsx(
+    `${baseUrl}/categories/importTemplate`,
+    {},
+    `product_category_import_template_${new Date().getTime()}.xlsx`,
+  );
+}
+
+export async function previewCategoryImport(file: File, updateSupport: boolean) {
+  return request<API.Product.ImportResultResponse>(
+    `${baseUrl}/categories/importPreview`,
+    {
+      method: 'POST',
+      params: { updateSupport },
+      data: buildImportFormData(file),
+    },
+  );
+}
+
+export async function importCategoryData(file: File, updateSupport: boolean) {
+  return request<API.Product.ImportResultResponse>(
+    `${baseUrl}/categories/importData`,
+    {
+      method: 'POST',
+      params: { updateSupport },
+      data: buildImportFormData(file),
+    },
+  );
 }
 
 export async function getAttributeList(params?: Record<string, any>) {
@@ -83,6 +120,36 @@ export async function deleteAttribute(attributeId: number) {
   });
 }
 
+export function downloadAttributeImportTemplate() {
+  return downLoadXlsx(
+    `${baseUrl}/attributes/importTemplate`,
+    {},
+    `product_attribute_import_template_${new Date().getTime()}.xlsx`,
+  );
+}
+
+export async function previewAttributeImport(file: File, updateSupport: boolean) {
+  return request<API.Product.ImportResultResponse>(
+    `${baseUrl}/attributes/importPreview`,
+    {
+      method: 'POST',
+      params: { updateSupport },
+      data: buildImportFormData(file),
+    },
+  );
+}
+
+export async function importAttributeData(file: File, updateSupport: boolean) {
+  return request<API.Product.ImportResultResponse>(
+    `${baseUrl}/attributes/importData`,
+    {
+      method: 'POST',
+      params: { updateSupport },
+      data: buildImportFormData(file),
+    },
+  );
+}
+
 export async function getAttributeOptionList(attributeId: number) {
   return request<API.Product.InfoResult<API.Product.AttributeOption[]>>(
     `${baseUrl}/attributes/${attributeId}/options`,
@@ -118,6 +185,42 @@ export async function deleteAttributeOption(
   return request<API.Result>(
     `${baseUrl}/attributes/${attributeId}/options/${optionId}`,
     { method: 'DELETE' },
+  );
+}
+
+export function downloadAttributeOptionImportTemplate() {
+  return downLoadXlsx(
+    `${baseUrl}/attributes/options/importTemplate`,
+    {},
+    `product_attribute_option_import_template_${new Date().getTime()}.xlsx`,
+  );
+}
+
+export async function previewAttributeOptionImport(
+  file: File,
+  updateSupport: boolean,
+) {
+  return request<API.Product.ImportResultResponse>(
+    `${baseUrl}/attributes/options/importPreview`,
+    {
+      method: 'POST',
+      params: { updateSupport },
+      data: buildImportFormData(file),
+    },
+  );
+}
+
+export async function importAttributeOptionData(
+  file: File,
+  updateSupport: boolean,
+) {
+  return request<API.Product.ImportResultResponse>(
+    `${baseUrl}/attributes/options/importData`,
+    {
+      method: 'POST',
+      params: { updateSupport },
+      data: buildImportFormData(file),
+    },
   );
 }
 

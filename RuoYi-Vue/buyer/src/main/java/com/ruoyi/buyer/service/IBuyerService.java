@@ -8,7 +8,9 @@ import com.ruoyi.system.domain.PortalDirectLoginTicket;
 import com.ruoyi.system.domain.PortalDirectLoginResult;
 import com.ruoyi.system.domain.PortalLoginLog;
 import com.ruoyi.system.domain.PortalLoginResult;
+import com.ruoyi.system.domain.PortalLoginSession;
 import com.ruoyi.system.domain.PortalOperLog;
+import com.ruoyi.system.domain.PortalPasswordChangeRequest;
 
 /**
  * 买家Service接口
@@ -26,6 +28,8 @@ public interface IBuyerService
     public int updateBuyerStatus(Buyer buyer);
 
     public List<BuyerAccount> selectBuyerAccountList(Long buyerId);
+
+    public BuyerAccount selectBuyerAccountById(Long buyerId, Long buyerAccountId);
 
     public int insertBuyerAccount(Long buyerId, BuyerAccount account);
 
@@ -52,4 +56,8 @@ public interface IBuyerService
     public PortalLoginResult loginBuyer(LoginBody loginBody);
 
     public PortalLoginResult directLoginBuyer(String directLoginToken);
+
+    public int logoutBuyer(PortalLoginSession session);
+
+    public int updateBuyerOwnPassword(PortalLoginSession session, PortalPasswordChangeRequest request);
 }

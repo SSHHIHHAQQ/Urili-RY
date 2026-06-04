@@ -1,4 +1,4 @@
-import { DownOutlined, PlusOutlined } from '@ant-design/icons';
+import { DownOutlined, ImportOutlined, PlusOutlined } from '@ant-design/icons';
 import {
   type ActionType,
   ModalForm,
@@ -16,7 +16,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   addAttribute,
   deleteAttribute,
+  downloadAttributeImportTemplate,
+  downloadAttributeOptionImportTemplate,
   getAttributeList,
+  importAttributeData,
+  importAttributeOptionData,
+  previewAttributeImport,
+  previewAttributeOptionImport,
   updateAttribute,
 } from '@/services/product/product';
 import { message } from '@/utils/feedback';
@@ -28,6 +34,7 @@ import {
   statusOptions,
   statusValueEnum,
 } from '../../constants';
+import ProductImportModal from '../../components/ProductImportModal';
 import AttributeOptionManager from './AttributeOptionManager';
 
 type AccessLike = {
@@ -59,6 +66,8 @@ export default function AttributeLibrary({ access }: AttributeLibraryProps) {
   const attributeFormRef =
     useRef<ProFormInstance<API.Product.Attribute> | undefined>(undefined);
   const [attributeModalOpen, setAttributeModalOpen] = useState(false);
+  const [attributeImportOpen, setAttributeImportOpen] = useState(false);
+  const [optionImportOpen, setOptionImportOpen] = useState(false);
   const [optionListOpen, setOptionListOpen] = useState(false);
   const [currentAttribute, setCurrentAttribute] = useState<API.Product.Attribute>();
   const [optionAttribute, setOptionAttribute] = useState<API.Product.Attribute>();
@@ -253,6 +262,22 @@ export default function AttributeLibrary({ access }: AttributeLibraryProps) {
         }}
         toolBarRender={() => [
           <Button
+            key="importAttribute"
+            icon={<ImportOutlined />}
+            hidden={!access.hasPerms('product:attribute:add')}
+            onClick={() => setAttributeImportOpen(true)}
+          >
+            导入属性
+          </Button>,
+          <Button
+            key="importOption"
+            icon={<ImportOutlined />}
+            hidden={!access.hasPerms('product:attribute:edit')}
+            onClick={() => setOptionImportOpen(true)}
+          >
+            导入选项
+          </Button>,
+          <Button
             key="add"
             type="primary"
             icon={<PlusOutlined />}
@@ -262,6 +287,26 @@ export default function AttributeLibrary({ access }: AttributeLibraryProps) {
             新增
           </Button>,
         ]}
+      />
+
+      <ProductImportModal
+        title="导入商品属性"
+        open={attributeImportOpen}
+        onOpenChange={setAttributeImportOpen}
+        onDownloadTemplate={downloadAttributeImportTemplate}
+        onPreview={previewAttributeImport}
+        onImport={importAttributeData}
+        onSuccess={() => actionRef.current?.reload()}
+      />
+
+      <ProductImportModal
+        title="导入商品属性选项"
+        open={optionImportOpen}
+        onOpenChange={setOptionImportOpen}
+        onDownloadTemplate={downloadAttributeOptionImportTemplate}
+        onPreview={previewAttributeOptionImport}
+        onImport={importAttributeOptionData}
+        onSuccess={() => actionRef.current?.reload()}
       />
 
       <ModalForm<API.Product.Attribute>

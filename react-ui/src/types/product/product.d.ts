@@ -85,6 +85,23 @@ declare namespace API.Product {
     remark?: string;
   }
 
+  export interface ImportMessage {
+    rowNum?: number;
+    action?: string;
+    status?: string;
+    message?: string;
+  }
+
+  export interface ImportResult {
+    totalCount?: number;
+    createCount?: number;
+    updateCount?: number;
+    skipCount?: number;
+    errorCount?: number;
+    passed?: boolean;
+    messages?: ImportMessage[];
+  }
+
   export interface ListResult<T> {
     code: number;
     msg: string;
@@ -103,4 +120,6 @@ declare namespace API.Product {
     msg: string;
     data: T;
   }
+
+  export interface ImportResultResponse extends InfoResult<ImportResult> {}
 }

@@ -158,6 +158,15 @@ public class PortalTokenSupport
         }
     }
 
+    public void deleteLoginToken(PortalLoginSession session)
+    {
+        if (session == null)
+        {
+            return;
+        }
+        deleteLoginTokens(session.getTerminal(), List.of(session.getTokenId()));
+    }
+
     private PortalLoginSession buildSession(String terminal, Long subjectId, String subjectNo, PortalAccount account,
             String tokenId, Date loginTime, Date expireAt)
     {

@@ -6,6 +6,8 @@ import React, { lazy } from 'react';
 
 let remoteMenu: any = null;
 
+const PLANNED_PAGE_COMPONENT = 'Common/PlannedPage/index.tsx';
+
 export function getRemoteMenu() {
   return remoteMenu;
 }
@@ -14,6 +16,45 @@ export function setRemoteMenu(data: any) {
   remoteMenu = data;
 }
 
+function toPageComponentPath(component?: string) {
+  if (!component) {
+    return PLANNED_PAGE_COMPONENT;
+  }
+
+  const names: string[] = component.split('/');
+  let path = '';
+  names.forEach(name => {
+    if (path.length > 0) {
+      path += '/';
+    }
+    if (name !== 'index') {
+      path += name.at(0)?.toUpperCase() + name.substr(1);
+    } else {
+      path += name;
+    }
+  });
+  if (!path.endsWith('.tsx')) {
+    path += '.tsx';
+  }
+  return path;
+}
+
+function isMissingMenuPage(error: unknown, pagePath: string) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  return error.message.includes('Cannot find module') && error.message.includes(pagePath);
+}
+
+function loadMenuPage(pagePath: string) {
+  return import('@/pages/' + pagePath).catch((error) => {
+    if (isMissingMenuPage(error, pagePath)) {
+      console.warn(`菜单页面未实现，已显示规划中占位页: ${pagePath}`);
+      return import('@/pages/' + PLANNED_PAGE_COMPONENT);
+    }
+    throw error;
+  });
+}
 
 function patchRouteItems(route: any, menu: any, parentPath: string) {
   for (const menuItem of menu) {
@@ -45,21 +86,7 @@ function patchRouteItems(route: any, menu: any, parentPath: string) {
         patchRouteItems(newItem, menuItem.routes, parentPath + menuItem.path + '/');
       }
     } else {
-      const names: string[] = menuItem.component.split('/');
-      let path = '';
-      names.forEach(name => {
-        if (path.length > 0) {
-          path += '/';
-        }
-        if (name !== 'index') {
-          path += name.at(0)?.toUpperCase() + name.substr(1);
-        } else {
-          path += name;
-        }
-      })
-      if (!path.endsWith('.tsx')) {
-        path += '.tsx'
-      }
+      const pagePath = toPageComponentPath(menuItem.component);
       if (route.routes === undefined) {
         route.routes = [];
       }
@@ -67,7 +94,7 @@ function patchRouteItems(route: any, menu: any, parentPath: string) {
         route.children = [];
       }
       const newRoute = {
-        element: React.createElement(lazy(() => import('@/pages/' + path))),
+        element: React.createElement(lazy(() => loadMenuPage(pagePath))),
         path: parentPath + menuItem.path,
         name: menuItem.name,
         icon: menuItem.icon,

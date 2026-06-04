@@ -1,6 +1,7 @@
 package com.ruoyi.seller.service.impl;
 
 import java.util.List;
+import java.util.Objects;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +24,7 @@ import com.ruoyi.system.domain.PortalLoginLog;
 import com.ruoyi.system.domain.PortalLoginResult;
 import com.ruoyi.system.domain.PortalLoginSession;
 import com.ruoyi.system.domain.PortalOperLog;
+import com.ruoyi.system.domain.PortalPasswordChangeRequest;
 import com.ruoyi.system.mapper.PortalDirectLoginTicketMapper;
 import com.ruoyi.system.service.support.PortalDirectLoginSupport;
 import com.ruoyi.system.service.support.PortalTokenSupport;
@@ -123,6 +125,18 @@ public class SellerServiceImpl implements ISellerService
     {
         selectSellerById(sellerId);
         return sellerMapper.selectSellerAccountList(sellerId);
+    }
+
+    @Override
+    public SellerAccount selectSellerAccountById(Long sellerId, Long sellerAccountId)
+    {
+        selectSellerById(sellerId);
+        SellerAccount account = sellerMapper.selectSellerAccountById(sellerAccountId);
+        if (account == null || !Objects.equals(account.getSellerId(), sellerId))
+        {
+            throw new ServiceException("卖家账号不存在");
+        }
+        return account;
     }
 
     @Override
@@ -307,6 +321,60 @@ public class SellerServiceImpl implements ISellerService
         PortalLoginIssue issue = portalTokenSupport.createLogin("seller", seller.getSellerId(), seller.getSellerNo(), account);
         recordSellerLoginSuccess(account, issue, "免密登录成功");
         return issue.getResult();
+    }
+
+    @Override
+    @Transactional
+    public int logoutSeller(PortalLoginSession session)
+    {
+        if (session == null)
+        {
+            throw new ServiceException("登录状态已失效");
+        }
+        int rows = sellerMapper.logoutSellerSession(session.getSubjectId(), session.getAccountId(), session.getTokenId());
+        sellerMapper.insertSellerLoginLog(portalTokenSupport.buildLoginLog(
+            session.getSubjectId(), session.getAccountId(), session.getUserName(), Constants.SUCCESS, "退出成功"));
+        portalTokenSupport.deleteLoginToken(session);
+        return rows;
+    }
+
+    @Override
+    @Transactional
+    public int updateSellerOwnPassword(PortalLoginSession session, PortalPasswordChangeRequest request)
+    {
+        if (session == null)
+        {
+            throw new ServiceException("登录状态已失效");
+        }
+        String oldPassword = request == null ? null : request.getOldPassword();
+        String newPassword = PartnerSupport.normalizePasswordChange(oldPassword,
+            request == null ? null : request.getNewPassword(),
+            request == null ? null : request.getConfirmPassword());
+
+        Seller seller = sellerMapper.selectSellerById(session.getSubjectId());
+        SellerAccount account = sellerMapper.selectSellerAccountById(session.getAccountId());
+        if (account == null || !session.getSubjectId().equals(account.getSellerId()))
+        {
+            throw new ServiceException("卖家账号不存在");
+        }
+        if (!PartnerSupport.STATUS_NORMAL.equals(seller.getStatus()))
+        {
+            throw new ServiceException("卖家已停用");
+        }
+        if (!PartnerSupport.STATUS_NORMAL.equals(account.getStatus()))
+        {
+            throw new ServiceException("卖家账号已停用");
+        }
+        if (StringUtils.isBlank(account.getPassword()) || !SecurityUtils.matchesPassword(oldPassword, account.getPassword()))
+        {
+            throw new ServiceException("修改密码失败，旧密码错误");
+        }
+        if (SecurityUtils.matchesPassword(newPassword, account.getPassword()))
+        {
+            throw new ServiceException("新密码不能与旧密码相同");
+        }
+        return sellerMapper.resetSellerAccountPassword(account.getSellerAccountId(),
+            SecurityUtils.encryptPassword(newPassword), session.getUserName());
     }
 
     private void normalizeSeller(Seller seller)

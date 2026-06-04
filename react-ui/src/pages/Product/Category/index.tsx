@@ -1,4 +1,4 @@
-import { DownOutlined, PlusOutlined } from '@ant-design/icons';
+import { DownOutlined, ImportOutlined, PlusOutlined } from '@ant-design/icons';
 import {
   type ActionType,
   ModalForm,
@@ -18,12 +18,16 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   addCategory,
   deleteCategory,
+  downloadCategoryImportTemplate,
   getCategoryList,
+  importCategoryData,
+  previewCategoryImport,
   updateCategory,
 } from '@/services/product/product';
 import { message } from '@/utils/feedback';
 import { getPersistedProTableSearch } from '@/utils/proTableSearch';
 import { buildCategoryTree, toCategoryTreeSelectData } from '../categoryTree';
+import ProductImportModal from '../components/ProductImportModal';
 import { statusOptions, statusValueEnum, yesNoOptions, yesNoValueEnum } from '../constants';
 
 function resultOk(resp: API.Result, successText: string) {
@@ -50,6 +54,7 @@ export default function ProductCategoryPage() {
   );
   const [flatCategories, setFlatCategories] = useState<API.Product.Category[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [currentCategory, setCurrentCategory] = useState<API.Product.Category>();
 
   const categoryTree = useMemo(
@@ -243,6 +248,14 @@ export default function ProductCategoryPage() {
         }}
         toolBarRender={() => [
           <Button
+            key="import"
+            icon={<ImportOutlined />}
+            hidden={!access.hasPerms('product:category:add')}
+            onClick={() => setImportOpen(true)}
+          >
+            导入
+          </Button>,
+          <Button
             key="add"
             type="primary"
             icon={<PlusOutlined />}
@@ -252,6 +265,16 @@ export default function ProductCategoryPage() {
             新增
           </Button>,
         ]}
+      />
+
+      <ProductImportModal
+        title="导入商品分类"
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onDownloadTemplate={downloadCategoryImportTemplate}
+        onPreview={previewCategoryImport}
+        onImport={importCategoryData}
+        onSuccess={() => actionRef.current?.reload()}
       />
 
       <ModalForm<API.Product.Category>

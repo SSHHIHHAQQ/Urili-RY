@@ -59,8 +59,9 @@
 | 后端端内认证改造 | 第一批已完成 | 已新增卖家端/买家端登录入口、独立 token、免密 token 消费、登录日志、会话写入；端内菜单/角色权限读取已接入，端内操作日志第一批写入链路已接入 |
 | 后端端内权限基础改造 | 第四批已完成 | 管理端已可维护端内菜单、角色、账号角色绑定、部门和端账号部门绑定；卖家端/买家端登录后已可读取端内角色、权限和菜单；端内接口级权限注解和统一校验器已落地 |
 | 管理端前端字段改造 | 第八批已完成 | 卖家/买家管理已接入公共端账号弹窗、端内部门弹窗、端内角色弹窗和端内菜单配置弹窗；支持端账号列表、新增、编辑、部门树绑定、重置默认密码、强制踢出、账号角色绑定、端内部门维护、端内角色维护和端内菜单维护 |
+| 同构 UI 模板化推进 | 已确认 | 后续已确定模式按“卖家先做标准样板，买家只替换配置和 service”推进，不再逐页重新设计 |
 | 管理端审计 UI 与查询 | 已完成 | 卖家/买家管理已按同构模板接入审计弹窗，可查询登录日志、操作日志和免密票据；端内操作日志第一批写入链路已覆盖 `getInfo` / `getRouters` |
-| 免密代入审计原因 | 已完成 | 管理端生成卖家/买家端免密代入票据时必须填写代入原因，并写入 `portal_direct_login_ticket.reason` |
+| 免密代入审计原因 | 已完成并已实测 | 管理端生成卖家/买家端免密代入票据时必须填写代入原因，并写入 `portal_direct_login_ticket.reason`；真实接口烟测已确认未填原因会被拒绝、原因可在审计列表读回、票据消费后变为 `USED` |
 | 前端三端拆分 | 未开始 | 需等账号和权限模型稳定 |
 | 旧实现迁移 | 第二批已完成 | 旧 `PortalAccountSupport` / `PortalAccountMapper` 已移除；迁移脚本已删除账号表旧 `user_id` 列；早期复用 `sys_user` 的历史方案文档已标记过期 |
 
@@ -1127,3 +1128,392 @@
 未完成：
 
 - 当前只是给真实业务接口准备统一会话入口；后续真实 seller/buyer 业务接口仍需逐个使用 `PortalSessionContext.requireSession(...)` 派生主体范围。
+
+## 2026-06-04 免密代入原因真实烟测检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，验证管理端免密代入原因必填链路在最新 jar 和远程数据源上真实可用。
+
+执行环境：
+
+- 后端启动方式：`.\start-backend-local.ps1 -Restart`。
+- 运行服务：`http://127.0.0.1:8080`。
+- 数据源确认：启动前已读取当前激活配置；`.env.local` 存在，MySQL 指向远程 `gz-cynosdbmysql-grp-lucf5kyf.sql.tencentcdb.com:28634/fenxiao`，Redis 指向远程 `114.132.156.75`；未输出凭证、密码或 token secret。
+- 本轮未执行 DDL。
+- 本轮执行了真实远程 DML：生成并消费卖家、买家各 1 张免密代入票据，端内登录会话随后通过管理端强制踢出接口清理。
+
+验证结果：
+
+- `mvn -DskipTests install`：通过，已重新打包最新 `ruoyi-admin.jar`。
+- `.\start-backend-local.ps1 -Restart`：通过，8080 正常监听，HTTP 探活返回 200。
+- 管理端登录：`code=200`，验证码开关保持关闭。
+- 卖家管理端 `POST /seller/admin/sellers/{sellerId}/directLogin` 未传 `reason`：返回 `code=500`，业务消息为“免密登录原因不能为空”。
+- 买家管理端 `POST /buyer/admin/buyers/{buyerId}/directLogin` 未传 `reason`：返回 `code=500`，业务消息为“免密登录原因不能为空”。
+- 卖家正向烟测：`sellerId=9`，生成票据 `ticketId=28`，审计列表可读回相同 `reason`，消费后状态为 `USED` 且 `usedTime` 已写入。
+- 买家正向烟测：`buyerId=2`，生成票据 `ticketId=29`，审计列表可读回相同 `reason`，消费后状态为 `USED` 且 `usedTime` 已写入。
+- 卖家、买家端内免密登录消费接口均返回 `code=200`。
+- 卖家、买家端账号会话清理接口均返回 `code=200`。
+
+当前判断：
+
+- 管理端免密代入已经具备“原因必填、短时一次性、可审计、可消费、可清理会话”的第一批闭环。
+- 后续管理端 UI 接入不需要重新设计原因链路，只需要复用当前公共弹窗和 service 契约。
+- 已确定的 seller/buyer 同构管理端 UI 继续按模板化方式推进：卖家侧先做标准样板并验证，买家侧只替换端类型、文案、路由、权限标识、字段配置和 service。
+
+## 2026-06-04 端内主体资料接口检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，推进“真实端内业务接口从端 token 推导主体范围，不相信前端传入 `sellerId` / `buyerId`”。
+
+已完成：
+
+- 新增 `PortalSubjectProfile`，作为卖家端/买家端主体资料只读 DTO。
+- 新增卖家端接口 `GET /seller/profile`：
+  - 使用 `@PortalPreAuthorize(terminal = "seller")`。
+  - 使用 `@PortalLog(terminal = "seller", title = "卖家端主体资料", ...)` 写入卖家端操作日志。
+  - 从 `PortalSessionContext.requireSession("seller")` 读取当前端会话，再使用 `session.subjectId` 查询主体资料。
+  - 不接收前端传入 `sellerId`。
+- 新增买家端接口 `GET /buyer/profile`：
+  - 使用 `@PortalPreAuthorize(terminal = "buyer")`。
+  - 使用 `@PortalLog(terminal = "buyer", title = "买家端主体资料", ...)` 写入买家端操作日志。
+  - 从 `PortalSessionContext.requireSession("buyer")` 读取当前端会话，再使用 `session.subjectId` 查询主体资料。
+  - 不接收前端传入 `buyerId`。
+- 端内 profile 返回 `PortalSubjectProfile`，不直接返回管理端 `Seller` / `Buyer` 全对象，避免暴露 `createBy`、`updateBy`、`remark` 等后台字段。
+- `docs/architecture/reuse-ledger.md` 已登记 `PortalSubjectProfile` 复用规则。
+
+验证结果：
+
+- `npm run tsc`：通过，确认管理端动态菜单缺页兜底改动无 TypeScript 错误。
+- `mvn -DskipTests compile`：通过。
+- `mvn -DskipTests install`：通过，已重新打包最新 `ruoyi-admin.jar`。
+- `.\start-backend-local.ps1 -Restart`：通过，后端使用 `.env.local` 重启成功。
+- 本轮没有执行 DDL。
+- 本轮执行了真实远程 DML：生成并消费卖家、买家各 1 张免密代入票据，用于获取端 token 后调用 profile 接口；烟测后已通过管理端强制踢出接口清理对应端账号会话。
+- 卖家端 profile 烟测：
+  - `sellerId=9`，`ticketId=30`。
+  - `GET /seller/profile` 返回 `code=200`。
+  - 返回 `terminal=seller`，`subjectId=9`。
+  - 返回对象不包含 `createBy` 和 `remark`。
+- 买家端 profile 烟测：
+  - `buyerId=2`，`ticketId=31`。
+  - `GET /buyer/profile` 返回 `code=200`。
+  - 返回 `terminal=buyer`，`subjectId=2`。
+  - 返回对象不包含 `createBy` 和 `remark`。
+- 跨端访问验证：
+  - 卖家端 token 访问 `GET /buyer/profile` 返回 `code=401`。
+  - 买家端 token 访问 `GET /seller/profile` 返回 `code=401`。
+- 端内操作日志验证：
+  - 卖家操作日志列表存在 `operUrl=/seller/profile`、`subjectId=9` 的记录。
+  - 买家操作日志列表存在 `operUrl=/buyer/profile`、`subjectId=2` 的记录。
+
+当前判断：
+
+- 真实端内业务接口范围控制已有第一条只读业务接口样板。
+- 后续 seller/buyer 端真实业务接口继续套用该模式：端 token 推导主体 ID，接口不收前端主体 ID，进入 Service 前先过 `@PortalPreAuthorize`，操作通过 `@PortalLog` 写入端内日志。
+
+## 2026-06-04 端内当前账号资料接口检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，推进卖家端/买家端账号体系独立后的“当前账号”只读接口。
+
+已完成：
+
+- 新增 `PortalAccountProfile`，作为卖家端/买家端当前账号资料只读 DTO。
+- `ISellerService` / `SellerServiceImpl` 新增 `selectSellerAccountById(Long sellerId, Long sellerAccountId)`：
+  - 先校验卖家主体存在。
+  - 再按账号 ID 查询 `seller_account`。
+  - 账号不存在或不属于当前卖家主体时，抛出“卖家账号不存在”。
+- `IBuyerService` / `BuyerServiceImpl` 新增 `selectBuyerAccountById(Long buyerId, Long buyerAccountId)`：
+  - 先校验买家主体存在。
+  - 再按账号 ID 查询 `buyer_account`。
+  - 账号不存在或不属于当前买家主体时，抛出“买家账号不存在”。
+- 新增卖家端接口 `GET /seller/account/profile`：
+  - 使用 `@PortalPreAuthorize(terminal = "seller")`。
+  - 使用 `@PortalLog(terminal = "seller", title = "卖家端账号资料", ...)` 写入卖家端操作日志。
+  - 从 `PortalSessionContext.requireSession("seller")` 读取当前端会话，再使用 `session.subjectId` 和 `session.accountId` 查询账号资料。
+  - 不接收前端传入 `sellerId` 或 `accountId`。
+- 新增买家端接口 `GET /buyer/account/profile`：
+  - 使用 `@PortalPreAuthorize(terminal = "buyer")`。
+  - 使用 `@PortalLog(terminal = "buyer", title = "买家端账号资料", ...)` 写入买家端操作日志。
+  - 从 `PortalSessionContext.requireSession("buyer")` 读取当前端会话，再使用 `session.subjectId` 和 `session.accountId` 查询账号资料。
+  - 不接收前端传入 `buyerId` 或 `accountId`。
+- 端内账号资料返回 `PortalAccountProfile`，不直接返回 `SellerAccount` / `BuyerAccount` 全对象，避免暴露 `password`、`createBy`、`updateBy`、`remark` 等字段。
+- `docs/architecture/reuse-ledger.md` 已登记 `PortalAccountProfile` 复用规则。
+
+验证结果：
+
+- 数据源确认：tracked YAML 继续使用环境变量占位，`.env.local` 存在；本轮未输出凭证。
+- `mvn -DskipTests compile`：通过。
+- `mvn -DskipTests install`：通过，已重新打包最新 `ruoyi-admin.jar`。
+- `.\start-backend-local.ps1 -Restart`：通过，后端使用 `.env.local` 重启成功。
+- 本轮没有执行 DDL。
+- 本轮执行了真实远程 DML：生成并消费卖家、买家各 1 张免密代入票据，用于获取端 token 后调用当前账号资料接口；烟测后已通过管理端强制踢出接口清理对应端账号会话。
+- 卖家端当前账号资料烟测：
+  - `sellerId=9`，`accountId=8`，`ticketId=32`。
+  - `GET /seller/account/profile` 返回 `code=200`。
+  - 返回 `terminal=seller`，`subjectId=9`，`accountId=8`。
+  - 返回对象不包含 `password` 和 `createBy`。
+- 买家端当前账号资料烟测：
+  - `buyerId=2`，`accountId=2`，`ticketId=33`。
+  - `GET /buyer/account/profile` 返回 `code=200`。
+  - 返回 `terminal=buyer`，`subjectId=2`，`accountId=2`。
+  - 返回对象不包含 `password` 和 `createBy`。
+- 跨端访问验证：
+  - 卖家端 token 访问 `GET /buyer/account/profile` 返回 `code=401`。
+  - 买家端 token 访问 `GET /seller/account/profile` 返回 `code=401`。
+- 端内操作日志验证：
+  - 卖家操作日志列表存在 `operUrl=/seller/account/profile`、`subjectId=9`、`accountId=8` 的记录。
+  - 买家操作日志列表存在 `operUrl=/buyer/account/profile`、`subjectId=2`、`accountId=2` 的记录。
+
+当前判断：
+
+- 端内主体资料和当前账号资料都已形成只读接口样板。
+- 后续真实端内业务接口继续套用该模式：从端 token 推导主体和账号，不接收前端主体 ID 或账号 ID 作为权限边界，返回 DTO 时避免直接暴露管理端对象或密码密文字段。
+
+## 2026-06-04 三端前端 session 模板检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，落实“已确认模式模板化复用”的执行方式，为后续卖家端、买家端物理拆分准备前端 session 基础层。
+
+已完成：
+
+- `react-ui/src/access.ts` 新增三端 token key map：
+  - 管理端继续使用原有 `access_token` / `refresh_token` / `expireTime`，避免影响当前 admin 登录。
+  - 卖家端预留 `seller_access_token` / `seller_refresh_token` / `seller_expireTime`。
+  - 买家端预留 `buyer_access_token` / `buyer_refresh_token` / `buyer_expireTime`。
+- `react-ui/src/access.ts` 新增端感知方法：
+  - `setTerminalSessionToken`
+  - `getTerminalAccessToken`
+  - `getTerminalRefreshToken`
+  - `getTerminalTokenExpireTime`
+  - `clearTerminalSessionToken`
+- 保留管理端现有 `setSessionToken` / `getAccessToken` / `getRefreshToken` / `getTokenExpireTime` / `clearSessionToken` 作为 admin 包装方法。
+- 新增 `react-ui/src/services/portal/session.ts`：
+  - 公共封装 `seller` / `buyer` 的 `/login`、`/direct-login`、`/getInfo`、`/getRouters`、`/profile`、`/account/profile`。
+  - 导出 `sellerPortalSessionService` 和 `buyerPortalSessionService`，后续端内页面按模板使用，不在页面中重复拼路径。
+- `react-ui/src/types/seller-buyer/party.d.ts` 补齐端内登录、权限信息、主体资料、当前账号资料的前端类型。
+- `docs/architecture/reuse-ledger.md` 已登记“三端前端 session 基础层”复用规则。
+
+验证结果：
+
+- `npm run tsc`：通过。
+- 本轮没有启动后端。
+- 本轮没有执行 SQL、DDL 或远程 DML。
+
+当前判断：
+
+- 当前 `react-ui/` 仍作为管理端验证入口，尚未复制 `seller-ui` / `buyer-ui`。
+- 后续卖家端、买家端物理拆分时，登录存储和端内 session API 可直接按该模板复用，只替换 terminal、入口配置和页面 service。
+
+## 2026-06-04 端内账号只读列表接口检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，推进“真实端内业务接口从端 token 推导主体范围，不相信前端传入 `sellerId` / `buyerId`”。
+
+已完成：
+
+- 新增卖家端接口 `GET /seller/accounts`：
+  - 使用 `@PortalPreAuthorize(terminal = "seller", hasPermi = "seller:account:list")`。
+  - 使用 `@PortalLog(terminal = "seller", title = "卖家端账号列表", ...)` 写入卖家端操作日志。
+  - 从 `PortalSessionContext.requireSession("seller")` 读取当前端会话，再使用 `session.subjectId` 查询当前卖家主体下账号。
+  - 不接收前端传入 `sellerId`。
+  - 返回 `PortalAccountProfile` 列表，不返回 `SellerAccount` 原始对象，避免暴露 `password`、`createBy`、`updateBy`、`remark` 等字段。
+- 新增买家端接口 `GET /buyer/accounts`：
+  - 使用 `@PortalPreAuthorize(terminal = "buyer", hasPermi = "buyer:account:list")`。
+  - 使用 `@PortalLog(terminal = "buyer", title = "买家端账号列表", ...)` 写入买家端操作日志。
+  - 从 `PortalSessionContext.requireSession("buyer")` 读取当前端会话，再使用 `session.subjectId` 查询当前买家主体下账号。
+  - 不接收前端传入 `buyerId`。
+  - 返回 `PortalAccountProfile` 列表，不返回 `BuyerAccount` 原始对象。
+- `react-ui/src/services/portal/session.ts` 新增 `getPortalAccounts`，并挂到 `sellerPortalSessionService.getAccounts` / `buyerPortalSessionService.getAccounts`。
+- `react-ui/src/types/seller-buyer/party.d.ts` 新增 `PortalAccountListResult`。
+- `docs/architecture/reuse-ledger.md` 已补充端内账号只读列表的复用规则。
+
+验证结果：
+
+- `mvn -DskipTests compile`：通过。
+- `npm run tsc`：通过。
+- 本轮没有启动后端。
+- 本轮没有执行 SQL、DDL 或远程 DML。
+
+当前判断：
+
+- 端内账号列表已经形成第一条“非 profile 类”的端内只读业务接口样板。
+- 端内账号列表优先保证权限边界：如果端内角色未配置 `seller:account:list` / `buyer:account:list`，运行时应返回无权限，而不是绕过端内权限放行。
+
+## 2026-06-04 端内账号列表权限 seed 与真实烟测检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，补齐 `/seller/accounts` 和 `/buyer/accounts` 所需端内权限数据，并完成真实接口烟测。
+
+已完成：
+
+- 新增 SQL：`RuoYi-Vue/sql/20260604_portal_account_list_permission_seed.sql`。
+- 新增执行记录：`docs/plans/2026-06-04-portal-account-list-permission-sql-execution-record.md`。
+- 脚本幂等补齐：
+  - 现有正常卖家主体的默认端内 Owner 角色。
+  - 现有正常买家主体的默认端内 Owner 角色。
+  - 现有 `account_role = OWNER` 的端账号和默认 Owner 角色绑定。
+  - `seller_menu.perms = seller:account:list`。
+  - `buyer_menu.perms = buyer:account:list`。
+  - 启用端内角色和账号列表权限菜单绑定。
+
+远程库执行：
+
+- 连接来源：本机 `.env.local` 中的 `RUOYI_DB_*`，未输出凭证。
+- 第一次执行失败：脚本误用了主体表不存在的 `del_flag` 字段，未提交变更。
+- 修正后第二次执行成功。
+- 执行后计数：
+  - `seller:account:list` 菜单：1。
+  - `buyer:account:list` 菜单：1。
+  - 启用 `seller_role`：3。
+  - 启用 `buyer_role`：1。
+  - OWNER 卖家账号绑定 owner 角色：3。
+  - OWNER 买家账号绑定 owner 角色：1。
+  - `seller:account:list` 角色菜单绑定：3。
+  - `buyer:account:list` 角色菜单绑定：1。
+
+验证结果：
+
+- `mvn -DskipTests install`：通过。
+- `.\start-backend-local.ps1 -Restart`：通过。
+- 管理端登录：`code=200`。
+- 卖家端：
+  - `sellerId=9`，免密票据 `ticketId=34`。
+  - `GET /seller/accounts` 返回 `code=200`。
+  - 返回账号数量 1。
+  - 返回对象不包含 `password` 和 `createBy`。
+  - 卖家端 token 访问 `GET /buyer/accounts` 返回 `code=401`。
+  - `seller_oper_log` 可查到 `operUrl=/seller/accounts`。
+  - 烟测后已调用管理端账号级强制踢出接口清理会话。
+- 买家端：
+  - `buyerId=2`，免密票据 `ticketId=35`。
+  - `GET /buyer/accounts` 返回 `code=200`。
+  - 返回账号数量 1。
+  - 返回对象不包含 `password` 和 `createBy`。
+  - 买家端 token 访问 `GET /seller/accounts` 返回 `code=401`。
+  - `buyer_oper_log` 可查到 `operUrl=/buyer/accounts`。
+  - 烟测后已调用管理端账号级强制踢出接口清理会话。
+
+当前判断：
+
+- 端内账号只读列表已形成完整闭环：接口权限、端 token 主体范围、DTO 脱敏、端内权限 seed、真实 200、跨端 401、端内操作日志均已验证。
+- 后续端内业务接口继续按这个模板推进：先从 token 推导主体范围，再用 `@PortalPreAuthorize` 校验端内权限，响应使用端内 DTO，不直接暴露后台对象。
+
+## 2026-06-04 端内部门/角色只读列表接口与权限 seed 检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，按已确认的端内业务接口模板推进：接口从端 token 推导主体范围，使用端内权限校验，响应使用脱敏 DTO，不相信前端传入的 `sellerId` / `buyerId`。
+
+已完成：
+
+- 新增 `PortalDeptProfile`，承载端内部门只读列表响应。
+- 新增 `PortalRoleProfile`，承载端内角色只读列表响应。
+- 新增卖家端接口：
+  - `GET /seller/depts`
+  - `GET /seller/roles`
+- 新增买家端接口：
+  - `GET /buyer/depts`
+  - `GET /buyer/roles`
+- 四个接口均使用 `PortalSessionContext.requireSession(...)` 读取当前端会话。
+- 四个接口均使用 `@PortalPreAuthorize` 校验端内权限：
+  - `seller:dept:list`
+  - `seller:role:list`
+  - `buyer:dept:list`
+  - `buyer:role:list`
+- 四个接口均使用 `@PortalLog` 写入对应端内操作日志。
+- `react-ui/src/services/portal/session.ts` 新增 `getPortalDepts` / `getPortalRoles`，并挂到 `sellerPortalSessionService` / `buyerPortalSessionService`。
+- `react-ui/src/types/seller-buyer/party.d.ts` 新增 `PortalDeptProfile` / `PortalRoleProfile` 及列表结果类型。
+- 新增 SQL：`RuoYi-Vue/sql/20260604_portal_dept_role_list_permission_seed.sql`。
+- 新增执行记录：`docs/plans/2026-06-04-portal-dept-role-list-permission-sql-execution-record.md`。
+
+远程库执行：
+
+- 连接来源：本机 `.env.local` 中的 `RUOYI_DB_*`，未在记录中输出凭证。
+- 第一次 jshell 输入被 BOM 干扰，SQL 未执行且未提交。
+- 第二次执行成功。
+- 执行后计数：
+  - `seller:dept:list` 菜单：1。
+  - `seller:role:list` 菜单：1。
+  - `buyer:dept:list` 菜单：1。
+  - `buyer:role:list` 菜单：1。
+  - 卖家启用角色绑定部门/角色只读权限：6。
+  - 买家启用角色绑定部门/角色只读权限：2。
+
+验证结果：
+
+- `mvn -DskipTests compile`：通过。
+- `npm run tsc`：通过。
+- `mvn -DskipTests install`：Java 编译通过，首次 repackage 因运行中的 8080 后端锁定 `ruoyi-admin.jar` 失败。
+- 停止 8080 后执行 `mvn -DskipTests install -rf :ruoyi-admin`：通过。
+- `.\start-backend-local.ps1 -Restart`：通过，`http://127.0.0.1:8080` 返回 200。
+- 管理端登录：`code=200`。
+- 卖家端：
+  - `sellerId=9`，免密票据 `ticketId=36`，端账号 `accountId=8`。
+  - `GET /seller/depts` 返回 `code=200`，数量 0。
+  - `GET /seller/roles` 返回 `code=200`，数量 1。
+  - 返回字段未发现 `password`、`createBy`、`updateBy`、`delFlag`、`remark`。
+  - 卖家端 token 访问 `GET /buyer/depts` 和 `GET /buyer/roles` 均返回 `code=401`。
+  - `seller_oper_log` 可查到 `/seller/depts` 和 `/seller/roles`。
+  - 烟测后已调用管理端账号级强制踢出接口清理会话，返回清理 1 条。
+- 买家端：
+  - `buyerId=2`，免密票据 `ticketId=37`，端账号 `accountId=2`。
+  - `GET /buyer/depts` 返回 `code=200`，数量 0。
+  - `GET /buyer/roles` 返回 `code=200`，数量 1。
+  - 返回字段未发现 `password`、`createBy`、`updateBy`、`delFlag`、`remark`。
+  - 买家端 token 访问 `GET /seller/depts` 和 `GET /seller/roles` 均返回 `code=401`。
+  - `buyer_oper_log` 可查到 `/buyer/depts` 和 `/buyer/roles`。
+  - 烟测后已调用管理端账号级强制踢出接口清理会话，返回清理 1 条。
+- 最终验证：
+  - `npm run tsc`：通过。
+  - `mvn -pl ruoyi-system -DargLine="-Djdk.net.URLClassPath.disableClassPathURLCheck=true" test`：通过，`Tests run: 12, Failures: 0, Errors: 0, Skipped: 0`。
+  - `git diff --check -- <本轮触碰文件>`：通过，仅有 Git LF/CRLF 换行提示。
+
+当前判断：
+
+- 端内部门/角色只读列表已补齐权限、DTO、前端 service/type 契约和真实接口烟测。
+- 当前远程库下卖家/买家主体暂无端内部门数据，因此部门列表数量为 0 是可接受状态；角色列表已返回当前端内启用角色。
+- 后续端内业务接口继续套用同一模板：先 seller 做成标准样板，再按配置复制到 buyer，只替换 terminal、权限标识、service 和文案。
+
+## 2026-06-04 端内主动退出登录接口检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，补齐卖家端、买家端账号体系独立后的“当前端账号主动退出”能力。该能力和管理端强制踢出不同：管理端强制踢出可以按主体或账号范围清理会话；端内主动退出只能清理当前 token 对应的一条会话。
+
+已完成：
+
+- `PortalTokenSupport` 新增 `deleteLoginToken(PortalLoginSession session)`，只删除当前会话对应的 `portal_login_tokens:{terminal}:{tokenId}` Redis key。
+- 卖家端新增 `POST /seller/logout`：
+  - 使用 `@PortalPreAuthorize(terminal = "seller")`。
+  - 使用 `@PortalLog(terminal = "seller", title = "卖家端退出登录", ...)` 写入 `seller_oper_log`。
+  - 从 `PortalSessionContext.requireSession("seller")` 读取当前会话。
+  - 更新 `seller_session` 当前 token 行为退出状态，并写入 `seller_login_log`。
+- 买家端新增 `POST /buyer/logout`，按同一模板写入 `buyer_session`、`buyer_login_log` 和 `buyer_oper_log`。
+- `react-ui/src/services/portal/session.ts` 新增 `portalLogout`，并挂到 `sellerPortalSessionService.logout` / `buyerPortalSessionService.logout`。
+- `PortalPreAuthorizeAspect` 保持高优先级执行，让 `PortalLogAspect` 在退出时仍能从 `PortalSessionContext` 读取当前会话。
+- 修复 `PortalPreAuthorizeAspect` 注解参数绑定不稳定问题：不再依赖 `argNames` 绑定 `PortalPreAuthorize` 参数，改为从 `MethodSignature` 读取方法注解。
+- `docs/architecture/reuse-ledger.md` 已补充端内主动退出和前端 portal session 的复用规则。
+
+修复过程记录：
+
+- 第一次真实烟测发现退出登录日志使用 `Constants.LOGOUT` 写入端内登录日志时，远程 MySQL `status` 字段长度不匹配，导致 `Data too long for column 'status'`。已改为 `Constants.SUCCESS` 表示退出成功，退出语义写入 `msg`。
+- 为保证退出时 `@PortalLog` 能拿到会话，曾尝试通过注解参数绑定调整切面顺序；最新修复已改为手动读取注解，避免 Spring AOP 参数绑定差异导致端内接口 500。
+
+验证结果：
+
+- 数据源确认：tracked YAML 当前通过 `RUOYI_*` 环境变量读取 MySQL/Redis 配置；本轮没有输出 `.env.local` 中的凭证、密码或 token secret。
+- `mvn -DskipTests compile`：通过。
+- 停止 8080 当前后端进程后执行 `mvn -DskipTests install`：通过，已重新打包 `ruoyi-admin.jar`。
+- `.\start-backend-local.ps1 -Restart`：通过，`http://127.0.0.1:8080` 探活返回 200。
+- 完整真实接口烟测：
+  - 管理端登录：`code=200`。
+  - 卖家端免密登录：`sellerId=9`，`accountId=8`，登录成功。
+  - 买家端免密登录：`buyerId=2`，`accountId=2`，登录成功。
+  - 退出前 `/seller/getInfo` 和 `/buyer/getInfo` 均返回 `code=200`。
+  - 卖家 token 调用 `/buyer/logout` 返回 `code=401`。
+  - 买家 token 调用 `/seller/logout` 返回 `code=401`。
+  - `POST /seller/logout` 返回 `code=200`，`data=1`。
+  - `POST /buyer/logout` 返回 `code=200`，`data=1`。
+  - 退出后旧卖家 token 调用 `/seller/getInfo` 返回 `code=401`。
+  - 退出后旧买家 token 调用 `/buyer/getInfo` 返回 `code=401`。
+  - `seller_login_log` 新增退出相关记录，烟测读取到 `infoId=39`。
+  - `buyer_login_log` 新增退出相关记录，烟测读取到 `infoId=27`。
+  - `seller_oper_log` 新增 `operUrl=/seller/logout`，烟测读取到 `operId=18`。
+  - `buyer_oper_log` 新增 `operUrl=/buyer/logout`，烟测读取到 `operId=18`。
+
+当前判断：
+
+- 端内主动退出已形成闭环：端 token 校验、跨端拒绝、当前会话退出、Redis token 删除、旧 token 失效、登录日志和操作日志均已验证。
+- 后续卖家端/买家端真实前端退出按钮直接调用 `sellerPortalSessionService.logout` / `buyerPortalSessionService.logout`，成功后清理对应端本地 token；不要在页面内重新拼路径或自行传会话 ID。
+- 已确认的 seller/buyer 同构部分继续模板化推进：卖家侧先形成标准样板并完成验证，买家侧只替换端类型、文案、路由、权限标识、字段配置和 service，不再逐页重新设计。

@@ -83,12 +83,14 @@
   - `RuoYi-Vue/sql/20260604_product_category_attribute_seed.sql`
   - `react-ui/src/pages/Product/Category/index.tsx`
   - `react-ui/src/pages/Product/Attribute/index.tsx`
+  - `react-ui/src/pages/Product/components/ProductImportModal.tsx`
   - `react-ui/src/services/product/product.ts`
   - `react-ui/src/types/product/product.d.ts`
 - 当前用途：
   - 管理端维护多级商品分类树。
   - 管理端维护平台级商品属性库和属性自定义选项。
   - 管理端维护类目属性配置，并预览按祖先链继承合并后的发布 schema。
+  - 管理端导入商品分类、商品属性和商品属性选项。
 - 复用规则：
   - `product` 是商品共享基础域，不是 admin / seller / buyer 之外的第四个端。
   - 管理端配置入口使用 `/product/admin/**`，权限走若依 `sys_menu` / `sys_role`。
@@ -96,6 +98,10 @@
   - 后续买家端分类浏览、筛选项和商品详情入口必须放在 `buyer` 端模块，只读消费 product 分类和筛选 schema。
   - 商品属性类型、选项来源、类目属性规则模式等 code 由 SQL 初始化字典或 `pages/Product/constants.ts` 集中维护，不要在页面里复制状态映射。
   - 类目属性规则统一通过 `IProductConfigService.previewCategorySchema(categoryId)` 计算，不要在前端或其他模块手写继承合并逻辑。
+  - 商品配置导入统一使用 `ProductConfigImportService` 和 `ProductImportModal` 的“下载模板、校验、确认导入”流程，不要在分类页、属性页分别复制上传解析和结果表格。
+  - 商品配置导入模板统一使用 `ProductImportTemplateService` 输出“正式导入 sheet + 填写示例 sheet + 字段说明 sheet”；第一个 sheet 保持空白，示例只供复制参考，避免误导入。
+  - 导入模板只使用业务 code 定位，不让用户填写数据库主键；分类父级使用父级分类编码，属性选项使用属性编码。
+  - 导入只支持新增和更新，不支持导入删除；删除仍必须走页面操作和后端业务校验。
   - 本阶段明确不包含 SKU、多 SKU、库存、价格、商品发布、商品审核和外部平台属性同步。
 
 ### PartnerSupport
@@ -166,6 +172,7 @@
   - 构建 `PortalLoginSession` 和 `PortalLoginLog`，由 seller/buyer 模块分别写入自己的会话表和登录日志表。
   - 解析卖家端/买家端请求头中的端 token，并按期望端类型读取 Redis 会话。
   - 批量删除端内 Redis token，供管理端强制踢出卖家/买家主体或账号在线会话。
+  - 删除当前端内登录 token，供卖家端/买家端主动退出当前会话。
 - 复用规则：
   - 只用于卖家端、买家端这类端内登录身份建立。
   - 不要把它用于管理端若依登录；管理端继续使用若依 `TokenService`。
@@ -205,6 +212,8 @@
   - 后续买家端真实业务接口优先使用 `@PortalPreAuthorize(terminal = "buyer", ...)`。
   - 不要在 Controller 或 Service 里重复手写 token 解析、权限集合读取、`*:*:*` 判断和端类型判断。
   - 端内接口需要当前主体或账号时，优先从 `PortalSessionContext.requireSession("seller" / "buyer")` 获取 `subjectId`、`accountId` 和 `terminal`。
+  - 端内主动退出也必须先经过 `@PortalPreAuthorize`，再用 `PortalSessionContext` 中的当前会话删除对应 Redis token 和更新当前 session 行；不要让前端传 `tokenId`、`sellerId`、`buyerId` 或 `accountId` 决定退出范围。
+  - `PortalPreAuthorizeAspect` 不依赖 `argNames` 绑定注解参数，统一从 `MethodSignature` 读取 `@PortalPreAuthorize`，避免 Spring AOP 参数名绑定差异导致端内接口 500。
   - 管理端接口继续使用若依 `@PreAuthorize("@ss.hasPermi(...)")`，不要把管理端后台权限迁移到 `@PortalPreAuthorize`。
   - 接口涉及端内业务数据时，权限注解只负责“能不能访问该操作”；数据范围仍必须从端 token 推导 `sellerId` / `buyerId`，不能相信前端传入主体 ID。
 
@@ -439,12 +448,81 @@
   - `seller_oper_log` / `buyer_oper_log` 已接入第一批真实写入链路；后续端内业务接口继续使用 `@PortalLog` 写入端内日志，并复用 `PortalOperLog` 查询对象和该弹窗。
   - 已确定的 seller/buyer 同构 UI 模式直接模板化复制：seller 做好一套后，buyer 只替换字段配置、权限标识、接口前缀和 service。
 
+### PortalSubjectProfile
+
+- 位置：
+  - `RuoYi-Vue/ruoyi-system/src/main/java/com/ruoyi/system/domain/PortalSubjectProfile.java`
+  - `RuoYi-Vue/seller/src/main/java/com/ruoyi/seller/controller/SellerPortalController.java`
+  - `RuoYi-Vue/buyer/src/main/java/com/ruoyi/buyer/controller/BuyerPortalController.java`
+- 当前用途：
+  - 卖家端 `/seller/profile` 返回当前 token 绑定卖家主体的只读资料。
+  - 买家端 `/buyer/profile` 返回当前 token 绑定买家主体的只读资料。
+  - 端内 profile 接口从 `PortalSessionContext.requireSession(...)` 推导主体 ID，不接收前端传入 `sellerId` / `buyerId`。
+- 复用规则：
+  - 后续端内真实业务接口继续按该模式从端 token 推导主体范围。
+  - 端内 profile 返回 `PortalSubjectProfile`，不要直接返回管理端 `Seller` / `Buyer` 全对象，避免暴露 `createBy`、`updateBy`、`remark` 等后台字段。
+  - 端内真实业务接口继续接入 `@PortalPreAuthorize` 和 `@PortalLog`，不要只在前端隐藏入口。
+
+### PortalAccountProfile
+
+- 位置：
+  - `RuoYi-Vue/ruoyi-system/src/main/java/com/ruoyi/system/domain/PortalAccountProfile.java`
+  - `RuoYi-Vue/seller/src/main/java/com/ruoyi/seller/controller/SellerPortalController.java`
+  - `RuoYi-Vue/buyer/src/main/java/com/ruoyi/buyer/controller/BuyerPortalController.java`
+- 当前用途：
+  - 卖家端 `/seller/account/profile` 返回当前 token 绑定卖家端账号的只读资料。
+  - 买家端 `/buyer/account/profile` 返回当前 token 绑定买家端账号的只读资料。
+  - 卖家端 `/seller/accounts` 返回当前 token 绑定卖家主体下的端账号只读列表。
+  - 买家端 `/buyer/accounts` 返回当前 token 绑定买家主体下的端账号只读列表。
+  - 端内账号资料接口从 `PortalSessionContext.requireSession(...)` 推导主体 ID 和账号 ID，不接收前端传入 `sellerId` / `buyerId` / `accountId`。
+- 复用规则：
+  - 后续端内“当前账号”类接口继续复用该 DTO，不要直接返回 `SellerAccount` / `BuyerAccount` 全对象。
+  - 端内账号资料响应不得包含 `password`、`createBy`、`updateBy`、`remark` 等后台或敏感字段。
+  - 账号查询必须在 Service 层校验账号归属当前主体，不能只按 `accountId` 单点查询后返回。
+  - 端内账号列表必须从端 token 推导主体范围，不允许前端传入 `sellerId` / `buyerId` 查询其他主体账号。
+  - 端内账号列表必须通过 `@PortalPreAuthorize` 校验 `seller:account:list` / `buyer:account:list`，不要只做登录态校验。
+
+### PortalDeptProfile / PortalRoleProfile
+
+- 位置：
+  - `RuoYi-Vue/ruoyi-system/src/main/java/com/ruoyi/system/domain/PortalDeptProfile.java`
+  - `RuoYi-Vue/ruoyi-system/src/main/java/com/ruoyi/system/domain/PortalRoleProfile.java`
+  - `RuoYi-Vue/seller/src/main/java/com/ruoyi/seller/controller/SellerPortalController.java`
+  - `RuoYi-Vue/buyer/src/main/java/com/ruoyi/buyer/controller/BuyerPortalController.java`
+- 当前用途：
+  - 卖家端 `/seller/depts` 返回当前 token 绑定卖家主体下的端内部门只读列表。
+  - 卖家端 `/seller/roles` 返回当前 token 绑定卖家主体下的端内角色只读列表。
+  - 买家端 `/buyer/depts` 返回当前 token 绑定买家主体下的端内部门只读列表。
+  - 买家端 `/buyer/roles` 返回当前 token 绑定买家主体下的端内角色只读列表。
+  - 四个接口都从 `PortalSessionContext.requireSession(...)` 推导主体 ID，不接收前端传入 `sellerId` / `buyerId`。
+- 复用规则：
+  - 后续端内部门、角色下拉或只读选择器优先复用这两个 DTO，不要直接返回 `PortalDept` / `PortalRole` 原始对象。
+  - 端内部门/角色只读列表必须通过 `@PortalPreAuthorize` 校验 `seller:dept:list` / `seller:role:list` / `buyer:dept:list` / `buyer:role:list`。
+  - 响应不得包含 `password`、`createBy`、`updateBy`、`delFlag`、`remark` 等后台或敏感字段。
+  - 同构端内接口继续按 seller 样板复制到 buyer，只替换 terminal、权限标识、service 和文案。
+
+### 三端前端 session 基础层
+
+- 位置：
+  - `react-ui/src/access.ts`
+  - `react-ui/src/services/portal/session.ts`
+  - `react-ui/src/types/seller-buyer/party.d.ts`
+- 当前用途：
+  - 管理端继续使用原有 `access_token` / `refresh_token` / `expireTime`，避免影响当前 admin 登录。
+  - 卖家端、买家端预留独立 token key：`seller_*` / `buyer_*`。
+  - `portal/session.ts` 统一封装卖家端、买家端登录、免密登录、主动退出、`getInfo`、`getRouters`、主体资料、当前账号资料、端内账号只读列表、端内部门只读列表和端内角色只读列表接口。
+- 复用规则：
+  - 后续三端物理拆分时，卖家端、买家端前端优先复用 `setTerminalSessionToken`、`getTerminalAccessToken`、`clearTerminalSessionToken`，不要重新设计 localStorage key。
+  - 后续端内页面调用当前账号、主体资料、菜单、权限和退出登录时，优先复用 `sellerPortalSessionService` / `buyerPortalSessionService` 或底层 `portal*` 方法，不要在页面里直接拼 `/seller` / `/buyer` 路径。
+  - 当前 `react-ui/` 仍是管理端验证入口；该基础层只为后续物理拆分降低重复改造，不代表现在立即复制 `seller-ui` / `buyer-ui`。
+
 ### PlannedPage
 
 - 位置：`react-ui/src/pages/Common/PlannedPage/index.tsx`
 - 当前用途：
   - 新业务菜单的临时占位入口。
   - 菜单种子已落地但业务表、接口、权限按钮和正式页面尚未确认时，避免前端动态路由导入失败。
+  - `react-ui/src/services/session.ts` 动态路由导入目标页面缺失时，回退到该占位页。
 - 复用规则：
   - 只允许作为短期占位页使用，不承载真实业务规则。
   - 后续某个菜单进入正式实现时，应替换为对应业务模块页面，不要在 `PlannedPage` 内按菜单名堆分支逻辑。

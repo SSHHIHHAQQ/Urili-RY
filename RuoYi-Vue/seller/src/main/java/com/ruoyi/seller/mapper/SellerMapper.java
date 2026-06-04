@@ -59,4 +59,7 @@ public interface SellerMapper
 
     public int forceLogoutSellerSessions(@Param("sellerId") Long sellerId,
             @Param("sellerAccountId") Long sellerAccountId);
+
+    public int logoutSellerSession(@Param("sellerId") Long sellerId,
+            @Param("sellerAccountId") Long sellerAccountId, @Param("tokenId") String tokenId);
 }

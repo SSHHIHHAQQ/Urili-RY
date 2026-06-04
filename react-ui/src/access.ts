@@ -17,39 +17,100 @@ export default function access(initialState: { currentUser?: API.CurrentUser } |
   };
 }
 
+export type SessionTerminal = 'admin' | 'seller' | 'buyer';
+
+type SessionTokenKeys = {
+  accessToken: string;
+  refreshToken: string;
+  expireTime: string;
+  user: string;
+};
+
+const SESSION_TOKEN_KEYS: Record<SessionTerminal, SessionTokenKeys> = {
+  admin: {
+    accessToken: 'access_token',
+    refreshToken: 'refresh_token',
+    expireTime: 'expireTime',
+    user: 'user',
+  },
+  seller: {
+    accessToken: 'seller_access_token',
+    refreshToken: 'seller_refresh_token',
+    expireTime: 'seller_expireTime',
+    user: 'seller_user',
+  },
+  buyer: {
+    accessToken: 'buyer_access_token',
+    refreshToken: 'buyer_refresh_token',
+    expireTime: 'buyer_expireTime',
+    user: 'buyer_user',
+  },
+};
+
+export function getTerminalSessionTokenKeys(terminal: SessionTerminal) {
+  return SESSION_TOKEN_KEYS[terminal];
+}
+
+export function setTerminalSessionToken(
+  terminal: SessionTerminal,
+  access_token: string | undefined,
+  refresh_token: string | undefined,
+  expireTime: number,
+): void {
+  const keys = getTerminalSessionTokenKeys(terminal);
+  if (access_token) {
+    localStorage.setItem(keys.accessToken, access_token);
+  } else {
+    localStorage.removeItem(keys.accessToken);
+  }
+  if (refresh_token) {
+    localStorage.setItem(keys.refreshToken, refresh_token);
+  } else {
+    localStorage.removeItem(keys.refreshToken);
+  }
+  localStorage.setItem(keys.expireTime, `${expireTime}`);
+}
+
+export function getTerminalAccessToken(terminal: SessionTerminal) {
+  return localStorage.getItem(getTerminalSessionTokenKeys(terminal).accessToken);
+}
+
+export function getTerminalRefreshToken(terminal: SessionTerminal) {
+  return localStorage.getItem(getTerminalSessionTokenKeys(terminal).refreshToken);
+}
+
+export function getTerminalTokenExpireTime(terminal: SessionTerminal) {
+  return localStorage.getItem(getTerminalSessionTokenKeys(terminal).expireTime);
+}
+
+export function clearTerminalSessionToken(terminal: SessionTerminal) {
+  const keys = getTerminalSessionTokenKeys(terminal);
+  sessionStorage.removeItem(keys.user);
+  localStorage.removeItem(keys.accessToken);
+  localStorage.removeItem(keys.refreshToken);
+  localStorage.removeItem(keys.expireTime);
+}
+
 export function setSessionToken(
   access_token: string | undefined,
   refresh_token: string | undefined,
   expireTime: number,
 ): void {
-  if (access_token) {
-    localStorage.setItem('access_token', access_token);
-  } else {
-    localStorage.removeItem('access_token');
-  }
-  if (refresh_token) {
-    localStorage.setItem('refresh_token', refresh_token);
-  } else {
-    localStorage.removeItem('refresh_token');
-  }
-  localStorage.setItem('expireTime', `${expireTime}`);
+  setTerminalSessionToken('admin', access_token, refresh_token, expireTime);
 }
 
 export function getAccessToken() {
-  return localStorage.getItem('access_token');
+  return getTerminalAccessToken('admin');
 }
 
 export function getRefreshToken() {
-  return localStorage.getItem('refresh_token');
+  return getTerminalRefreshToken('admin');
 }
 
 export function getTokenExpireTime() {
-  return localStorage.getItem('expireTime');
+  return getTerminalTokenExpireTime('admin');
 }
 
 export function clearSessionToken() {
-  sessionStorage.removeItem('user');
-  localStorage.removeItem('access_token');
-  localStorage.removeItem('refresh_token');
-  localStorage.removeItem('expireTime');
+  clearTerminalSessionToken('admin');
 }

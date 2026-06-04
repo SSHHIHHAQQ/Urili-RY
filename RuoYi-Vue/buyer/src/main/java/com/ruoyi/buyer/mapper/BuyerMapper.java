@@ -59,4 +59,7 @@ public interface BuyerMapper
 
     public int forceLogoutBuyerSessions(@Param("buyerId") Long buyerId,
             @Param("buyerAccountId") Long buyerAccountId);
+
+    public int logoutBuyerSession(@Param("buyerId") Long buyerId,
+            @Param("buyerAccountId") Long buyerAccountId, @Param("tokenId") String tokenId);
 }

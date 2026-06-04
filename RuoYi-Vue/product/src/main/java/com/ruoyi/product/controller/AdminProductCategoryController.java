@@ -1,6 +1,7 @@
 package com.ruoyi.product.controller;
 
 import java.util.List;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -12,12 +13,18 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 import com.ruoyi.common.annotation.Log;
 import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.enums.BusinessType;
+import com.ruoyi.common.utils.poi.ExcelUtil;
 import com.ruoyi.product.domain.ProductCategory;
+import com.ruoyi.product.domain.importdata.ProductCategoryImportRow;
+import com.ruoyi.product.domain.importdata.ProductImportResult;
+import com.ruoyi.product.service.ProductConfigImportService;
 import com.ruoyi.product.service.IProductConfigService;
+import com.ruoyi.product.service.ProductImportTemplateService;
 
 /**
  * 管理端商品分类配置。
@@ -28,6 +35,12 @@ public class AdminProductCategoryController extends BaseController
 {
     @Autowired
     private IProductConfigService productConfigService;
+
+    @Autowired
+    private ProductConfigImportService productConfigImportService;
+
+    @Autowired
+    private ProductImportTemplateService productImportTemplateService;
 
     @PreAuthorize("@ss.hasPermi('product:category:list')")
     @GetMapping("/list")
@@ -68,5 +81,42 @@ public class AdminProductCategoryController extends BaseController
     public AjaxResult remove(@PathVariable("categoryId") Long categoryId)
     {
         return toAjax(productConfigService.deleteCategoryById(categoryId));
+    }
+
+    @PreAuthorize("@ss.hasPermi('product:category:add')")
+    @PostMapping("/importTemplate")
+    public void importTemplate(HttpServletResponse response)
+    {
+        productImportTemplateService.exportCategoryTemplate(response);
+    }
+
+    @PreAuthorize("@ss.hasPermi('product:category:add')")
+    @PostMapping("/importPreview")
+    public AjaxResult importPreview(MultipartFile file, boolean updateSupport) throws Exception
+    {
+        ExcelUtil<ProductCategoryImportRow> util = new ExcelUtil<>(ProductCategoryImportRow.class);
+        ProductImportResult result = productConfigImportService.previewCategories(util.importExcel(file.getInputStream()),
+            updateSupport);
+        return importResult(result, "商品分类导入校验通过");
+    }
+
+    @PreAuthorize("@ss.hasPermi('product:category:add')")
+    @Log(title = "商品分类", businessType = BusinessType.IMPORT)
+    @PostMapping("/importData")
+    public AjaxResult importData(MultipartFile file, boolean updateSupport) throws Exception
+    {
+        ExcelUtil<ProductCategoryImportRow> util = new ExcelUtil<>(ProductCategoryImportRow.class);
+        ProductImportResult result = productConfigImportService.importCategories(util.importExcel(file.getInputStream()),
+            updateSupport);
+        return importResult(result, "商品分类导入完成");
+    }
+
+    private AjaxResult importResult(ProductImportResult result, String successText)
+    {
+        if (result.isPassed())
+        {
+            return AjaxResult.success(successText, result);
+        }
+        return AjaxResult.warn("商品分类导入校验未通过", result);
     }
 }

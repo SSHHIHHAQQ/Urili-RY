@@ -453,4 +453,15 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
           and buyer_account_id = #{buyerAccountId}
         </if>
     </update>
+
+    <update id="logoutBuyerSession">
+        update buyer_session
+        set status = '1',
+            logout_time = sysdate()
+        where buyer_id = #{buyerId}
+          and buyer_account_id = #{buyerAccountId}
+          and token_id = #{tokenId}
+          and status = '0'
+          and logout_time is null
+    </update>
 </mapper>

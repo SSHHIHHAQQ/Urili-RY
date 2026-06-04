@@ -1,4 +1,6 @@
 declare namespace API.Partner {
+  export type PortalTerminal = 'seller' | 'buyer';
+
   export interface PartyAttachment {
     fileName: string;
     mimeType: string;
@@ -159,6 +161,148 @@ declare namespace API.Partner {
     code: number;
     msg: string;
     data: DirectLoginResult;
+  }
+
+  export interface PortalLoginParams {
+    username?: string;
+    password?: string;
+    code?: string;
+    uuid?: string;
+  }
+
+  export interface PortalLoginResultData {
+    token: string;
+    terminal: PortalTerminal;
+    subjectId: number;
+    subjectNo?: string;
+    accountId: number;
+    username: string;
+    nickName?: string;
+    expireMinutes?: number;
+    expireTime?: string;
+  }
+
+  export interface PortalLoginApiResult {
+    code: number;
+    msg: string;
+    data: PortalLoginResultData;
+  }
+
+  export interface PortalPasswordChangeParams {
+    oldPassword: string;
+    newPassword: string;
+    confirmPassword: string;
+  }
+
+  export interface PortalPermissionInfo {
+    terminal?: PortalTerminal;
+    subjectId?: number;
+    subjectNo?: string;
+    accountId?: number;
+    userName?: string;
+    nickName?: string;
+    roles?: string[];
+    permissions?: string[];
+  }
+
+  export interface PortalPermissionInfoResult {
+    code: number;
+    msg: string;
+    data: PortalPermissionInfo;
+  }
+
+  export interface PortalSubjectProfile {
+    terminal?: PortalTerminal;
+    subjectId?: number;
+    subjectNo?: string;
+    subjectCode?: string;
+    subjectName?: string;
+    subjectShortName?: string;
+    subjectType?: string;
+    subjectLevel?: string;
+    status?: string;
+    countryCode?: string;
+    stateProvince?: string;
+    city?: string;
+    postalCode?: string;
+    addressLine1?: string;
+    addressLine2?: string;
+    contactName?: string;
+    contactPhone?: string;
+    contactEmail?: string;
+    attachment?: PartyAttachment;
+    accountBalance?: number;
+    balanceCurrency?: string;
+  }
+
+  export interface PortalSubjectProfileResult {
+    code: number;
+    msg: string;
+    data: PortalSubjectProfile;
+  }
+
+  export interface PortalAccountProfile {
+    terminal?: PortalTerminal;
+    subjectId?: number;
+    accountId?: number;
+    deptId?: number;
+    deptName?: string;
+    accountRole?: string;
+    status?: string;
+    userName?: string;
+    nickName?: string;
+    email?: string;
+    phonenumber?: string;
+    lastLoginTime?: string;
+    pwdUpdateTime?: string;
+  }
+
+  export interface PortalAccountProfileResult {
+    code: number;
+    msg: string;
+    data: PortalAccountProfile;
+  }
+
+  export interface PortalAccountListResult {
+    code: number;
+    msg: string;
+    data: PortalAccountProfile[];
+  }
+
+  export interface PortalDeptProfile {
+    terminal?: PortalTerminal;
+    subjectId?: number;
+    deptId?: number;
+    parentId?: number;
+    parentName?: string;
+    deptName?: string;
+    orderNum?: number;
+    leader?: string;
+    phone?: string;
+    email?: string;
+    status?: string;
+  }
+
+  export interface PortalDeptProfileListResult {
+    code: number;
+    msg: string;
+    data: PortalDeptProfile[];
+  }
+
+  export interface PortalRoleProfile {
+    terminal?: PortalTerminal;
+    subjectId?: number;
+    roleId?: number;
+    roleName?: string;
+    roleKey?: string;
+    roleSort?: number;
+    status?: string;
+  }
+
+  export interface PortalRoleProfileListResult {
+    code: number;
+    msg: string;
+    data: PortalRoleProfile[];
   }
 
   export interface PortalAuditPageResult<T> {

@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.function.Function;
 import org.apache.commons.lang3.StringUtils;
 import com.ruoyi.common.constant.Constants;
+import com.ruoyi.common.constant.UserConstants;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.system.domain.PartnerProfile;
 import com.ruoyi.system.domain.PartnerProfile.Attachment;
@@ -136,6 +137,32 @@ public class PartnerSupport
             return trimmed;
         }
         return trimmed.substring(0, maxLength);
+    }
+
+    public static String normalizePasswordChange(String oldPassword, String newPassword, String confirmPassword)
+    {
+        if (StringUtils.isEmpty(oldPassword))
+        {
+            throw new ServiceException("旧密码不能为空");
+        }
+        if (StringUtils.isEmpty(newPassword))
+        {
+            throw new ServiceException("新密码不能为空");
+        }
+        if (newPassword.length() < UserConstants.PASSWORD_MIN_LENGTH
+                || newPassword.length() > UserConstants.PASSWORD_MAX_LENGTH)
+        {
+            throw new ServiceException("密码长度必须在5到20个字符之间");
+        }
+        if (StringUtils.isEmpty(confirmPassword))
+        {
+            throw new ServiceException("确认密码不能为空");
+        }
+        if (!StringUtils.equals(newPassword, confirmPassword))
+        {
+            throw new ServiceException("两次密码输入不一致");
+        }
+        return newPassword;
     }
 
     private static String buildNoPrefix(String prefix, LocalDate date)
