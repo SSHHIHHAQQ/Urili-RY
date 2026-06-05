@@ -27,7 +27,7 @@ const RESPONSIVE_VERTICAL_SEARCH_SPAN: NonNullable<
   xs: 24,
   sm: 12,
   md: 12,
-  lg: 8,
+  lg: 6,
   xl: 4,
   xxl: 3,
 };

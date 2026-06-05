@@ -137,6 +137,7 @@
   - 系统 SPU / 系统 SKU 由后端生成；新增页不得作为输入项展示系统 SPU，编辑页只读展示系统 SPU；新增/编辑 SKU 表内不展示系统 SKU，列表/详情查看场景可以只读展示系统 SKU。
   - 卖家快照通过 `ProductSellerLookupService` 读取 seller 模块，不在 product 模块直接读 seller Mapper。
   - 商品类目和类目属性 schema 继续复用 `IProductConfigService.previewCategorySchema(categoryId)`，前端不要自己合并祖先属性模板。
+  - 商城商品新增/编辑页渲染类目属性时按属性类型统一处理：`TEXT` 用输入框，`NUMBER` 用数字输入并显示 `unit`，`BOOLEAN` 固定用 `是 / 否` 选项，`SINGLE_SELECT` / `MULTI_SELECT` 使用 schema options，`DATE` 用日期选择器；多选保存为 JSON 数组、编辑回显时必须解析回数组。
   - 商品分类 TreeSelect 搜索复用 `SEARCHABLE_TREE_SELECT_PROPS`，只按当前节点标题匹配，避免搜索一个词时把整棵无关子树带出来。
   - 业务可用币种最终仍由 `finance_currency` 和 `IFinanceCurrencyService` 做可用性校验；新增/编辑页不允许自由选择 SKU 币种，当前先通过“发货仓库（预留）”同国家选择推导币种，仓库模块落地后替换临时仓库选项。
   - 图片上传复用 `/common/upload` 和 `FileStorageService`，商品表只保存 `/profile/...` 等资源路径。
@@ -204,6 +205,7 @@
   - `RuoYi-Vue/seller/src/main/java/com/ruoyi/seller/domain/SellerPortalProductSku.java`
   - `RuoYi-Vue/seller/src/test/java/com/ruoyi/seller/service/impl/SellerPortalProductServiceImplTest.java`
   - `RuoYi-Vue/sql/seller_buyer_management_seed.sql`
+  - `scripts/smoke/seller-own-distribution-product-read-template-smoke.ps1`
 - 当前用途：
   - 作为 seller 端真实业务接口的数据范围控制标准模板。
   - 提供卖家端自己的商城商品列表、详情和 SKU 只读接口。
@@ -217,7 +219,8 @@
   - 详情和 SKU 列表必须先读取商品并校验 `product.sellerId == session.subjectId`；不属于当前卖家的商品统一按“商城商品不存在”处理。
   - seller 端响应使用 `SellerPortalProduct` / `SellerPortalProductSku` DTO，不直接返回 `ProductSpu` / `ProductSku`，避免把 `sellerId`、系统 SPU/SKU、`BaseEntity` 审计字段或后台范围字段作为端内 API 标准。
   - 端入口必须使用方法级 `@Anonymous` + `@PortalPreAuthorize(terminal = "seller", hasPermi = "...")` + `@PortalLog(terminal = "seller", ...)`，并继续受 `TerminalRouteOwnershipTest` 和 `TerminalSeedPermissionContractTest` 约束。
-  - 当前权限点为 `seller:product:distribution:list` 和 `seller:product:distribution:query`，只读 seed 已写入 `seller_menu` 和 active seller role 授权；本切片没有执行远程数据库 DDL/DML。
+  - 当前权限点为 `seller:product:distribution:list` 和 `seller:product:distribution:query`，只读 seed 已写入 `seller_menu` 和 active seller role 授权；远程运行库已补 seller 端权限 DML，未执行 DDL，未复制 buyer。
+  - 脚本化烟测必须覆盖 seller 登录、列表、伪造客户端范围参数、详情、SKU、响应字段脱敏、跨卖家详情/SKU 负向访问和 logout 清理；烟测不得输出 token、JWT、Redis key、`.env.local` 或数据库连接明文。
   - buyer 端后续如果复制该模板，只能替换 terminal、路径、权限前缀、日志 title、service 名称、DTO 名称和测试名；不能把 seller 商品拥有关系机械改成 buyer 拥有关系，买家浏览商品的可见性规则需要单独确认。
 
 ### 端内 Controller 鉴权模板守卫
@@ -557,8 +560,9 @@
   - 后续需要列设置持久化时，使用 `columnsState={getProTableColumnsState('稳定页面标识-columns')}`，并给纯 `render` 列、操作列补稳定 `key`。
   - 页面级 ProTable 如果开启 `options.setting` 或 `options.density`，不要使用 `toolBarRender={false}` 关闭 toolbar；无自定义按钮时使用 `toolBarRender={() => []}` 或省略自定义按钮，让 ProTable 自带设置入口正常渲染。
   - 三端前端列表页筛选区默认采用 Ant Design Pro 原生 `vertical` 查询布局，也就是字段名在上、输入框在下，避免标签和输入框横向挤压。
-  - 三端前端筛选区必须按内容区宽度响应式降列：宽屏优先一行 5 个筛选字段并给查询动作预留位置，中屏自动降为 4 个或 3 个字段，小屏降为 2 个字段；宁可换行，不允许把输入框压缩成不可用的小块。
+  - 三端前端筛选区必须按内容区宽度响应式降列：宽屏优先一行 5 个筛选字段并给查询动作预留位置，中屏默认 4 个字段，小屏降为 2 个字段；宁可换行，不允许把输入框压缩成不可用的小块。
   - 当前默认收起态显示 5 个筛选字段，避免 6 个字段刚好占满一行后，查询/重置/展开按钮被挤到第二行并贴近表格。
+  - 当前 `lg` 断点按 4 列展示，避免 9 个展开筛选字段刚好占满 `3 x 3` 后，查询/重置/收起按钮被单独挤到第 4 行右侧。
   - 日期范围、金额区间、余额区间、库存区间等长控件默认占 2 个筛选格；普通输入框也要保留最小可用宽度。
   - 弹窗内小表格、纯明细表、无查询条件表格等确有理由的场景可显式 `search={false}`，但不要另起一套页面内筛选布局。
   - 同一业务指标的最小/最大查询条件统一做成一个区间字段，例如余额、金额、库存数量；优先使用 Ant Design 原生组合控件和默认输入框样式，不自定义特殊容器，不使用假的禁用输入框，前端提交时再拆成后端需要的最小/最大参数。

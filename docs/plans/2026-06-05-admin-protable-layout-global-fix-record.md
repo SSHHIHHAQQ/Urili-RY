@@ -17,6 +17,7 @@
 - 超宽屏下一行 6 个筛选字段刚好占满 24 栅格，Ant Design Pro 查询动作区域只能换到第二行。
 - Ant Design Pro 在无 toolbar 的 ProTable card body 上写入内联 `padding-block-start: 0px`，来源商品库这类无 toolbar 页面需要全局覆盖这个内联值，避免表格贴住卡片顶部。
 - 来源商品库虽然配置了 `options.setting` 和 `options.density`，但同时使用 `toolBarRender={false}` 关闭了 ProTable toolbar，导致列设置、密度设置入口不渲染。
+- 来源商品库展开态有 9 个筛选字段；`lg` 断点原来按 3 列展示时，9 个字段刚好占满 `3 x 3`，查询动作区只能被挤到第 4 行右侧。
 
 ## 修复内容
 
@@ -24,6 +25,7 @@
   - 新增 `getProTableScroll(x, config?)`，统一为页面级 ProTable 提供 `scroll.x` 和默认 `scroll.y: '100%'`。
   - 新增 `getProTableColumnsState(persistenceKey, config?)`，统一使用 localStorage 持久化列显示状态。
   - 将默认收起态筛选字段数调整为 `5`，给查询动作区预留位置。
+  - 将 `lg` 筛选断点从 3 列调整为 4 列，避免展开态 9 个字段占满三整行后把查询动作区挤到单独一行。
   - 保留 `getPersistedProTableSearch(...)` 和 `getProTablePagination(...)`，作为页面筛选、分页、滚动和列状态工具。
 
 - `react-ui/src/global.css`
@@ -96,6 +98,13 @@
   - 隐藏「仓库尺寸」后，表头中该列消失。
   - localStorage 写入 `source-product-library-columns`。
   - 刷新页面后，「仓库尺寸」仍保持隐藏，列状态持久化生效。
+
+- 展开态断点回归：
+  - `960 x 1024`：9 个筛选字段分 5 行，动作区与最后一个字段「配对状态」同一行。
+  - `1180 x 1024`：9 个筛选字段分 3 行，动作区与最后一个字段「配对状态」同一行。
+  - `1280 x 1024`：9 个筛选字段分 3 行，动作区与最后一个字段「配对状态」同一行。
+  - `1366 x 1024`：9 个筛选字段分 2 行，动作区与最后一行字段同一行。
+  - 以上视口下，筛选区底部到表格卡片顶部均保留 10px 间距，未再出现动作区单独悬在表格上方的问题。
 
 ## 验证命令
 

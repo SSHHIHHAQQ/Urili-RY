@@ -1,7 +1,7 @@
 import { PlusOutlined } from '@ant-design/icons';
 import { Button, Checkbox, Input, InputNumber, Select, Space, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { salesStatusOptions, skuSpecFields } from '../constants';
 import ImageUploadField from './ImageUploadField';
 import styles from '../style.module.css';
@@ -66,8 +66,12 @@ export default function SkuMatrixEditor({
   const [bulkWeight, setBulkWeight] = useState<string>();
   const [bulkSupplyPrice, setBulkSupplyPrice] = useState<number>();
   const [bulkSalePrice, setBulkSalePrice] = useState<number>();
+  const hydratedRowsKeyRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
+    const rowsKey = value.map((row) => row.skuId || row.rowKey).join('|');
+    if (rowsKey === hydratedRowsKeyRef.current) return;
+    hydratedRowsKeyRef.current = rowsKey;
     const selected = inferSelectedSpecs(value);
     const values: Record<string, string[]> = {};
     selected.forEach((field) => {
@@ -75,7 +79,7 @@ export default function SkuMatrixEditor({
     });
     setSelectedSpecs(selected);
     setSpecValues(values);
-  }, []);
+  }, [value]);
 
   const rows = useMemo(
     () => value.map((row) => ({ ...row, rowKey: row.rowKey || String(row.skuId || makeRowKey()) })),

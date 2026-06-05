@@ -113,7 +113,10 @@ export default function ProductDistributionPage() {
     });
   };
 
-  const skuColumns = (spuId: number): ColumnsType<API.ProductDistribution.Sku> => [
+  const skuColumns = (
+    spuId: number,
+    siblingRows: API.ProductDistribution.Sku[] = [],
+  ): ColumnsType<API.ProductDistribution.Sku> => [
     {
       title: 'SKU图',
       dataIndex: 'skuImageUrl',
@@ -126,7 +129,7 @@ export default function ProductDistributionPage() {
     {
       title: 'SKU规格',
       width: 220,
-      render: (_, record) => buildSkuSpecText(record) || '--',
+      render: (_, record) => buildSkuSpecText(record, siblingRows) || '--',
     },
     {
       title: '尺寸重量',
@@ -285,7 +288,7 @@ export default function ProductDistributionPage() {
             <Table
               rowKey="skuId"
               size="small"
-              columns={skuColumns(record.spuId ?? 0)}
+              columns={skuColumns(record.spuId ?? 0, record.skus || [])}
               dataSource={record.skus || []}
               pagination={false}
               scroll={{ x: 1420 }}

@@ -14,6 +14,32 @@ function statusText(status?: string) {
   return getSalesStatusText(status);
 }
 
+function parseJsonArrayText(value?: string) {
+  if (!value) return '';
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter(Boolean).join(' / ') : '';
+  } catch {
+    return value;
+  }
+}
+
+function formatAttributeValue(item: API.ProductDistribution.AttributeValue) {
+  if (item.attributeType === 'BOOLEAN') {
+    if (item.valueCode === 'Y') return '是';
+    if (item.valueCode === 'N') return '否';
+  }
+  if (item.attributeType === 'MULTI_SELECT') {
+    return parseJsonArrayText(item.valueJson) || '--';
+  }
+  return item.valueText
+    || item.valueCode
+    || (item.valueNumber !== undefined && item.valueNumber !== null ? String(item.valueNumber) : '')
+    || item.valueDate
+    || item.valueJson
+    || '--';
+}
+
 export default function ProductDetailDrawer({
   open,
   product,
@@ -32,7 +58,7 @@ export default function ProductDetailDrawer({
     {
       title: 'SKU规格',
       width: 220,
-      render: (_, record) => buildSkuSpecText(record) || '--',
+      render: (_, record) => buildSkuSpecText(record, product?.skus || []) || '--',
     },
     {
       title: '尺寸重量',
@@ -96,7 +122,7 @@ export default function ProductDetailDrawer({
           <Descriptions bordered size="small" column={1} title="类目属性">
             {(product.attributeValues || []).map((item) => (
               <Descriptions.Item key={item.valueId || item.attributeId} label={item.attributeName || item.attributeCode}>
-                {item.valueText || item.valueCode || item.valueNumber || item.valueDate || item.valueJson || '--'}
+                {formatAttributeValue(item)}
               </Descriptions.Item>
             ))}
           </Descriptions>

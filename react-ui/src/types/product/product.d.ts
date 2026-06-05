@@ -69,6 +69,7 @@ declare namespace API.Product {
     optionSource?: string;
     dictType?: string;
     unit?: string;
+    valuePrecision?: number;
     options?: AttributeOption[];
     ruleMode?: string;
     requiredFlag?: string;

@@ -1,7 +1,8 @@
 import { ArrowLeftOutlined, SaveOutlined } from '@ant-design/icons';
 import { PageContainer } from '@ant-design/pro-components';
 import { history, useParams } from '@umijs/max';
-import { Affix, Button, Card, Form, Input, InputNumber, Select, Space, TreeSelect } from 'antd';
+import { Affix, Button, Card, DatePicker, Form, Input, InputNumber, Select, Space, TreeSelect } from 'antd';
+import dayjs from 'dayjs';
 import { useEffect, useMemo, useState } from 'react';
 import { getCategoryList, getCategorySchema } from '@/services/product/product';
 import {
@@ -13,6 +14,7 @@ import { getAdminSellerList } from '@/services/seller/seller';
 import { message } from '@/utils/feedback';
 import { SEARCHABLE_SELECT_PROPS, SEARCHABLE_TREE_SELECT_PROPS } from '@/utils/selectSearch';
 import { buildCategoryTree } from '../categoryTree';
+import { yesNoOptions } from '../constants';
 import { salesStatusOptions } from './constants';
 import DetailContentBuilder from './components/DetailContentBuilder';
 import ProductImageSection from './components/ProductImageSection';
@@ -27,6 +29,8 @@ import styles from './style.module.css';
 type ProductEditValues = API.ProductDistribution.Spu & {
   attributeValueMap?: Record<string, any>;
 };
+
+const ATTRIBUTE_DATE_FORMAT = 'YYYY-MM-DD';
 
 type WarehouseOption = {
   label: string;
@@ -45,7 +49,24 @@ const warehouseOptions: WarehouseOption[] = [
   { label: '汉堡仓（德国 / EUR）', value: 'DE-HH', countryCode: 'DE', countryName: '德国', currencyCode: 'EUR', currencyLabel: '欧元 (EUR)' },
 ];
 
+function parseAttributeJsonArray(value?: string) {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 function valueFromAttribute(item: API.ProductDistribution.AttributeValue) {
+  if (item.attributeType === 'MULTI_SELECT') {
+    return parseAttributeJsonArray(item.valueJson);
+  }
+  if (item.attributeType === 'DATE' && item.valueDate) {
+    const value = dayjs(item.valueDate);
+    return value.isValid() ? value : undefined;
+  }
   return item.valueText ?? item.valueCode ?? item.valueNumber ?? item.valueDate ?? item.valueJson;
 }
 
@@ -176,7 +197,12 @@ export default function ProductDistributionEditPage() {
     schema
       .map((item) => {
         const value = values.attributeValueMap?.[String(item.attributeId)];
-        if (value === undefined || value === null || value === '') return undefined;
+        if (
+          value === undefined
+          || value === null
+          || value === ''
+          || (Array.isArray(value) && value.length === 0)
+        ) return undefined;
         const base = {
           attributeId: item.attributeId,
           attributeCode: item.attributeCode,
@@ -186,7 +212,9 @@ export default function ProductDistributionEditPage() {
         if (item.attributeType === 'NUMBER') return { ...base, valueNumber: Number(value) };
         if (item.attributeType === 'SINGLE_SELECT' || item.attributeType === 'BOOLEAN') return { ...base, valueCode: String(value) };
         if (item.attributeType === 'MULTI_SELECT') return { ...base, valueJson: JSON.stringify(value) };
-        if (item.attributeType === 'DATE') return { ...base, valueDate: String(value) };
+        if (item.attributeType === 'DATE') {
+          return { ...base, valueDate: dayjs.isDayjs(value) ? value.format(ATTRIBUTE_DATE_FORMAT) : String(value) };
+        }
         return { ...base, valueText: String(value) };
       })
       .filter(Boolean) as API.ProductDistribution.AttributeValue[];
@@ -197,16 +225,39 @@ export default function ProductDistributionEditPage() {
     const common = {
       name,
       label: item.attributeName,
+      extra: item.helpText,
       rules: item.requiredFlag === 'Y' ? [{ required: true, message: `请输入${item.attributeName}` }] : undefined,
     };
     if (item.attributeType === 'NUMBER') {
-      return <Form.Item key={itemKey} {...common}><InputNumber style={{ width: '100%' }} /></Form.Item>;
+      return (
+        <Form.Item key={itemKey} {...common}>
+          <InputNumber
+            addonAfter={item.unit || undefined}
+            precision={item.valuePrecision}
+            placeholder={item.placeholder || `请输入${item.attributeName || ''}`}
+            style={{ width: '100%' }}
+          />
+        </Form.Item>
+      );
     }
-    if (item.attributeType === 'SINGLE_SELECT' || item.attributeType === 'BOOLEAN') {
+    if (item.attributeType === 'BOOLEAN') {
+      return (
+        <Form.Item key={itemKey} {...common}>
+          <Select
+            allowClear
+            options={yesNoOptions}
+            placeholder={item.placeholder || '请选择是或否'}
+          />
+        </Form.Item>
+      );
+    }
+    if (item.attributeType === 'SINGLE_SELECT') {
       return (
         <Form.Item key={itemKey} {...common}>
           <Select
             {...SEARCHABLE_SELECT_PROPS}
+            allowClear
+            placeholder={item.placeholder || `请选择${item.attributeName || ''}`}
             options={(item.options || []).map((option) => ({ label: option.optionLabel, value: option.optionCode }))}
           />
         </Form.Item>
@@ -218,12 +269,28 @@ export default function ProductDistributionEditPage() {
           <Select
             {...SEARCHABLE_SELECT_PROPS}
             mode="multiple"
+            placeholder={item.placeholder || `请选择${item.attributeName || ''}`}
             options={(item.options || []).map((option) => ({ label: option.optionLabel, value: option.optionCode }))}
           />
         </Form.Item>
       );
     }
-    return <Form.Item key={itemKey} {...common}><Input /></Form.Item>;
+    if (item.attributeType === 'DATE') {
+      return (
+        <Form.Item key={itemKey} {...common}>
+          <DatePicker
+            format={ATTRIBUTE_DATE_FORMAT}
+            placeholder={item.placeholder || `请选择${item.attributeName || ''}`}
+            style={{ width: '100%' }}
+          />
+        </Form.Item>
+      );
+    }
+    return (
+      <Form.Item key={itemKey} {...common}>
+        <Input placeholder={item.placeholder || `请输入${item.attributeName || ''}`} />
+      </Form.Item>
+    );
   };
 
   const submit = async (targetStatus?: string) => {

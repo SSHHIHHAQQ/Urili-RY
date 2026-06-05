@@ -36,16 +36,27 @@ export function getSalesStatusText(status?: string) {
   return salesStatusOptions.find((item) => item.value === status)?.label || status || '--';
 }
 
-export function buildSkuSpecText(record: API.ProductDistribution.Sku) {
-  return [
-    record.color,
-    record.size,
-    record.material,
-    record.style,
-    record.model,
-    record.packageQuantity,
-    record.capacity,
-  ]
+function readSkuSpecValue(record: API.ProductDistribution.Sku, field: keyof API.ProductDistribution.Sku) {
+  return String(record[field] || '').trim();
+}
+
+export function buildSkuSpecText(
+  record: API.ProductDistribution.Sku,
+  siblingRows?: API.ProductDistribution.Sku[],
+) {
+  const allFields = skuSpecFields.map((item) => item.value);
+  const differingFields = siblingRows && siblingRows.length > 1
+    ? allFields.filter((field) => new Set(siblingRows.map((row) => readSkuSpecValue(row, field)).filter(Boolean)).size > 1)
+    : [];
+  const fallbackFields: (keyof API.ProductDistribution.Sku)[] = ['color', 'size'];
+  const fields = differingFields.length ? differingFields : fallbackFields;
+  const text = fields
+    .map((field) => readSkuSpecValue(record, field))
+    .filter(Boolean)
+    .join(' / ');
+  if (text) return text;
+  return allFields
+    .map((field) => readSkuSpecValue(record, field))
     .filter(Boolean)
     .join(' / ');
 }

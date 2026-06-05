@@ -145,6 +145,9 @@ cd E:\Urili-Ruoyi
 - Playwright 控制台检查结果为 `Errors: 0, Warnings: 0`。
 - SKU 尺寸重量展示已改为紧凑格式，例如 `28.00 x 20.00 x 3.00 cm   180 g`，不再展示 `长 28cm / 宽 20cm / 高 3cm / 重 180g`。
 - SKU 批量填充区已改为 Ant Design `Space + Space.Compact` 紧凑工具条，尺寸三边使用组合输入，重量、供货价、销售价和“应用到全部 SKU”按钮保持同一操作行，避免输入框纵向铺满页面。
+- 编辑页 SKU 规格属性回显修复：演示 SQL 写入的材质、风格、型号、商品数量等固定 SKU 字段会在异步加载后重新推导并显示，避免只显示默认颜色/尺寸。
+- 列表和详情 `SKU规格` 摘要改为按同一 SPU 下真正有差异的固定规格字段展示；T 恤演示商品显示为 `白色 / M`、`黑色 / L`，不再把相同的材质、风格、型号和商品数量塞进摘要。
+- 类目属性控件按类型补齐：`BOOLEAN` 固定展示 `是 / 否`，`NUMBER` 在输入框右侧展示 schema 的 `unit`，`DATE` 使用 Ant Design `DatePicker`，`MULTI_SELECT` 编辑回显时从 `value_json` 解析回数组，详情展示布尔和多选时不再暴露 `Y/N` 或 JSON 字符串。
 - CodeGraph 同步通过。
 - ruoyi-admin jar 打包通过。
 - 后端 8080 启动成功。

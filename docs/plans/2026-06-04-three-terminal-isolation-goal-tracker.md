@@ -71,7 +71,7 @@
 | 端内会话响应脱敏契约守卫 | 已完成 | 已新增 `PortalSessionProfileTest`，固定 `PortalSessionProfile.tokenId` 不得序列化输出，防止端内和管理端会话列表响应泄漏 tokenId |
 | 端内商品分类与 Schema 只读接口 | 已完成 | 已落地 seller/buyer 端可发布商品分类列表和商品 schema 只读接口；seller/buyer 商品分类/schema 端入口均已从 product controller 收口到各自 terminal facade，product 只保留共享 schema service |
 | 端内商品 Schema 前端消费模板 | 已完成 | `react-ui` 的 `/seller/portal` 已接入商品发布准备卡片，`/buyer/portal` 已按卖家模板接入商品浏览准备卡片；均通过端 service 真实消费对应端商品分类和 Schema 接口，不复用管理端 token |
-| 卖家端我的商城商品只读后端模板 | 卖家模板已完成，待验收后复制买家 | 已新增 seller 端自己的商品列表、详情和 SKU 只读入口；数据范围由 `PortalLoginSession.subjectId` 强制收敛，响应使用 seller DTO，不直接返回 product 管理端实体；本切片没有复制 buyer，也没有执行远程数据库 |
+| 卖家端我的商城商品只读后端模板 | 卖家模板已完成，已补脚本化烟测，待验收后复制买家 | 已新增 seller 端自己的商品列表、详情和 SKU 只读入口；数据范围由 `PortalLoginSession.subjectId` 强制收敛，响应使用 seller DTO，不直接返回 product 管理端实体；远程运行库已补 seller 端两个只读权限及角色授权，并新增可复跑 HTTP 烟测脚本；本切片没有复制 buyer |
 | 免密登录响应日志脱敏 | 已完成 | 管理端 seller/buyer directLogin 的 `@Log` 已关闭响应体记录；真实验证 `sys_oper_log` 未写入 `token` / `loginUrl` / `directLoginToken` |
 | Portal Controller 匿名放行硬化 | 已完成 | `SellerPortalController` / `BuyerPortalController` 已移除类级 `@Anonymous`，12 个 seller 映射和 12 个 buyer 映射均改为方法级 `@Anonymous` + `@PortalPreAuthorize` |
 | 端内 Controller 鉴权模板守卫 | 已完成 | `TerminalRouteOwnershipTest` 已覆盖 product 不承载 seller/buyer 端入口，并覆盖 seller/buyer 受保护 portal handler 必须方法级 `@Anonymous` + `@PortalPreAuthorize` + `@PortalLog` + `PortalSessionContext.requireSession(...)` |
@@ -3608,7 +3608,7 @@
 
 ## 2026-06-05 卖家端我的商城商品只读后端模板检查点
 
-本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，并按用户最新节奏执行：先做一套标准卖家模板，验收通过后再复制买家；每个切片只改一类东西。本轮只处理 seller 端我的商城商品只读后端模板，不做前端页面，不复制 buyer，不执行远程数据库 DDL/DML。
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，并按用户最新节奏执行：先做一套标准卖家模板，验收通过后再复制买家；每个切片只改一类东西。本轮只处理 seller 端我的商城商品只读后端模板，不做前端页面，不复制 buyer，不执行数据库 DDL，不执行 buyer 权限 DML。
 
 已完成：
 
@@ -3629,7 +3629,13 @@
   - 新增 `seller:product:distribution:list`
   - 新增 `seller:product:distribution:query`
   - active seller role seed 增加上述两个只读权限。
+- 远程运行库已执行 seller 权限 DML：
+  - 连接来源：本机 `.env.local` 的 `RUOYI_DB_*`。
+  - 目标环境：远程 MySQL，数据库 `fenxiao`。
+  - 执行类型：DML，仅写入 `seller_menu` 和 `seller_role_menu`。
+  - 执行结果：`seller_menu` 中两个权限从 0 条变为 2 条；新增菜单 2 条；新增 active seller role 授权 6 条；最终相关 role-menu 授权 6 条。
 - 新增 `SellerPortalProductServiceImplTest`，覆盖 seller 范围收敛、分页 total 保留、非本卖家商品拒绝、DTO 不暴露管理端范围字段、SKU 查询先校验归属。
+- 新增 `scripts/smoke/seller-own-distribution-product-read-template-smoke.ps1`，把 seller 登录、商品列表、伪造客户端范围参数、详情、SKU、字段脱敏、跨卖家详情/SKU 拒绝和 logout 清理固化为可复跑 HTTP 烟测。
 - 更新 `docs/architecture/reuse-ledger.md`，登记“卖家端我的商城商品只读后端模板”。
 - 新增执行记录：`docs/plans/2026-06-05-seller-own-distribution-product-read-template-record.md`。
 
@@ -3637,7 +3643,7 @@
 
 - 本轮没有修改 `product` 模块现有 admin 分销商品接口、mapper 或业务规则。
 - 本轮没有复制 buyer；买家商品浏览的可见性规则不等同于 seller 商品拥有关系，后续必须单独确认。
-- 本轮只更新 SQL seed 文件，没有读取或写入当前远程 MySQL/Redis。
+- 本轮已写入远程 MySQL 的 seller 端权限 DML；没有执行 DDL，没有写入 Redis，没有执行 buyer 相关 DML。
 - 本轮没有新增管理端前端页面，也没有启动 `seller-ui` / `buyer-ui` 物理拆分。
 
 验证结果：
@@ -3646,13 +3652,34 @@
 - `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system "-Dtest=TerminalRouteOwnershipTest,TerminalSeedPermissionContractTest" test`：通过，`Tests run: 6, Failures: 0, Errors: 0, Skipped: 0`。
 - `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl seller test`：通过，`Tests run: 15, Failures: 0, Errors: 0, Skipped: 0`。
 - `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system "-Dtest=TerminalAccountIsolationTest,PortalTokenSupportTest,TerminalRouteOwnershipTest,TerminalSeedPermissionContractTest" test`：通过，`Tests run: 12, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi; .\scripts\smoke\seller-own-distribution-product-read-template-smoke.ps1 -SellerUsername '594165649@qq.com' -OtherSellerUsername '1234'`：通过，覆盖 seller 登录、列表、伪造客户端范围参数、详情、SKU、字段脱敏、跨卖家详情/SKU 拒绝和 logout 清理。
+- 远程 MySQL seller 权限 DML：通过，`menuBefore=0`、`insertedMenus=2`、`insertedRoleMenus=6`、`menuAfter=2`、`roleMenuAfter=6`。
 - `git diff --check -- <本切片相关文件>`：通过，仅有 LF/CRLF 工作区换行提示。
 - 相关文件尾随空白检查：通过。
 - 相关文件冲突标记检查：通过。
 - `cd E:\Urili-Ruoyi; codegraph sync .`：通过，输出 `Already up to date`。
 
+运行验收：
+
+- 当前运行数据源已按 `application.yml` / `application-druid.yml` 和 `.env.local` 确认为远程 MySQL / 远程 Redis；记录中不输出凭据。
+- 首次 `mvn -DskipTests install` 在 `ruoyi-admin` repackage 阶段失败，原因是旧 8080 Java 进程锁住 `ruoyi-admin.jar`，报 `Unable to rename ... ruoyi-admin.jar.original`。
+- 停止旧 8080 Java 进程后执行 `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -DskipTests install -rf :ruoyi-admin`：通过，`ruoyi-admin.jar` 已重打包。
+- `seller-3.9.2.jar` 已确认包含 `SellerPortalProductDistributionController.class` 和 `SellerPortalProductServiceImpl.class`。
+- `cd E:\Urili-Ruoyi; .\start-backend-local.ps1`：已启动新后端，8080 Java 进程存在，`/captchaImage` 返回 200。
+- sellerId=5 / accountId=5 真实 seller 登录成功，调用：
+  - `GET /seller/product/distribution-products/list?pageNum=1&pageSize=10`：`code=200`，`total=4`，`rows=4`。
+  - `GET /seller/product/distribution-products/{sampleSpuId}`：`code=200`。
+  - `GET /seller/product/distribution-products/{sampleSpuId}/skus`：`code=200`，`skuRows=2`。
+  - 列表、详情和 SKU 响应未出现 `sellerId`、`systemSpuCode`、`systemSkuCode` 字段。
+- sellerId=9 / accountId=8 真实 seller 登录成功后访问 sellerId=5 的 sample SPU：接口返回业务 `code=500`，消息为“商城商品不存在”，跨卖家访问被拒绝。
+- 脚本化烟测走真实 HTTP 业务链路，会产生 seller 端登录/退出日志和会话记录；脚本结束时已调用 `/seller/logout` 清理本次 token，且不输出 token、JWT、Redis key、`.env.local` 或数据库连接明文。
+- 脚本化烟测已补强断言：伪造 `sellerId`、`subjectId`、`accountId`、`terminal`、`systemSpuCode`、`sourceType` 不改变当前 seller 列表范围；跨卖家详情和 SKU 均返回业务 `code=500`，语义为“商城商品不存在”。
+- 运行验收记录补充后执行 `cd E:\Urili-Ruoyi; codegraph sync .`：通过，输出 `Synced 5 changed files`。
+- 脚本化烟测补强和文档补记后再次执行 `cd E:\Urili-Ruoyi; codegraph sync .`：通过，输出 `Already up to date`。
+
 当前判断：
 
 - seller 端“我的商城商品”只读后端模板已经具备端入口、权限点、范围收敛、响应 DTO 和契约测试。
 - 当前 seller 模板适合作为后续 seller 端同类业务接口的基线：Controller 只负责端入口、鉴权、分页和返回；Service 负责基于 `PortalLoginSession` 做数据范围和响应字段收敛。
+- 真实后端运行验收已通过，seller 模板可以进入用户验收；但 buyer 仍未复制。
 - buyer 端后续不应机械复制 seller 商品拥有关系。若要做买家商品浏览，需要先确认商品可见性、上架状态、价格口径和库存可见边界，再按已验收模板替换 terminal、路径、权限点、service、DTO 和测试。
