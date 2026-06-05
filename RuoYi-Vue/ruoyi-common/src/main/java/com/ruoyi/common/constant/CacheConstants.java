@@ -41,4 +41,17 @@ public class CacheConstants
      * 登录账户密码错误次数 redis key
      */
     public static final String PWD_ERR_CNT_KEY = "pwd_err_cnt:";
+
+
+    /** 商品 schema 缓存前缀 */
+    public static final String PRODUCT_SCHEMA = "product:schema:";
+
+    /** 商品分类缓存前缀 */
+    public static final String PRODUCT_CATEGORY = "product:category:";
+
+    /** 商品属性缓存前缀 */
+    public static final String PRODUCT_ATTRIBUTE = "product:attribute:";
+
+    /** 商品属性选项缓存前缀 */
+    public static final String PRODUCT_ATTRIBUTE_OPTIONS = "product:attribute:options:";
 }

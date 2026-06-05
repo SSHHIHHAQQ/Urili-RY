@@ -1,15 +1,21 @@
 package com.ruoyi.product.service.impl;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.ruoyi.common.constant.CacheConstants;
+import com.ruoyi.common.core.redis.RedisCache;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.product.domain.ProductAttribute;
@@ -54,6 +60,10 @@ public class ProductConfigServiceImpl implements IProductConfigService
 
     private static final String RULE_DISABLE = "DISABLE";
 
+    private static final int CACHE_TTL_MINUTES = 60;
+
+    @Autowired
+    private RedisCache redisCache;
     @Autowired
     private ProductConfigMapper productConfigMapper;
 
@@ -145,7 +155,8 @@ public class ProductConfigServiceImpl implements IProductConfigService
         category.setSchemaVersion(current.getSchemaVersion());
         category.setPublishEnabled(derivedPublishEnabled(category.getCategoryId()));
         category.setUpdateBy(currentUsername());
-        return productConfigMapper.updateCategory(category);
+        int rows = productConfigMapper.updateCategory(category);
+        return rows;
     }
 
     @Override
@@ -162,6 +173,7 @@ public class ProductConfigServiceImpl implements IProductConfigService
             throw new ServiceException("该分类已配置属性，请先移除类目属性配置");
         }
         String username = currentUsername();
+        invalidateSchemaByCategoryId(categoryId);
         int rows = productConfigMapper.deleteCategoryById(categoryId, username);
         Long parentId = category.getParentId();
         if (parentId != null && parentId.longValue() != ROOT_PARENT_ID
@@ -206,7 +218,8 @@ public class ProductConfigServiceImpl implements IProductConfigService
             throw new ServiceException("商品属性编码已存在");
         }
         attribute.setCreateBy(currentUsername());
-        return productConfigMapper.insertAttribute(attribute);
+        int rows = productConfigMapper.insertAttribute(attribute);
+        return rows;
     }
 
     @Override
@@ -229,7 +242,9 @@ public class ProductConfigServiceImpl implements IProductConfigService
             }
         }
         attribute.setUpdateBy(currentUsername());
-        return productConfigMapper.updateAttribute(attribute);
+        invalidateSchemaByAttributeId(attribute.getAttributeId());
+        int rows = productConfigMapper.updateAttribute(attribute);
+        return rows;
     }
 
     @Override
@@ -241,7 +256,9 @@ public class ProductConfigServiceImpl implements IProductConfigService
         {
             throw new ServiceException("属性已被类目引用，不能删除，请停用");
         }
-        return productConfigMapper.deleteAttributeById(attributeId, currentUsername());
+        invalidateSchemaByAttributeId(attributeId);
+        int rows = productConfigMapper.deleteAttributeById(attributeId, currentUsername());
+        return rows;
     }
 
     @Override
@@ -263,7 +280,9 @@ public class ProductConfigServiceImpl implements IProductConfigService
             throw new ServiceException("属性选项编码已存在");
         }
         option.setCreateBy(currentUsername());
-        return productConfigMapper.insertOption(option);
+        invalidateSchemaByAttributeId(attributeId);
+        int rows = productConfigMapper.insertOption(option);
+        return rows;
     }
 
     @Override
@@ -284,7 +303,9 @@ public class ProductConfigServiceImpl implements IProductConfigService
             throw new ServiceException("属性选项编码已存在");
         }
         option.setUpdateBy(currentUsername());
-        return productConfigMapper.updateOption(option);
+        invalidateSchemaByAttributeId(attributeId);
+        int rows = productConfigMapper.updateOption(option);
+        return rows;
     }
 
     @Override
@@ -296,7 +317,9 @@ public class ProductConfigServiceImpl implements IProductConfigService
         {
             throw new ServiceException("属性选项不存在");
         }
-        return productConfigMapper.deleteOptionById(optionId, currentUsername());
+        invalidateSchemaByAttributeId(attributeId);
+        int rows = productConfigMapper.deleteOptionById(optionId, currentUsername());
+        return rows;
     }
 
     @Override
@@ -339,6 +362,7 @@ public class ProductConfigServiceImpl implements IProductConfigService
             categoryAttribute.setCategoryAttributeId(current.getCategoryAttributeId());
             rows = productConfigMapper.updateCategoryAttribute(categoryAttribute);
         }
+        invalidateSchemaByCategoryId(category.getCategoryId());
         productConfigMapper.increaseCategorySchemaVersion(category.getCategoryId(), categoryAttribute.getUpdateBy());
         return rows;
     }
@@ -348,6 +372,7 @@ public class ProductConfigServiceImpl implements IProductConfigService
     public int deleteCategoryAttributeById(Long categoryAttributeId)
     {
         ProductCategoryAttribute current = selectCategoryAttributeById(categoryAttributeId);
+        invalidateSchemaByCategoryId(current.getCategoryId());
         int rows = productConfigMapper.deleteCategoryAttributeById(categoryAttributeId, currentUsername());
         productConfigMapper.increaseCategorySchemaVersion(current.getCategoryId(), currentUsername());
         return rows;
@@ -356,12 +381,21 @@ public class ProductConfigServiceImpl implements IProductConfigService
     @Override
     public List<ProductCategoryAttribute> previewCategorySchema(Long categoryId)
     {
+        String cacheKey = CacheConstants.PRODUCT_SCHEMA + categoryId;
+
+        List<ProductCategoryAttribute> cached = redisCache.getCacheObject(cacheKey);
+        if (cached != null)
+        {
+            return cached;
+        }
+
         ProductCategory category = selectCategoryById(categoryId);
         List<Long> categoryIds = categoryChain(category);
         List<ProductCategoryAttribute> rules = productConfigMapper.selectCategoryAttributeRulesByCategoryIds(categoryIds);
         rules.sort(Comparator
-            .comparingInt((ProductCategoryAttribute rule) -> categoryIds.indexOf(rule.getCategoryId()))
-            .thenComparing(rule -> defaultInt(rule.getSortOrder())));
+                .comparingInt((ProductCategoryAttribute rule) -> categoryIds.indexOf(rule.getCategoryId()))
+                .thenComparing(rule -> defaultInt(rule.getSortOrder())));
+
         Map<Long, ProductCategoryAttribute> schema = new LinkedHashMap<>();
         for (ProductCategoryAttribute rule : rules)
         {
@@ -372,9 +406,11 @@ public class ProductConfigServiceImpl implements IProductConfigService
             }
             schema.put(rule.getAttributeId(), rule);
         }
-        return withOptions(new ArrayList<>(schema.values()));
-    }
 
+        List<ProductCategoryAttribute> result = withOptions(new ArrayList<>(schema.values()));
+        redisCache.setCacheObject(cacheKey, result, CACHE_TTL_MINUTES, TimeUnit.MINUTES);
+        return result;
+    }
     private void normalizeCategory(ProductCategory category)
     {
         category.setParentId(category.getParentId() == null ? ROOT_PARENT_ID : category.getParentId());
@@ -617,5 +653,74 @@ public class ProductConfigServiceImpl implements IProductConfigService
     private String currentUsername()
     {
         return SecurityUtils.getUsername();
+    }
+
+    private void invalidateSchemaByCategoryId(Long categoryId)
+    {
+        List<Long> categoryIds = collectSchemaCategoryIdsByCategoryId(categoryId);
+        clearSchemaCaches(categoryIds);
+        delayClearSchemaCaches(categoryIds);
+    }
+
+    private void invalidateSchemaByAttributeId(Long attributeId)
+    {
+        List<Long> categoryIds = collectSchemaCategoryIdsByAttributeId(attributeId);
+        clearSchemaCaches(categoryIds);
+        delayClearSchemaCaches(categoryIds);
+    }
+
+    private List<Long> collectSchemaCategoryIdsByCategoryId(Long categoryId)
+    {
+        return productConfigMapper.selectCategoryDescendantIds(categoryId);
+    }
+
+    private List<Long> collectSchemaCategoryIdsByAttributeId(Long attributeId)
+    {
+        List<Long> categoryIds = productConfigMapper.selectCategoryIdsByAttributeId(attributeId);
+        if (categoryIds == null || categoryIds.isEmpty())
+        {
+            return categoryIds;
+        }
+        LinkedHashSet<Long> descendantCategoryIds = new LinkedHashSet<>();
+        for (Long categoryId : categoryIds)
+        {
+            descendantCategoryIds.addAll(productConfigMapper.selectCategoryDescendantIds(categoryId));
+        }
+        return new ArrayList<>(descendantCategoryIds);
+    }
+
+    private void clearSchemaCaches(Collection<Long> categoryIds)
+    {
+        if (categoryIds == null || categoryIds.isEmpty())
+        {
+            return;
+        }
+        LinkedHashSet<String> keys = new LinkedHashSet<>();
+        for (Long categoryId : categoryIds)
+        {
+            keys.add(CacheConstants.PRODUCT_SCHEMA + categoryId);
+        }
+        redisCache.deleteObject(keys);
+    }
+
+    private void delayClearSchemaCaches(Collection<Long> categoryIds)
+    {
+        if (categoryIds == null || categoryIds.isEmpty())
+        {
+            return;
+        }
+        List<Long> snapshot = new ArrayList<>(categoryIds);
+        CompletableFuture.runAsync(() -> {
+            try
+            {
+                Thread.sleep(500L);
+            }
+            catch (InterruptedException e)
+            {
+                Thread.currentThread().interrupt();
+                return;
+            }
+            clearSchemaCaches(snapshot);
+        });
     }
 }

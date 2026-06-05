@@ -15,6 +15,8 @@ const forbiddenPatterns = [
   /\bportal_login_token\b/,
   /\baccess_token\b/,
 ];
+const forbiddenScopeObjectKeyPattern =
+  /\b(?:sellerId|buyerId|subjectId|accountId|sellerAccountId|buyerAccountId)\s*:/;
 const portalQueryFunctions = [
   'getPortalLoginLogs',
   'getPortalOperLogs',
@@ -51,6 +53,9 @@ for (const file of sourceRoots.flatMap(walk)) {
     if (pattern.test(source)) {
       violations.push(`${relativePath} must not use ${pattern}`);
     }
+  }
+  if (forbiddenScopeObjectKeyPattern.test(source)) {
+    violations.push(`${relativePath} must not send portal identity scope object keys`);
   }
   if (file.startsWith(portalPagesRoot)) {
     if (/\brequest\s*(?:<[^;]+?>)?\s*\(/.test(source)) {

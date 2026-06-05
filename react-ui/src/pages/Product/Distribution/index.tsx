@@ -17,6 +17,7 @@ import { getPersistedProTableSearch, getProTableScroll } from '@/utils/proTableS
 import { SEARCHABLE_SELECT_PROPS, SEARCHABLE_TREE_SELECT_PROPS } from '@/utils/selectSearch';
 import { buildCategoryTree, toCategoryTreeSelectData } from '../categoryTree';
 import {
+  buildSkuDimensionText,
   buildSkuSpecText,
   formatPriceRange,
   getSalesStatusText,
@@ -126,6 +127,11 @@ export default function ProductDistributionPage() {
       title: 'SKU规格',
       width: 220,
       render: (_, record) => buildSkuSpecText(record) || '--',
+    },
+    {
+      title: '尺寸重量',
+      width: 220,
+      render: (_, record) => buildSkuDimensionText(record) || '--',
     },
     { title: '供货价', dataIndex: 'supplyPrice', width: 90 },
     { title: '销售价', dataIndex: 'salePrice', width: 90 },
@@ -282,7 +288,7 @@ export default function ProductDistributionPage() {
               columns={skuColumns(record.spuId ?? 0)}
               dataSource={record.skus || []}
               pagination={false}
-              scroll={{ x: 1200 }}
+              scroll={{ x: 1420 }}
             />
           ),
         }}

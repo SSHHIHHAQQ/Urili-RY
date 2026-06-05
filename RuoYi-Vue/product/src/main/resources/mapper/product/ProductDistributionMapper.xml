@@ -46,6 +46,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="sellerSkuCode"   column="seller_sku_code"  />
         <result property="color"           column="color"            />
         <result property="size"            column="size"             />
+        <result property="lengthValue"     column="length_value"     />
+        <result property="widthValue"      column="width_value"      />
+        <result property="heightValue"     column="height_value"     />
         <result property="weight"          column="weight"           />
         <result property="material"        column="material"         />
         <result property="style"           column="style"            />
@@ -275,13 +278,15 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <insert id="insertSku" parameterType="ProductSku" useGeneratedKeys="true" keyProperty="skuId">
         insert into product_sku(
             spu_id, seller_id, system_sku_code, seller_sku_code, color,
-            size, weight, material, style, model,
+            size, length_value, width_value, height_value, weight,
+            material, style, model,
             package_quantity, capacity, sku_image_url, supply_price, sale_price,
             currency_code, sku_status, sort_order, del_flag, create_by,
             create_time, remark
         ) values (
             #{spuId}, #{sellerId}, #{systemSkuCode}, #{sellerSkuCode}, #{color},
-            #{size}, #{weight}, #{material}, #{style}, #{model},
+            #{size}, #{lengthValue}, #{widthValue}, #{heightValue}, #{weight},
+            #{material}, #{style}, #{model},
             #{packageQuantity}, #{capacity}, #{skuImageUrl}, #{supplyPrice}, #{salePrice},
             #{currencyCode}, #{skuStatus}, #{sortOrder}, '0', #{createBy},
             sysdate(), #{remark}
@@ -294,6 +299,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             seller_sku_code = #{sellerSkuCode},
             color = #{color},
             size = #{size},
+            length_value = #{lengthValue},
+            width_value = #{widthValue},
+            height_value = #{heightValue},
             weight = #{weight},
             material = #{material},
             style = #{style},

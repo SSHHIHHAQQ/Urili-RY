@@ -17,6 +17,9 @@ public class ProductSku extends BaseEntity
     private String sellerSkuCode;
     private String color;
     private String size;
+    private String lengthValue;
+    private String widthValue;
+    private String heightValue;
     private String weight;
     private String material;
     private String style;
@@ -46,6 +49,12 @@ public class ProductSku extends BaseEntity
     public void setColor(String color) { this.color = color; }
     public String getSize() { return size; }
     public void setSize(String size) { this.size = size; }
+    public String getLengthValue() { return lengthValue; }
+    public void setLengthValue(String lengthValue) { this.lengthValue = lengthValue; }
+    public String getWidthValue() { return widthValue; }
+    public void setWidthValue(String widthValue) { this.widthValue = widthValue; }
+    public String getHeightValue() { return heightValue; }
+    public void setHeightValue(String heightValue) { this.heightValue = heightValue; }
     public String getWeight() { return weight; }
     public void setWeight(String weight) { this.weight = weight; }
     public String getMaterial() { return material; }

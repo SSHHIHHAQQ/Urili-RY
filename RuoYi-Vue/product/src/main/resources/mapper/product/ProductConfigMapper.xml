@@ -224,6 +224,14 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         where category_id = #{categoryId}
     </select>
 
+    <select id="selectCategoryDescendantIds" resultType="java.lang.Long">
+        select category_id
+        from product_category
+        where del_flag = '0'
+          and (category_id = #{categoryId} or find_in_set(#{categoryId}, ancestors) &gt; 0)
+        order by category_level asc, category_id asc
+    </select>
+
     <insert id="insertCategory" parameterType="ProductCategory" useGeneratedKeys="true" keyProperty="categoryId">
         insert into product_category(
             parent_id, ancestors, category_code, category_name, category_level,
@@ -382,6 +390,13 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         select count(1)
         from product_category_attribute
         where attribute_id = #{attributeId}
+    </select>
+
+    <select id="selectCategoryIdsByAttributeId" resultType="java.lang.Long">
+        select distinct category_id
+        from product_category_attribute
+        where attribute_id = #{attributeId}
+        order by category_id asc
     </select>
 
     <select id="selectOptionList" resultMap="OptionResult">

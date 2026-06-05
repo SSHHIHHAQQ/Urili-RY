@@ -60,6 +60,10 @@ export default function SkuMatrixEditor({
   const [selectedSpecs, setSelectedSpecs] = useState<(keyof API.ProductDistribution.Sku)[]>(['color', 'size']);
   const [specValues, setSpecValues] = useState<Record<string, string[]>>({});
   const [draftValues, setDraftValues] = useState<Record<string, string>>({});
+  const [bulkLengthValue, setBulkLengthValue] = useState<string>();
+  const [bulkWidthValue, setBulkWidthValue] = useState<string>();
+  const [bulkHeightValue, setBulkHeightValue] = useState<string>();
+  const [bulkWeight, setBulkWeight] = useState<string>();
   const [bulkSupplyPrice, setBulkSupplyPrice] = useState<number>();
   const [bulkSalePrice, setBulkSalePrice] = useState<number>();
 
@@ -133,6 +137,10 @@ export default function SkuMatrixEditor({
   const applyBulk = () => {
     onChange(rows.map((row) => ({
       ...row,
+      lengthValue: bulkLengthValue || row.lengthValue,
+      widthValue: bulkWidthValue || row.widthValue,
+      heightValue: bulkHeightValue || row.heightValue,
+      weight: bulkWeight || row.weight,
       supplyPrice: bulkSupplyPrice ?? row.supplyPrice,
       salePrice: bulkSalePrice ?? row.salePrice,
     })));
@@ -168,6 +176,54 @@ export default function SkuMatrixEditor({
           size="small"
           value={row.skuImageUrl}
           onChange={(skuImageUrl) => updateRow(row.rowKey!, { skuImageUrl })}
+        />
+      ),
+    },
+    {
+      title: '长度',
+      dataIndex: 'lengthValue',
+      width: 110,
+      render: (_, row) => (
+        <Input
+          value={row.lengthValue}
+          placeholder="如 30cm"
+          onChange={(event) => updateRow(row.rowKey!, { lengthValue: event.target.value })}
+        />
+      ),
+    },
+    {
+      title: '宽度',
+      dataIndex: 'widthValue',
+      width: 110,
+      render: (_, row) => (
+        <Input
+          value={row.widthValue}
+          placeholder="如 20cm"
+          onChange={(event) => updateRow(row.rowKey!, { widthValue: event.target.value })}
+        />
+      ),
+    },
+    {
+      title: '高度',
+      dataIndex: 'heightValue',
+      width: 110,
+      render: (_, row) => (
+        <Input
+          value={row.heightValue}
+          placeholder="如 8cm"
+          onChange={(event) => updateRow(row.rowKey!, { heightValue: event.target.value })}
+        />
+      ),
+    },
+    {
+      title: '重量',
+      dataIndex: 'weight',
+      width: 110,
+      render: (_, row) => (
+        <Input
+          value={row.weight}
+          placeholder="如 350g"
+          onChange={(event) => updateRow(row.rowKey!, { weight: event.target.value })}
         />
       ),
     },
@@ -297,9 +353,60 @@ export default function SkuMatrixEditor({
       </div>
 
       <div className={styles.bulkPanel}>
-        <InputNumber min={0} precision={4} placeholder="批量供货价" value={bulkSupplyPrice} onChange={(value) => setBulkSupplyPrice(value ?? undefined)} />
-        <InputNumber min={0} precision={4} placeholder="批量销售价" value={bulkSalePrice} onChange={(value) => setBulkSalePrice(value ?? undefined)} />
-        <Button type="primary" onClick={applyBulk}>批量填充</Button>
+        <Space size={8} wrap>
+          <Typography.Text strong className={styles.bulkPanelLabel}>
+            批量填充
+          </Typography.Text>
+          <Space.Compact>
+            <Input
+              allowClear
+              placeholder="长"
+              style={{ width: 96 }}
+              value={bulkLengthValue}
+              onChange={(event) => setBulkLengthValue(event.target.value || undefined)}
+            />
+            <Input
+              allowClear
+              placeholder="宽"
+              style={{ width: 96 }}
+              value={bulkWidthValue}
+              onChange={(event) => setBulkWidthValue(event.target.value || undefined)}
+            />
+            <Input
+              allowClear
+              placeholder="高"
+              style={{ width: 96 }}
+              value={bulkHeightValue}
+              onChange={(event) => setBulkHeightValue(event.target.value || undefined)}
+            />
+          </Space.Compact>
+          <Input
+            allowClear
+            placeholder="重量"
+            style={{ width: 112 }}
+            value={bulkWeight}
+            onChange={(event) => setBulkWeight(event.target.value || undefined)}
+          />
+          <InputNumber
+            min={0}
+            precision={4}
+            placeholder="供货价"
+            style={{ width: 140 }}
+            value={bulkSupplyPrice}
+            onChange={(value) => setBulkSupplyPrice(value ?? undefined)}
+          />
+          <InputNumber
+            min={0}
+            precision={4}
+            placeholder="销售价"
+            style={{ width: 140 }}
+            value={bulkSalePrice}
+            onChange={(value) => setBulkSalePrice(value ?? undefined)}
+          />
+          <Button type="primary" onClick={applyBulk}>
+            应用到全部 SKU
+          </Button>
+        </Space>
       </div>
 
       <Table
@@ -307,7 +414,7 @@ export default function SkuMatrixEditor({
         columns={columns}
         dataSource={rows}
         pagination={false}
-        scroll={{ x: 1040 }}
+        scroll={{ x: 1480 }}
         size="small"
       />
     </div>

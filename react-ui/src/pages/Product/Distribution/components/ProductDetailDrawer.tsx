@@ -1,6 +1,6 @@
 import { Descriptions, Drawer, Image, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { buildSkuSpecText, getSalesStatusText, resolveResourceUrl } from '../constants';
+import { buildSkuDimensionText, buildSkuSpecText, getSalesStatusText, resolveResourceUrl } from '../constants';
 import DetailContentPreview from './DetailContentPreview';
 import styles from '../style.module.css';
 
@@ -33,6 +33,11 @@ export default function ProductDetailDrawer({
       title: 'SKU规格',
       width: 220,
       render: (_, record) => buildSkuSpecText(record) || '--',
+    },
+    {
+      title: '尺寸重量',
+      width: 220,
+      render: (_, record) => buildSkuDimensionText(record) || '--',
     },
     { title: '供货价', dataIndex: 'supplyPrice', width: 100 },
     { title: '销售价', dataIndex: 'salePrice', width: 100 },
@@ -85,7 +90,7 @@ export default function ProductDetailDrawer({
             pagination={false}
             columns={skuColumns}
             dataSource={product.skus || []}
-            scroll={{ x: 1000 }}
+            scroll={{ x: 1220 }}
           />
 
           <Descriptions bordered size="small" column={1} title="类目属性">

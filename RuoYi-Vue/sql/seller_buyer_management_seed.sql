@@ -805,6 +805,8 @@ from (
     union all select '角色列表', 41, 'seller:role:list', '卖家端角色只读列表权限'
     union all select 'Product Category List', 50, 'seller:product:category:list', 'Seller portal product category list permission'
     union all select 'Product Schema Query', 51, 'seller:product:schema:query', 'Seller portal product schema read permission'
+    union all select 'Distribution Product List', 52, 'seller:product:distribution:list', 'Seller portal own distribution product list permission'
+    union all select 'Distribution Product Query', 53, 'seller:product:distribution:query', 'Seller portal own distribution product read permission'
 ) seed
 where not exists (
     select 1 from seller_menu m where m.perms = seed.perms
@@ -864,7 +866,9 @@ join seller_menu m on m.perms in (
     'seller:dept:list',
     'seller:role:list',
     'seller:product:category:list',
-    'seller:product:schema:query'
+    'seller:product:schema:query',
+    'seller:product:distribution:list',
+    'seller:product:distribution:query'
 )
 where r.del_flag = '0'
   and r.status = '0'

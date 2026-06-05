@@ -134,7 +134,10 @@ SKU：白色/L
 | `seller_sku_code` | varchar(128) | 否 | 空字符串 | 客户 SKU，也就是卖家自己的 SKU 编码。前端展示名用“客户SKU”。同一卖家下建议唯一，不要求跨卖家唯一。 |
 | `color` | varchar(128) | 否 | 空字符串 | 颜色。SKU 固定规格字段之一，纯文本保存，例如“黑色”“红色”。不拆字典，不拆单位。 |
 | `size` | varchar(128) | 否 | 空字符串 | 尺寸。SKU 固定规格字段之一，纯文本保存，例如“L”“30cm”。 |
-| `weight` | varchar(128) | 否 | 空字符串 | 重量。SKU 固定规格字段之一，纯文本保存，单位由卖家或运营自己写，例如“500g”“0.5kg”。 |
+| `length_value` | varchar(128) | 否 | 空字符串 | 长度。SKU 级物流/包装字段，纯文本保存，单位由卖家或运营自己写，例如“30cm”。不参与 SKU 规格矩阵生成。 |
+| `width_value` | varchar(128) | 否 | 空字符串 | 宽度。SKU 级物流/包装字段，纯文本保存，单位由卖家或运营自己写，例如“20cm”。不参与 SKU 规格矩阵生成。 |
+| `height_value` | varchar(128) | 否 | 空字符串 | 高度。SKU 级物流/包装字段，纯文本保存，单位由卖家或运营自己写，例如“8cm”。不参与 SKU 规格矩阵生成。 |
+| `weight` | varchar(128) | 否 | 空字符串 | 重量。SKU 级物流/包装字段，纯文本保存，单位由卖家或运营自己写，例如“500g”“0.5kg”。不参与 SKU 规格矩阵生成。 |
 | `material` | varchar(128) | 否 | 空字符串 | 材质。SKU 固定规格字段之一，例如“棉”“不锈钢”。 |
 | `style` | varchar(128) | 否 | 空字符串 | 风格。SKU 固定规格字段之一，例如“简约”“户外”。 |
 | `model` | varchar(128) | 否 | 空字符串 | 型号。SKU 固定规格字段之一，例如厂家型号、规格型号或卖家内部型号。 |
@@ -170,13 +173,13 @@ SKU：白色/L
 规格摘要不是独立字段，建议由接口或前端按以下字段自动拼接：
 
 ```text
-color / size / weight / material / style / model / package_quantity / capacity
+color / size / material / style / model / package_quantity / capacity
 ```
 
 空字段跳过。例如：
 
 ```text
-黑色 / L / 500g / 棉 / 简约
+黑色 / L / 棉 / 简约
 ```
 
 不建议保存规格摘要为事实字段，避免规格字段修改后摘要不同步。

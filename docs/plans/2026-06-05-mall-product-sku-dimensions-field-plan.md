@@ -2,7 +2,7 @@
 
 日期：2026-06-05
 
-状态：待用户确认后实施。
+状态：已确认并实施。
 
 ## 1. 背景
 
@@ -21,7 +21,7 @@
 `product_sku.weight`
 
 - 中文名：重量
-- 类型：`varchar(64)`
+- 类型：`varchar(128)`
 - 是否必填：首版不强制必填
 - 单位规则：不固定单位，卖家/管理员按业务约定自行填写
 - 用途：保存 SKU 重量，例如 `0.35kg`、`350g`
@@ -31,7 +31,7 @@
 `product_sku.length_value`
 
 - 中文名：长度
-- 类型：`varchar(64)`
+- 类型：`varchar(128)`
 - 是否必填：首版不强制必填
 - 默认值：空字符串
 - 单位规则：不固定单位，卖家/管理员自行填写
@@ -40,7 +40,7 @@
 `product_sku.width_value`
 
 - 中文名：宽度
-- 类型：`varchar(64)`
+- 类型：`varchar(128)`
 - 是否必填：首版不强制必填
 - 默认值：空字符串
 - 单位规则：不固定单位，卖家/管理员自行填写
@@ -49,7 +49,7 @@
 `product_sku.height_value`
 
 - 中文名：高度
-- 类型：`varchar(64)`
+- 类型：`varchar(128)`
 - 是否必填：首版不强制必填
 - 默认值：空字符串
 - 单位规则：不固定单位，卖家/管理员自行填写
@@ -73,6 +73,10 @@
 - 不强制校验数字格式，避免和“单位自行填写”的规则冲突。
 - 不在库存模块未落地前用这些字段计算库存或运费。
 
-## 6. 待确认点
+## 6. 执行结果
 
-建议确认后直接按以上方案实施：长度、宽度、高度新增为 SKU 表固定字段，重量复用现有 `weight` 字段；四个字段均为字符串、非必填、单位自行填写。
+- 用户已确认：长度、宽度、高度直接作为 `product_sku` 固定字段；重量复用现有 `weight` 字段。
+- 已更新 `ProductSku`、`ProductDistributionMapper.xml`、`ProductDistributionServiceImpl`、前端 SKU 类型和 SKU 矩阵编辑器。
+- 已新增运行库同步脚本 `RuoYi-Vue/sql/20260605_mall_product_sku_dimension_fields.sql`。
+- 已确认当前激活数据源后同步运行库 `product_sku`，新增 `length_value`、`width_value`、`height_value` 三列。
+- 已通过管理端详情接口验证演示 SKU 返回 `lengthValue`、`widthValue`、`heightValue` 和 `weight`。

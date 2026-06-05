@@ -42,13 +42,13 @@
 - SKU 固定规格字段包括：
   - 颜色
   - 尺寸
-  - 重量
   - 材质
   - 风格
   - 型号
   - 商品数量
   - 容量
 - SKU 固定规格字段均允许为空；单位由卖家或运营写入字段文本，不单独拆单位字段。
+- SKU 物流/包装字段包括长度、宽度、高度和重量，固定展示在 SKU 表格中，不进入规格属性勾选区，也不参与 SKU 矩阵组合生成。
 - 供货价、销售价、币种放在 SKU 维度。
 - 销售价允许低于供货价，但保存或上架时需要风险提示，不做硬阻断。
 - 库存按 SKU 维度拆，并且未来按仓库读取；本阶段只设计库存读取边界，不建库存事实表。
@@ -273,6 +273,9 @@ SKU 切换为 `ON_SALE` 前必须满足：
 | `seller_sku_code` | varchar(128) | 否 | `''` | 客户 SKU，同一卖家下唯一 |
 | `color` | varchar(128) | 否 | `''` | 颜色 |
 | `size` | varchar(128) | 否 | `''` | 尺寸 |
+| `length_value` | varchar(128) | 否 | `''` | 长度，含单位文本 |
+| `width_value` | varchar(128) | 否 | `''` | 宽度，含单位文本 |
+| `height_value` | varchar(128) | 否 | `''` | 高度，含单位文本 |
 | `weight` | varchar(128) | 否 | `''` | 重量，含单位文本 |
 | `material` | varchar(128) | 否 | `''` | 材质 |
 | `style` | varchar(128) | 否 | `''` | 风格 |
@@ -533,14 +536,7 @@ warehouseBreakdown[]
 | 系统 SKU | `system_sku_code` |
 | 客户 SKU | `seller_sku_code` |
 | SKU 规格 | 自动规格摘要 |
-| 颜色 | `color` |
-| 尺寸 | `size` |
-| 重量 | `weight` |
-| 材质 | `material` |
-| 风格 | `style` |
-| 型号 | `model` |
-| 商品数量 | `package_quantity` |
-| 容量 | `capacity` |
+| 尺寸重量 | `length_value` / `width_value` / `height_value` / `weight` |
 | 供货价 | `supply_price` |
 | 销售价 | `sale_price` |
 | 币种 | `currency_code` |
@@ -701,6 +697,7 @@ SKU 固定规格：
 
 - 首版不进字典。
 - 直接作为表单文本字段。
+- 长度、宽度、高度和重量归为 SKU 级物流/包装字段，仍直接保存到 `product_sku`，但不用于生成 SKU 规格矩阵。
 
 ## 17. 与卖家审核流程的后续关系
 

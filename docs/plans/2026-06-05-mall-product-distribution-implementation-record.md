@@ -143,10 +143,13 @@ cd E:\Urili-Ruoyi
 - 跨国家仓库混选已被前端拦截，页面保持原同国家仓库选择。
 - 新增/编辑页底部保存操作区已改为 Ant Design `Affix + Card + Space + Button`，浏览器验证 `bottomGap=0`，确认为冻结在视口底部。
 - Playwright 控制台检查结果为 `Errors: 0, Warnings: 0`。
+- SKU 尺寸重量展示已改为紧凑格式，例如 `28.00 x 20.00 x 3.00 cm   180 g`，不再展示 `长 28cm / 宽 20cm / 高 3cm / 重 180g`。
+- SKU 批量填充区已改为 Ant Design `Space + Space.Compact` 紧凑工具条，尺寸三边使用组合输入，重量、供货价、销售价和“应用到全部 SKU”按钮保持同一操作行，避免输入框纵向铺满页面。
 - CodeGraph 同步通过。
 - ruoyi-admin jar 打包通过。
 - 后端 8080 启动成功。
 - 管理端登录成功，`/product/admin/distribution-products/list?pageNum=1&pageSize=10` 返回 `code=200`。
+- 管理端详情接口已返回 SKU 三边尺寸字段，演示 SKU 返回 `lengthValue=28cm`、`widthValue=20cm`、`heightValue=3cm`、`weight=180g`。
 - 动态路由中已返回 `Product/Distribution/index`。
 - 新增表单依赖接口验证通过：启用卖家 3 条、启用分类 220 条、启用币种 4 条。
 - 新增接口已进入后端业务校验；缺少卖家时返回“请选择卖家”，列表仍为 0，未插入临时数据。
@@ -159,7 +162,7 @@ cd E:\Urili-Ruoyi
 - 新增商品完整成功保存路径本轮未再造新临时业务数据；当前已验证新增页 UI、前端校验边界和后端业务校验入口。
 - 前端已启动并完成首页、`/api` 代理、TypeScript、生产构建和浏览器新增页视觉验收。
 - 仓库绑定真实保存未验证，原因是仓库模块尚未落地；本轮只按确认范围预留 UI 和币种推导。
-- SKU 三边尺寸字段尚未实施，原因是 `product_sku` 当前只有 `weight`、没有长度/宽度/高度；已按 AGENTS 生成待确认字段方案 `docs/plans/2026-06-05-mall-product-sku-dimensions-field-plan.md`。
+- SKU 三边尺寸字段已实施；已按 AGENTS 先生成并确认字段方案 `docs/plans/2026-06-05-mall-product-sku-dimensions-field-plan.md`，随后同步后端、前端、SQL 脚本和运行库。
 
 ## 12. CodeGraph 更新结果
 
@@ -175,6 +178,7 @@ codegraph sync .
 - 首次同步成功，输出 `Synced 13 changed files`，其中 Added 12、Modified 1。
 - SQL 执行与运行态记录更新后再次同步成功，输出 `Synced 1 changed files`。
 - 本轮新增页 UI 反馈修正完成后再次执行 `codegraph sync .`，输出 `Already up to date`。
+- SKU 三边尺寸字段和文档记录补齐后再次执行 `codegraph sync .`，输出 `Already up to date`。
 
 ## 13. 大文件合理性判断结果
 

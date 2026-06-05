@@ -36,6 +36,9 @@ declare namespace API.ProductDistribution {
     sellerSkuCode?: string;
     color?: string;
     size?: string;
+    lengthValue?: string;
+    widthValue?: string;
+    heightValue?: string;
     weight?: string;
     material?: string;
     style?: string;

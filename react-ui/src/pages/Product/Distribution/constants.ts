@@ -25,7 +25,6 @@ export const sourceTypeValueEnum: ProSchemaValueEnumObj = {
 export const skuSpecFields: { label: string; value: keyof API.ProductDistribution.Sku }[] = [
   { label: '颜色', value: 'color' },
   { label: '尺寸', value: 'size' },
-  { label: '重量', value: 'weight' },
   { label: '材质', value: 'material' },
   { label: '风格', value: 'style' },
   { label: '型号', value: 'model' },
@@ -41,7 +40,6 @@ export function buildSkuSpecText(record: API.ProductDistribution.Sku) {
   return [
     record.color,
     record.size,
-    record.weight,
     record.material,
     record.style,
     record.model,
@@ -50,6 +48,59 @@ export function buildSkuSpecText(record: API.ProductDistribution.Sku) {
   ]
     .filter(Boolean)
     .join(' / ');
+}
+
+type MeasurementText = {
+  raw: string;
+  numberText?: string;
+  unit?: string;
+};
+
+function parseMeasurementText(value?: string): MeasurementText | undefined {
+  const raw = value?.trim();
+  if (!raw) return undefined;
+  const match = raw.match(/^(-?\d+(?:\.\d+)?)\s*(\D.*)?$/);
+  if (!match) return { raw };
+  return {
+    raw,
+    numberText: match[1],
+    unit: match[2]?.trim(),
+  };
+}
+
+function formatDimensionValue(item: MeasurementText, includeUnit: boolean) {
+  if (!item.numberText) return item.raw;
+  const numericValue = Number(item.numberText);
+  const formattedValue = Number.isFinite(numericValue) ? numericValue.toFixed(2) : item.numberText;
+  if (!includeUnit || !item.unit) return formattedValue;
+  return `${formattedValue} ${item.unit}`;
+}
+
+function stripTrailingZero(value: string) {
+  return value.replace(/(\.\d*?[1-9])0+$/, '$1').replace(/\.0+$/, '');
+}
+
+function formatWeightText(value?: string) {
+  const item = parseMeasurementText(value);
+  if (!item) return '';
+  if (!item.numberText) return item.raw;
+  const numericText = stripTrailingZero(item.numberText);
+  return item.unit ? `${numericText} ${item.unit}` : numericText;
+}
+
+export function buildSkuDimensionText(record: API.ProductDistribution.Sku) {
+  const dimensionValues = [record.lengthValue, record.widthValue, record.heightValue]
+    .map(parseMeasurementText)
+    .filter(Boolean) as MeasurementText[];
+  const dimensionUnits = Array.from(new Set(dimensionValues.map((item) => item.unit).filter(Boolean)));
+  const commonDimensionUnit = dimensionUnits.length === 1 ? dimensionUnits[0] : undefined;
+  const dimensionText = dimensionValues.length
+    ? `${dimensionValues
+        .map((item) => formatDimensionValue(item, !commonDimensionUnit))
+        .join(' x ')}${commonDimensionUnit ? ` ${commonDimensionUnit}` : ''}`
+    : '';
+  const weightText = formatWeightText(record.weight);
+  return [dimensionText, weightText].filter(Boolean).join(' \u00a0\u00a0 ');
 }
 
 export function formatPriceRange(min?: number, max?: number) {

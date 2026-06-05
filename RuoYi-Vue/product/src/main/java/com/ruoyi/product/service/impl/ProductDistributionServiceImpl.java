@@ -276,6 +276,9 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
         sku.setSellerSkuCode(trimToEmpty(sku.getSellerSkuCode()));
         sku.setColor(trimToEmpty(sku.getColor()));
         sku.setSize(trimToEmpty(sku.getSize()));
+        sku.setLengthValue(trimToEmpty(sku.getLengthValue()));
+        sku.setWidthValue(trimToEmpty(sku.getWidthValue()));
+        sku.setHeightValue(trimToEmpty(sku.getHeightValue()));
         sku.setWeight(trimToEmpty(sku.getWeight()));
         sku.setMaterial(trimToEmpty(sku.getMaterial()));
         sku.setStyle(trimToEmpty(sku.getStyle()));

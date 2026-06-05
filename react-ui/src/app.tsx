@@ -37,6 +37,23 @@ function clearAdminSession() {
   setRemoteMenu(null);
 }
 
+function getResponseCode(data: unknown) {
+  if (!data || typeof data !== 'object') {
+    return undefined;
+  }
+  const responseData = data as { code?: number | string; errorCode?: number | string };
+  return responseData.code ?? responseData.errorCode;
+}
+
+function isUnauthorizedCode(code: unknown) {
+  return Number(code) === 401;
+}
+
+function handleUnauthorizedResponse() {
+  clearAdminSession();
+  redirectToLogin();
+}
+
 /**
  * @see  https://umijs.org/zh-CN/plugins/plugin-initial-state
  * */
@@ -277,6 +294,12 @@ export const request: any = {
     },
   ],
   responseInterceptors: [
+    (response: any) => {
+      if (isUnauthorizedCode(getResponseCode(response?.data))) {
+        handleUnauthorizedResponse();
+      }
+      return response;
+    },
     // (response) =>
     // {
     //   // // 不再需要异步处理读取返回体内容，可直接在data中读出，部分字段可在 config 中找到

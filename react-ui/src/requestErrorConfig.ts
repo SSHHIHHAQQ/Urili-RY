@@ -1,7 +1,33 @@
 import type { RequestOptions } from '@@/plugin-request/request';
 import type { RequestConfig } from '@umijs/max';
-import { getIntl } from '@umijs/max';
+import { getIntl, history } from '@umijs/max';
 import { message, notification } from '@/utils/feedback';
+import { clearSessionToken } from '@/access';
+import { PageEnum } from '@/enums/pagesEnums';
+
+const PORTAL_ROUTE_PREFIXES = ['/seller/direct-login', '/buyer/direct-login', '/seller/portal', '/buyer/portal'];
+
+function isPortalRoute(pathname?: string) {
+  return PORTAL_ROUTE_PREFIXES.some((prefix) => pathname === prefix || pathname?.startsWith(`${prefix}/`));
+}
+
+function redirectToLogin() {
+  const { pathname, search, hash } = history.location;
+  if (pathname === PageEnum.LOGIN || isPortalRoute(pathname)) {
+    return;
+  }
+  const redirect = `${pathname}${search || ''}${hash || ''}`;
+  history.replace(`${PageEnum.LOGIN}?redirect=${encodeURIComponent(redirect)}`);
+}
+
+function isUnauthorizedCode(code: unknown) {
+  return Number(code) === 401;
+}
+
+function handleUnauthorized() {
+  clearSessionToken();
+  redirectToLogin();
+}
 
 // 错误处理方案： 错误类型
 enum ErrorShowType {
@@ -47,6 +73,10 @@ export const errorConfig: RequestConfig = {
         const errorInfo: ResponseStructure | undefined = error.info;
         if (errorInfo) {
           const { errorMessage, errorCode } = errorInfo;
+          if (isUnauthorizedCode(errorCode)) {
+            handleUnauthorized();
+            return;
+          }
           switch (errorInfo.showType) {
             case ErrorShowType.SILENT:
               // do nothing
@@ -64,7 +94,7 @@ export const errorConfig: RequestConfig = {
               });
               break;
             case ErrorShowType.REDIRECT:
-              window.location.href = '/user/login';
+              handleUnauthorized();
               break;
             default:
               message.error(errorMessage);
@@ -73,6 +103,10 @@ export const errorConfig: RequestConfig = {
       } else if (error.response) {
         // Axios 的错误
         // 请求成功发出且服务器也响应了状态码，但状态代码超出了 2xx 的范围
+        if (isUnauthorizedCode(error.response.status)) {
+          handleUnauthorized();
+          return;
+        }
         message.error(`Response status:${error.response.status}`);
       } else if (typeof navigator !== 'undefined' && !navigator.onLine) {
         message.error(

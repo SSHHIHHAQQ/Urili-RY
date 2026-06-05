@@ -25,6 +25,8 @@ public interface ProductConfigMapper
 
     int countCategoryAttributes(@Param("categoryId") Long categoryId);
 
+    List<Long> selectCategoryDescendantIds(@Param("categoryId") Long categoryId);
+
     int insertCategory(ProductCategory category);
 
     int updateCategory(ProductCategory category);
@@ -51,6 +53,8 @@ public interface ProductConfigMapper
     int deleteAttributeById(@Param("attributeId") Long attributeId, @Param("updateBy") String updateBy);
 
     int countAttributeCategoryBindings(@Param("attributeId") Long attributeId);
+
+    List<Long> selectCategoryIdsByAttributeId(@Param("attributeId") Long attributeId);
 
     List<ProductAttributeOption> selectOptionList(@Param("attributeId") Long attributeId);
 

@@ -144,6 +144,8 @@
   - SPU 详情内容统一通过 `detailContent.ts` 序列化为 `product_spu.detail_content` JSON，当前支持文本段落、图片模块、图文模块和参数表模块；新增/编辑页和详情预览必须复用同一套解析逻辑。
   - 详情模块里的图片 URL 随 `detail_content` JSON 保存；后续若需要详情图独立审核、排序或素材复用，再单独设计详情图片存储，不要临时拆出并行逻辑。
   - SKU 录入优先使用“固定规格字段选择 -> 规格值 -> 生成 SKU 矩阵 -> 表格补充价格/图片/状态”的页面模式；固定规格字段仍落 `product_sku` 固定字段，不另建规格模板表。
+  - SKU 三边尺寸和重量属于 SKU 级物流/包装属性，固定展示在 SKU 表格中；`length_value`、`width_value`、`height_value`、`weight` 均为可填写单位的字符串，不进入“规格属性”勾选区，也不参与 SKU 矩阵组合生成。
+  - SKU 尺寸重量在列表和详情中按紧凑格式展示，例如 `42.00 x 42.00 x 17.00 cm   920 g`；不要展示成 `长 42cm / 宽 42cm / 高 17cm / 重 920g` 这类标签串。
   - SKU 表批量供货价、销售价输入框保持足够宽度，避免为了压缩表格把价格录入框做成不可用的小块。
   - 发货仓库当前只做 SPU 维度 UI 预留和币种推导，不保存仓库绑定；未选仓库时 SKU 币种列只显示 `-`，不要在表格内反复提示。
   - 库存首版只保留读取边界；后续库存数量、仓库拆分和库存流水必须进入 `inventory` 模块，不写入 `product_sku`。
@@ -191,6 +193,32 @@
   - 当前权限 seed 会授予 active 端内角色；如果后续改成明确角色清单，必须同步更新 SQL 执行记录和本台账。
   - 后续维护 seller/buyer 端同构接口时，只替换 terminal、路径、权限点、日志 title、seed 表名和验证主体，不重新设计。
   - seller/buyer facade 已按各自 terminal 模块收口；后续维护只复制端入口配置，不复制 product schema 计算。
+
+### 卖家端我的商城商品只读后端模板
+
+- 位置：
+  - `RuoYi-Vue/seller/src/main/java/com/ruoyi/seller/controller/SellerPortalProductDistributionController.java`
+  - `RuoYi-Vue/seller/src/main/java/com/ruoyi/seller/service/ISellerPortalProductService.java`
+  - `RuoYi-Vue/seller/src/main/java/com/ruoyi/seller/service/impl/SellerPortalProductServiceImpl.java`
+  - `RuoYi-Vue/seller/src/main/java/com/ruoyi/seller/domain/SellerPortalProduct.java`
+  - `RuoYi-Vue/seller/src/main/java/com/ruoyi/seller/domain/SellerPortalProductSku.java`
+  - `RuoYi-Vue/seller/src/test/java/com/ruoyi/seller/service/impl/SellerPortalProductServiceImplTest.java`
+  - `RuoYi-Vue/sql/seller_buyer_management_seed.sql`
+- 当前用途：
+  - 作为 seller 端真实业务接口的数据范围控制标准模板。
+  - 提供卖家端自己的商城商品列表、详情和 SKU 只读接口。
+  - 端入口放在 `seller` 模块，实际只读消费 `product` 共享模块的 `IProductDistributionService`；`product` 模块不承载 `/seller/**` 路由。
+  - 当前只完成 seller 模板，buyer 不在本切片复制；待卖家验收通过后，再按同构规则复制买家或单独设计买家浏览口径。
+- 复用规则：
+  - 列表、详情和 SKU 查询的数据范围必须来自 `PortalSessionContext.requireSession("seller")` 得到的 `PortalLoginSession.subjectId`，不得信任前端传入的 `sellerId`、`subjectId`、`accountId` 或 `terminal`。
+  - Service 必须创建新的查询对象并写入当前 `sellerId`；不得直接修改或透传前端提交的 `ProductSpu` 查询对象。
+  - 允许复制的列表筛选字段仅限业务筛选字段，例如 `keyword`、`sellerSpuCode`、`sellerSkuCode`、`productName`、`productNameEn`、`categoryId`、`spuStatus`；`systemSpuCode`、`systemSkuCode`、`sourceType` 等管理端或系统字段不得作为 seller 端范围来源。
+  - 列表 DTO 转换必须保留 PageHelper 分页元数据，避免 `getDataTable(...)` 只能读到当前页条数。
+  - 详情和 SKU 列表必须先读取商品并校验 `product.sellerId == session.subjectId`；不属于当前卖家的商品统一按“商城商品不存在”处理。
+  - seller 端响应使用 `SellerPortalProduct` / `SellerPortalProductSku` DTO，不直接返回 `ProductSpu` / `ProductSku`，避免把 `sellerId`、系统 SPU/SKU、`BaseEntity` 审计字段或后台范围字段作为端内 API 标准。
+  - 端入口必须使用方法级 `@Anonymous` + `@PortalPreAuthorize(terminal = "seller", hasPermi = "...")` + `@PortalLog(terminal = "seller", ...)`，并继续受 `TerminalRouteOwnershipTest` 和 `TerminalSeedPermissionContractTest` 约束。
+  - 当前权限点为 `seller:product:distribution:list` 和 `seller:product:distribution:query`，只读 seed 已写入 `seller_menu` 和 active seller role 授权；本切片没有执行远程数据库 DDL/DML。
+  - buyer 端后续如果复制该模板，只能替换 terminal、路径、权限前缀、日志 title、service 名称、DTO 名称和测试名；不能把 seller 商品拥有关系机械改成 buyer 拥有关系，买家浏览商品的可见性规则需要单独确认。
 
 ### 端内 Controller 鉴权模板守卫
 
@@ -799,6 +827,7 @@
   - 端内当前账号会话接口必须从 `PortalSessionContext.requireSession(...)` 推导 `subjectId` 和 `accountId`，不允许前端传主体 ID 或账号 ID 扩大查询范围。
   - 响应不得返回 `tokenId`、JWT、Redis key、密码密文或其他敏感字段。
   - `PortalSessionProfile.tokenId` 只允许后端内部用于判断 `current`，必须保持不输出给前端。
+  - `PortalSessionProfileTest` 固定 `tokenId` JSON 脱敏契约；后续调整会话 DTO 或复用该响应对象时必须保持该测试通过。
   - 当前账号会话接口分页最大 `pageSize` 为 100；后续如抽公共端内分页工具，应保留该上限。
   - 管理端强制踢出继续使用管理端 session 接口；端内当前账号会话接口只读，不承担踢出能力。
 
@@ -813,12 +842,16 @@
   - 卖家端、买家端预留独立 token key：`seller_*` / `buyer_*`。
   - `portal/session.ts` 统一封装卖家端、买家端登录、免密登录、主动退出、修改当前账号密码、`getInfo`、`getRouters`、主体资料、当前账号资料、端内账号只读列表、端内部门只读列表、端内角色只读列表、当前账号日志只读接口和当前账号会话只读接口。
   - `scripts/check-portal-token-isolation.mjs` 作为前端端内 token 静态守卫，已接入 `npm run lint`。
+  - `scripts/check-portal-token-isolation.mjs` 同时作为前端 portal 请求身份范围参数静态守卫，防止 portal 页面或 service 绕过端 token，把 `sellerId`、`buyerId`、`subjectId`、`accountId`、`sellerAccountId`、`buyerAccountId` 等客户端身份范围字段作为请求参数发送。
 - 复用规则：
   - 后续三端物理拆分时，卖家端、买家端前端优先复用 `setTerminalSessionToken`、`getTerminalAccessToken`、`clearTerminalSessionToken`，不要重新设计 localStorage key。
   - 后续端内页面调用当前账号、主体资料、菜单、权限和退出登录时，优先复用 `sellerPortalSessionService` / `buyerPortalSessionService` 或底层 `portal*` 方法，不要在页面里直接拼 `/seller` / `/buyer` 路径。
   - `portal/session.ts` 的登录、免密登录和端内请求必须显式设置 `isToken: false`，避免全局请求拦截器注入管理端 token。
   - `persistPortalLogin(result, expectedTerminal)` 必须校验后端返回 `terminal` 与当前 URL 端类型一致；不一致时清理相关端内 token 并返回失败，不能把 seller token 写入 buyer key，也不能写入管理端 `access_token`。
   - `src/pages/Portal/**` 和 `src/services/portal/**` 禁止调用管理端 `getAccessToken`、`setSessionToken`、`clearSessionToken`，也不得出现裸 `access_token` / `portal_login_token`；新增端内前端能力后必须运行 `npm run guard:portal-token`。
+  - `src/pages/Portal/**` 不得直接调用 `request(...)` 或硬编码 `/api/seller`、`/api/buyer`；页面必须通过 `PORTAL_SERVICE` 或 `@/services/portal/session` 统一出口调用端内接口。
+  - 受保护 portal 请求不得把 `sellerId`、`buyerId`、`subjectId`、`accountId`、`sellerAccountId`、`buyerAccountId` 作为 query/body/request params 发送；`terminal` 只允许作为前端本地端类型选择、URL 判断、`persistPortalLogin(..., expectedTerminal)` 和 `getTerminalAccessToken(terminal)` 的本地参数。
+  - `portal/session.ts` 的日志和会话查询必须使用 `sanitizePortalQueryParams(params)` 清洗参数；分页、日志安全筛选和商品 `categoryId` 这类业务参数可以保留，但端内数据范围必须由端 token 和后端 `PortalSessionContext` 推导。
   - 后续端内安全设置或个人中心修改密码时，优先调用 `sellerPortalSessionService.updatePassword` / `buyerPortalSessionService.updatePassword`；页面不要传主体 ID、账号 ID，也不要持久化旧密码、新密码或确认密码。
   - 后续端内安全中心或个人中心展示当前账号会话时，优先调用 `sellerPortalSessionService.getSessions` / `buyerPortalSessionService.getSessions`；页面不要传主体 ID、账号 ID、`tokenId` 或 Redis key。
 
@@ -1023,6 +1056,17 @@
 - 复用规则：
   - 后续领星相关同步能力继续从该适配器扩展，不要在 Service、Controller 或 Mapper XML 中散落签名和 HTTP 调用逻辑。
   - 如果新增订单、库存、费用等领域能力，适配器只返回外部响应，业务事实落库必须经过对应业务模块。
+
+### UpstreamSystemTask
+
+- 位置：`RuoYi-Vue/integration/src/main/java/com/ruoyi/integration/task/UpstreamSystemTask.java`
+- 当前用途：
+  - 作为若依 Quartz 的上游系统定时任务入口。
+  - `upstreamSystemTask.syncSkus` 每 10 分钟同步已启用领星主仓的 SKU 清单。
+  - 复用 `IUpstreamSystemService.syncSkusOnly`，不新增第二套领星签名、请求日志或 SKU 落库逻辑。
+- 复用规则：
+  - 后续上游系统定时任务优先挂到该 task 或同模块 task，不要在前端、Controller 或独立线程里轮询外部系统。
+  - 定时任务登记使用若依 `sys_job`，让“系统监控 / 定时任务”统一启停、手动执行和查看日志。
 
 ### 上游系统 React 页面组件
 
