@@ -68,9 +68,13 @@ public class ProductConfigImportService
         {
             return checkResult;
         }
-        ProductImportResult importResult = processCategories(rows, updateSupport, false);
-        assertActualPassed(importResult);
-        return importResult;
+        try (ProductConfigChangeContext.Scope ignored =
+            ProductConfigChangeContext.useActionSource(ProductConfigChangeContext.SOURCE_IMPORT))
+        {
+            ProductImportResult importResult = processCategories(rows, updateSupport, false);
+            assertActualPassed(importResult);
+            return importResult;
+        }
     }
 
     public ProductImportResult previewAttributes(List<ProductAttributeImportRow> rows, boolean updateSupport)
@@ -86,9 +90,13 @@ public class ProductConfigImportService
         {
             return checkResult;
         }
-        ProductImportResult importResult = processAttributes(rows, updateSupport, false);
-        assertActualPassed(importResult);
-        return importResult;
+        try (ProductConfigChangeContext.Scope ignored =
+            ProductConfigChangeContext.useActionSource(ProductConfigChangeContext.SOURCE_IMPORT))
+        {
+            ProductImportResult importResult = processAttributes(rows, updateSupport, false);
+            assertActualPassed(importResult);
+            return importResult;
+        }
     }
 
     public ProductImportResult previewOptions(List<ProductAttributeOptionImportRow> rows, boolean updateSupport)
@@ -104,9 +112,13 @@ public class ProductConfigImportService
         {
             return checkResult;
         }
-        ProductImportResult importResult = processOptions(rows, updateSupport, false);
-        assertActualPassed(importResult);
-        return importResult;
+        try (ProductConfigChangeContext.Scope ignored =
+            ProductConfigChangeContext.useActionSource(ProductConfigChangeContext.SOURCE_IMPORT))
+        {
+            ProductImportResult importResult = processOptions(rows, updateSupport, false);
+            assertActualPassed(importResult);
+            return importResult;
+        }
     }
 
     private ProductImportResult processCategories(List<ProductCategoryImportRow> rows, boolean updateSupport,
@@ -408,7 +420,7 @@ public class ProductConfigImportService
             }
             if (attribute.getValuePrecision() != null && attribute.getValuePrecision() != 0)
             {
-                throw new ServiceException("只有 NUMBER 属性才允许填写数值精度");
+                throw new ServiceException("只有 NUMBER 属性才允许填写小数位数");
             }
             attribute.setUnit("");
             attribute.setValuePrecision(0);
@@ -420,7 +432,7 @@ public class ProductConfigImportService
         }
         if (attribute.getValuePrecision() < 0 || attribute.getValuePrecision() > 8)
         {
-            throw new ServiceException("NUMBER 属性的数值精度必须在 0 到 8 之间");
+            throw new ServiceException("NUMBER 属性的小数位数必须在 0 到 8 之间");
         }
     }
 

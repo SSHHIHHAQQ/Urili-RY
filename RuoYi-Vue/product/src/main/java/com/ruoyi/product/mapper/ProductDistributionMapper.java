@@ -2,6 +2,7 @@ package com.ruoyi.product.mapper;
 
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
+import java.math.BigDecimal;
 import com.ruoyi.product.domain.ProductAttributeValue;
 import com.ruoyi.product.domain.ProductImage;
 import com.ruoyi.product.domain.ProductSku;
@@ -26,10 +27,15 @@ public interface ProductDistributionMapper
 
     int updateSpuStatus(@Param("spuId") Long spuId, @Param("status") String status, @Param("updateBy") String updateBy);
 
+    int updateSpuControlStatus(@Param("spuId") Long spuId, @Param("controlStatus") String controlStatus,
+        @Param("reason") String reason, @Param("updateBy") String updateBy);
+
     int countSystemSpuCode(@Param("systemSpuCode") String systemSpuCode);
 
     int countSellerSpuCode(@Param("sellerId") Long sellerId, @Param("sellerSpuCode") String sellerSpuCode,
         @Param("excludeSpuId") Long excludeSpuId);
+
+    List<ProductSku> selectSkuPageList(ProductSku query);
 
     List<ProductSku> selectSkuListBySpuId(@Param("spuId") Long spuId);
 
@@ -42,6 +48,12 @@ public interface ProductDistributionMapper
     int updateSku(ProductSku sku);
 
     int updateSkuStatus(@Param("skuId") Long skuId, @Param("status") String status, @Param("updateBy") String updateBy);
+
+    int updateSkuControlStatus(@Param("skuId") Long skuId, @Param("controlStatus") String controlStatus,
+        @Param("reason") String reason, @Param("updateBy") String updateBy);
+
+    int updateSkuSalePrice(@Param("skuId") Long skuId, @Param("salePrice") BigDecimal salePrice,
+        @Param("updateBy") String updateBy);
 
     int deleteSkusBySpuId(@Param("spuId") Long spuId, @Param("updateBy") String updateBy);
 

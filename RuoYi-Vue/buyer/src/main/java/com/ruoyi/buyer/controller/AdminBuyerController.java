@@ -123,6 +123,23 @@ public class AdminBuyerController extends BaseController
         return toAjax(buyerService.updateBuyerAccount(buyerId, account));
     }
 
+    @PreAuthorize("@ss.hasPermi('buyer:admin:account:lock')")
+    @Log(title = "买家账号锁定", businessType = BusinessType.UPDATE)
+    @PutMapping("/{buyerId}/accounts/{accountId}/lock")
+    public AjaxResult lockAccount(@PathVariable("buyerId") Long buyerId, @PathVariable("accountId") Long accountId,
+            @RequestBody(required = false) BuyerAccount account)
+    {
+        return toAjax(buyerService.lockBuyerAccount(buyerId, accountId, account == null ? null : account.getLockReason()));
+    }
+
+    @PreAuthorize("@ss.hasPermi('buyer:admin:account:lock')")
+    @Log(title = "买家账号解锁", businessType = BusinessType.UPDATE)
+    @PutMapping("/{buyerId}/accounts/{accountId}/unlock")
+    public AjaxResult unlockAccount(@PathVariable("buyerId") Long buyerId, @PathVariable("accountId") Long accountId)
+    {
+        return toAjax(buyerService.unlockBuyerAccount(buyerId, accountId));
+    }
+
     @PreAuthorize("@ss.hasPermi('buyer:admin:account:resetPwd')")
     @Log(title = "买家账号", businessType = BusinessType.UPDATE)
     @PutMapping("/accounts/resetPwd")

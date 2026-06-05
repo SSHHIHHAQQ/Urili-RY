@@ -6,6 +6,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Date;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import com.ruoyi.common.core.redis.RedisCache;
@@ -77,7 +78,6 @@ public class PortalDirectLoginSupport
         ticketMapper.insertPortalDirectLoginTicket(ticket);
 
         PortalDirectLoginToken payload = new PortalDirectLoginToken();
-        payload.setToken(token);
         payload.setTicketId(ticket.getTicketId());
         payload.setPortalType(portalType);
         payload.setPartnerId(partnerId);
@@ -88,7 +88,7 @@ public class PortalDirectLoginSupport
         payload.setCreateTime(now);
         payload.setExpireTime(expireTime);
 
-        redisCache.setCacheObject(CACHE_PREFIX + token, payload, EXPIRE_MINUTES, TimeUnit.MINUTES);
+        redisCache.setCacheObject(cacheKey(tokenHash), payload, EXPIRE_MINUTES, TimeUnit.MINUTES);
 
         PortalDirectLoginResult result = new PortalDirectLoginResult();
         result.setToken(token);
@@ -103,15 +103,25 @@ public class PortalDirectLoginSupport
 
     public PortalDirectLoginToken consumeToken(String portalType, String token)
     {
+        return consumeToken(portalType, token, null);
+    }
+
+    public PortalDirectLoginToken consumeToken(String portalType, String token, Consumer<PortalDirectLoginToken> validator)
+    {
         if (StringUtils.isBlank(token))
         {
             throw new ServiceException("免密登录 token 不能为空");
         }
 
         Date now = new Date();
-        String cacheKey = CACHE_PREFIX + token;
-        PortalDirectLoginTicket ticket = loadUsableTicket(portalType, token, now, cacheKey);
+        String tokenHash = hashToken(token);
+        String cacheKey = cacheKey(tokenHash);
+        PortalDirectLoginTicket ticket = loadUsableTicket(portalType, tokenHash, now, cacheKey);
         PortalDirectLoginToken payload = loadUsablePayload(portalType, cacheKey, ticket, now);
+        if (validator != null)
+        {
+            validator.accept(payload);
+        }
 
         if (ticketMapper.markPortalDirectLoginTicketUsed(ticket.getTicketId(), now, IpUtils.getIpAddr(), SYSTEM_OPERATOR) <= 0)
         {
@@ -123,9 +133,9 @@ public class PortalDirectLoginSupport
         return payload;
     }
 
-    private PortalDirectLoginTicket loadUsableTicket(String portalType, String token, Date now, String cacheKey)
+    private PortalDirectLoginTicket loadUsableTicket(String portalType, String tokenHash, Date now, String cacheKey)
     {
-        PortalDirectLoginTicket ticket = ticketMapper.selectPortalDirectLoginTicketByTokenHash(hashToken(token));
+        PortalDirectLoginTicket ticket = ticketMapper.selectPortalDirectLoginTicketByTokenHash(tokenHash);
         if (ticket == null)
         {
             throw new ServiceException("免密登录票据不存在");
@@ -215,6 +225,11 @@ public class PortalDirectLoginSupport
         {
             throw new ServiceException("免密登录 token 哈希失败");
         }
+    }
+
+    private String cacheKey(String tokenHash)
+    {
+        return CACHE_PREFIX + tokenHash;
     }
 
     private String normalizeReason(String reason)

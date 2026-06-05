@@ -72,6 +72,22 @@ export async function updateAdminBuyerAccount(buyerId: number, data: API.Partner
   });
 }
 
+export async function lockAdminBuyerAccount(buyerId: number, buyerAccountId: number, lockReason: string) {
+  return request<API.Result>(`/api/buyer/admin/buyers/${buyerId}/accounts/${buyerAccountId}/lock`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json;charset=UTF-8',
+    },
+    data: { lockReason },
+  });
+}
+
+export async function unlockAdminBuyerAccount(buyerId: number, buyerAccountId: number) {
+  return request<API.Result>(`/api/buyer/admin/buyers/${buyerId}/accounts/${buyerAccountId}/unlock`, {
+    method: 'PUT',
+  });
+}
+
 export async function getAdminBuyerAccountRoles(buyerId: number, buyerAccountId: number) {
   return request<API.Partner.PortalAccountRoleResult>(`/api/buyer/admin/buyers/${buyerId}/accounts/${buyerAccountId}/roles`, {
     method: 'GET',

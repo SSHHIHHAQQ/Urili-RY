@@ -24,6 +24,10 @@ public class TerminalRouteOwnershipTest
     private static final Pattern PUBLIC_METHOD = Pattern.compile("public\\s+[^\\(]+\\s+(\\w+)\\s*\\(");
     private static final Pattern CLIENT_IDENTITY_PARAMETER = Pattern.compile(
             "\\b(?:sellerId|buyerId|subjectId|accountId|terminal)\\b");
+    private static final Pattern ADMIN_LOGIN_CONTEXT_REFERENCE = Pattern.compile(
+            "\\bSecurityUtils\\s*\\.\\s*(?:getLoginUser|getUserId|getUsername)\\s*\\("
+                    + "|(?<![\\.\\w])(?:getLoginUser|getUserId|getUsername)\\s*\\("
+                    + "|\\bLoginUser\\b|\\bSysUser\\b");
 
     @Test
     public void productModuleMustNotExposeSellerOrBuyerPortalRoutes() throws IOException
@@ -67,6 +71,18 @@ public class TerminalRouteOwnershipTest
     public void buyerPortalHandlersMustNotAcceptClientIdentityScope() throws IOException
     {
         assertPortalHandlersDoNotAcceptClientIdentityScope("buyer");
+    }
+
+    @Test
+    public void sellerPortalHandlersMustNotUseAdminLoginContext() throws IOException
+    {
+        assertPortalHandlersDoNotUseAdminLoginContext("seller");
+    }
+
+    @Test
+    public void buyerPortalHandlersMustNotUseAdminLoginContext() throws IOException
+    {
+        assertPortalHandlersDoNotUseAdminLoginContext("buyer");
     }
 
     private void assertPortalHandlersUseSecurityTemplate(String terminal) throws IOException
@@ -144,6 +160,42 @@ public class TerminalRouteOwnershipTest
         if (!violations.isEmpty())
         {
             fail(terminal + " portal handlers must not accept client-provided identity scope:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    private void assertPortalHandlersDoNotUseAdminLoginContext(String terminal) throws IOException
+    {
+        Path backendRoot = findBackendRoot();
+        List<String> violations = new ArrayList<>();
+        List<Path> controllers = discoverProtectedPortalControllers(backendRoot, terminal);
+
+        if (controllers.isEmpty())
+        {
+            violations.add(terminal + " module must have protected portal controllers");
+        }
+
+        for (Path path : controllers)
+        {
+            String source = Files.readString(path, StandardCharsets.UTF_8);
+            String relativePath = backendRoot.relativize(path).toString();
+            List<HandlerMethod> handlers = extractHandlerMethods(source);
+
+            for (HandlerMethod handler : handlers)
+            {
+                Matcher matcher = ADMIN_LOGIN_CONTEXT_REFERENCE.matcher(handler.body);
+                if (matcher.find())
+                {
+                    violations.add(relativePath + "#" + handler.name
+                            + " must not use RuoYi admin login context `" + matcher.group()
+                            + "`; derive terminal actor from PortalSessionContext instead");
+                }
+            }
+        }
+
+        if (!violations.isEmpty())
+        {
+            fail(terminal + " portal handlers must not use admin login context:\n"
                     + String.join("\n", violations));
         }
     }

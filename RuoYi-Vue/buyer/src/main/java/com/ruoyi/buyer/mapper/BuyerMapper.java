@@ -41,6 +41,10 @@ public interface BuyerMapper
 
     public int updateBuyerAccount(BuyerAccount account);
 
+    public int updateBuyerAccountLockStatus(@Param("buyerId") Long buyerId, @Param("buyerAccountId") Long buyerAccountId,
+            @Param("lockStatus") String lockStatus, @Param("lockReason") String lockReason,
+            @Param("updateBy") String updateBy);
+
     public int resetBuyerAccountPassword(@Param("buyerAccountId") Long buyerAccountId, @Param("password") String password,
             @Param("updateBy") String updateBy);
 

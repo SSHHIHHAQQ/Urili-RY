@@ -52,8 +52,12 @@ public class PermissionServiceAccountPermissionTest
         assertFalse(permissionService.hasPermi("seller:admin:account:add"));
         assertFalse(permissionService.hasPermi("seller:admin:account:edit"));
         assertFalse(permissionService.hasPermi("seller:admin:account:resetPwd"));
+        assertFalse(permissionService.hasPermi("seller:admin:account:lock"));
         assertFalse(permissionService.hasPermi("seller:admin:account:role:query"));
         assertFalse(permissionService.hasPermi("seller:admin:account:role:edit"));
+        assertFalse(permissionService.hasPermi("seller:admin:forceLogout"));
+        assertFalse(permissionService.hasPermi("seller:admin:directLogin"));
+        assertFalse(permissionService.hasPermi("seller:admin:ticket:list"));
     }
 
     @Test
@@ -71,8 +75,12 @@ public class PermissionServiceAccountPermissionTest
         assertFalse(permissionService.hasPermi("buyer:admin:account:add"));
         assertFalse(permissionService.hasPermi("buyer:admin:account:edit"));
         assertFalse(permissionService.hasPermi("buyer:admin:account:resetPwd"));
+        assertFalse(permissionService.hasPermi("buyer:admin:account:lock"));
         assertFalse(permissionService.hasPermi("buyer:admin:account:role:query"));
         assertFalse(permissionService.hasPermi("buyer:admin:account:role:edit"));
+        assertFalse(permissionService.hasPermi("buyer:admin:forceLogout"));
+        assertFalse(permissionService.hasPermi("buyer:admin:directLogin"));
+        assertFalse(permissionService.hasPermi("buyer:admin:ticket:list"));
     }
 
     @Test
@@ -83,6 +91,7 @@ public class PermissionServiceAccountPermissionTest
                 "seller:admin:account:add",
                 "seller:admin:account:edit",
                 "seller:admin:account:resetPwd",
+                "seller:admin:account:lock",
                 "seller:admin:account:role:query",
                 "seller:admin:account:role:edit");
 
@@ -90,9 +99,61 @@ public class PermissionServiceAccountPermissionTest
         assertTrue(permissionService.hasPermi("seller:admin:account:add"));
         assertTrue(permissionService.hasPermi("seller:admin:account:edit"));
         assertTrue(permissionService.hasPermi("seller:admin:account:resetPwd"));
+        assertTrue(permissionService.hasPermi("seller:admin:account:lock"));
         assertTrue(permissionService.hasPermi("seller:admin:account:role:query"));
         assertTrue(permissionService.hasPermi("seller:admin:account:role:edit"));
         assertFalse(permissionService.hasPermi("buyer:admin:account:list"));
+        assertFalse(permissionService.hasPermi("buyer:admin:account:lock"));
+        assertFalse(permissionService.hasPermi("seller:admin:forceLogout"));
+        assertFalse(permissionService.hasPermi("buyer:admin:forceLogout"));
+        assertFalse(permissionService.hasPermi("seller:admin:directLogin"));
+        assertFalse(permissionService.hasPermi("seller:admin:ticket:list"));
+        assertFalse(permissionService.hasPermi("buyer:admin:directLogin"));
+        assertFalse(permissionService.hasPermi("buyer:admin:ticket:list"));
+    }
+
+    @Test
+    public void exactForceLogoutPermissionsAllowOnlyTheirOwnTerminalSessions()
+    {
+        setAdminPermissions("seller:admin:forceLogout");
+
+        assertTrue(permissionService.hasPermi("seller:admin:forceLogout"));
+        assertFalse(permissionService.hasPermi("buyer:admin:forceLogout"));
+        assertFalse(permissionService.hasPermi("seller:admin:account:list"));
+        assertFalse(permissionService.hasPermi("seller:admin:account:lock"));
+        assertFalse(permissionService.hasPermi("seller:admin:directLogin"));
+        assertFalse(permissionService.hasPermi("seller:admin:ticket:list"));
+    }
+
+    @Test
+    public void exactDirectLoginPermissionsAllowOnlyTheirOwnTerminalDirectLoginAndTicketAudit()
+    {
+        setAdminPermissions("seller:admin:directLogin", "seller:admin:ticket:list");
+
+        assertTrue(permissionService.hasPermi("seller:admin:directLogin"));
+        assertTrue(permissionService.hasPermi("seller:admin:ticket:list"));
+        assertFalse(permissionService.hasPermi("buyer:admin:directLogin"));
+        assertFalse(permissionService.hasPermi("buyer:admin:ticket:list"));
+        assertFalse(permissionService.hasPermi("seller:admin:account:resetPwd"));
+        assertFalse(permissionService.hasPermi("seller:admin:account:lock"));
+        assertFalse(permissionService.hasPermi("seller:admin:forceLogout"));
+    }
+
+    @Test
+    public void accountAndSessionPermissionsDoNotGrantDirectLogin()
+    {
+        setAdminPermissions(
+                "seller:admin:account:resetPwd",
+                "seller:admin:account:lock",
+                "seller:admin:forceLogout");
+
+        assertTrue(permissionService.hasPermi("seller:admin:account:resetPwd"));
+        assertTrue(permissionService.hasPermi("seller:admin:account:lock"));
+        assertTrue(permissionService.hasPermi("seller:admin:forceLogout"));
+        assertFalse(permissionService.hasPermi("seller:admin:directLogin"));
+        assertFalse(permissionService.hasPermi("seller:admin:ticket:list"));
+        assertFalse(permissionService.hasPermi("buyer:admin:directLogin"));
+        assertFalse(permissionService.hasPermi("buyer:admin:ticket:list"));
     }
 
     @Test
@@ -101,9 +162,17 @@ public class PermissionServiceAccountPermissionTest
         setAdminPermissions(Constants.ALL_PERMISSION);
 
         assertTrue(permissionService.hasPermi("seller:admin:account:list"));
+        assertTrue(permissionService.hasPermi("seller:admin:account:lock"));
         assertTrue(permissionService.hasPermi("seller:admin:account:role:edit"));
+        assertTrue(permissionService.hasPermi("seller:admin:forceLogout"));
+        assertTrue(permissionService.hasPermi("seller:admin:directLogin"));
+        assertTrue(permissionService.hasPermi("seller:admin:ticket:list"));
         assertTrue(permissionService.hasPermi("buyer:admin:account:list"));
+        assertTrue(permissionService.hasPermi("buyer:admin:account:lock"));
         assertTrue(permissionService.hasPermi("buyer:admin:account:role:edit"));
+        assertTrue(permissionService.hasPermi("buyer:admin:forceLogout"));
+        assertTrue(permissionService.hasPermi("buyer:admin:directLogin"));
+        assertTrue(permissionService.hasPermi("buyer:admin:ticket:list"));
     }
 
     private void setAdminPermissions(String... permissions)

@@ -23,6 +23,7 @@ import com.ruoyi.product.domain.ProductAttributeOption;
 import com.ruoyi.product.domain.ProductCategory;
 import com.ruoyi.product.domain.ProductCategoryAttribute;
 import com.ruoyi.product.mapper.ProductConfigMapper;
+import com.ruoyi.product.service.ProductConfigChangeLogService;
 import com.ruoyi.product.service.IProductConfigService;
 
 /**
@@ -68,6 +69,8 @@ public class ProductConfigServiceImpl implements IProductConfigService
     private RedisCache redisCache;
     @Autowired
     private ProductConfigMapper productConfigMapper;
+    @Autowired
+    private ProductConfigChangeLogService changeLogService;
 
     @Override
     public List<ProductCategory> selectCategoryList(ProductCategory query)
@@ -125,7 +128,13 @@ public class ProductConfigServiceImpl implements IProductConfigService
         category.setPublishEnabled(YES);
         String username = currentUsername();
         category.setCreateBy(username);
+        category.setUpdateBy(username);
         int rows = productConfigMapper.insertCategory(category);
+        if (rows > 0)
+        {
+            changeLogService.recordCategory(ProductConfigChangeLogService.ACTION_CREATE, null,
+                productConfigMapper.selectCategoryById(category.getCategoryId()));
+        }
         if (parent != null)
         {
             productConfigMapper.updateCategoryPublishEnabled(parent.getCategoryId(), NO, username);
@@ -158,6 +167,11 @@ public class ProductConfigServiceImpl implements IProductConfigService
         category.setPublishEnabled(derivedPublishEnabled(category.getCategoryId()));
         category.setUpdateBy(currentUsername());
         int rows = productConfigMapper.updateCategory(category);
+        if (rows > 0)
+        {
+            changeLogService.recordCategory(ProductConfigChangeLogService.ACTION_UPDATE, current,
+                productConfigMapper.selectCategoryById(category.getCategoryId()));
+        }
         invalidateSchemaByCategoryId(category.getCategoryId());
         return rows;
     }
@@ -178,6 +192,10 @@ public class ProductConfigServiceImpl implements IProductConfigService
         String username = currentUsername();
         invalidateSchemaByCategoryId(categoryId);
         int rows = productConfigMapper.deleteCategoryById(categoryId, username);
+        if (rows > 0)
+        {
+            changeLogService.recordCategory(ProductConfigChangeLogService.ACTION_DELETE, category, null);
+        }
         Long parentId = category.getParentId();
         if (parentId != null && parentId.longValue() != ROOT_PARENT_ID
             && productConfigMapper.countChildCategories(parentId) == 0)
@@ -220,8 +238,15 @@ public class ProductConfigServiceImpl implements IProductConfigService
         {
             throw new ServiceException("商品属性编码已存在");
         }
-        attribute.setCreateBy(currentUsername());
+        String username = currentUsername();
+        attribute.setCreateBy(username);
+        attribute.setUpdateBy(username);
         int rows = productConfigMapper.insertAttribute(attribute);
+        if (rows > 0)
+        {
+            changeLogService.recordAttribute(ProductConfigChangeLogService.ACTION_CREATE, null,
+                selectAttributeById(attribute.getAttributeId()));
+        }
         return rows;
     }
 
@@ -247,6 +272,11 @@ public class ProductConfigServiceImpl implements IProductConfigService
         attribute.setUpdateBy(currentUsername());
         invalidateSchemaByAttributeId(attribute.getAttributeId());
         int rows = productConfigMapper.updateAttribute(attribute);
+        if (rows > 0)
+        {
+            changeLogService.recordAttribute(ProductConfigChangeLogService.ACTION_UPDATE, current,
+                selectAttributeById(attribute.getAttributeId()));
+        }
         return rows;
     }
 
@@ -261,20 +291,31 @@ public class ProductConfigServiceImpl implements IProductConfigService
             return 1;
         }
         invalidateSchemaByAttributeId(attributeId);
-        return productConfigMapper.updateAttributeStatus(attributeId, targetStatus, currentUsername());
+        int rows = productConfigMapper.updateAttributeStatus(attributeId, targetStatus, currentUsername());
+        if (rows > 0)
+        {
+            String actionType = STATUS_NORMAL.equals(targetStatus) ? ProductConfigChangeLogService.ACTION_ENABLE
+                : ProductConfigChangeLogService.ACTION_DISABLE;
+            changeLogService.recordAttribute(actionType, current, selectAttributeById(attributeId));
+        }
+        return rows;
     }
 
     @Override
     @Transactional
     public int deleteAttributeById(Long attributeId)
     {
-        selectAttributeById(attributeId);
+        ProductAttribute current = selectAttributeById(attributeId);
         if (productConfigMapper.countAttributeCategoryBindings(attributeId) > 0)
         {
             throw new ServiceException("属性已被类目引用，不能删除，请停用");
         }
         invalidateSchemaByAttributeId(attributeId);
         int rows = productConfigMapper.deleteAttributeById(attributeId, currentUsername());
+        if (rows > 0)
+        {
+            changeLogService.recordAttribute(ProductConfigChangeLogService.ACTION_DELETE, current, null);
+        }
         return rows;
     }
 
@@ -296,9 +337,16 @@ public class ProductConfigServiceImpl implements IProductConfigService
         {
             throw new ServiceException("属性选项编码已存在");
         }
-        option.setCreateBy(currentUsername());
+        String username = currentUsername();
+        option.setCreateBy(username);
+        option.setUpdateBy(username);
         invalidateSchemaByAttributeId(attributeId);
         int rows = productConfigMapper.insertOption(option);
+        if (rows > 0)
+        {
+            changeLogService.recordOption(ProductConfigChangeLogService.ACTION_CREATE, null,
+                productConfigMapper.selectOptionById(option.getOptionId()));
+        }
         return rows;
     }
 
@@ -322,6 +370,11 @@ public class ProductConfigServiceImpl implements IProductConfigService
         option.setUpdateBy(currentUsername());
         invalidateSchemaByAttributeId(attributeId);
         int rows = productConfigMapper.updateOption(option);
+        if (rows > 0)
+        {
+            changeLogService.recordOption(ProductConfigChangeLogService.ACTION_UPDATE, current,
+                productConfigMapper.selectOptionById(optionId));
+        }
         return rows;
     }
 
@@ -336,6 +389,10 @@ public class ProductConfigServiceImpl implements IProductConfigService
         }
         invalidateSchemaByAttributeId(attributeId);
         int rows = productConfigMapper.deleteOptionById(optionId, currentUsername());
+        if (rows > 0)
+        {
+            changeLogService.recordOption(ProductConfigChangeLogService.ACTION_DELETE, current, null);
+        }
         return rows;
     }
 
@@ -373,11 +430,21 @@ public class ProductConfigServiceImpl implements IProductConfigService
         {
             categoryAttribute.setCreateBy(categoryAttribute.getUpdateBy());
             rows = productConfigMapper.insertCategoryAttribute(categoryAttribute);
+            if (rows > 0)
+            {
+                changeLogService.recordCategoryAttribute(ProductConfigChangeLogService.ACTION_CREATE, null,
+                    productConfigMapper.selectCategoryAttributeById(categoryAttribute.getCategoryAttributeId()));
+            }
         }
         else
         {
             categoryAttribute.setCategoryAttributeId(current.getCategoryAttributeId());
             rows = productConfigMapper.updateCategoryAttribute(categoryAttribute);
+            if (rows > 0)
+            {
+                changeLogService.recordCategoryAttribute(ProductConfigChangeLogService.ACTION_UPDATE, current,
+                    productConfigMapper.selectCategoryAttributeById(current.getCategoryAttributeId()));
+            }
         }
         invalidateSchemaByCategoryId(category.getCategoryId());
         productConfigMapper.increaseCategorySchemaVersion(category.getCategoryId(), categoryAttribute.getUpdateBy());
@@ -391,6 +458,10 @@ public class ProductConfigServiceImpl implements IProductConfigService
         ProductCategoryAttribute current = selectCategoryAttributeById(categoryAttributeId);
         invalidateSchemaByCategoryId(current.getCategoryId());
         int rows = productConfigMapper.deleteCategoryAttributeById(categoryAttributeId, currentUsername());
+        if (rows > 0)
+        {
+            changeLogService.recordCategoryAttribute(ProductConfigChangeLogService.ACTION_DELETE, current, null);
+        }
         productConfigMapper.increaseCategorySchemaVersion(current.getCategoryId(), currentUsername());
         return rows;
     }
@@ -517,7 +588,7 @@ public class ProductConfigServiceImpl implements IProductConfigService
             }
             if (attribute.getValuePrecision() != null && attribute.getValuePrecision() != 0)
             {
-                throw new ServiceException("只有数字属性才允许配置数值精度");
+                throw new ServiceException("只有数字属性才允许配置小数位数");
             }
             attribute.setUnit("");
             attribute.setValuePrecision(0);
@@ -527,7 +598,7 @@ public class ProductConfigServiceImpl implements IProductConfigService
         attribute.setValuePrecision(defaultInt(attribute.getValuePrecision()));
         if (attribute.getValuePrecision() < 0 || attribute.getValuePrecision() > 8)
         {
-            throw new ServiceException("数字属性的数值精度必须在 0 到 8 之间");
+            throw new ServiceException("数字属性的小数位数必须在 0 到 8 之间");
         }
     }
 

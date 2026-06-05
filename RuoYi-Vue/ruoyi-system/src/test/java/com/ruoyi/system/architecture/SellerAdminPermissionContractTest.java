@@ -65,6 +65,12 @@ public class SellerAdminPermissionContractTest
         assertHandlerPermission(handlers, "editAccount", "seller:admin:account:edit", violations);
         assertHandlerPermission(handlers, "resetPassword", "seller:admin:account:resetPwd", violations);
         assertHandlerPermission(handlers, "resetDefaultPassword", "seller:admin:account:resetPwd", violations);
+        assertHandlerPermission(handlers, "lockAccount", "seller:admin:account:lock", violations);
+        assertHandlerPermission(handlers, "unlockAccount", "seller:admin:account:lock", violations);
+        assertHandlerPermission(handlers, "sessions", "seller:admin:forceLogout", violations);
+        assertHandlerPermission(handlers, "accountSessions", "seller:admin:forceLogout", violations);
+        assertHandlerPermission(handlers, "forceLogoutSeller", "seller:admin:forceLogout", violations);
+        assertHandlerPermission(handlers, "forceLogoutSellerAccount", "seller:admin:forceLogout", violations);
 
         if (!violations.isEmpty())
         {

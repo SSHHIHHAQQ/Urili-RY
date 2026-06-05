@@ -10,8 +10,6 @@ public class PortalDirectLoginToken implements Serializable
 {
     private static final long serialVersionUID = 1L;
 
-    private String token;
-
     private Long ticketId;
 
     private String portalType;
@@ -29,16 +27,6 @@ public class PortalDirectLoginToken implements Serializable
     private Date createTime;
 
     private Date expireTime;
-
-    public String getToken()
-    {
-        return token;
-    }
-
-    public void setToken(String token)
-    {
-        this.token = token;
-    }
 
     public Long getTicketId()
     {

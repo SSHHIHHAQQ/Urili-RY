@@ -1,4 +1,9 @@
-import { ImportOutlined, PlusOutlined } from '@ant-design/icons';
+import {
+  DownOutlined,
+  HistoryOutlined,
+  ImportOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
 import {
   type ActionType,
   ModalForm,
@@ -10,7 +15,7 @@ import {
   ProFormTextArea,
   ProTable,
 } from '@ant-design/pro-components';
-import { Button, Form, Switch } from 'antd';
+import { Button, Dropdown, Form, Switch } from 'antd';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   addAttribute,
@@ -39,6 +44,7 @@ import {
   statusValueEnum,
 } from '../../constants';
 import ProductImportModal from '../../components/ProductImportModal';
+import ProductConfigChangeLogDrawer from '../../components/ProductConfigChangeLogDrawer';
 import AttributeOptionManager from './AttributeOptionManager';
 
 type AccessLike = {
@@ -102,6 +108,7 @@ export default function AttributeLibrary({ access }: AttributeLibraryProps) {
   const [statusUpdatingId, setStatusUpdatingId] = useState<number>();
   const [currentAttribute, setCurrentAttribute] = useState<API.Product.Attribute>();
   const [optionAttribute, setOptionAttribute] = useState<API.Product.Attribute>();
+  const [operationLogOpen, setOperationLogOpen] = useState(false);
   const [dictTypeOptions, setDictTypeOptions] = useState<
     { label: string; value: string }[]
   >([]);
@@ -230,11 +237,6 @@ export default function AttributeLibrary({ access }: AttributeLibraryProps) {
 
   const columns: ProColumns<API.Product.Attribute>[] = [
     {
-      title: '关键词',
-      dataIndex: 'keyword',
-      hideInTable: true,
-    },
-    {
       title: '属性编码',
       dataIndex: 'attributeCode',
       width: 160,
@@ -306,39 +308,69 @@ export default function AttributeLibrary({ access }: AttributeLibraryProps) {
       title: '操作',
       valueType: 'option',
       width: 190,
-      render: (_, record) => [
-        <Button
-          key="edit"
-          type="link"
-          size="small"
-          hidden={!access.hasPerms('product:attribute:edit')}
-          onClick={() => openEditAttribute(record)}
-        >
-          编辑
-        </Button>,
-        <Button
-          key="options"
-          type="link"
-          size="small"
-          hidden={
-            !access.hasPerms('product:attribute:query') ||
-            record.optionSource !== 'ATTRIBUTE_OPTION'
-          }
-          onClick={() => openOptions(record)}
-        >
-          选项
-        </Button>,
-        <Button
-          key="delete"
-          type="link"
-          size="small"
-          danger
-          hidden={!access.hasPerms('product:attribute:remove')}
-          onClick={() => removeAttribute(record)}
-        >
-          删除
-        </Button>,
-      ],
+      render: (_, record) => {
+        const canShowOptions =
+          access.hasPerms('product:attribute:query') &&
+          record.optionSource === 'ATTRIBUTE_OPTION';
+        const deleteButton = (
+          <Button
+            key="delete"
+            type="link"
+            size="small"
+            danger
+            hidden={!access.hasPerms('product:attribute:remove')}
+            onClick={() => removeAttribute(record)}
+          >
+            删除
+          </Button>
+        );
+        return [
+          <Button
+            key="edit"
+            type="link"
+            size="small"
+            hidden={!access.hasPerms('product:attribute:edit')}
+            onClick={() => openEditAttribute(record)}
+          >
+            编辑
+          </Button>,
+          canShowOptions ? (
+            <Button
+              key="options"
+              type="link"
+              size="small"
+              onClick={() => openOptions(record)}
+            >
+              选项
+            </Button>
+          ) : (
+            deleteButton
+          ),
+          canShowOptions ? (
+            <Dropdown
+              key="more"
+              trigger={['click']}
+              menu={{
+                items: [
+                  {
+                    key: 'delete',
+                    label: '删除',
+                    danger: true,
+                    disabled: !access.hasPerms('product:attribute:remove'),
+                  },
+                ],
+                onClick: ({ key }) => {
+                  if (key === 'delete') removeAttribute(record);
+                },
+              }}
+            >
+              <Button type="link" size="small">
+                更多 <DownOutlined />
+              </Button>
+            </Dropdown>
+          ) : null,
+        ];
+      },
     },
   ];
 
@@ -359,6 +391,13 @@ export default function AttributeLibrary({ access }: AttributeLibraryProps) {
           };
         }}
         toolBarRender={() => [
+          <Button
+            key="operationLog"
+            icon={<HistoryOutlined />}
+            onClick={() => setOperationLogOpen(true)}
+          >
+            操作日志
+          </Button>,
           <Button
             key="importAttribute"
             icon={<ImportOutlined />}
@@ -405,6 +444,13 @@ export default function AttributeLibrary({ access }: AttributeLibraryProps) {
         onPreview={previewAttributeOptionImport}
         onImport={importAttributeOptionData}
         onSuccess={() => actionRef.current?.reload()}
+      />
+
+      <ProductConfigChangeLogDrawer
+        open={operationLogOpen}
+        onOpenChange={setOperationLogOpen}
+        bizTypes={['ATTRIBUTE', 'ATTRIBUTE_OPTION']}
+        title="属性库"
       />
 
       <ModalForm<API.Product.Attribute>

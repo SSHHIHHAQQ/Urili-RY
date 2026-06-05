@@ -48,6 +48,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="deptName"       column="dept_name"         />
         <result property="accountRole"    column="account_role"      />
         <result property="status"         column="status"            />
+        <result property="lockStatus"     column="lock_status"       />
+        <result property="lockReason"     column="lock_reason"       />
         <result property="userName"       column="user_name"         />
         <result property="nickName"       column="nick_name"         />
         <result property="password"       column="password"          />
@@ -268,7 +270,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </update>
 
     <select id="selectBuyerAccountList" resultMap="BuyerAccountResult">
-        select a.buyer_account_id, a.buyer_id, a.dept_id, d.dept_name, a.account_role, a.status, a.status as user_status,
+        select a.buyer_account_id, a.buyer_id, a.dept_id, d.dept_name, a.account_role, a.status, a.lock_status,
+               a.lock_reason, a.status as user_status,
                a.user_name, a.nick_name, a.email, a.phonenumber, a.last_login_ip, a.last_login_time, a.pwd_update_time,
                a.create_by, a.create_time, a.update_by, a.update_time, a.remark
         from buyer_account a
@@ -278,7 +281,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </select>
 
     <select id="selectBuyerAccountById" parameterType="Long" resultMap="BuyerAccountResult">
-        select a.buyer_account_id, a.buyer_id, a.dept_id, d.dept_name, a.account_role, a.status, a.status as user_status,
+        select a.buyer_account_id, a.buyer_id, a.dept_id, d.dept_name, a.account_role, a.status, a.lock_status,
+               a.lock_reason, a.status as user_status,
                a.user_name, a.nick_name, a.password, a.email, a.phonenumber, a.last_login_ip, a.last_login_time, a.pwd_update_time,
                a.create_by, a.create_time, a.update_by, a.update_time, a.remark
         from buyer_account a
@@ -288,7 +292,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </select>
 
     <select id="selectBuyerAccountByUserName" parameterType="String" resultMap="BuyerAccountResult">
-        select a.buyer_account_id, a.buyer_id, a.dept_id, d.dept_name, a.account_role, a.status, a.status as user_status,
+        select a.buyer_account_id, a.buyer_id, a.dept_id, d.dept_name, a.account_role, a.status, a.lock_status,
+               a.lock_reason, a.status as user_status,
                a.user_name, a.nick_name, a.password, a.email, a.phonenumber, a.last_login_ip, a.last_login_time, a.pwd_update_time,
                a.create_by, a.create_time, a.update_by, a.update_time, a.remark
         from buyer_account a
@@ -298,7 +303,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </select>
 
     <select id="selectOwnerBuyerAccountByBuyerId" parameterType="Long" resultMap="BuyerAccountResult">
-        select a.buyer_account_id, a.buyer_id, a.dept_id, d.dept_name, a.account_role, a.status, a.status as user_status,
+        select a.buyer_account_id, a.buyer_id, a.dept_id, d.dept_name, a.account_role, a.status, a.lock_status,
+               a.lock_reason, a.status as user_status,
                a.user_name, a.nick_name, a.email, a.phonenumber, a.last_login_ip, a.last_login_time, a.pwd_update_time,
                a.create_by, a.create_time, a.update_by, a.update_time, a.remark
         from buyer_account a
@@ -312,10 +318,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <insert id="insertBuyerAccount" parameterType="BuyerAccount" useGeneratedKeys="true" keyProperty="buyerAccountId">
         insert into buyer_account(
             buyer_id, dept_id, user_name, nick_name, password, email, phonenumber,
-            account_role, status, pwd_update_time, create_by, create_time, remark
+            account_role, status, lock_status, lock_reason, pwd_update_time, create_by, create_time, remark
         ) values (
             #{buyerId}, #{deptId}, #{userName}, #{nickName}, #{password}, #{email}, #{phonenumber},
-            #{accountRole}, #{status}, sysdate(), #{createBy}, sysdate(), #{remark}
+            #{accountRole}, #{status}, #{lockStatus}, #{lockReason}, sysdate(), #{createBy}, sysdate(), #{remark}
         )
     </insert>
 
@@ -330,6 +336,16 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             update_time = sysdate(),
             remark = #{remark}
         where buyer_account_id = #{buyerAccountId}
+    </update>
+
+    <update id="updateBuyerAccountLockStatus">
+        update buyer_account
+        set lock_status = #{lockStatus},
+            lock_reason = #{lockReason},
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where buyer_account_id = #{buyerAccountId}
+          and buyer_id = #{buyerId}
     </update>
 
     <update id="resetBuyerAccountPassword">

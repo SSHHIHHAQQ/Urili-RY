@@ -41,6 +41,10 @@ public interface SellerMapper
 
     public int updateSellerAccount(SellerAccount account);
 
+    public int updateSellerAccountLockStatus(@Param("sellerId") Long sellerId, @Param("sellerAccountId") Long sellerAccountId,
+            @Param("lockStatus") String lockStatus, @Param("lockReason") String lockReason,
+            @Param("updateBy") String updateBy);
+
     public int resetSellerAccountPassword(@Param("sellerAccountId") Long sellerAccountId, @Param("password") String password,
             @Param("updateBy") String updateBy);
 

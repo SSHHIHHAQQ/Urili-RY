@@ -17,7 +17,13 @@ public class PartnerSupport
 {
     public static final String STATUS_NORMAL = "0";
 
+    public static final String ACCOUNT_LOCK_STATUS_UNLOCKED = "0";
+
+    public static final String ACCOUNT_LOCK_STATUS_LOCKED = "1";
+
     public static final String ACCOUNT_ROLE_OWNER = "OWNER";
+
+    public static final String ACCOUNT_ROLE_ADMIN = "ADMIN";
 
     public static final String ACCOUNT_ROLE_STAFF = "STAFF";
 
@@ -28,6 +34,9 @@ public class PartnerSupport
     public static final String DEFAULT_OWNER_PASSWORD = "U12346";
 
     private static final List<String> SUBJECT_TYPES = List.of("COMPANY", "PERSON", "OTHER");
+
+    private static final List<String> ACCOUNT_ROLES = List.of(ACCOUNT_ROLE_OWNER, ACCOUNT_ROLE_ADMIN,
+            ACCOUNT_ROLE_STAFF);
 
     private static final int NO_BASE_YEAR = 2026;
 
@@ -79,6 +88,16 @@ public class PartnerSupport
         return type;
     }
 
+    public static String normalizeAccountRole(String value)
+    {
+        String role = trimRequired(StringUtils.defaultIfBlank(value, ACCOUNT_ROLE_STAFF), "账号角色不能为空").toUpperCase();
+        if (!ACCOUNT_ROLES.contains(role))
+        {
+            throw new ServiceException("账号角色不正确");
+        }
+        return role;
+    }
+
     public static String normalizeLevel(String value, String message)
     {
         return trimRequired(StringUtils.defaultIfBlank(value, DEFAULT_LEVEL), message).toUpperCase();
@@ -90,6 +109,21 @@ public class PartnerSupport
         {
             throw new ServiceException("状态不正确");
         }
+    }
+
+    public static String normalizeAccountLockStatus(String value)
+    {
+        String status = StringUtils.defaultIfBlank(value, ACCOUNT_LOCK_STATUS_UNLOCKED);
+        if (!ACCOUNT_LOCK_STATUS_UNLOCKED.equals(status) && !ACCOUNT_LOCK_STATUS_LOCKED.equals(status))
+        {
+            throw new ServiceException("锁定状态不正确");
+        }
+        return status;
+    }
+
+    public static boolean isAccountLocked(String lockStatus)
+    {
+        return ACCOUNT_LOCK_STATUS_LOCKED.equals(lockStatus);
     }
 
     public static synchronized String generateNo(String prefix, Function<String, String> maxNoLookup)

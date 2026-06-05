@@ -155,11 +155,6 @@ export default function FinanceCurrencyPage() {
 
   const currencyColumns: ProColumns<API.Finance.Currency>[] = [
     {
-      title: '关键词',
-      dataIndex: 'keyword',
-      hideInTable: true,
-    },
-    {
       title: '币种代码',
       dataIndex: 'currencyCode',
       width: 110,

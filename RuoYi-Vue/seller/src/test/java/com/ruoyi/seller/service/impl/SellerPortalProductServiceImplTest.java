@@ -10,7 +10,9 @@ import java.util.List;
 import org.junit.Test;
 import com.github.pagehelper.Page;
 import com.ruoyi.common.exception.ServiceException;
+import com.ruoyi.product.domain.ProductDistributionOperationLog;
 import com.ruoyi.product.domain.ProductSku;
+import com.ruoyi.product.domain.ProductSkuSalePriceUpdateRequest;
 import com.ruoyi.product.domain.ProductSpu;
 import com.ruoyi.product.service.IProductDistributionService;
 import com.ruoyi.seller.domain.SellerPortalProduct;
@@ -79,6 +81,19 @@ public class SellerPortalProductServiceImplTest
     }
 
     @Test
+    public void selectOwnProductListRejectsNonSellerSessionBeforeQueryingProducts()
+    {
+        RecordingProductDistributionService productService = new RecordingProductDistributionService();
+        SellerPortalProductServiceImpl service = service(productService);
+        PortalLoginSession buyerSession = session(11L, 22L);
+        buyerSession.setTerminal("buyer");
+
+        assertLoginException(() -> service.selectOwnProductList(buyerSession, new ProductSpu()));
+
+        assertEquals(null, productService.productListQuery);
+    }
+
+    @Test
     public void selectOwnProductByIdRejectsProductFromAnotherSeller()
     {
         RecordingProductDistributionService productService = new RecordingProductDistributionService();
@@ -132,6 +147,21 @@ public class SellerPortalProductServiceImplTest
         assertEquals(Long.valueOf(1L), productService.skuListSpuId);
         assertEquals(1, result.size());
         assertEquals("SELLER-SKU-1", result.get(0).getSellerSkuCode());
+    }
+
+    @Test
+    public void selectOwnProductDetailAndSkuRejectNonSellerSessionBeforeQueryingProducts()
+    {
+        RecordingProductDistributionService productService = new RecordingProductDistributionService();
+        SellerPortalProductServiceImpl service = service(productService);
+        PortalLoginSession buyerSession = session(11L, 22L);
+        buyerSession.setTerminal("buyer");
+
+        assertLoginException(() -> service.selectOwnProductById(buyerSession, 1L));
+        assertLoginException(() -> service.selectOwnSkuList(buyerSession, 1L));
+
+        assertEquals(null, productService.productByIdArg);
+        assertEquals(null, productService.skuListSpuId);
     }
 
     @Test
@@ -207,6 +237,20 @@ public class SellerPortalProductServiceImplTest
         catch (ServiceException e)
         {
             assertEquals("商城商品不存在", e.getMessage());
+            return;
+        }
+        throw new AssertionError("Expected ServiceException");
+    }
+
+    private void assertLoginException(ThrowingRunnable runnable)
+    {
+        try
+        {
+            runnable.run();
+        }
+        catch (ServiceException e)
+        {
+            assertEquals("登录状态已失效", e.getMessage());
             return;
         }
         throw new AssertionError("Expected ServiceException");
@@ -291,6 +335,48 @@ public class SellerPortalProductServiceImplTest
         public int updateSkuStatus(Long spuId, Long skuId, String status)
         {
             return 0;
+        }
+
+        @Override
+        public int batchUpdateSpuStatus(List<Long> spuIds, String status, boolean syncSkuStatus)
+        {
+            return 0;
+        }
+
+        @Override
+        public int batchUpdateSkuStatus(List<Long> skuIds, String status)
+        {
+            return 0;
+        }
+
+        @Override
+        public int batchUpdateSpuControlStatus(List<Long> spuIds, String controlStatus, String reason)
+        {
+            return 0;
+        }
+
+        @Override
+        public int batchUpdateSkuControlStatus(List<Long> skuIds, String controlStatus, String reason)
+        {
+            return 0;
+        }
+
+        @Override
+        public int batchUpdateSkuSalePrice(ProductSkuSalePriceUpdateRequest request)
+        {
+            return 0;
+        }
+
+        @Override
+        public List<ProductDistributionOperationLog> selectOperationLogList(ProductDistributionOperationLog query)
+        {
+            return new ArrayList<>();
+        }
+
+        @Override
+        public List<ProductSku> selectSkuPageList(ProductSku query)
+        {
+            return new ArrayList<>();
         }
 
         @Override

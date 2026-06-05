@@ -1,7 +1,11 @@
 import { ReloadOutlined } from '@ant-design/icons';
 import {
+  type ActionType,
+  type ProColumns,
+  ProTable,
+} from '@ant-design/pro-components';
+import {
   Button,
-  Card,
   Descriptions,
   Empty,
   Image,
@@ -12,7 +16,7 @@ import {
   Typography,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   buildSkuDimensionText,
   buildSkuSpecText,
@@ -26,12 +30,13 @@ import {
   getBuyerPortalDistributionProducts,
 } from '@/services/portal/session';
 import { message } from '@/utils/feedback';
+import {
+  getPersistedProTableSearch,
+  getProTablePagination,
+  getProTableScroll,
+} from '@/utils/proTableSearch';
 
 type BuyerProductRow = API.Partner.BuyerPortalProduct & {
-  uiRowKey: string;
-};
-
-type BuyerSkuRow = API.Partner.BuyerPortalProductSku & {
   uiRowKey: string;
 };
 
@@ -53,64 +58,13 @@ function statusTag(status?: string) {
 }
 
 const BuyerDistributionProductList: React.FC = () => {
-  const [loading, setLoading] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [rows, setRows] = useState<BuyerProductRow[]>([]);
-  const [total, setTotal] = useState(0);
-  const [pageNum, setPageNum] = useState(1);
-  const [pageSize, setPageSize] = useState(5);
   const [detailOpen, setDetailOpen] = useState(false);
   const [current, setCurrent] = useState<API.Partner.BuyerPortalProduct>();
-  const [skuRows, setSkuRows] = useState<BuyerSkuRow[]>([]);
-  const listRequestSeq = useRef(0);
-
-  const loadProducts = useCallback(
-    async (currentPage: number, currentPageSize: number) => {
-      const requestSeq = listRequestSeq.current + 1;
-      listRequestSeq.current = requestSeq;
-      setLoading(true);
-      try {
-        const response = await getBuyerPortalDistributionProducts({
-          pageNum: currentPage,
-          pageSize: currentPageSize,
-        });
-        if (listRequestSeq.current !== requestSeq) {
-          return;
-        }
-        if (response.code !== 200) {
-          message.error(response.msg || '商品加载失败');
-          setRows([]);
-          setTotal(0);
-          return;
-        }
-        setPageNum(currentPage);
-        setPageSize(currentPageSize);
-        setTotal(response.total || 0);
-        setRows(
-          (response.rows || []).map((row, index) => ({
-            ...row,
-            uiRowKey: `${row.spuId || 'product'}-${index}`,
-          })),
-        );
-      } catch (error) {
-        console.log(error);
-        if (listRequestSeq.current === requestSeq) {
-          message.error('商品加载失败');
-          setRows([]);
-          setTotal(0);
-        }
-      } finally {
-        if (listRequestSeq.current === requestSeq) {
-          setLoading(false);
-        }
-      }
-    },
+  const [skuRows, setSkuRows] = useState<API.Partner.BuyerPortalProductSku[]>(
     [],
   );
-
-  useEffect(() => {
-    loadProducts(1, 5);
-  }, [loadProducts]);
+  const actionRef = useRef<ActionType | undefined>(undefined);
 
   const openDetail = async (record: API.Partner.BuyerPortalProduct) => {
     if (!record.spuId) {
@@ -134,12 +88,7 @@ const BuyerDistributionProductList: React.FC = () => {
         return;
       }
       setCurrent(detailResponse.data);
-      setSkuRows(
-        (skuResponse.data || []).map((row, index) => ({
-          ...row,
-          uiRowKey: `${row.spuId || record.spuId || 0}-${row.skuId || 'sku'}-${index}`,
-        })),
-      );
+      setSkuRows(skuResponse.data || []);
     } catch (error) {
       console.log(error);
       message.error('商品详情加载失败');
@@ -148,12 +97,18 @@ const BuyerDistributionProductList: React.FC = () => {
     }
   };
 
-  const columns: ColumnsType<BuyerProductRow> = [
+  const columns: ProColumns<BuyerProductRow>[] = [
+    {
+      title: '关键词',
+      dataIndex: 'keyword',
+      hideInTable: true,
+    },
     {
       title: '商品',
       dataIndex: 'productName',
       key: 'productName',
-      width: 360,
+      width: 340,
+      search: false,
       render: (_, record) => (
         <Space size={10}>
           {record.mainImageUrl ? (
@@ -167,7 +122,7 @@ const BuyerDistributionProductList: React.FC = () => {
             <div style={{ width: 48, height: 48, background: '#f0f0f0' }} />
           )}
           <Space orientation="vertical" size={0}>
-            <Typography.Text ellipsis style={{ maxWidth: 250 }}>
+            <Typography.Text ellipsis style={{ maxWidth: 240 }}>
               {displayText(record.productName)}
             </Typography.Text>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
@@ -182,12 +137,14 @@ const BuyerDistributionProductList: React.FC = () => {
       dataIndex: 'categoryName',
       key: 'categoryName',
       width: 180,
-      render: displayText,
+      search: false,
+      render: (_, record) => displayText(record.categoryName),
     },
     {
       title: '销售价',
       key: 'price',
       width: 160,
+      search: false,
       render: (_, record) => (
         <Space orientation="vertical" size={0}>
           <span>
@@ -204,18 +161,20 @@ const BuyerDistributionProductList: React.FC = () => {
       dataIndex: 'skuCount',
       key: 'skuCount',
       width: 80,
-      render: displayText,
+      search: false,
+      render: (_, record) => displayText(record.skuCount),
     },
     {
       title: '状态',
       dataIndex: 'spuStatus',
       key: 'spuStatus',
       width: 96,
-      render: statusTag,
+      search: false,
+      render: (_, record) => statusTag(record.spuStatus),
     },
     {
       title: '操作',
-      key: 'action',
+      valueType: 'option',
       width: 88,
       render: (_, record) => (
         <Button type="link" size="small" onClick={() => openDetail(record)}>
@@ -225,7 +184,7 @@ const BuyerDistributionProductList: React.FC = () => {
     },
   ];
 
-  const skuColumns: ColumnsType<BuyerSkuRow> = [
+  const skuColumns: ColumnsType<API.Partner.BuyerPortalProductSku> = [
     {
       title: 'SKU规格',
       key: 'spec',
@@ -263,36 +222,50 @@ const BuyerDistributionProductList: React.FC = () => {
 
   return (
     <>
-      <Card
-        title="商城商品"
-        variant="borderless"
-        extra={
+      <ProTable<BuyerProductRow>
+        actionRef={actionRef}
+        rowKey="uiRowKey"
+        headerTitle="商城商品"
+        columns={columns}
+        search={getPersistedProTableSearch(
+          { labelWidth: 96, defaultFormItemsNumber: 4 },
+          'buyer-portal-distribution-product',
+        )}
+        pagination={getProTablePagination({
+          defaultPageSize: 5,
+          pageSizeOptions: [5, 10, 20],
+        })}
+        scroll={getProTableScroll(980)}
+        request={async ({ current: currentPage, pageSize: currentPageSize, ...params }) => {
+          const response = await getBuyerPortalDistributionProducts({
+            keyword: params.keyword,
+            pageNum: currentPage,
+            pageSize: currentPageSize,
+          });
+          if (response.code !== 200) {
+            message.error(response.msg || '商品加载失败');
+            return { data: [], total: 0, success: false };
+          }
+          return {
+            data: (response.rows || []).map((row, index) => ({
+              ...row,
+              uiRowKey: `${row.spuId || 'product'}-${index}`,
+            })),
+            total: response.total || 0,
+            success: true,
+          };
+        }}
+        toolBarRender={() => [
           <Button
+            key="refresh"
             icon={<ReloadOutlined />}
-            onClick={() => loadProducts(pageNum, pageSize)}
+            onClick={() => actionRef.current?.reload()}
           >
             刷新
-          </Button>
-        }
-      >
-        <Table<BuyerProductRow>
-          size="small"
-          rowKey="uiRowKey"
-          loading={loading}
-          columns={columns}
-          dataSource={rows}
-          scroll={{ x: 980 }}
-          pagination={{
-            current: pageNum,
-            pageSize,
-            total,
-            showSizeChanger: true,
-            pageSizeOptions: [5, 10, 20],
-            onChange: loadProducts,
-          }}
-          locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
-        />
-      </Card>
+          </Button>,
+        ]}
+        locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
+      />
 
       <Modal
         title="商品详情"
@@ -326,9 +299,11 @@ const BuyerDistributionProductList: React.FC = () => {
               {displayText(current?.sellingPoint)}
             </Descriptions.Item>
           </Descriptions>
-          <Table<BuyerSkuRow>
+          <Table<API.Partner.BuyerPortalProductSku>
             size="small"
-            rowKey="uiRowKey"
+            rowKey={(record) =>
+              `${record.spuId || current?.spuId || 0}-${record.skuId || 'sku'}`
+            }
             loading={detailLoading}
             columns={skuColumns}
             dataSource={skuRows}

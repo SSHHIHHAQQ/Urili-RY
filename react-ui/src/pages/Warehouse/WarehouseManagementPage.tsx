@@ -112,6 +112,7 @@ export default function WarehouseManagementPage({ kind }: WarehouseManagementPag
   const isOfficial = kind === 'official';
   const services = serviceMap[kind];
   const permissions = permissionMap[kind];
+  const searchFieldCount = isOfficial ? 7 : 8;
 
   useEffect(() => {
     getDictSelectOption('country_region').then(setCountryOptions);
@@ -293,8 +294,12 @@ export default function WarehouseManagementPage({ kind }: WarehouseManagementPag
       render: (_, record) =>
         record.warehousePairingId ? (
           <Space direction="vertical" size={0}>
-            <Typography.Text>{displayText(record.upstreamWarehouseName)}</Typography.Text>
-            <Typography.Text type="secondary">{displayText(record.upstreamWarehouseCode)}</Typography.Text>
+            <Typography.Text>
+              {displayText(record.masterWarehouseName || record.connectionCode)}
+            </Typography.Text>
+            <Typography.Text type="secondary">
+              {displayText(record.upstreamWarehouseName)} / {displayText(record.upstreamWarehouseCode)}
+            </Typography.Text>
           </Space>
         ) : (
           <Tag>未配对</Tag>
@@ -349,7 +354,10 @@ export default function WarehouseManagementPage({ kind }: WarehouseManagementPag
         rowKey="warehouseId"
         columns={columns}
         options={false}
-        search={getPersistedProTableSearch({ labelWidth: 96 }, `warehouse-${kind}`)}
+        search={getPersistedProTableSearch(
+          { labelWidth: 96, fieldCount: searchFieldCount },
+          `warehouse-${kind}`,
+        )}
         pagination={getProTablePagination(20)}
         scroll={getProTableScroll(isOfficial ? 1540 : 1640)}
         request={async (params) => {
@@ -361,7 +369,7 @@ export default function WarehouseManagementPage({ kind }: WarehouseManagementPag
           };
         }}
         toolBarRender={() => [
-          isOfficial && access.hasPerms(permissions.sync) ? (
+          isOfficial && access.hasPerms(permissionMap.official.sync) ? (
             <Button key="sync" icon={<SyncOutlined />} onClick={() => setSyncOpen(true)}>
               同步仓库
             </Button>

@@ -12,7 +12,9 @@ import com.github.pagehelper.Page;
 import com.ruoyi.buyer.domain.BuyerPortalProduct;
 import com.ruoyi.buyer.domain.BuyerPortalProductSku;
 import com.ruoyi.common.exception.ServiceException;
+import com.ruoyi.product.domain.ProductDistributionOperationLog;
 import com.ruoyi.product.domain.ProductSku;
+import com.ruoyi.product.domain.ProductSkuSalePriceUpdateRequest;
 import com.ruoyi.product.domain.ProductSpu;
 import com.ruoyi.product.service.IProductDistributionService;
 import com.ruoyi.system.domain.PortalLoginSession;
@@ -100,6 +102,21 @@ public class BuyerPortalProductServiceImplTest
         assertProductException(() -> service.selectVisibleProductById(buyerSession(), 1L));
 
         assertEquals(Long.valueOf(1L), productService.onSaleProductByIdArg);
+    }
+
+    @Test
+    public void selectVisibleProductDetailAndSkuRejectNonBuyerSessionBeforeQueryingProducts()
+    {
+        RecordingProductDistributionService productService = new RecordingProductDistributionService();
+        BuyerPortalProductServiceImpl service = service(productService);
+        PortalLoginSession sellerSession = buyerSession();
+        sellerSession.setTerminal("seller");
+
+        assertLoginException(() -> service.selectVisibleProductById(sellerSession, 1L));
+        assertLoginException(() -> service.selectVisibleSkuList(sellerSession, 1L));
+
+        assertEquals(null, productService.onSaleProductByIdArg);
+        assertEquals(null, productService.onSaleSkuListSpuId);
     }
 
     @Test
@@ -348,6 +365,48 @@ public class BuyerPortalProductServiceImplTest
         public int updateSkuStatus(Long spuId, Long skuId, String status)
         {
             return 0;
+        }
+
+        @Override
+        public int batchUpdateSpuStatus(List<Long> spuIds, String status, boolean syncSkuStatus)
+        {
+            return 0;
+        }
+
+        @Override
+        public int batchUpdateSkuStatus(List<Long> skuIds, String status)
+        {
+            return 0;
+        }
+
+        @Override
+        public int batchUpdateSpuControlStatus(List<Long> spuIds, String controlStatus, String reason)
+        {
+            return 0;
+        }
+
+        @Override
+        public int batchUpdateSkuControlStatus(List<Long> skuIds, String controlStatus, String reason)
+        {
+            return 0;
+        }
+
+        @Override
+        public int batchUpdateSkuSalePrice(ProductSkuSalePriceUpdateRequest request)
+        {
+            return 0;
+        }
+
+        @Override
+        public List<ProductDistributionOperationLog> selectOperationLogList(ProductDistributionOperationLog query)
+        {
+            return new ArrayList<>();
+        }
+
+        @Override
+        public List<ProductSku> selectSkuPageList(ProductSku query)
+        {
+            return new ArrayList<>();
         }
 
         @Override

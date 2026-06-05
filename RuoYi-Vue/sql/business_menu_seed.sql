@@ -28,6 +28,9 @@ values
     (2411, '退件管理', 2070, 10, 'return', 'Common/PlannedPage/index', '', 'ReturnManagement',
      1, 0, 'C', '0', '0', 'order:return:list', 'UndoOutlined', 'admin',
      sysdate(), '', null, '订单管理菜单：退件管理，占位入口'),
+    (2412, '售后管理', 2070, 15, 'after-sale', 'Common/PlannedPage/index', '', 'AfterSaleManagement',
+     1, 0, 'C', '0', '0', 'order:afterSale:list', 'IssuesCloseOutlined', 'admin',
+     sysdate(), '', null, '订单管理菜单：售后管理，占位入口'),
 
     (2420, '库存总览', 2080, 5, 'overview', 'Common/PlannedPage/index', '', 'InventoryOverview',
      1, 0, 'C', '0', '0', 'inventory:overview:list', 'DashboardOutlined', 'admin',

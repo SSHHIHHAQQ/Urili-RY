@@ -91,6 +91,35 @@ declare namespace API.Product {
     remark?: string;
   }
 
+  export interface ConfigChangeDiffItem {
+    field?: string;
+    fieldLabel?: string;
+    beforeValue?: string | number | boolean;
+    afterValue?: string | number | boolean;
+  }
+
+  export interface ConfigChangeLog {
+    logId?: number;
+    bizType?: string;
+    bizTypes?: string;
+    bizId?: number;
+    bizCode?: string;
+    bizName?: string;
+    actionType?: string;
+    actionSource?: string;
+    operatorName?: string;
+    changeSummary?: string;
+    beforeJson?: string;
+    afterJson?: string;
+    diffJson?: string;
+    changeTime?: string;
+    changeTimeRange?: string[];
+    keyword?: string;
+    beginTime?: string;
+    endTime?: string;
+    remark?: string;
+  }
+
   export interface ImportMessage {
     rowNum?: number;
     action?: string;

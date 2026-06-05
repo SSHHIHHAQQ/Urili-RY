@@ -1,5 +1,790 @@
 # 三端独立改造目标追踪
 
+## 2026-06-06 免密 Redis 明文 Token 收敛检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，按“先做一套标准卖家模板，验收通过后复制买家；每个切片只改一类东西”的节奏推进。本轮只处理一类问题：管理端免密代入的一次性明文 token 仍可返回给管理端用于短时直登链接，但 Redis 侧不再用明文 token 做 key，也不在 payload 中保存明文 token。本轮不改前端、不执行 SQL、不连接远程 MySQL / Redis。
+
+已完成：
+
+- `PortalDirectLoginSupport` 继续生成明文一次性 token 并返回给管理端 `PortalDirectLoginResult`，保持 direct-login 链接契约不变。
+- Redis key 从 `portal_direct_login:{token}` 改为 `portal_direct_login:{token_hash}`。
+- `PortalDirectLoginToken` 删除 `token` 字段，Redis payload 不再保存明文 token。
+- `consumeToken(...)` 先对请求 token 做 hash，再用 hash 查询审计票据和 Redis payload。
+- `PortalDirectLoginSupportTest` 更新为固定 DB `token_hash`、Redis hash key、payload 无 token 字段、30 分钟 TTL、一次性消费、跨端拒绝、过期删除和 validator 失败不消费票据。
+- seller/buyer service 测试假件同步删除 `PortalDirectLoginToken#setToken(...)`。
+- 更新 `docs/architecture/reuse-ledger.md`，登记免密 Redis 明文 token 收敛规则。
+- 新增执行记录：`docs/plans/2026-06-06-direct-login-redis-token-hash-hardening-record.md`。
+
+验证结果：
+
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system,seller,buyer -am "-Dtest=PortalDirectLoginSupportTest,SellerServiceImplTest,BuyerServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，support `Tests run: 6`、seller `Tests run: 28`、buyer `Tests run: 28`，均无失败。
+- `cd E:\Urili-Ruoyi; codegraph sync .`：通过，CodeGraph 返回 `Already up to date`。
+
+当前判断：
+
+- 免密代入的明文 token 仍只作为一次性链接参数存在；后端 Redis 存储面不再保留明文 token key 或 payload 字段。
+- 本轮没有新增表或字段，没有改远程数据，也没有改变 seller/buyer 端 direct-login 入口参数。
+- `PortalDirectLoginSupportTest` 当前 510 行，触发 500 行判断阈值；该文件职责仍集中在免密票据生成、消费、Redis payload、状态机和原因校验，暂不拆分，后续若继续增加免密场景再拆成 create/consume 两类测试。
+- `SellerServiceImplTest` / `BuyerServiceImplTest` 为既有大文件，本轮只删除测试假件中的旧 token 字段设置，不扩大职责。
+- 本轮未执行 SQL，未连接远程 MySQL / Redis，未修改远程数据。
+
+## 2026-06-06 端内操作日志写入路由测试检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，按“先做一套标准卖家模板，验收通过后复制买家；每个切片只改一类东西”的节奏推进。本轮只处理一类问题：端内 `@PortalLog` 生成的操作日志必须通过 `PortalOperLogServiceImpl` 按 terminal 写入 seller/buyer 各自端内操作日志表，不能回落到若依管理端 `sys_oper_log`。本轮不改生产代码、不改前端、不执行 SQL、不连接远程 MySQL / Redis。
+
+已完成：
+
+- 新增 `PortalOperLogServiceImplTest`，固定 seller terminal 只调用 `insertSellerOperLog(...)`，不调用 buyer 写入。
+- 同一测试按 buyer 模板固定 buyer terminal 只调用 `insertBuyerOperLog(...)`，不调用 seller 写入。
+- 新增未知 terminal 负向用例：非 seller/buyer terminal 必须抛出 `ServiceException`，且不写任何端内操作日志。
+- 新增 service 依赖负向守卫：`PortalOperLogServiceImpl` 不得持有 `ISysOperLogService` 或 `SysOperLog` 相关依赖。
+- 更新 `docs/architecture/reuse-ledger.md`，登记 `PortalOperLogService` 端内写入路由复用规则。
+- 新增执行记录：`docs/plans/2026-06-06-portal-oper-log-service-routing-record.md`。
+
+验证结果：
+
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system -am "-Dtest=PortalOperLogServiceImplTest,TerminalRouteOwnershipTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`Tests run: 11, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi; codegraph sync .`：通过，CodeGraph 同步 `1 changed files`。
+
+当前判断：
+
+- 端内操作日志第一批写入链路现在不只依赖 `@PortalLog` 静态模板，也有 service 层 terminal 路由测试守住 seller/buyer 写入目标。
+- 本轮只补测试证据和记录，没有改变现有运行时行为。
+- `PortalOperLogServiceImplTest` 当前 151 行，未触发 300 行判断阈值。
+- 本轮未执行 SQL，未连接远程 MySQL / Redis，未修改远程数据。
+
+## 2026-06-06 端内商品 Service Session 守卫补强检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，按“先做一套标准卖家模板，验收通过后复制买家；每个切片只改一类东西”的节奏推进。本轮只处理一类问题：补强 seller/buyer 端商城商品 service 的 session fail-closed 自动化守卫。本轮不改生产代码、不改前端、不执行 SQL、不连接远程 MySQL / Redis。
+
+已完成：
+
+- `SellerPortalProductServiceImplTest` 新增列表入口负向用例：非 seller session 必须先返回“登录状态已失效”，不得调用共享 product service 查询商品。
+- `SellerPortalProductServiceImplTest` 新增详情和 SKU 入口负向用例：非 seller session 必须先拒绝，且 `selectProductById(...)` / `selectSkuList(...)` 不得被调用。
+- `BuyerPortalProductServiceImplTest` 在已有列表负向用例基础上，新增详情和 SKU 入口负向用例：非 buyer session 必须先拒绝，且 `selectOnSaleProductById(...)` / `selectOnSaleSkuList(...)` 不得被调用。
+- seller/buyer 测试 fake 同步当前 `IProductDistributionService.batchUpdateSpuStatus(List<Long>, String, boolean)` 签名，避免接口变更后测试编译漂移。
+- 新增执行记录：`docs/plans/2026-06-06-portal-product-service-session-guard-record.md`。
+- 更新 `docs/architecture/reuse-ledger.md`，登记端内商品 service 的 session fail-closed 复用规则。
+
+验证结果：
+
+- 首次 seller 定向测试失败，原因是测试 fake 仍实现旧的 `batchUpdateSpuStatus(List<Long>, String)` 签名；已只修测试 fake，不改生产代码。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl seller -am "-Dtest=SellerPortalProductServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`Tests run: 8, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl buyer -am "-Dtest=BuyerPortalProductServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`Tests run: 9, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi; git diff --check -- <本轮触碰测试文件>`：通过，仅有 LF/CRLF 工作区换行提示。
+- `cd E:\Urili-Ruoyi; codegraph sync .`：通过，CodeGraph 返回 `Already up to date`。
+
+当前判断：
+
+- 当前 seller/buyer 端商城商品 service 三个入口均有 service 层负向测试守住：端类型不匹配时先拒绝，不进入共享 product service。
+- 本轮只补测试证据，没有改变现有运行时行为。
+- seller/buyer 商品 service 测试文件当前分别为 395 行和 425 行，触发 300/400 行判断阈值；职责仍集中在端内商品 service 范围控制、可见性和 DTO 脱敏，暂不拆分。
+- 本轮未执行 SQL，未连接远程 MySQL / Redis，未修改远程数据。
+
+## 2026-06-06 端内权限菜单树测试补强检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，按“先做一套标准卖家模板，验收通过后复制买家；每个切片只改一类东西”的节奏推进。本轮只处理一类问题：补强 seller/buyer 端 `selectPortalMenuTree(...)` 的 service 层自动化守卫。本轮不改生产代码、不改前端、不执行 SQL、不连接远程 MySQL / Redis。
+
+已完成：
+
+- 新增 `SellerPortalPermissionServiceImplMenuTreeTest`，从 PortalAccess 测试中迁入 seller 离线菜单树拒绝用例。
+- 按 seller 标准模板新增在线菜单树正向用例：必须先校验 DB session 在线，再用当前 `sellerId/accountId` 查询 `selectSellerAccountMenuList(...)`，并返回 `PortalPermissionSupport.buildMenuTree(...)` 形成的父子树。
+- 新增 `BuyerPortalPermissionServiceImplMenuTreeTest`，按 seller 菜单树模板同构复制，只替换 terminal、领域对象、mapper、service、token 和文案。
+- `SellerPortalPermissionServiceImplPortalAccessTest` / `BuyerPortalPermissionServiceImplPortalAccessTest` 不再混入菜单树 fake，只保留权限信息和 `selectPermissions(...)` 访问测试。
+- 新增执行记录：`docs/plans/2026-06-06-terminal-permission-service-menu-tree-test-record.md`。
+- 更新 `docs/architecture/reuse-ledger.md`，登记菜单树测试分文件规则和 `selectPortalMenuTree(...)` 的端内 mapper 读取契约。
+
+验证结果：
+
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl seller -am "-Dtest=SellerPortalPermissionServiceImplTest,SellerPortalPermissionServiceImplPortalAccessTest,SellerPortalPermissionServiceImplMenuTreeTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`Tests run: 11, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl buyer -am "-Dtest=BuyerPortalPermissionServiceImplTest,BuyerPortalPermissionServiceImplPortalAccessTest,BuyerPortalPermissionServiceImplMenuTreeTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`Tests run: 11, Failures: 0, Errors: 0, Skipped: 0`。
+- 尾随空白检查通过：`rg -n "[ \t]+$" <本轮触碰测试文件>` 未发现匹配。
+- `cd E:\Urili-Ruoyi; git diff --check -- <本轮触碰 tracked 测试文件>`：通过。
+- `cd E:\Urili-Ruoyi; codegraph sync .`：通过，输出 `Already up to date`。
+
+当前判断：
+
+- 菜单树读取已从“只覆盖离线拒绝”补强为“离线拒绝 + 在线返回父子树 + mapper 入参固定”。
+- 权限 service 测试当前拆成三类职责：角色绑定测试各 321 行、portal access 测试各 456 行、menu tree 测试各 338 行。
+- 本轮未执行 SQL，未连接远程 MySQL / Redis，未修改远程数据。
+
+## 2026-06-06 端内权限 Service 测试拆分检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，按“先做一套标准卖家模板，验收通过后复制买家；每个切片只改一类东西”的节奏推进。本轮只处理一类问题：把 seller/buyer 端 `PortalPermissionServiceImpl` 测试从 500 行以上的大文件拆成“角色绑定写操作”和“端内访问/权限读取”两个测试类。本轮不改生产代码、不改前端、不执行 SQL、不连接远程 MySQL / Redis。
+
+已完成：
+
+- 新增 `SellerPortalPermissionServiceImplPortalAccessTest`，承载 seller 端 `selectPortalPermissionInfo(...)`、`selectPermissions(...)`、`selectPortalMenuTree(...)` 的会话守卫、在线 session 和权限信息返回测试。
+- `SellerPortalPermissionServiceImplTest` 收缩为 4 个 `assignAccountRoles...` 角色绑定写操作测试。
+- 新增 `BuyerPortalPermissionServiceImplPortalAccessTest`，按 seller 模板同构复制，只替换 terminal、领域对象、mapper、service、token 和权限 code。
+- `BuyerPortalPermissionServiceImplTest` 收缩为 4 个 `assignAccountRoles...` 角色绑定写操作测试。
+- 新增执行记录：`docs/plans/2026-06-06-terminal-permission-service-test-split-record.md`。
+- 更新 `docs/architecture/reuse-ledger.md`，登记权限 service 测试结构规则。
+
+验证结果：
+
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl seller -am "-Dtest=SellerPortalPermissionServiceImplTest,SellerPortalPermissionServiceImplPortalAccessTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`Tests run: 10, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl buyer -am "-Dtest=BuyerPortalPermissionServiceImplTest,BuyerPortalPermissionServiceImplPortalAccessTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`Tests run: 10, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi; git diff --check -- <本轮触碰 tracked 文件>`：通过，仅有 LF/CRLF 工作区换行提示；新增未跟踪文件另用行尾空白检查覆盖。
+- `cd E:\Urili-Ruoyi; codegraph sync .`：通过；测试拆分后输出过 `Synced 2 changed files`，复用台账修正后最近一次输出 `Synced 1 changed files`。
+
+当前判断：
+
+- 权限 service 测试已从单个 529 行文件拆成角色绑定测试 288 行、portal access 测试 423 行。
+- seller/buyer 原有 10 个测试行为均保留，只改变测试文件归属。
+- 本轮未执行 SQL，未连接远程 MySQL / Redis，未修改远程数据。
+
+## 2026-06-05 端内权限 Service 会话 fail-closed 守卫检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，按“先做一套标准卖家模板，验收通过后复制买家；每个切片只改一类东西”的节奏推进。本轮只处理一类问题：seller/buyer 端 `@PortalPreAuthorize` 背后的权限 service 必须在 session 形态异常或 DB session 缺失/失效时 fail-closed，并且在线 session 的权限信息必须从各自端内权限 mapper 返回。本轮不新增接口、不改前端、不执行 SQL、不连接远程 MySQL / Redis。
+
+已完成：
+
+- `SellerPortalPermissionServiceImpl.assertActiveSellerSession(...)` 增加 session 形态守卫：`session` 非空、terminal 必须为 `seller`、`subjectId` / `accountId` 必须存在、`tokenId` 必须非空白；不满足时返回 `401` 登录失效。
+- `SellerPortalPermissionServiceImplTest` 按卖家标准模板补充畸形 session、空白 token、DB session 离线、DB session 入参和账号锁定的权限 service 级守卫；畸形 session 用“查了就失败”的 fake 固定 BeforeLookup 契约，并覆盖 `selectPortalPermissionInfo(...)`、`selectPermissions(...)`、`selectPortalMenuTree(...)` 三个 public 入口。
+- `SellerPortalPermissionServiceImplTest` 按卖家标准模板补充 `selectPortalPermissionInfo(...)` 正向返回测试：在线 session 返回 terminal、主体、账号、用户名、昵称、角色和权限；角色和权限读取入参必须是当前 seller/account，权限字符串支持逗号拆分。
+- `BuyerPortalPermissionServiceImpl` / `BuyerPortalPermissionServiceImplTest` 按卖家模板同构复制，只替换 terminal、领域对象、mapper、service 和文案。
+- 更新 `docs/architecture/reuse-ledger.md`，登记端内权限 service session fail-closed 复用规则。
+- 新增执行记录：`docs/plans/2026-06-05-terminal-permission-service-session-shape-guard-record.md`。
+
+验证结果：
+
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl seller -am "-Dtest=SellerPortalPermissionServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`Tests run: 10, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl buyer -am "-Dtest=BuyerPortalPermissionServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`Tests run: 10, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi; git diff --check -- <本轮触碰文件>`：通过，仅有 LF/CRLF 工作区换行提示。
+- `cd E:\Urili-Ruoyi; codegraph sync .`：通过；本检查点先后输出 `Synced 5 changed files`、`Synced 2 changed files`、`Synced 3 changed files`。
+
+当前判断：
+
+- seller/buyer 端权限 service 现在同时守住三层边界：session 形态异常先拒绝、主体/账号状态异常拒绝、DB session 不在线拒绝。
+- `selectPortalPermissionInfo(...)`、`selectPermissions(...)`、`selectPortalMenuTree(...)` 三个权限 service public 入口均已由测试固定复用同一 fail-closed 守卫。
+- `selectPortalPermissionInfo(...)` 正向返回已经按卖家标准模板验收，并同构复制到买家；后续端内 `getInfo` 相关改动应沿用这套 fake mapper 与入参断言。
+- `PortalTokenSupport.requireSession(...)` 的 Redis/JWT 校验仍是入口守卫，权限 service 的 DB session 校验是运行时兜底；两者重复但不冲突。
+- 本轮未执行 SQL，未连接远程 MySQL / Redis，未修改远程数据。
+
+## 2026-06-05 端内 Portal 后台上下文回退守卫检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，按“先做一套标准卖家模板，验收通过后复制买家；每个切片只改一类东西”的节奏推进。本轮只处理一类问题：seller/buyer 端受 `@PortalPreAuthorize` 保护的端内接口，不能在缺失端内上下文时回退到若依后台 `SecurityUtils` / `LoginUser` / `SysUser` / `@ss` 权限上下文。本轮不新增接口、不改 service 业务逻辑、不复制 buyer 前端、不执行远程数据库 DDL/DML、不连接远程 MySQL / Redis。
+
+已完成：
+
+- `TerminalRouteOwnershipTest` 新增 seller/buyer 受保护 portal handler 后台上下文回退守卫。
+- 新增断言：受保护 portal handler 方法体不得使用 `SecurityUtils.getLoginUser/getUserId/getUsername`、裸调用 `getLoginUser/getUserId/getUsername`、`LoginUser` 或 `SysUser` 推导端内身份。
+- 继续保留原有守卫：端内 handler 必须方法级 `@Anonymous`、`@PortalPreAuthorize`、`@PortalLog`、`PortalSessionContext.requireSession(...)`，且方法签名不得接收客户端身份范围参数。
+- 6 个子 agent 已完成只读审计并关闭；seller/buyer controller 未发现后台登录上下文回退，service 审计确认当前后台 `SecurityUtils.getUsername()` 用于管理端控制面审计字段，暂不属于本切片违规。
+- 新增执行记录：`docs/plans/2026-06-05-terminal-portal-admin-context-guard-record.md`。
+- 更新 `docs/architecture/reuse-ledger.md`，登记端内 Controller 鉴权模板和 `PortalSessionContext` 复用规则。
+
+验证结果：
+
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system -Dtest=TerminalRouteOwnershipTest test`：通过，`Tests run: 7, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system "-Dtest=TerminalAccountIsolationTest,TerminalRouteOwnershipTest,TerminalSeedPermissionContractTest,TerminalSqlIsolationContractTest" test`：通过，`Tests run: 11, Failures: 0, Errors: 0, Skipped: 0`。
+- UI 子 agent 只读审计中运行 `cd E:\Urili-Ruoyi\react-ui; npm run guard:partner-management`：通过，`Partner management template guard passed.`。
+- `git diff --check -- RuoYi-Vue/ruoyi-system/src/test/java/com/ruoyi/system/architecture/TerminalRouteOwnershipTest.java docs/architecture/reuse-ledger.md docs/plans/2026-06-04-three-terminal-isolation-goal-tracker.md docs/plans/2026-06-05-terminal-portal-admin-context-guard-record.md`：通过，仅有 LF/CRLF 工作区换行提示。
+- `cd E:\Urili-Ruoyi; codegraph sync .`：通过，输出 `Already up to date`。
+
+当前判断：
+
+- 当前受保护 seller/buyer portal handler 已由测试同时守住三层身份边界：必须从 `PortalSessionContext` 派生身份、不能接收客户端身份范围参数、不能回退若依后台登录上下文。
+- 管理端 `/seller/admin/**`、`/buyer/admin/**` 继续使用若依后台 `@PreAuthorize("@ss.hasPermi(...)")` 和后台登录上下文；本轮守卫不限制管理端控制面。
+- 本轮未执行 SQL，未连接远程 MySQL / Redis，未修改远程数据。
+
+## 2026-06-05 远程库三端独立结构只读核验检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，只做远程 MySQL 当前结构的只读核验。本轮不执行 DDL/DML，不修改数据，不读取账号密码明文或业务内容。
+
+数据源确认：
+
+- 激活配置：`RuoYi-Vue/ruoyi-admin/src/main/resources/application.yml` 当前 `active: druid`。
+- JDBC 来源：`RuoYi-Vue/ruoyi-admin/src/main/resources/application-druid.yml`，目标库为远程 MySQL `fenxiao`。
+- Redis 配置：`application.yml` 指向远程 Redis。
+- 连接凭证来源：本机 `.env.local` 的 `RUOYI_DB_*`，未在命令输出或记录中写入明文。
+- 本机 `mysql` CLI 不存在，本轮使用 Maven 本地缓存的 `mysql-connector-j` 和 `jshell` 进行 JDBC 只读查询。
+
+已核验：
+
+- 三端独立核心表存在：`seller`、`buyer`、`seller_account`、`buyer_account`、`seller_role`、`buyer_role`、`seller_menu`、`buyer_menu`、`seller_dept`、`buyer_dept`、`seller_account_role`、`buyer_account_role`、`seller_role_menu`、`buyer_role_menu`、`seller_login_log`、`buyer_login_log`、`seller_oper_log`、`buyer_oper_log`、`seller_session`、`buyer_session`、`portal_direct_login_ticket`，共 `21/21`。
+- `seller_account.user_id` 不存在，`buyer_account.user_id` 不存在。
+- `seller_account` / `buyer_account` 的端账号关键字段存在：端账号 ID、主体 ID、`user_name`、`password`、`account_role`、`status`、`lock_status`。
+- `seller_login_log` / `buyer_login_log`、`seller_oper_log` / `buyer_oper_log` 的端主体 ID、端账号 ID 和时间字段存在。
+- `seller_session` / `buyer_session` 的端主体 ID、端账号 ID、账号名、过期时间和状态字段存在。
+- 关键索引存在：端账号用户名唯一索引、OWNER 唯一索引、端会话账号索引。
+
+只读查询结果摘要：
+
+- `coreTablesPresent=21/21 missing=[]`
+- `forbiddenColumn seller_account.user_id count=0`
+- `forbiddenColumn buyer_account.user_id count=0`
+- `requiredColumns seller_account missing=[]`
+- `requiredColumns buyer_account missing=[]`
+- `requiredColumns seller_login_log missing=[]`
+- `requiredColumns buyer_login_log missing=[]`
+- `requiredColumns seller_oper_log missing=[]`
+- `requiredColumns buyer_oper_log missing=[]`
+- `requiredColumns seller_session missing=[]`
+- `requiredColumns buyer_session missing=[]`
+- `index seller_account.uk_seller_account_username count=1`
+- `index buyer_account.uk_buyer_account_username count=1`
+- `index seller_account.uk_seller_account_owner count=1`
+- `index buyer_account.uk_buyer_account_owner count=1`
+- `index seller_session.idx_seller_session_account count=1`
+- `index buyer_session.idx_buyer_session_account count=1`
+
+新增执行记录：
+
+- `docs/plans/2026-06-05-remote-terminal-schema-readonly-verification-record.md`
+
+当前判断：
+
+- 当前远程 MySQL 的三端账号、权限、日志、会话核心结构与三端独立方向一致。
+- 本轮只证明当前结构存在与关键字段/索引满足要求，不证明所有端内业务权限、页面按钮和运行时接口已经全部覆盖；这些仍以对应接口测试、guard 和 smoke 记录为准。
+- 本轮未执行 DDL/DML，未修改远程数据。
+
+## 2026-06-05 legacy sys_user 账号回填隔离检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，按“卖家/买家端账号不再复用若依 `sys_user`”的目标推进。本轮只处理一类问题：旧三端隔离迁移 SQL 中端账号从 `sys_user` 回填的兼容块不再保留在当前主三端隔离基线中。本轮不执行远程数据库 DDL/DML、不连接远程 MySQL / Redis。
+
+已完成：
+
+- `RuoYi-Vue/sql/20260604_three_terminal_isolation_migration.sql` 移除 `migrate_seller_account_from_sys_user` / `migrate_buyer_account_from_sys_user` 过程和 `left join sys_user` 回填逻辑。
+- 新增 `RuoYi-Vue/sql/20260604_three_terminal_legacy_sys_user_account_backfill.sql`，明确作为历史混用账号库的 legacy helper；仅当旧库仍存在 `seller_account.user_id` / `buyer_account.user_id` 指向 `sys_user` 时，在主迁移脚本之前按需执行。
+- `TerminalSqlIsolationContractTest` 增加断言：当前主三端隔离迁移脚本不得再包含 legacy `sys_user` 账号回填过程或 `join sys_user`。
+- 新增执行记录：`docs/plans/2026-06-05-terminal-legacy-sys-user-backfill-isolation-record.md`。
+- 更新 `docs/architecture/reuse-ledger.md`，登记当前主三端隔离 SQL 与 legacy 回填脚本边界。
+
+验证结果：
+
+- `cd E:\Urili-Ruoyi; rg -n "migrate_(seller|buyer)_account_from_sys_user|join\s+sys_user|left\s+join\s+sys_user|sys_user" RuoYi-Vue/sql/20260604_three_terminal_isolation_migration.sql RuoYi-Vue/sql/20260604_three_terminal_legacy_sys_user_account_backfill.sql`：命中只存在于 legacy helper 文件，主迁移脚本无命中。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system -Dtest=TerminalSqlIsolationContractTest test`：通过，`Tests run: 2, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system "-Dtest=TerminalAccountIsolationTest,TerminalRouteOwnershipTest,TerminalSeedPermissionContractTest,TerminalSqlIsolationContractTest" test`：通过，`Tests run: 9, Failures: 0, Errors: 0, Skipped: 0`。
+
+当前判断：
+
+- 当前主三端隔离迁移脚本不再从若依 `sys_user` 回填 seller/buyer 端账号，账号独立基线更清楚。
+- legacy helper 只作为历史混用账号库迁出工具保留，不属于新环境或当前主三端隔离基线。
+- 本轮未执行 SQL；远程 MySQL / Redis 未连接。
+
+## 2026-06-05 端内日志 SQL 独立 DDL 守卫检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，按“三端账号、权限、日志、会话独立”的目标推进。本轮只处理一类问题：旧三端隔离迁移 SQL 中 seller/buyer 登录日志、操作日志表不再通过 `LIKE sys_logininfor` / `LIKE sys_oper_log` 继承若依后台日志表结构。本轮不复制 buyer 前端、不改运行时 Java 业务逻辑、不执行远程数据库 DDL/DML、不连接远程 MySQL / Redis。
+
+已完成：
+
+- `RuoYi-Vue/sql/20260604_three_terminal_isolation_migration.sql` 中 `seller_login_log`、`buyer_login_log`、`seller_oper_log`、`buyer_oper_log` 改为显式独立 DDL。
+- 对已有运行库表保持兼容：仍通过 `add_column_if_missing(...)` 补端内主体/账号字段，并通过 `add_index_if_missing(...)` 补端内主体/账号时间索引。
+- 新增 `TerminalSqlIsolationContractTest`，扫描三端隔离迁移脚本和综合 seed，防止 seller/buyer 端内日志表再次使用 `LIKE sys_*` 模板生成。
+- 新增执行记录：`docs/plans/2026-06-05-terminal-log-sql-explicit-ddl-record.md`。
+- 更新 `docs/architecture/reuse-ledger.md`，登记端内日志 SQL 必须显式建表，不从若依 `sys_logininfor` / `sys_oper_log` 派生。
+
+验证结果：
+
+- `cd E:\Urili-Ruoyi; rg -n "create table if not exists (seller|buyer)_(login|oper)_log like sys_|like sys_logininfor|like sys_oper_log" RuoYi-Vue/sql/20260604_three_terminal_isolation_migration.sql RuoYi-Vue/sql/seller_buyer_management_seed.sql`：无命中。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system -Dtest=TerminalSqlIsolationContractTest test`：通过，`Tests run: 1, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system "-Dtest=TerminalAccountIsolationTest,TerminalRouteOwnershipTest,TerminalSeedPermissionContractTest,TerminalSqlIsolationContractTest" test`：通过，`Tests run: 8, Failures: 0, Errors: 0, Skipped: 0`。
+
+当前判断：
+
+- seller/buyer 端内登录日志和操作日志的 SQL 基线不再依赖若依后台日志表模板，三端日志独立性更清楚。
+- 迁移脚本中的 `sys_user` 历史字段回填已在后续 `legacy sys_user 账号回填隔离检查点` 中拆出为独立 legacy helper；本检查点只负责端内日志 DDL 独立。
+- 本轮未执行 SQL；远程 MySQL / Redis 未连接。
+
+## 2026-06-05 卖家端商品 ProTable 标准模板检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，并按最新确认节奏执行：先做一套标准卖家模板，验收通过后复制买家；每个切片只改一类东西。本轮只固定 seller portal “我的商城商品”主列表的标准 ProTable 模板，并解除阻塞该验证链路的 product 模块编译问题；不复制 buyer 前端、不执行数据库 DDL/DML、不连接远程 MySQL / Redis。
+
+已完成：
+
+- 6 个只读子 agent 并行审查 seller 后端、buyer 后端、seller 前端、buyer 前端、测试守卫和文档台账，结论用于收敛本切片边界。
+- `ProductDistributionServiceImpl` 补齐已有商城商品状态/控制/价格操作日志代码缺失的批次号、状态校验和日志记录辅助方法，解除 `product` 模块编译阻塞。
+- seller portal “我的商城商品”主列表从手写 `Card + Table + useEffect + pageNum/pageSize` 列表整理为标准 `ProTable`。
+- seller 商品主列表统一复用 `getPersistedProTableSearch(...)`、`getProTablePagination(...)` 和 `getProTableScroll(...)`，并在 ProTable request 中固定 `current -> pageNum`、`pageSize -> pageSize` 映射。
+- seller 商品查询参数继续通过端内 service 清理客户端身份范围字段，不让 `sellerId`、`subjectId`、`accountId` 或 `terminal` 决定端内数据范围。
+- `react-ui/scripts/check-seller-portal-product-template.mjs` 增加 ProTable、统一筛选、统一分页、统一滚动和若依分页映射的静态契约断言。
+- 更新 `docs/architecture/reuse-ledger.md`，登记 seller 商品主列表 ProTable 模板和 buyer 后续复制边界。
+- 新增执行记录：
+  - `docs/plans/2026-06-05-product-distribution-operation-log-compile-unblock-record.md`
+  - `docs/plans/2026-06-05-seller-portal-product-protable-template-record.md`
+
+验证结果：
+
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl product -am "-DskipTests" compile`：通过。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system,ruoyi-framework,seller,buyer -am "-Dtest=TerminalAccountIsolationTest,TerminalRouteOwnershipTest,TerminalSeedPermissionContractTest,SellerAdminPermissionContractTest,BuyerAdminPermissionContractTest,AdminAccountPermissionUiContractTest,PortalTokenSupportTest,PortalSessionProfileTest,PortalDirectLoginSupportTest,SellerServiceImplTest,BuyerServiceImplTest,SellerPortalProductServiceImplTest,BuyerPortalProductServiceImplTest,SellerPortalPermissionServiceImplTest,BuyerPortalPermissionServiceImplTest,PermissionServiceAccountPermissionTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`ruoyi-system Tests run: 24`、`ruoyi-framework Tests run: 7`、`seller Tests run: 39`、`buyer Tests run: 41`，均无失败。
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:seller-portal-product`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:buyer-portal-product`：通过，确认本切片未破坏 buyer 既有模板。
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:partner-management`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:portal-token`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run tsc -- --pretty false`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npx biome lint src/pages/Portal/Home/SellerOwnDistributionProductList.tsx scripts/check-seller-portal-product-template.mjs`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run lint`：未通过，失败点为既有 Biome lint 问题，集中在 `DictTag`、`RightContent`、`utils/tree`、`IconSelector`、`Monitor` 等非本切片修改文件；本切片修改文件的定向 lint 已通过。
+- `cd E:\Urili-Ruoyi; .\scripts\smoke\seller-portal-product-ui-smoke.ps1 -AdminPassword 'admin123' -ScreenshotPath 'output/playwright/seller-portal-product-protable-smoke.png' -TimeoutMs 60000`：通过，真实进入 seller portal，验证 seller token 隔离、“我的商城商品”列表、详情弹窗、字段脱敏和退出清理；截图保存到 `output/playwright/seller-portal-product-protable-smoke.png`。
+- `cd E:\Urili-Ruoyi; codegraph sync .`：通过，CodeGraph 同步 `9 changed files`。
+
+当前判断：
+
+- seller portal 商品主列表已经形成当前可验收的标准 ProTable 模板，且已通过真实浏览器 smoke；本检查点当时未复制 buyer 前端 ProTable 差量。
+- 后续已通过 `docs/plans/2026-06-05-buyer-portal-product-protable-copy-record.md` 按 buyer 浏览口径完成 ProTable 差量复制；顶部当前状态以“双端 ProTable 标准模板已完成”为准。
+- product 模块本轮只完成已有操作日志链路的编译阻塞修复，没有执行 SQL；远程 MySQL / Redis 未连接。
+- 子 agent 提醒的后续项已纳入边界：buyer schema 组件可后续中性化复用；商品日志 SQL 中历史 `sys_user` / `sys_log` 类命名已由后续 SQL 隔离检查点继续收敛。
+
+## 2026-06-05 免密票据目标账号失效守卫检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，按“先做一套标准卖家模板，验收通过后复制买家；每个切片只改一类东西”的节奏推进。本轮只补 direct-login 票据指向的端账号生命周期守卫测试，不改生产代码、不改前端、不执行 SQL、不连接远程 MySQL / Redis。
+
+已完成：
+
+- `SellerServiceImplTest` 先作为标准模板新增 2 个用例：票据指向账号已不存在时拒绝登录、票据指向账号已被改绑到其他卖家时拒绝登录。
+- seller 模板验证通过后，`BuyerServiceImplTest` 按同一结构复制 2 个用例，只替换 terminal、编号、实体和 service。
+- 两端新增用例均断言失败时不创建端登录 session、不创建端 token，并写入失败登录日志；账号不存在或归属变化时失败日志保留目标主体 ID，账号 ID 为空。
+- 新增执行记录：`docs/plans/2026-06-05-direct-login-target-account-validation-record.md`。
+- 更新 `docs/architecture/reuse-ledger.md`，登记免密票据消费前还必须校验目标账号存在且仍属于票据主体。
+
+验证结果：
+
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl seller -am "-Dtest=SellerServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`Tests run: 28, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl buyer -am "-Dtest=BuyerServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`Tests run: 28, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system,seller,buyer -am "-Dtest=PortalDirectLoginSupportTest,SellerServiceImplTest,BuyerServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" clean test`：通过，support `Tests run: 6`，seller `Tests run: 28`，buyer `Tests run: 28`，均无失败。
+
+当前判断：
+
+- 管理端签发的免密票据如果目标端账号后续被删除、迁移或错绑，不会生成 seller/buyer 端登录会话。
+- 该切片没有改变票据状态机；真正“不消耗票据”的行为仍由前序 `PortalDirectLoginSupportTest` 的 validator 失败测试守住，本轮补齐 seller/buyer service 对目标账号缺失和归属变化的业务输入。
+- 本轮未执行 SQL；远程 MySQL / Redis 未连接。
+
+## 2026-06-05 directLogin 权限矩阵补强检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，按“每个切片只改一类东西”的节奏推进。本轮只补若依运行时 `PermissionService` 权限矩阵，不改接口、不改 UI、不执行 SQL、不连接远程 MySQL / Redis。
+
+已完成：
+
+- `PermissionServiceAccountPermissionTest` 增加 `seller:admin:directLogin` / `seller:admin:ticket:list` 与 buyer 对应权限的运行时矩阵断言。
+- 证明只有主体权限或端内角色权限时，不能访问账号域权限、强制踢出、免密代入和免密票据。
+- 证明只有账号 reset/lock/forceLogout 权限时，不能访问 directLogin 或 ticket 列表。
+- 证明只有 directLogin/ticket 权限时，不能访问账号 reset/lock 或 forceLogout，也不能串到 buyer 端。
+- 超管通配权限仍能访问 seller/buyer 账号、强踢、免密代入和免密票据权限。
+- 新增执行记录：`docs/plans/2026-06-05-direct-login-permission-matrix-record.md`。
+- 更新 `docs/architecture/reuse-ledger.md`，登记 directLogin/ticket 已进入 `PermissionServiceAccountPermissionTest` 运行时权限矩阵。
+
+验证结果：
+
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-framework -Dtest=PermissionServiceAccountPermissionTest test`：通过，`Tests run: 7, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-framework -Dtest=PermissionServiceAccountPermissionTest clean test`：通过，`Tests run: 7, Failures: 0, Errors: 0, Skipped: 0`，确认 clean 后重新编译。
+
+当前判断：
+
+- 管理端免密代入和免密票据现在同时有 controller/UI/seed 静态契约，以及若依运行时 `@ss.hasPermi(...)` 权限矩阵兜底。
+- 本轮没有做真实低权限 HTTP / 浏览器 smoke；seller/buyer 的 directLogin 低权限真实验收已有前序记录，本轮只固化运行时权限服务矩阵。
+- 本轮未执行 SQL；远程 MySQL / Redis 未连接。
+
+## 2026-06-05 免密票据消费前状态校验检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，按“先做一套标准卖家模板，验收通过后复制买家；每个切片只改一类东西”的节奏推进。本轮只处理一类问题：管理端已生成的 seller/buyer 免密票据，在目标主体或端账号后续被停用/锁定后，不能被消费为 `USED`。本轮不改前端、不执行 SQL、不连接远程 MySQL / Redis。
+
+已完成：
+
+- `PortalDirectLoginSupport` 增加 `consumeToken(portalType, token, validator)` 重载；validator 在票据标记 `USED` 和 Redis payload 删除之前执行。
+- `PortalDirectLoginSupportTest` 增加 validator 失败测试，固定失败时不 mark used、不 mark expired、不删除 Redis payload。
+- `SellerServiceImpl` 的 `directLoginSeller(...)` 接入消费前 validator，按 token 中的 subject/account 重新读取当前 seller 与 seller_account；主体停用、账号停用、账号锁定或目标账号不存在时，在消费票据前拒绝。
+- `SellerServiceImplTest` 先作为标准模板补齐免密票据消费时当前状态复验：正常可登录、主体停用拒绝、账号停用拒绝、账号锁定拒绝。
+- `BuyerServiceImpl` / `BuyerServiceImplTest` 按 seller 模板同构复制，只替换 buyer 字段、service 和 terminal。
+- 新增执行记录：`docs/plans/2026-06-05-direct-login-pre-consume-validation-record.md`。
+- 更新 `docs/architecture/reuse-ledger.md`，登记免密票据消费前状态校验复用规则。
+
+验证结果：
+
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system,seller,buyer -am "-Dtest=PortalDirectLoginSupportTest,SellerServiceImplTest,BuyerServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，support `Tests run: 6`，seller `Tests run: 26`，buyer `Tests run: 26`，均无失败。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system,seller,buyer -am "-Dtest=PortalDirectLoginSupportTest,SellerServiceImplTest,BuyerServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" clean test`：通过，确认 clean 后重新编译。
+
+当前判断：
+
+- 免密票据现在不会因为目标主体/端账号已失效而被“先消费再拒绝登录”；无效状态会在 mark `USED` 前被 seller/buyer 当前状态校验拦截。
+- 本轮未做 HTTP smoke，因为该切片主要固定 service/support 行为；真实端入口仍复用既有 seller/buyer direct-login controller。
+- 本轮未执行 SQL；远程 MySQL / Redis 未连接。
+
+## 2026-06-05 密码重置强制踢出端会话检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，按“先做一套标准卖家模板，验收通过后复制买家；每个切片只改一类东西”的节奏推进。本轮只处理一类问题：管理端重置 seller/buyer 端账号密码后，旧端会话不能继续使用。本轮不改前端、不执行 SQL、不连接远程 MySQL / Redis。
+
+已完成：
+
+- `SellerServiceImpl` 将自定义重置密码、恢复默认密码、重置主体主账号密码三个入口纳入事务；密码更新成功后强制踢出目标 seller 端账号会话，并删除 seller terminal Redis token。
+- `SellerServiceImplTest` 先作为标准模板补齐三类入口的 service 单测，覆盖密码写入 BCrypt 密文、只踢目标端账号会话、Redis token 删除 terminal 为 `seller`。
+- `BuyerServiceImpl` 按 seller 模板同构复制，只替换 buyer 字段、service 和 terminal。
+- `BuyerServiceImplTest` 按 seller 模板补齐三类入口的 service 单测，覆盖 terminal 为 `buyer`。
+- 新增执行记录：`docs/plans/2026-06-05-password-reset-force-logout-sessions-record.md`。
+- 更新 `docs/architecture/reuse-ledger.md`，登记管理端重置端账号密码必须同步清理旧端会话的复用规则。
+
+验证结果：
+
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl seller -am "-Dtest=SellerServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`Tests run: 22, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl buyer -am "-Dtest=BuyerServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`Tests run: 22, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl seller,buyer -am "-Dtest=SellerServiceImplTest,BuyerServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" clean test`：通过，seller / buyer 各 `Tests run: 22, Failures: 0, Errors: 0, Skipped: 0`，并确认 clean 后重新编译。
+
+当前判断：
+
+- 管理端重置端账号密码现在不再只改密码字段，还会立即失效该端账号旧会话，符合管理端对 seller/buyer 端账号的控制权要求。
+- 本轮未做 HTTP smoke，因为该切片只补 service 行为；真实接口入口仍复用既有管理端 controller 和权限契约。
+- 本轮未执行 SQL；远程 MySQL / Redis 未连接。
+
+## 2026-06-05 会话与强制踢出权限契约补强检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，按“每个切片只改一类东西”的节奏推进。本轮只补管理端会话列表 / 强制踢出的权限契约测试，不改接口、不改 UI、不执行 SQL、不连接远程 MySQL / Redis。
+
+已完成：
+
+- `SellerAdminPermissionContractTest` 增加卖家管理端 `sessions`、`accountSessions`、`forceLogoutSeller`、`forceLogoutSellerAccount` 必须使用 `seller:admin:forceLogout` 的断言。
+- `BuyerAdminPermissionContractTest` 按卖家模板补齐买家管理端 `sessions`、`accountSessions`、`forceLogoutBuyer`、`forceLogoutBuyerAccount` 必须使用 `buyer:admin:forceLogout` 的断言。
+- `AdminAccountPermissionUiContractTest` 增加 seller/buyer 页面必须注入主体会话、账号会话、主体强踢、账号强踢 service 的断言。
+- `AdminAccountPermissionUiContractTest` 增加共享主体列表和账号弹窗必须通过 `access.hasPerms(\`${permPrefix}:forceLogout\`)` 控制“会话 / 强制踢出”入口的断言。
+- `PermissionServiceAccountPermissionTest` 增加 `*:admin:forceLogout` 的权限矩阵：主体权限、角色权限和账号权限不能误授权强踢；seller 精确强踢权限不能串到 buyer；超管通配仍可访问双端强踢权限。
+- 新增执行记录：`docs/plans/2026-06-05-session-force-logout-permission-contract-record.md`。
+- 更新 `docs/architecture/reuse-ledger.md`，登记会话列表与强制踢出权限契约守卫。
+
+验证结果：
+
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system "-Dtest=SellerAdminPermissionContractTest,BuyerAdminPermissionContractTest,AdminAccountPermissionUiContractTest" test`：通过，`Tests run: 5, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-framework -Dtest=PermissionServiceAccountPermissionTest test`：通过，`Tests run: 5, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:partner-management`：通过。
+
+当前判断：
+
+- 管理端 seller/buyer 会话列表和强制踢出已经有后端 controller 权限、前端显隐和 PermissionService 权限矩阵三层契约兜底。
+- 旧检查点中“管理端前端 session 列表 UI 尚未接入 / buyer UI 仍未复制”的表述已是历史状态；当前以 `PartnerSessionModal`、Seller/Buyer 页面配置和本检查点为准。
+- 本轮未做运行时低权限验收；下一类更适合单独验证低权限账号看不到“会话 / 强制踢出”且后端接口返回拒绝，或补 seller/buyer service 级会话列表/强踢直接单测。
+
+## 2026-06-05 账号锁定权限契约补强检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，并按当前确认节奏执行：先做一套标准卖家模板，验收通过后复制买家；每个切片只改一类东西。本轮只补账号锁定/解锁权限的契约测试，不改业务实现、不执行 SQL、不做页面布局调整。
+
+已完成：
+
+- `SellerAdminPermissionContractTest` 增加 `lockAccount` / `unlockAccount` 的 `seller:admin:account:lock` 权限断言。
+- `BuyerAdminPermissionContractTest` 按卖家模板同构补齐 `buyer:admin:account:lock` 权限断言。
+- `AdminAccountPermissionUiContractTest` 增加 seller/buyer 页面配置必须声明 `accountPermissions.lock`，并要求共享账号弹窗通过 `access.hasPerms(accountPermissions.lock...)` 控制锁定/解锁入口。
+- `PermissionServiceAccountPermissionTest` 增加 `*:admin:account:lock` 的权限矩阵：主体/角色权限不能误授权账号锁定权限，精确 seller 账号权限不能串到 buyer，超管通配仍可访问双端账号锁定权限。
+- 新增执行记录：`docs/plans/2026-06-05-account-lock-permission-contract-record.md`。
+- 更新 `docs/architecture/reuse-ledger.md`，登记账号锁定权限必须被后端接口、权限服务和前端 UI 契约共同保护。
+
+验证结果：
+
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system "-Dtest=SellerAdminPermissionContractTest,BuyerAdminPermissionContractTest,AdminAccountPermissionUiContractTest" test`：通过，`Tests run: 5, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-framework -Dtest=PermissionServiceAccountPermissionTest test`：通过，`Tests run: 4, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:partner-management`：通过。
+
+当前判断：
+
+- seller/buyer 账号锁定/解锁的后端接口权限、权限服务矩阵和前端显隐契约已经被固定为同一套标准模板。
+- 后续再改账号弹窗、页面配置或 controller 权限时，测试会阻止把锁定/解锁误挂到主体权限、角色权限或漏掉前端按钮权限。
+- 本轮未连接远程 MySQL / Redis，未启动浏览器；因为切片只补源码级契约测试，运行时低权限验收已由前序 seller/buyer 锁定记录覆盖。
+
+## 2026-06-05 Portal 401 端 token 隔离检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，按“每个切片只改一类东西”的节奏推进。本轮只处理一类前端隔离问题：seller/buyer portal 请求返回 401 时，不得清理管理端 `access_token`、`admin_remote_menu` 或跳转管理端登录页。本轮不改后端、不执行 SQL、不改管理端业务页面、不启动三端物理前端拆分。
+
+已完成：
+
+- 新增 `react-ui/src/utils/portalRequest.ts`，通过请求 URL 判断是否为 seller/buyer portal API。
+- `/api/seller/admin/**` 和 `/api/buyer/admin/**` 明确排除在 portal API 之外，继续按管理端后台接口处理。
+- `react-ui/src/app.tsx` 的响应拦截器在业务 `code=401` 时，先判断 portal terminal；若是 portal 请求，只清对应 `seller` / `buyer` 端 token。
+- `react-ui/src/requestErrorConfig.ts` 的 BizError / HTTP status 401 处理同样按 URL 区分 portal 请求和管理端请求。
+- `react-ui/scripts/check-portal-token-isolation.mjs` 增加静态守卫：必须存在 portal URL 判定工具，必须排除管理端 seller/buyer admin API，`app.tsx` 和 `requestErrorConfig.ts` 必须用 `clearTerminalSessionToken(portalTerminal)` 处理 portal 401。
+- 更新 `docs/architecture/reuse-ledger.md`，登记 portal 401 与 admin session 隔离规则。
+- 新增执行记录：`docs/plans/2026-06-05-portal-401-terminal-token-isolation-record.md`。
+
+验证结果：
+
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:portal-token`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npx biome lint src/app.tsx src/requestErrorConfig.ts src/utils/portalRequest.ts scripts/check-portal-token-isolation.mjs`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npx biome check src/utils/portalRequest.ts scripts/check-portal-token-isolation.mjs`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run tsc -- --pretty false`：通过。
+
+当前判断：
+
+- portal 端 401 现在只影响对应端 token，不再误伤管理端登录态。
+- 管理端卖家/买家后台接口仍通过 `/api/seller/admin/**`、`/api/buyer/admin/**` 保持原有 admin 401 处理。
+- 本轮未运行浏览器 smoke；当前切片是请求错误处理和静态守卫增强，后续如果做 portal 页面回归，可复跑 seller/buyer portal smoke。
+
+## 2026-06-05 买家账号锁定解锁模板复制检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，按“卖家模板先定型、买家只复制替换；每个切片只改一类东西”的节奏推进。本轮只复制买家账号锁定/解锁能力，不做充值、余额或三端物理前端拆分。
+
+已完成：
+
+- 新增 buyer 账号锁定字段 `lock_status` / `lock_reason`，并同步 `seller_buyer_management_seed.sql`、`20260604_three_terminal_isolation_migration.sql` 和新增增量 SQL `20260605_buyer_account_lock_control.sql`。
+- 新增管理端权限点 `buyer:admin:account:lock`，同步买家账号权限 seed 和综合 seed。
+- `BuyerAccount`、`BuyerMapper` / `BuyerMapper.xml`、`IBuyerService`、`AdminBuyerController`、`BuyerServiceImpl` 已按 seller 模板复制锁定/解锁链路。
+- buyer 登录、免密登录生成、端内改密、端内权限校验均拒绝锁定账号。
+- `Buyer/index.tsx` 和 `buyer.ts` 已注入 `lockAccount` / `unlockAccount`，共享账号弹窗无需重写。
+- 模板守卫 `check-partner-management-template.mjs` 已升级为 seller/buyer 双端都检查锁定 service、URL、权限和配置绑定。
+- 新增执行记录：`docs/plans/2026-06-05-buyer-account-lock-control-copy-record.md`。
+- 更新 `docs/architecture/reuse-ledger.md`。
+
+验证结果：
+
+- 远程 SQL 首次执行 `14` 条语句，幂等复跑 `14` 条语句。
+- 远程 SQL 执行后：`buyer_account` 锁定字段数 `2`，`idx_buyer_account_buyer_lock` distinct 索引数 `1`，`buyer:admin:account:lock` 权限数 `1`，`buyer_account_lock_status` 字典类型数 `1`，字典数据数 `2`。
+- 管理员 HTTP smoke：空锁定原因返回业务 `code=500` 且状态不变；有效锁定后 `lockStatus=1`，账号级免密被拒；解锁后 `lockStatus=0` 且 `lockReason=''`。
+- 低权限接口验收：临时角色拥有 `buyer:admin:account:list` 但没有 `buyer:admin:account:lock`；买家列表和账号列表 `code=200`，锁定/解锁接口均 `code=403`，账号锁定字段不变。
+- 低权限浏览器验收：买家账号弹窗可打开，锁定列数量 `1`，锁定/解锁操作数量 `0`，更多按钮数量 `0`；管理端 token 存在，`seller_access_token=false`，`buyer_access_token=false`。
+- 临时账号 `codex_b_lock_ltd` 和临时角色 `codex_buyer_lock_negative` 均已清理，剩余 `0`。
+- 截图：`react-ui/output/playwright/buyer-lock-lowperm-negative.png`，文件大小 `51957` bytes。
+- `mvn -pl buyer -am test`：通过，`ruoyi-system` 44 个测试、`finance` 9 个测试、`buyer` 33 个测试均通过。
+- 前端 `node --check`、`npm run guard:partner-management`、定向 `biome lint`、`npm run tsc -- --pretty false`、`npm run guard:portal-token` 均通过。
+- `mvn -DskipTests install` 首次因旧 8080 Java 进程锁住 jar 在 `ruoyi-admin` repackage 失败；停止旧进程后 `mvn -DskipTests install -rf :ruoyi-admin` 通过，并已重启 8080。
+
+当前判断：
+
+- 买家账号锁定/解锁已按 seller 标准模板复制完成，并通过后端、前端、远程 SQL、低权限接口和低权限浏览器验收。
+- 本轮证明“能看账号但不能锁定/解锁”的权限边界成立，不是通过隐藏整个账号入口规避验证。
+
+## 2026-06-05 卖家账号锁定低权限负向验收检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，接在卖家账号锁定/解锁模板之后，只验证一类权限边界：管理端低权限账号可以查看卖家账号列表，但没有 `seller:admin:account:lock` 时不能锁定或解锁卖家账号。本轮不复制 buyer，不改业务代码，不改表结构。
+
+已完成：
+
+- 通过若依管理端 API 创建临时角色 `codex_lock_negative` 和临时账号 `codex_lock_limited`。
+- 临时角色只绑定 `seller:admin:list`、`seller:admin:query`、`seller:admin:account:list` 及其父级菜单；未绑定 `seller:admin:account:lock`。
+- 使用低权限 token 验证卖家列表和卖家账号列表接口可访问。
+- 使用低权限 token 验证卖家账号锁定/解锁接口均被后端拒绝。
+- 使用管理员 token 复查目标账号 `lock_status` / `lock_reason` 未被低权限请求改变。
+- 使用 Playwright CLI 通过真实登录页进入卖家管理，打开账号弹窗，验证能看到“锁定”状态列，但没有“锁定账号” / “解锁账号”或“更多”账号操作入口。
+- 验收完成后退出临时账号会话，并删除临时账号和临时角色。
+- 新增执行记录：`docs/plans/2026-06-05-seller-account-lock-low-permission-negative-record.md`。
+
+验证结果：
+
+- `/getInfo` 权限返回：`seller:admin:list,seller:admin:account:list,seller:admin:query`。
+- `GET /seller/admin/sellers/list?pageNum=1&pageSize=1`：业务 `code=200`。
+- `GET /seller/admin/sellers/{sellerId}/accounts`：业务 `code=200`。
+- `PUT /seller/admin/sellers/{sellerId}/accounts/{accountId}/lock`：业务 `code=403`。
+- `PUT /seller/admin/sellers/{sellerId}/accounts/{accountId}/unlock`：业务 `code=403`。
+- 状态核验：目标账号请求前 `lock_status=0`、`lock_reason=''`；拒绝请求后状态不变。
+- Playwright CLI：卖家列表“账号”入口数量 `3`，账号弹窗 `modalHasLockColumn=true`，`modalHasLockAction=false`，`modalMoreButtonCount=0`。
+- token 核验：管理端 token 存在，`seller_access_token=false`，`buyer_access_token=false`。
+- 清理核验：`codex_lock_limited` 用户剩余 `0`，`codex_lock_negative` 角色剩余 `0`。
+- 截图：`react-ui/output/playwright/seller-lock-lowperm-negative.png`，文件大小 `55735` bytes。
+
+当前判断：
+
+- 卖家账号锁定/解锁模板现在有后端权限拒绝、状态不变和真实浏览器按钮隐藏三层证据。
+- 该验收角色拥有账号列表权限但没有锁定权限，证明的是“能看账号但不能锁定/解锁”，不是靠隐藏整个账号入口规避。
+- buyer 锁定/解锁仍等待 seller 模板验收后按同构配置复制。
+
+## 2026-06-05 卖家账号锁定解锁模板检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，按“先做一套标准卖家模板，验收通过后复制买家；每个切片只改一类东西”的节奏推进。本轮只做 seller 账号 `lock_status` / `lock_reason` 锁定解锁模板，不复制 buyer，不调整三端物理拆分。
+
+已完成：
+
+- 新增 seller 账号锁定字段 `lock_status` / `lock_reason`，并同步 `seller_buyer_management_seed.sql`、`20260604_three_terminal_isolation_migration.sql` 和新增增量 SQL `20260605_seller_account_lock_control.sql`。
+- 新增 seller 管理端权限点 `seller:admin:account:lock`，同步卖家账号权限 seed 和综合 seed。
+- `SellerAccount` 增加 seller 专属锁定字段；未把字段放到共享 `PortalAccount`，避免 buyer 被本切片隐式扩展。
+- `SellerMapper` / `SellerMapper.xml` 新增锁定字段映射和 `updateSellerAccountLockStatus(...)` 专用更新。
+- `AdminSellerController` 新增锁定/解锁接口，均受 `seller:admin:account:lock` 保护。
+- `SellerServiceImpl` 新增 `lockSellerAccount(...)` / `unlockSellerAccount(...)`；锁定强踢该账号 seller 会话，解锁不恢复旧会话。
+- seller 登录、免密登录生成、免密登录消费、端内改密、端内权限校验均拒绝锁定账号。
+- 管理端账号弹窗通过 `lockAccount` / `unlockAccount` 可选 service 展示 seller 锁定列和“更多”操作；buyer 未注入，不展示锁定列或锁定操作。
+- 新增执行记录：`docs/plans/2026-06-05-seller-account-lock-control-template-record.md`。
+- 更新 `docs/architecture/reuse-ledger.md`。
+
+验证结果：
+
+- 远程 SQL 预检：`seller_account` 锁定字段数为 `0`，`buyer_account` 锁定字段数为 `0`，seller 锁定权限和字典均不存在。
+- 远程 SQL 执行：首次执行 `14` 条语句，幂等复跑 `14` 条语句。
+- 远程 SQL 执行后：`seller_account` 锁定字段数为 `2`，`buyer_account` 锁定字段数仍为 `0`，`idx_seller_account_seller_lock` 索引数为 `1`，seller 锁定权限数为 `1`，seller 锁定字典数据数为 `2`。
+- `mvn -pl ruoyi-system -am "-Dtest=PartnerSupportTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`Tests run: 7, Failures: 0, Errors: 0, Skipped: 0`。
+- `mvn -pl seller -am "-Dtest=SellerServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`Tests run: 20, Failures: 0, Errors: 0, Skipped: 0`。
+- `mvn -pl seller -am "-Dtest=SellerPortalPermissionServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`Tests run: 5, Failures: 0, Errors: 0, Skipped: 0`。
+- `mvn -pl seller -am test`：通过，`ruoyi-system` 44 个测试、`finance` 9 个测试、`seller` 31 个测试均通过。
+- `node --check scripts/check-partner-management-template.mjs`、`npm run guard:partner-management`、定向 `biome lint`、`npm run tsc -- --pretty false`、`npm run guard:portal-token` 均通过。
+- `mvn -DskipTests install`：除 `ruoyi-admin` repackage 因旧后端进程锁 jar 失败外，其余模块和 admin 编译通过；停止旧 8080 Java 后端后，`mvn -DskipTests install -rf :ruoyi-admin` 通过。
+- 后端已通过 `start-backend-local.ps1 -Restart` 重启；`/captchaImage` HTTP `200`，业务 `code=200`，验证码仍为关闭状态。
+- HTTP smoke：空锁定原因返回业务 `code=500` 且状态不变；选择无在线会话的未锁定卖家账号成功锁定后 `lock_status=1`、解锁后 `lock_status=0` 且 `lock_reason=''`。
+
+当前判断：
+
+- seller 账号锁定/解锁已形成可复制模板。
+- buyer 复制仍等待 seller 模板验收后单独推进。
+- 低权限管理端真实账号对 `seller:admin:account:lock` 的前端隐藏、后端拒绝和状态不变验收已在后续独立检查点补齐。
+
+## 2026-06-05 端内 OWNER 主账号数据库唯一约束检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，接在 Service 级 OWNER 主账号唯一性兜底之后，补齐远程 MySQL 数据库层约束。本轮只处理数据库 OWNER 唯一约束，不改 Java 生产逻辑，不改前端 UI，不处理 `lock_status` / 解锁账号。
+
+已完成：
+
+- 新增增量 SQL：`RuoYi-Vue/sql/20260605_terminal_owner_account_unique_constraint.sql`。
+- `seller_account` 新增生成列 `owner_unique_seller_id`，当 `account_role = 'OWNER'` 时生成 `seller_id`，否则为 `NULL`。
+- `seller_account` 新增唯一索引 `uk_seller_account_owner(owner_unique_seller_id)`。
+- `buyer_account` 新增生成列 `owner_unique_buyer_id`，当 `account_role = 'OWNER'` 时生成 `buyer_id`，否则为 `NULL`。
+- `buyer_account` 新增唯一索引 `uk_buyer_account_owner(owner_unique_buyer_id)`。
+- 更新初始化 SQL：`RuoYi-Vue/sql/seller_buyer_management_seed.sql`。
+- 更新三端迁移 SQL：`RuoYi-Vue/sql/20260604_three_terminal_isolation_migration.sql`。
+- 新增执行记录：`docs/plans/2026-06-05-terminal-owner-account-db-constraint-record.md`。
+- 更新 `docs/architecture/reuse-ledger.md`，登记数据库层 OWNER 唯一约束。
+
+验证结果：
+
+- 远程 MySQL 预检：版本 `8.0.30-cynos-3.1.16.003`，seller/buyer 重复 OWNER 主体组数均为 `0`，目标列和目标索引执行前均不存在。
+- 远程 DDL 执行：通过，临时 JDBC SQL runner 执行 `16` 条语句。
+- 远程 DDL 执行后校验：seller/buyer 重复 OWNER 主体组数均为 `0`；`owner_unique_seller_id`、`owner_unique_buyer_id`、`uk_seller_account_owner`、`uk_buyer_account_owner` 存在数均为 `1`。
+- 幂等复跑：通过，同一 SQL 复跑后列/索引存在数仍为 `1`，重复 OWNER 主体组数仍为 `0`。
+
+当前判断：
+
+- 端内 OWNER 主账号唯一性现在同时有 Service 级兜底和数据库唯一约束。
+- 本轮没有执行 Redis 操作，也没有改前端 UI。
+- `lock_status` / `lock_reason` / 解锁账号仍属于后续独立 DDL/后端/前端切片。
+
+## 2026-06-05 端账号角色白名单 Service 校验检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，接在 OWNER 主账号唯一性 Service 硬化之后，只处理一类规则：端账号 `accountRole` 合法值校验。本轮不改前端 UI，不执行数据库 DDL/DML，不处理 `lock_status` / 解锁账号。
+
+已完成：
+
+- `PartnerSupport` 新增 `ACCOUNT_ROLE_ADMIN` 常量。
+- `PartnerSupport` 新增 `normalizeAccountRole(...)`，统一允许 `OWNER` / `ADMIN` / `STAFF`，非法值抛出 `账号角色不正确`。
+- `SellerServiceImpl.normalizeSellerAccount(...)` 改为复用 `PartnerSupport.normalizeAccountRole(...)`。
+- `BuyerServiceImpl.normalizeBuyerAccount(...)` 按 seller 模板复制同一规则。
+- `PartnerSupportTest` 新增角色默认值、大写化和非法值拒绝测试。
+- `SellerServiceImplTest` 新增非法 `accountRole` 拒绝测试。
+- `BuyerServiceImplTest` 按 seller 模板新增非法 `accountRole` 拒绝测试。
+- 新增执行记录：`docs/plans/2026-06-05-terminal-account-role-whitelist-service-record.md`。
+- 更新 `docs/architecture/reuse-ledger.md`，登记端账号角色白名单公共 helper。
+
+验证结果：
+
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system -am "-Dtest=PartnerSupportTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`PartnerSupportTest` 为 `Tests run: 5, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl seller -am "-Dtest=SellerServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`SellerServiceImplTest` 为 `Tests run: 15, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl buyer -am "-Dtest=BuyerServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`BuyerServiceImplTest` 为 `Tests run: 15, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl seller -am test`：通过，`ruoyi-system` 为 `Tests run: 42, Failures: 0, Errors: 0, Skipped: 0`，`finance` 为 `Tests run: 9, Failures: 0, Errors: 0, Skipped: 0`，`seller` 为 `Tests run: 25, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl buyer -am test`：通过，`ruoyi-system` 为 `Tests run: 42, Failures: 0, Errors: 0, Skipped: 0`，`finance` 为 `Tests run: 9, Failures: 0, Errors: 0, Skipped: 0`，`buyer` 为 `Tests run: 27, Failures: 0, Errors: 0, Skipped: 0`。
+
+当前判断：
+
+- 端账号角色合法值现在有统一公共 helper，seller/buyer 不再各自散写或只做大写化。
+- `ADMIN` 作为第一阶段角色之一已有常量承载；后续如果字典 code 调整，需同步 `PartnerSupport.normalizeAccountRole(...)` 和端账号角色字典。
+- 数据库层 OWNER 唯一约束已在后续“端内 OWNER 主账号数据库唯一约束检查点”补齐。
+- `lock_status` / 解锁账号仍属于后续独立切片。
+
+## 2026-06-05 端内 OWNER 主账号唯一性 Service 硬化检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，按“seller 先形成标准样板，验收后复制 buyer；每个切片只改一类东西”的节奏推进。本轮只做端内 OWNER 主账号唯一性 Service 兜底和测试守卫，不改前端 UI，不执行数据库 DDL/DML，不处理 `lock_status` / 解锁账号。
+
+已完成：
+
+- `SellerServiceImpl.insertSellerAccount(...)` 新增手工新增第二个 `OWNER` 的 Service 拦截。
+- `BuyerServiceImpl.insertBuyerAccount(...)` 按 seller 模板复制同一拦截。
+- `SellerServiceImpl.updateSellerAccount(...)` 编辑账号时不再采纳 payload 的 `accountRole`，始终保留当前账号角色。
+- `BuyerServiceImpl.updateBuyerAccount(...)` 按 seller 模板复制同一规则。
+- `SellerServiceImplTest` 新增 2 个测试：新增第二个 OWNER 拒绝、编辑主账号时保留当前 OWNER 角色。
+- `BuyerServiceImplTest` 按 seller 模板新增 2 个测试：新增第二个 OWNER 拒绝、编辑主账号时保留当前 OWNER 角色。
+- 新增执行记录：`docs/plans/2026-06-05-terminal-owner-account-uniqueness-service-hardening-record.md`。
+- 更新 `docs/architecture/reuse-ledger.md`，登记 OWNER 主账号唯一性 Service 守卫。
+- 本轮启动 6 个只读 explorer 子 agent 辅助盘点，均已关闭。
+
+验证结果：
+
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl seller -am "-Dtest=SellerServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`SellerServiceImplTest` 为 `Tests run: 14, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl buyer -am "-Dtest=BuyerServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`BuyerServiceImplTest` 为 `Tests run: 14, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl seller -am test`：通过，`ruoyi-system` 为 `Tests run: 40, Failures: 0, Errors: 0, Skipped: 0`，`finance` 为 `Tests run: 9, Failures: 0, Errors: 0, Skipped: 0`，`seller` 为 `Tests run: 24, Failures: 0, Errors: 0, Skipped: 0`。本次并行跑 Maven 时出现一次 Surefire 临时目录 warning，但构建结果为 `BUILD SUCCESS`。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl buyer -am test`：通过，`ruoyi-system` 为 `Tests run: 40, Failures: 0, Errors: 0, Skipped: 0`，`finance` 为 `Tests run: 9, Failures: 0, Errors: 0, Skipped: 0`，`buyer` 为 `Tests run: 26, Failures: 0, Errors: 0, Skipped: 0`。
+
+当前判断：
+
+- 端内手工新增第二个 OWNER 已有 Service 级兜底；前端禁选不再是唯一保护。
+- 账号编辑路径现在明确为“账号角色不可通过账号编辑接口变更”；角色绑定仍走端内角色分配能力。
+- 数据库层唯一约束已在后续“端内 OWNER 主账号数据库唯一约束检查点”补齐。
+- `accountRole` 白名单校验已在后续“端账号角色白名单 Service 校验检查点”补齐。
+- `lock_status` / `lock_reason` / 解锁账号仍属于后续独立 DDL/后端/前端切片。
+
+## 2026-06-05 买家账号生命周期 Service 测试复制检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，接在卖家账号生命周期 Service 测试守卫之后，只把已验收的 seller 测试模板复制到 buyer。本轮不改业务实现、不改前端、不执行数据库 DDL/DML。
+
+已完成：
+
+- `BuyerServiceImplTest` 从 5 个测试扩展到 12 个测试。
+- 新增 buyer 账号新增测试，覆盖密码加密、默认 `STAFF`、部门必须属于当前买家。
+- 新增 buyer 账号新增负向测试，覆盖其他买家部门拒绝保存。
+- 新增 buyer 默认密码重置测试，固定重置的是 `buyer_account` 端内账号且密码为 BCrypt 密文。
+- 新增 buyer 账号停用测试，固定停用账号后只强踢该账号会话，并通过 `buyer` 端 token key 删除。
+- 新增 buyer 登录成功测试，覆盖最后登录信息更新、`buyer_session` 写入和 `buyer_login_log` 成功记录。
+- 新增 buyer 停用账号登录失败测试，覆盖不签发 token 且写入登录失败日志。
+- 新增 buyer 当前账号会话列表测试，覆盖查询范围来自 session，当前 token 标记为 `current=true`。
+- 新增执行记录：`docs/plans/2026-06-05-buyer-account-lifecycle-service-test-record.md`。
+- 更新 `docs/architecture/reuse-ledger.md`，登记 seller/buyer 账号生命周期守卫已按同一模板对齐。
+
+验证结果：
+
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl buyer -am "-Dtest=BuyerServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`BuyerServiceImplTest` 为 `Tests run: 12, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl buyer -am test`：通过，`ruoyi-system` 为 `Tests run: 40, Failures: 0, Errors: 0, Skipped: 0`，`finance` 为 `Tests run: 9, Failures: 0, Errors: 0, Skipped: 0`，`buyer` 为 `Tests run: 24, Failures: 0, Errors: 0, Skipped: 0`。
+
+当前判断：
+
+- buyer 账号生命周期核心 service 行为已按 seller 标准模板复制并通过完整 buyer 模块测试。
+- 本轮只复制测试模板，没有修改生产逻辑；如果后续要补 `lock_status` / `lock_reason` / 解锁账号，应作为独立 DDL/后端/前端方案推进。
+- 主账号唯一性是否要加强为数据库/后端硬约束仍需单独处理。
+
+## 2026-06-05 卖家账号生命周期 Service 测试守卫检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，接在管理端共享模板守卫之后，只补卖家端账号生命周期自动化守卫。本轮不改业务实现、不复制买家、不执行数据库 DDL/DML。
+
+已完成：
+
+- `SellerServiceImplTest` 从 5 个测试扩展到 12 个测试。
+- 新增 seller 账号新增测试，覆盖密码加密、默认 `STAFF`、部门必须属于当前卖家。
+- 新增 seller 账号新增负向测试，覆盖其他卖家部门拒绝保存。
+- 新增 seller 默认密码重置测试，固定重置的是 `seller_account` 端内账号且密码为 BCrypt 密文。
+- 新增 seller 账号停用测试，固定停用账号后只强踢该账号会话，并通过 `seller` 端 token key 删除。
+- 新增 seller 登录成功测试，覆盖最后登录信息更新、`seller_session` 写入和 `seller_login_log` 成功记录。
+- 新增 seller 停用账号登录失败测试，覆盖不签发 token 且写入登录失败日志。
+- 新增 seller 当前账号会话列表测试，覆盖查询范围来自 session，当前 token 标记为 `current=true`。
+- 新增执行记录：`docs/plans/2026-06-05-seller-account-lifecycle-service-test-record.md`。
+- 更新 `docs/architecture/reuse-ledger.md`，登记 seller 账号生命周期守卫。
+
+验证结果：
+
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl seller -am "-Dtest=SellerServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`SellerServiceImplTest` 为 `Tests run: 12, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl seller -am test`：通过，`ruoyi-system` 为 `Tests run: 40, Failures: 0, Errors: 0, Skipped: 0`，`seller` 为 `Tests run: 22, Failures: 0, Errors: 0, Skipped: 0`。
+- `git diff --check -- RuoYi-Vue\seller\src\test\java\com\ruoyi\seller\service\impl\SellerServiceImplTest.java`：通过，仅有 LF/CRLF 工作区换行提示。
+- 冲突标记检查：通过。
+
+当前判断：
+
+- seller 账号生命周期核心 service 行为已有自动化守卫，后续可按同一模式复制 buyer。
+- `lock_status` / `lock_reason` / 解锁账号仍属于后续独立设计，不应混入本轮测试守卫。
+- 主账号唯一性是否要加强为数据库/后端硬约束仍需单独处理。
+
+## 2026-06-05 管理端卖家/买家共享模板守卫检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，并按“卖家先形成标准样板，买家只替换配置和 service；每个切片只改一类东西”的节奏推进。本轮只做管理端共享模板静态守卫，不改 UI、不改后端、不执行数据库 DDL/DML。
+
+已完成：
+
+- 新增 `react-ui/scripts/check-partner-management-template.mjs`，固定 Seller / Buyer 管理页面必须只通过共享 `PartnerManagementPage` 配置接入。
+- 新增 `guard:partner-management` 并接入 `npm run lint`。
+- 守卫覆盖 seller/buyer 页面配置、账号域权限、账号/部门/角色/菜单/会话/日志/免密 service 映射、service 路径端隔离和公共组件不得硬编码端 API。
+- 更新 `docs/architecture/reuse-ledger.md`，登记管理端共享模板守卫规则。
+- 新增执行记录：`docs/plans/2026-06-05-admin-partner-management-template-guard-record.md`。
+
+验证结果：
+
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:partner-management`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npx biome lint scripts/check-partner-management-template.mjs package.json`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; node --check scripts/check-partner-management-template.mjs`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:portal-token`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:seller-portal-product`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:buyer-portal-product`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run tsc -- --pretty false`：通过。
+- `git diff --check -- react-ui\scripts\check-partner-management-template.mjs react-ui\package.json`：通过，仅有 LF/CRLF 工作区换行提示。
+
+当前判断：
+
+- 管理端 seller/buyer 同构 UI 模板已具备可复跑静态契约守卫，后续不会只靠人工记忆保证“卖家模板验收后复制买家”。
+- 本轮没有跑完整 `npm run lint`；全量 `biome:lint` 的历史无关文件问题仍不在本切片处理。
+- 下一片建议只补 seller 账号生命周期 service 测试，覆盖新增、默认密码、停用登录拒绝、最后登录、部门归属和强制踢出等账号核心行为；不与 `lock_status` DDL/UI 混合。
+
 ## 2026-06-05 买家端商城商品前端工作台复制检查点
 
 本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md`、`docs/plans/2026-06-05-buyer-product-browse-copy-boundary-plan.md`、`docs/plans/2026-06-05-buyer-distribution-product-read-template-record.md` 和 `docs/plans/2026-06-05-buyer-product-permission-dml-smoke-record.md` 为开发方向。本轮只做 buyer 前端工作台复制和验收，不做后端，不执行 DDL/DML，不重复补远程权限。
@@ -284,6 +1069,7 @@
 | AGENTS 规则更新 | 已完成 | 已将新方向写入 `AGENTS.md` |
 | 账号表字段设计 | 第一批已落地 | `seller_account` / `buyer_account` 已改为端内账号字段；端内角色、菜单、部门、日志、会话表已进入 SQL |
 | 数据库 DDL/DML | 已执行 | 远程库已执行 `RuoYi-Vue/sql/20260604_three_terminal_isolation_migration.sql` |
+| 远程库三端结构核验 | 已完成 | 只读核验确认远程 MySQL 三端核心表 `21/21` 存在，`seller_account.user_id` / `buyer_account.user_id` 均不存在，端账号、端日志和端会话关键字段及索引存在 |
 | 后端管理端账号改造 | 第一批已完成 | 卖家/买家账号创建、列表、重置密码、主账号重置、免密登录不再依赖 `sys_user` |
 | 后端端内认证改造 | 第一批已完成 | 已新增卖家端/买家端登录入口、独立 token、免密 token 消费、登录日志、会话写入；端内菜单/角色权限读取已接入，端内操作日志第一批写入链路已接入 |
 | 后端端内权限基础改造 | 第四批已完成 | 管理端已可维护端内菜单、角色、账号角色绑定、部门和端账号部门绑定；卖家端/买家端登录后已可读取端内角色、权限和菜单；端内接口级权限注解和统一校验器已落地 |
@@ -293,26 +1079,28 @@
 | 同构 UI 模板化推进 | 已确认 | 后续已确定模式按“卖家先做标准样板，买家只替换配置和 service”推进，不再逐页重新设计 |
 | 管理端审计 UI 与查询 | 已完成 | 卖家/买家管理已按同构模板接入审计弹窗，可查询登录日志、操作日志和免密票据；端内操作日志第一批写入链路已覆盖 `getInfo` / `getRouters` |
 | 免密代入审计原因 | 已完成并已实测 | 管理端生成卖家/买家端免密代入票据时必须填写代入原因，并写入 `portal_direct_login_ticket.reason`；真实接口烟测已确认未填原因会被拒绝、原因可在审计列表读回、票据消费后变为 `USED` |
-| 前端直登入口与端内工作台 | 第一版已完成，token 持久化已加固 | 当前 `react-ui/` 已落地 `/seller/direct-login`、`/buyer/direct-login`、`/seller/portal`、`/buyer/portal`；seller/buyer 工作台已分别接入商品 Schema 前端消费卡片；`persistPortalLogin` 已校验 expected terminal，portal token 静态守卫已接入 `npm run lint`；该工作台是验证型入口，后续物理拆分可迁移模板 |
-| 前端 portal 请求身份范围参数守卫 | 已完成，已覆盖 seller 商品列表 | 已在 `portal/session.ts` 清洗日志、会话和 seller 商品列表 query 参数，并扩展 `guard:portal-token`，防止 `src/pages/Portal/**` 和 `src/services/portal/**` 直接请求、硬编码端 API 或把 `sellerId` / `buyerId` / `subjectId` / `accountId` / `terminal` 等客户端身份范围字段作为请求参数发送 |
+| 前端直登入口与端内工作台 | 第一版已完成，token 持久化已加固 | 当前 `react-ui/` 已落地 `/seller/direct-login`、`/buyer/direct-login`、`/seller/portal`、`/buyer/portal`；seller/buyer 工作台已分别接入商品 Schema 前端消费卡片和商城商品只读卡片；`persistPortalLogin` 已校验 expected terminal，portal token 静态守卫已接入 `npm run lint`；该工作台是验证型入口，后续物理拆分可迁移模板 |
+| 前端 portal 请求身份范围参数守卫 | 已完成，已覆盖 seller/buyer 商品列表 | 已在 `portal/session.ts` 清洗日志、会话、seller 商品列表和 buyer 商品列表 query 参数，并扩展 `guard:portal-token`，防止 `src/pages/Portal/**` 和 `src/services/portal/**` 直接请求、硬编码端 API 或把 `sellerId` / `buyerId` / `subjectId` / `accountId` / `terminal` 等客户端身份范围字段作为请求参数发送 |
 | 端内当前账号日志接口 | 已完成，双端已加固 | 已落地 seller/buyer 当前账号登录日志、操作日志只读接口；seller/buyer 均已从“Controller 覆盖 DTO”升级为“Service 内按 `PortalLoginSession` 强制收敛范围”，买家端已按卖家模板只替换 terminal、service、controller、mapper、测试名和文案完成同构复制 |
 | 端内当前账号会话接口 | 已完成 | 已落地 seller/buyer 当前账号会话只读接口；查询范围由 `PortalSessionContext` 推导，只返回当前端账号自己的会话，不返回 `tokenId`、JWT、Redis key 或密码字段 |
 | 端内会话响应脱敏契约守卫 | 已完成 | 已新增 `PortalSessionProfileTest`，固定 `PortalSessionProfile.tokenId` 不得序列化输出，防止端内和管理端会话列表响应泄漏 tokenId |
 | 端内商品分类与 Schema 只读接口 | 已完成 | 已落地 seller/buyer 端可发布商品分类列表和商品 schema 只读接口；seller/buyer 商品分类/schema 端入口均已从 product controller 收口到各自 terminal facade，product 只保留共享 schema service |
 | 端内商品 Schema 前端消费模板 | 已完成 | `react-ui` 的 `/seller/portal` 已接入商品发布准备卡片，`/buyer/portal` 已按卖家模板接入商品浏览准备卡片；均通过端 service 真实消费对应端商品分类和 Schema 接口，不复用管理端 token |
-| 卖家端我的商城商品只读后端模板 | 卖家模板已完成，已补脚本化烟测，待验收后复制买家 | 已新增 seller 端自己的商品列表、详情和 SKU 只读入口；数据范围由 `PortalLoginSession.subjectId` 强制收敛，响应使用 seller DTO，不直接返回 product 管理端实体；远程运行库已补 seller 端两个只读权限及角色授权，并新增可复跑 HTTP 烟测脚本；本切片没有复制 buyer |
-| 卖家端我的商城商品前端工作台模板 | seller 已完成，待验收后复制买家 | `react-ui` 的 `/seller/portal` 已接入“我的商城商品”只读卡片，真实消费 seller 端商品列表、详情和 SKU 接口；请求继续使用 seller token 和 `isToken:false`，并过滤客户端身份范围字段；本切片没有复制 buyer |
+| 端内商城商品只读后端模板 | seller/buyer 双端已完成 | seller 端“我的商城商品”按当前 seller 范围读取自有商城商品；buyer 端“商城商品”按平台 `ON_SALE` 可见性只读浏览，不把 buyerId 当商品归属。两端均使用端内 DTO，不直接返回 product 管理端实体；seller/buyer 远程权限 DML 与 HTTP smoke 均已完成 |
+| 端内商城商品前端工作台模板 | 双端 ProTable 标准模板已完成 | `react-ui` 的 `/seller/portal` 已将“我的商城商品”主列表升级为标准 ProTable；`/buyer/portal` 已按 buyer 浏览口径复制 ProTable 差量，只保留关键词搜索、分页、刷新和详情，不展示或筛选 seller/system/供货价字段；双端均继续通过 portal service 使用端 token 和 `isToken:false`，并过滤客户端身份范围字段 |
 | 免密登录响应日志脱敏 | 已完成 | 管理端 seller/buyer directLogin 的 `@Log` 已关闭响应体记录；真实验证 `sys_oper_log` 未写入 `token` / `loginUrl` / `directLoginToken` |
 | Portal Controller 匿名放行硬化 | 已完成 | `SellerPortalController` / `BuyerPortalController` 已移除类级 `@Anonymous`，12 个 seller 映射和 12 个 buyer 映射均改为方法级 `@Anonymous` + `@PortalPreAuthorize` |
 | 端内 Controller 鉴权模板守卫 | 已完成 | `TerminalRouteOwnershipTest` 已覆盖 product 不承载 seller/buyer 端入口，并覆盖 seller/buyer 受保护 portal handler 必须方法级 `@Anonymous` + `@PortalPreAuthorize` + `@PortalLog` + `PortalSessionContext.requireSession(...)` |
 | 端账号权限 sys_* 回退守卫 | 已完成 | `TerminalAccountIsolationTest` 已覆盖 seller/buyer 模块不得引用 `sys_user`、`sys_role`、`sys_menu`、`sys_dept`、`SysUser`、`SysRole`、`SysMenu`、`SysDept`、旧 `PortalAccountSupport` / `PortalAccountMapper` 或旧 `*.user_id` |
+| 三端隔离 SQL 基线守卫 | 已完成 | `TerminalSqlIsolationContractTest` 已覆盖主三端隔离迁移脚本不得通过 `LIKE sys_logininfor/sys_oper_log` 派生端内日志表，也不得从 `sys_user` 回填 seller/buyer 端账号；历史混用账号库回填已拆到 legacy helper |
 | 端 token 隔离守卫 | 已完成 | `PortalTokenSupportTest` 已覆盖 `portal_login_tokens:{terminal}:{tokenId}`、JWT terminal claim、Redis session terminal 校验和按端删除 token key |
 | 卖家端 DB 会话权威鉴权模板 | 已完成 | seller 端 `@PortalPreAuthorize` 鉴权时已回查 `seller_session` 的 `status/logout_time/expire_time`；实测只改 DB session 失效且保留 Redis token 时，旧 seller token 调 `/seller/getInfo` 返回 `401` |
 | 买家端 DB 会话权威鉴权模板 | 已完成 | buyer 端已按卖家模板复制，`@PortalPreAuthorize` 鉴权时回查 `buyer_session` 的 `status/logout_time/expire_time`；实测只改 DB session 失效且保留 Redis token 时，旧 buyer token 调 `/buyer/getInfo` 返回 `401` |
+| 端内权限 Service 会话 fail-closed 守卫 | 已完成 | `SellerPortalPermissionServiceImplPortalAccessTest` / `BuyerPortalPermissionServiceImplPortalAccessTest` 已覆盖权限信息和 `selectPermissions(...)` 入口的畸形 session、空白 token、DB session 和账号锁定拒绝；`SellerPortalPermissionServiceImplMenuTreeTest` / `BuyerPortalPermissionServiceImplMenuTreeTest` 已单独覆盖 `selectPortalMenuTree(...)`，防止只凭 Redis token 或账号状态放行 |
 | 管理端会话列表后端模板 | 已完成 | seller/buyer 管理端均已新增主体级和账号级 session 只读列表接口，复用 `PortalSessionProfile` 脱敏响应，真实接口烟测通过 |
 | 管理端会话列表 UI 模板 | 已完成 | `react-ui/` 已接入 seller/buyer 主体级和账号级会话只读弹窗；buyer 已按 seller 模板复制，只替换 service 和配置 |
 | 前端三端物理拆分 | 未开始 | 当前仍在 `react-ui/` 中验证 seller/buyer 直登页和工作台模板，尚未复制 `seller-ui` / `buyer-ui` |
-| 旧实现迁移 | 第二批已完成 | 旧 `PortalAccountSupport` / `PortalAccountMapper` 已移除；迁移脚本已删除账号表旧 `user_id` 列；早期复用 `sys_user` 的历史方案文档已标记过期 |
+| 旧实现迁移 | 第二批已完成 | 旧 `PortalAccountSupport` / `PortalAccountMapper` 已移除；主迁移脚本已删除账号表旧 `user_id` 列，且不再内置 `sys_user` 回填；历史混用账号库回填仅保留在明确标记的 legacy helper 中 |
 
 ## 2026-06-04 实施检查点
 

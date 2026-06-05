@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.product.mapper.ProductDistributionOperationLogMapper">
+
+    <resultMap type="ProductDistributionOperationLog" id="OperationLogResult">
+        <id     property="logId"              column="log_id"               />
+        <result property="batchNo"            column="batch_no"             />
+        <result property="operationType"      column="operation_type"       />
+        <result property="ownerType"          column="owner_type"           />
+        <result property="spuId"              column="spu_id"               />
+        <result property="skuId"              column="sku_id"               />
+        <result property="systemSpuCode"      column="system_spu_code"      />
+        <result property="systemSkuCode"      column="system_sku_code"      />
+        <result property="sellerId"           column="seller_id"            />
+        <result property="sellerName"         column="seller_name"          />
+        <result property="beforeSalesStatus"  column="before_sales_status"  />
+        <result property="afterSalesStatus"   column="after_sales_status"   />
+        <result property="beforeControlStatus" column="before_control_status" />
+        <result property="afterControlStatus" column="after_control_status" />
+        <result property="beforeSalePrice"    column="before_sale_price"    />
+        <result property="afterSalePrice"     column="after_sale_price"     />
+        <result property="currencyCode"       column="currency_code"        />
+        <result property="reason"             column="reason"               />
+        <result property="changeSummary"      column="change_summary"       />
+        <result property="diffJson"           column="diff_json"            />
+        <result property="operatorName"       column="operator_name"        />
+        <result property="operationTime"      column="operation_time"       />
+        <result property="operationSource"    column="operation_source"     />
+        <result property="remark"             column="remark"               />
+    </resultMap>
+
+    <select id="selectOperationLogList" parameterType="ProductDistributionOperationLog" resultMap="OperationLogResult">
+        select *
+        from product_distribution_operation_log
+        where 1 = 1
+        <if test="keyword != null and keyword != ''">
+            and (
+                system_spu_code like concat('%', #{keyword}, '%')
+                or system_sku_code like concat('%', #{keyword}, '%')
+                or seller_name like concat('%', #{keyword}, '%')
+                or change_summary like concat('%', #{keyword}, '%')
+            )
+        </if>
+        <if test="operationType != null and operationType != ''">
+            and operation_type = #{operationType}
+        </if>
+        <if test="operationTypes != null and operationTypes != ''">
+            and find_in_set(operation_type, #{operationTypes})
+        </if>
+        <if test="ownerType != null and ownerType != ''">
+            and owner_type = #{ownerType}
+        </if>
+        <if test="spuId != null">
+            and spu_id = #{spuId}
+        </if>
+        <if test="skuId != null">
+            and sku_id = #{skuId}
+        </if>
+        <if test="operatorName != null and operatorName != ''">
+            and operator_name like concat('%', #{operatorName}, '%')
+        </if>
+        <if test="params.beginTime != null and params.beginTime != ''">
+            and operation_time &gt;= #{params.beginTime}
+        </if>
+        <if test="params.endTime != null and params.endTime != ''">
+            and operation_time &lt;= #{params.endTime}
+        </if>
+        order by operation_time desc, log_id desc
+    </select>
+
+    <insert id="insertOperationLog" parameterType="ProductDistributionOperationLog" useGeneratedKeys="true" keyProperty="logId">
+        insert into product_distribution_operation_log(
+            batch_no, operation_type, owner_type, spu_id, sku_id,
+            system_spu_code, system_sku_code, seller_id, seller_name,
+            before_sales_status, after_sales_status, before_control_status, after_control_status,
+            before_sale_price, after_sale_price, currency_code, reason,
+            change_summary, diff_json, operator_name, operation_time, operation_source, remark
+        ) values (
+            #{batchNo}, #{operationType}, #{ownerType}, #{spuId}, #{skuId},
+            #{systemSpuCode}, #{systemSkuCode}, #{sellerId}, #{sellerName},
+            #{beforeSalesStatus}, #{afterSalesStatus}, #{beforeControlStatus}, #{afterControlStatus},
+            #{beforeSalePrice}, #{afterSalePrice}, #{currencyCode}, #{reason},
+            #{changeSummary}, #{diffJson}, #{operatorName}, sysdate(), #{operationSource}, #{remark}
+        )
+    </insert>
+</mapper>

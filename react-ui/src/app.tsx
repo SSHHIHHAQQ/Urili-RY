@@ -1,17 +1,18 @@
-import { Question, SelectLang, AvatarDropdown, AvatarName } from '@/components';
 import { LinkOutlined } from '@ant-design/icons';
 import type { Settings as LayoutSettings } from '@ant-design/pro-components';
 import { SettingDrawer } from '@ant-design/pro-components';
-import { App as AntdApp, ConfigProvider } from 'antd';
 import type { RunTimeLayoutConfig } from '@umijs/max';
 import { history, Link } from '@umijs/max';
+import { App as AntdApp, ConfigProvider } from 'antd';
 import type { ReactNode } from 'react';
+import { AvatarDropdown, AvatarName, Question, SelectLang } from '@/components';
 import defaultSettings from '../config/defaultSettings';
-import { errorConfig } from './requestErrorConfig';
-import { clearSessionToken, getAccessToken, getTokenExpireTime } from './access';
-import { getRemoteMenu, getRoutersInfo, getUserInfo, patchRouteWithRemoteMenus, setRemoteMenu } from './services/session';
+import { clearSessionToken, clearTerminalSessionToken, getAccessToken, getTokenExpireTime } from './access';
 import { PageEnum } from './enums/pagesEnums';
+import { errorConfig } from './requestErrorConfig';
+import { getRemoteMenu, getRoutersInfo, getUserInfo, patchRouteWithRemoteMenus, setRemoteMenu } from './services/session';
 import { AntdFeedbackProvider } from './utils/feedback';
+import { getPortalTerminalFromApiUrl } from './utils/portalRequest';
 import './global.css';
 
 
@@ -49,7 +50,12 @@ function isUnauthorizedCode(code: unknown) {
   return Number(code) === 401;
 }
 
-function handleUnauthorizedResponse() {
+function handleUnauthorizedResponse(requestUrl?: string) {
+  const portalTerminal = getPortalTerminalFromApiUrl(requestUrl);
+  if (portalTerminal) {
+    clearTerminalSessionToken(portalTerminal);
+    return;
+  }
   clearAdminSession();
   redirectToLogin();
 }
@@ -296,7 +302,7 @@ export const request: any = {
   responseInterceptors: [
     (response: any) => {
       if (isUnauthorizedCode(getResponseCode(response?.data))) {
-        handleUnauthorizedResponse();
+        handleUnauthorizedResponse(response?.config?.url);
       }
       return response;
     },

@@ -315,6 +315,7 @@ public class BuyerPortalPermissionServiceImpl implements IBuyerPortalPermissionS
 
     private BuyerAccount assertActiveBuyerSession(PortalLoginSession session)
     {
+        assertBuyerSessionShape(session);
         Buyer buyer = buyerService.selectBuyerById(session.getSubjectId());
         BuyerAccount account = assertBuyerAccount(session.getSubjectId(), session.getAccountId());
         if (!PartnerSupport.STATUS_NORMAL.equals(buyer.getStatus()))
@@ -325,11 +326,24 @@ public class BuyerPortalPermissionServiceImpl implements IBuyerPortalPermissionS
         {
             throw new ServiceException("买家端账号已停用");
         }
+        if (PartnerSupport.isAccountLocked(account.getLockStatus()))
+        {
+            throw new ServiceException("买家端账号已锁定");
+        }
         if (buyerMapper.countOnlineBuyerSession(session.getSubjectId(), session.getAccountId(), session.getTokenId()) <= 0)
         {
             throw new ServiceException("登录状态已失效", HttpStatus.UNAUTHORIZED);
         }
         return account;
+    }
+
+    private void assertBuyerSessionShape(PortalLoginSession session)
+    {
+        if (session == null || !"buyer".equals(session.getTerminal()) || session.getSubjectId() == null
+                || session.getAccountId() == null || StringUtils.isBlank(session.getTokenId()))
+        {
+            throw new ServiceException("登录状态已失效", HttpStatus.UNAUTHORIZED);
+        }
     }
 
     private Set<String> splitPermissions(List<String> values)

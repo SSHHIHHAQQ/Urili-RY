@@ -1,4 +1,9 @@
-import { DownOutlined, ImportOutlined, PlusOutlined } from '@ant-design/icons';
+import {
+  DownOutlined,
+  HistoryOutlined,
+  ImportOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
 import {
   ModalForm,
   PageContainer,
@@ -30,6 +35,7 @@ import { getPersistedProTableSearch, getProTableScroll } from '@/utils/proTableS
 import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 import { getCategoryDisplayPath, toCategoryOption } from '../categoryTree';
 import ProductImportModal from '../components/ProductImportModal';
+import ProductConfigChangeLogDrawer from '../components/ProductConfigChangeLogDrawer';
 import { statusOptions, statusValueEnum } from '../constants';
 
 function resultOk(resp: API.Result, successText: string) {
@@ -60,10 +66,13 @@ function getPlaceholderCategory(parentId: number): API.Product.Category {
 
 function normalizeCategoryTableRows(
   rows: API.Product.Category[],
+  disableExpand = false,
 ): API.Product.Category[] {
   return rows.map((item) => {
     const hasChildren = Number(item.childrenCount || 0) > 0;
-    const children = item.children?.length
+    const children = disableExpand
+      ? undefined
+      : item.children?.length
       ? normalizeCategoryTableRows(item.children)
       : hasChildren && item.categoryId
         ? [getPlaceholderCategory(item.categoryId)]
@@ -120,6 +129,7 @@ export default function ProductCategoryPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [currentCategory, setCurrentCategory] = useState<API.Product.Category>();
+  const [operationLogOpen, setOperationLogOpen] = useState(false);
 
   const loadCategoryRows = useCallback(async (params: CategoryQueryParams = {}) => {
     setTableLoading(true);
@@ -132,7 +142,7 @@ export default function ProductCategoryPage() {
           pageNum: 1,
           pageSize: 200,
         });
-        setCategoryRows(normalizeCategoryTableRows(resp.rows || []));
+        setCategoryRows(normalizeCategoryTableRows(resp.rows || [], true));
         setExpandedRowKeys([]);
         loadedParentIds.current.clear();
         return;
@@ -272,11 +282,6 @@ export default function ProductCategoryPage() {
 
   const columns: ProColumns<API.Product.Category>[] = [
     {
-      title: '关键词',
-      dataIndex: 'keyword',
-      hideInTable: true,
-    },
-    {
       title: '分类名称',
       dataIndex: 'categoryName',
       width: 220,
@@ -343,6 +348,7 @@ export default function ProductCategoryPage() {
               </Button>,
               <Dropdown
                 key="more"
+                trigger={['click']}
                 menu={{
                   items: [
                     {
@@ -399,8 +405,12 @@ export default function ProductCategoryPage() {
         )}
         expandable={{
           expandedRowKeys,
+          rowExpandable: (record) =>
+            !categorySearchMode &&
+            !record.loadingPlaceholder &&
+            Number(record.childrenCount || 0) > 0,
           onExpand: async (expanded, record) => {
-            if (!record.categoryId || record.loadingPlaceholder) {
+            if (categorySearchMode || !record.categoryId || record.loadingPlaceholder) {
               return;
             }
             if (expanded) {
@@ -418,6 +428,13 @@ export default function ProductCategoryPage() {
           },
         }}
         toolBarRender={() => [
+          <Button
+            key="operationLog"
+            icon={<HistoryOutlined />}
+            onClick={() => setOperationLogOpen(true)}
+          >
+            操作日志
+          </Button>,
           <Button
             key="import"
             icon={<ImportOutlined />}
@@ -446,6 +463,13 @@ export default function ProductCategoryPage() {
         onPreview={previewCategoryImport}
         onImport={importCategoryData}
         onSuccess={() => loadCategoryRows(categoryQuery)}
+      />
+
+      <ProductConfigChangeLogDrawer
+        open={operationLogOpen}
+        onOpenChange={setOperationLogOpen}
+        bizType="CATEGORY"
+        title="商品分类配置"
       />
 
       <ModalForm<API.Product.Category>

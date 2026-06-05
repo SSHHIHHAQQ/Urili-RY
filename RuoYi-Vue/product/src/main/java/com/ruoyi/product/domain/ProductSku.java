@@ -1,6 +1,7 @@
 package com.ruoyi.product.domain;
 
 import java.math.BigDecimal;
+import java.util.Date;
 import com.ruoyi.common.core.domain.BaseEntity;
 
 /**
@@ -13,6 +14,15 @@ public class ProductSku extends BaseEntity
     private Long skuId;
     private Long spuId;
     private Long sellerId;
+    private String systemSpuCode;
+    private String sellerSpuCode;
+    private String sellerName;
+    private Long categoryId;
+    private String categoryName;
+    private String productName;
+    private String productNameEn;
+    private String spuStatus;
+    private String keyword;
     private String systemSkuCode;
     private String sellerSkuCode;
     private String color;
@@ -31,9 +41,19 @@ public class ProductSku extends BaseEntity
     private BigDecimal salePrice;
     private String currencyCode;
     private String skuStatus;
+    private String controlStatus;
+    private String spuControlStatus;
+    private String controlReason;
+    private String controlBy;
+    private Date controlTime;
+    private String recoverBy;
+    private Date recoverTime;
     private Integer sortOrder;
     private String delFlag;
+    private Long availableStock;
     private Integer warehouseCount;
+    private String inventoryStatus;
+    private Date stockUpdateTime;
 
     public Long getSkuId() { return skuId; }
     public void setSkuId(Long skuId) { this.skuId = skuId; }
@@ -41,6 +61,24 @@ public class ProductSku extends BaseEntity
     public void setSpuId(Long spuId) { this.spuId = spuId; }
     public Long getSellerId() { return sellerId; }
     public void setSellerId(Long sellerId) { this.sellerId = sellerId; }
+    public String getSystemSpuCode() { return systemSpuCode; }
+    public void setSystemSpuCode(String systemSpuCode) { this.systemSpuCode = systemSpuCode; }
+    public String getSellerSpuCode() { return sellerSpuCode; }
+    public void setSellerSpuCode(String sellerSpuCode) { this.sellerSpuCode = sellerSpuCode; }
+    public String getSellerName() { return sellerName; }
+    public void setSellerName(String sellerName) { this.sellerName = sellerName; }
+    public Long getCategoryId() { return categoryId; }
+    public void setCategoryId(Long categoryId) { this.categoryId = categoryId; }
+    public String getCategoryName() { return categoryName; }
+    public void setCategoryName(String categoryName) { this.categoryName = categoryName; }
+    public String getProductName() { return productName; }
+    public void setProductName(String productName) { this.productName = productName; }
+    public String getProductNameEn() { return productNameEn; }
+    public void setProductNameEn(String productNameEn) { this.productNameEn = productNameEn; }
+    public String getSpuStatus() { return spuStatus; }
+    public void setSpuStatus(String spuStatus) { this.spuStatus = spuStatus; }
+    public String getKeyword() { return keyword; }
+    public void setKeyword(String keyword) { this.keyword = keyword; }
     public String getSystemSkuCode() { return systemSkuCode; }
     public void setSystemSkuCode(String systemSkuCode) { this.systemSkuCode = systemSkuCode; }
     public String getSellerSkuCode() { return sellerSkuCode; }
@@ -77,10 +115,30 @@ public class ProductSku extends BaseEntity
     public void setCurrencyCode(String currencyCode) { this.currencyCode = currencyCode; }
     public String getSkuStatus() { return skuStatus; }
     public void setSkuStatus(String skuStatus) { this.skuStatus = skuStatus; }
+    public String getControlStatus() { return controlStatus; }
+    public void setControlStatus(String controlStatus) { this.controlStatus = controlStatus; }
+    public String getSpuControlStatus() { return spuControlStatus; }
+    public void setSpuControlStatus(String spuControlStatus) { this.spuControlStatus = spuControlStatus; }
+    public String getControlReason() { return controlReason; }
+    public void setControlReason(String controlReason) { this.controlReason = controlReason; }
+    public String getControlBy() { return controlBy; }
+    public void setControlBy(String controlBy) { this.controlBy = controlBy; }
+    public Date getControlTime() { return controlTime; }
+    public void setControlTime(Date controlTime) { this.controlTime = controlTime; }
+    public String getRecoverBy() { return recoverBy; }
+    public void setRecoverBy(String recoverBy) { this.recoverBy = recoverBy; }
+    public Date getRecoverTime() { return recoverTime; }
+    public void setRecoverTime(Date recoverTime) { this.recoverTime = recoverTime; }
     public Integer getSortOrder() { return sortOrder; }
     public void setSortOrder(Integer sortOrder) { this.sortOrder = sortOrder; }
     public String getDelFlag() { return delFlag; }
     public void setDelFlag(String delFlag) { this.delFlag = delFlag; }
+    public Long getAvailableStock() { return availableStock; }
+    public void setAvailableStock(Long availableStock) { this.availableStock = availableStock; }
     public Integer getWarehouseCount() { return warehouseCount; }
     public void setWarehouseCount(Integer warehouseCount) { this.warehouseCount = warehouseCount; }
+    public String getInventoryStatus() { return inventoryStatus; }
+    public void setInventoryStatus(String inventoryStatus) { this.inventoryStatus = inventoryStatus; }
+    public Date getStockUpdateTime() { return stockUpdateTime; }
+    public void setStockUpdateTime(Date stockUpdateTime) { this.stockUpdateTime = stockUpdateTime; }
 }

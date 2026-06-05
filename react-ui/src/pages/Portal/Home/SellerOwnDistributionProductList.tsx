@@ -1,7 +1,11 @@
 import { ReloadOutlined } from '@ant-design/icons';
 import {
+  type ActionType,
+  type ProColumns,
+  ProTable,
+} from '@ant-design/pro-components';
+import {
   Button,
-  Card,
   Descriptions,
   Empty,
   Image,
@@ -12,7 +16,7 @@ import {
   Typography,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   buildSkuDimensionText,
   buildSkuSpecText,
@@ -26,6 +30,12 @@ import {
   getSellerPortalDistributionProducts,
 } from '@/services/portal/session';
 import { message } from '@/utils/feedback';
+import {
+  getPersistedProTableSearch,
+  getProTablePagination,
+  getProTableScroll,
+} from '@/utils/proTableSearch';
+import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 
 type SellerProductRow = API.Partner.SellerPortalProduct & {
   uiRowKey: string;
@@ -48,67 +58,26 @@ function statusTag(status?: string) {
   return <Tag color={color}>{label}</Tag>;
 }
 
+const PRODUCT_STATUS_VALUE_ENUM = {
+  DRAFT: { text: getSalesStatusText('DRAFT') },
+  READY: { text: getSalesStatusText('READY') },
+  ON_SALE: { text: getSalesStatusText('ON_SALE') },
+  OFF_SALE: { text: getSalesStatusText('OFF_SALE') },
+  DISABLED: { text: getSalesStatusText('DISABLED') },
+};
+
+const PRODUCT_STATUS_OPTIONS = Object.entries(PRODUCT_STATUS_VALUE_ENUM).map(
+  ([value, item]) => ({ value, label: item.text }),
+);
+
 const SellerOwnDistributionProductList: React.FC = () => {
-  const [loading, setLoading] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [rows, setRows] = useState<SellerProductRow[]>([]);
-  const [total, setTotal] = useState(0);
-  const [pageNum, setPageNum] = useState(1);
-  const [pageSize, setPageSize] = useState(5);
   const [detailOpen, setDetailOpen] = useState(false);
   const [current, setCurrent] = useState<API.Partner.SellerPortalProduct>();
   const [skuRows, setSkuRows] = useState<API.Partner.SellerPortalProductSku[]>(
     [],
   );
-  const listRequestSeq = useRef(0);
-
-  const loadProducts = useCallback(
-    async (currentPage: number, currentPageSize: number) => {
-      const requestSeq = listRequestSeq.current + 1;
-      listRequestSeq.current = requestSeq;
-      setLoading(true);
-      try {
-        const response = await getSellerPortalDistributionProducts({
-          pageNum: currentPage,
-          pageSize: currentPageSize,
-        });
-        if (listRequestSeq.current !== requestSeq) {
-          return;
-        }
-        if (response.code !== 200) {
-          message.error(response.msg || '商品加载失败');
-          setRows([]);
-          setTotal(0);
-          return;
-        }
-        setPageNum(currentPage);
-        setPageSize(currentPageSize);
-        setTotal(response.total || 0);
-        setRows(
-          (response.rows || []).map((row, index) => ({
-            ...row,
-            uiRowKey: `${row.spuId || 'product'}-${row.sellerSpuCode || ''}-${index}`,
-          })),
-        );
-      } catch (error) {
-        console.log(error);
-        if (listRequestSeq.current === requestSeq) {
-          message.error('商品加载失败');
-          setRows([]);
-          setTotal(0);
-        }
-      } finally {
-        if (listRequestSeq.current === requestSeq) {
-          setLoading(false);
-        }
-      }
-    },
-    [],
-  );
-
-  useEffect(() => {
-    loadProducts(1, 5);
-  }, [loadProducts]);
+  const actionRef = useRef<ActionType | undefined>(undefined);
 
   const openDetail = async (record: API.Partner.SellerPortalProduct) => {
     if (!record.spuId) {
@@ -141,12 +110,18 @@ const SellerOwnDistributionProductList: React.FC = () => {
     }
   };
 
-  const columns: ColumnsType<SellerProductRow> = [
+  const columns: ProColumns<SellerProductRow>[] = [
+    {
+      title: '关键词',
+      dataIndex: 'keyword',
+      hideInTable: true,
+    },
     {
       title: '商品',
       dataIndex: 'productName',
       key: 'productName',
       width: 320,
+      search: false,
       render: (_, record) => (
         <Space size={10}>
           {record.mainImageUrl ? (
@@ -175,19 +150,26 @@ const SellerOwnDistributionProductList: React.FC = () => {
       dataIndex: 'sellerSpuCode',
       key: 'sellerSpuCode',
       width: 140,
-      render: displayText,
+      render: (_, record) => displayText(record.sellerSpuCode),
+    },
+    {
+      title: '客户SKU',
+      dataIndex: 'sellerSkuCode',
+      hideInTable: true,
     },
     {
       title: '类目',
       dataIndex: 'categoryName',
       key: 'categoryName',
       width: 160,
-      render: displayText,
+      search: false,
+      render: (_, record) => displayText(record.categoryName),
     },
     {
       title: '价格',
       key: 'price',
       width: 160,
+      search: false,
       render: (_, record) => (
         <Space orientation="vertical" size={0}>
           <span>
@@ -204,18 +186,25 @@ const SellerOwnDistributionProductList: React.FC = () => {
       dataIndex: 'skuCount',
       key: 'skuCount',
       width: 80,
-      render: displayText,
+      search: false,
+      render: (_, record) => displayText(record.skuCount),
     },
     {
       title: '状态',
       dataIndex: 'spuStatus',
       key: 'spuStatus',
       width: 96,
-      render: statusTag,
+      valueType: 'select',
+      valueEnum: PRODUCT_STATUS_VALUE_ENUM,
+      fieldProps: {
+        ...SEARCHABLE_SELECT_PROPS,
+        options: PRODUCT_STATUS_OPTIONS,
+      },
+      render: (_, record) => statusTag(record.spuStatus),
     },
     {
       title: '操作',
-      key: 'action',
+      valueType: 'option',
       width: 88,
       render: (_, record) => (
         <Button type="link" size="small" onClick={() => openDetail(record)}>
@@ -270,36 +259,53 @@ const SellerOwnDistributionProductList: React.FC = () => {
 
   return (
     <>
-      <Card
-        title="我的商城商品"
-        variant="borderless"
-        extra={
+      <ProTable<SellerProductRow>
+        actionRef={actionRef}
+        rowKey="uiRowKey"
+        headerTitle="我的商城商品"
+        columns={columns}
+        search={getPersistedProTableSearch(
+          { labelWidth: 96, defaultFormItemsNumber: 4 },
+          'seller-portal-distribution-product',
+        )}
+        pagination={getProTablePagination({
+          defaultPageSize: 5,
+          pageSizeOptions: [5, 10, 20],
+        })}
+        scroll={getProTableScroll(1040)}
+        request={async ({ current: currentPage, pageSize: currentPageSize, ...params }) => {
+          const response = await getSellerPortalDistributionProducts({
+            keyword: params.keyword,
+            sellerSpuCode: params.sellerSpuCode,
+            sellerSkuCode: params.sellerSkuCode,
+            spuStatus: params.spuStatus,
+            pageNum: currentPage,
+            pageSize: currentPageSize,
+          });
+          if (response.code !== 200) {
+            message.error(response.msg || '商品加载失败');
+            return { data: [], total: 0, success: false };
+          }
+          return {
+            data: (response.rows || []).map((row, index) => ({
+              ...row,
+              uiRowKey: `${row.spuId || 'product'}-${row.sellerSpuCode || ''}-${index}`,
+            })),
+            total: response.total || 0,
+            success: true,
+          };
+        }}
+        toolBarRender={() => [
           <Button
+            key="refresh"
             icon={<ReloadOutlined />}
-            onClick={() => loadProducts(pageNum, pageSize)}
+            onClick={() => actionRef.current?.reload()}
           >
             刷新
-          </Button>
-        }
-      >
-        <Table<SellerProductRow>
-          size="small"
-          rowKey="uiRowKey"
-          loading={loading}
-          columns={columns}
-          dataSource={rows}
-          scroll={{ x: 1040 }}
-          pagination={{
-            current: pageNum,
-            pageSize,
-            total,
-            showSizeChanger: true,
-            pageSizeOptions: [5, 10, 20],
-            onChange: loadProducts,
-          }}
-          locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
-        />
-      </Card>
+          </Button>,
+        ]}
+        locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
+      />
 
       <Modal
         title="商品详情"

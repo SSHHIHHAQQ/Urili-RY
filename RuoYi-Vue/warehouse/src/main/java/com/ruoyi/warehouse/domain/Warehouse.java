@@ -40,6 +40,7 @@ public class Warehouse extends BaseEntity
 
     private Long warehousePairingId;
     private String connectionCode;
+    private String masterWarehouseName;
     private String upstreamWarehouseCode;
     private String upstreamWarehouseName;
     private String pairingStatus;
@@ -306,6 +307,16 @@ public class Warehouse extends BaseEntity
     public void setConnectionCode(String connectionCode)
     {
         this.connectionCode = connectionCode;
+    }
+
+    public String getMasterWarehouseName()
+    {
+        return masterWarehouseName;
+    }
+
+    public void setMasterWarehouseName(String masterWarehouseName)
+    {
+        this.masterWarehouseName = masterWarehouseName;
     }
 
     public String getUpstreamWarehouseCode()

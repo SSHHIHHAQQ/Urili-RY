@@ -5,15 +5,48 @@ export const salesStatusOptions = [
   { label: '待上架', value: 'READY' },
   { label: '已上架', value: 'ON_SALE' },
   { label: '已下架', value: 'OFF_SALE' },
-  { label: '停用', value: 'DISABLED' },
 ];
+
+export const salesStatusTabOptions = [
+  { label: '待上架', value: 'READY' },
+  { label: '已上架', value: 'ON_SALE' },
+  { label: '已下架', value: 'OFF_SALE' },
+  { label: '停用', value: 'DISABLED' },
+  { label: '草稿', value: 'DRAFT' },
+  { label: '全部', value: 'ALL' },
+] as const;
+
+export type SalesStatusTabValue = (typeof salesStatusTabOptions)[number]['value'];
 
 export const salesStatusValueEnum: ProSchemaValueEnumObj = {
   DRAFT: { text: '草稿', status: 'Default' },
   READY: { text: '待上架', status: 'Warning' },
   ON_SALE: { text: '已上架', status: 'Success' },
   OFF_SALE: { text: '已下架', status: 'Processing' },
+};
+
+export const controlStatusOptions = [
+  { label: '正常', value: 'NORMAL' },
+  { label: '停用', value: 'DISABLED' },
+];
+
+export const controlStatusValueEnum: ProSchemaValueEnumObj = {
+  NORMAL: { text: '正常', status: 'Success' },
   DISABLED: { text: '停用', status: 'Error' },
+};
+
+export const productOperationTypeText: Record<string, string> = {
+  SALES_STATUS_CHANGE: '销售状态调整',
+  CONTROL_DISABLE: '停用',
+  CONTROL_RECOVER: '恢复',
+  SALE_PRICE_ADJUST: '调价',
+};
+
+export const productOperationTypeColor: Record<string, string> = {
+  SALES_STATUS_CHANGE: 'blue',
+  CONTROL_DISABLE: 'orange',
+  CONTROL_RECOVER: 'green',
+  SALE_PRICE_ADJUST: 'purple',
 };
 
 export const sourceTypeValueEnum: ProSchemaValueEnumObj = {
@@ -36,8 +69,19 @@ export function getSalesStatusText(status?: string) {
   return salesStatusOptions.find((item) => item.value === status)?.label || status || '--';
 }
 
+export function getControlStatusText(status?: string) {
+  return controlStatusOptions.find((item) => item.value === status)?.label || status || '--';
+}
+
 function readSkuSpecValue(record: API.ProductDistribution.Sku, field: keyof API.ProductDistribution.Sku) {
   return String(record[field] || '').trim();
+}
+
+function formatSkuSpecValue(record: API.ProductDistribution.Sku, field: keyof API.ProductDistribution.Sku) {
+  const value = readSkuSpecValue(record, field);
+  if (!value) return '';
+  const label = skuSpecFields.find((item) => item.value === field)?.label || String(field);
+  return `${label}：${value}`;
 }
 
 export function buildSkuSpecText(
@@ -51,12 +95,12 @@ export function buildSkuSpecText(
   const fallbackFields: (keyof API.ProductDistribution.Sku)[] = ['color', 'size'];
   const fields = differingFields.length ? differingFields : fallbackFields;
   const text = fields
-    .map((field) => readSkuSpecValue(record, field))
+    .map((field) => formatSkuSpecValue(record, field))
     .filter(Boolean)
     .join(' / ');
   if (text) return text;
   return allFields
-    .map((field) => readSkuSpecValue(record, field))
+    .map((field) => formatSkuSpecValue(record, field))
     .filter(Boolean)
     .join(' / ');
 }

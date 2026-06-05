@@ -21,6 +21,12 @@ create table if not exists product_spu (
   main_image_url   varchar(1000) default ''              comment 'SPU主图资源路径',
   detail_content   text                                  comment '商品详情文本',
   spu_status       varchar(32)   not null default 'DRAFT' comment 'SPU销售状态',
+  control_status   varchar(32)   not null default 'NORMAL' comment 'SPU管控状态：NORMAL正常，DISABLED停用',
+  control_reason   varchar(500)  default null            comment '最近一次停用原因',
+  control_by       varchar(64)   default null            comment '最近一次停用操作人',
+  control_time     datetime                              comment '最近一次停用时间',
+  recover_by       varchar(64)   default null            comment '最近一次恢复操作人',
+  recover_time     datetime                              comment '最近一次恢复时间',
   source_type      varchar(32)   not null default 'ADMIN_MANUAL' comment '创建来源',
   source_ref_type  varchar(32)   default ''              comment '来源对象类型',
   source_ref_id    varchar(128)  default ''              comment '来源对象ID',
@@ -36,6 +42,8 @@ create table if not exists product_spu (
   key idx_product_spu_seller_code (seller_id, seller_spu_code),
   key idx_product_spu_category (category_id),
   key idx_product_spu_status (spu_status),
+  key idx_product_spu_control_status (control_status),
+  key idx_product_spu_status_control (spu_status, control_status),
   key idx_product_spu_source (source_type),
   key idx_product_spu_update_time (update_time)
 ) engine=innodb auto_increment=1 comment='商城商品SPU表';
@@ -59,9 +67,15 @@ create table if not exists product_sku (
   capacity          varchar(128)  default ''              comment '容量，含单位文本',
   sku_image_url     varchar(1000) default ''              comment 'SKU主图或规格示意图',
   supply_price      decimal(18,4) not null                comment '供货价',
-  sale_price        decimal(18,4) not null                comment '销售价',
+  sale_price        decimal(18,4)                         comment '销售价',
   currency_code     varchar(16)   not null                comment '币种code',
   sku_status        varchar(32)   not null default 'DRAFT' comment 'SKU销售状态',
+  control_status    varchar(32)   not null default 'NORMAL' comment 'SKU管控状态：NORMAL正常，DISABLED停用',
+  control_reason    varchar(500)  default null            comment '最近一次停用原因',
+  control_by        varchar(64)   default null            comment '最近一次停用操作人',
+  control_time      datetime                              comment '最近一次停用时间',
+  recover_by        varchar(64)   default null            comment '最近一次恢复操作人',
+  recover_time      datetime                              comment '最近一次恢复时间',
   sort_order        int           not null default 0      comment '显示排序',
   del_flag          char(1)       not null default '0'    comment '删除标志：0存在 2删除',
   create_by         varchar(64)   default ''              comment '创建者',
@@ -75,6 +89,8 @@ create table if not exists product_sku (
   key idx_product_sku_seller (seller_id),
   key idx_product_sku_seller_code (seller_id, seller_sku_code),
   key idx_product_sku_status (sku_status),
+  key idx_product_sku_control_status (control_status),
+  key idx_product_sku_status_control (sku_status, control_status),
   key idx_product_sku_currency (currency_code),
   key idx_product_sku_update_time (update_time)
 ) engine=innodb auto_increment=1 comment='商城商品SKU表';
@@ -125,6 +141,39 @@ create table if not exists product_image (
   key idx_product_image_role (image_role)
 ) engine=innodb auto_increment=1 comment='商城商品图片表';
 
+create table if not exists product_distribution_operation_log (
+  log_id                bigint        not null auto_increment comment '日志ID',
+  batch_no              varchar(64)   not null                comment '批量操作批次号',
+  operation_type        varchar(32)   not null                comment '操作类型',
+  owner_type            varchar(16)   not null                comment '对象类型：SPU/SKU',
+  spu_id                bigint        not null                comment 'SPU ID',
+  sku_id                bigint        default null            comment 'SKU ID',
+  system_spu_code       varchar(64)   default null            comment '系统SPU编码快照',
+  system_sku_code       varchar(64)   default null            comment '系统SKU编码快照',
+  seller_id             bigint        default null            comment '卖家ID快照',
+  seller_name           varchar(128)  default null            comment '卖家名称快照',
+  before_sales_status   varchar(32)   default null            comment '操作前销售状态',
+  after_sales_status    varchar(32)   default null            comment '操作后销售状态',
+  before_control_status varchar(32)   default null            comment '操作前管控状态',
+  after_control_status  varchar(32)   default null            comment '操作后管控状态',
+  before_sale_price     decimal(18,4) default null            comment '操作前销售价',
+  after_sale_price      decimal(18,4) default null            comment '操作后销售价',
+  currency_code         varchar(16)   default null            comment '币种快照',
+  reason                varchar(500)  default null            comment '操作原因',
+  change_summary        varchar(500)  default null            comment '操作摘要',
+  diff_json             longtext                              comment '字段差异JSON',
+  operator_name         varchar(64)   not null                comment '操作人账号',
+  operation_time        datetime      not null default current_timestamp comment '操作时间',
+  operation_source      varchar(32)   not null default 'PAGE' comment '操作来源',
+  remark                varchar(500)  default null            comment '备注',
+  primary key (log_id),
+  key idx_product_dist_log_batch (batch_no),
+  key idx_product_dist_log_spu (spu_id, operation_time),
+  key idx_product_dist_log_sku (sku_id, operation_time),
+  key idx_product_dist_log_type (operation_type, operation_time),
+  key idx_product_dist_log_operator (operator_name, operation_time)
+) engine=innodb auto_increment=1 comment='商城商品业务操作日志';
+
 insert into sys_dict_type
     (dict_name, dict_type, status, create_by, create_time, update_by, update_time, remark)
 select '商品销售状态', 'product_sales_status', '0', 'admin', sysdate(), '', null, '商城商品SPU/SKU销售状态'
@@ -138,9 +187,30 @@ from (
     union all select 2, '待上架', 'READY', 'warning', 'N'
     union all select 3, '已上架', 'ON_SALE', 'success', 'N'
     union all select 4, '已下架', 'OFF_SALE', 'info', 'N'
-    union all select 5, '停用', 'DISABLED', 'danger', 'N'
 ) seed
 where not exists (select 1 from sys_dict_data d where d.dict_type = 'product_sales_status' and d.dict_value = seed.dict_value);
+
+update sys_dict_data
+set status = '1',
+    update_by = 'admin',
+    update_time = sysdate(),
+    remark = '停用已拆分为商品管控状态，不再作为销售状态'
+where dict_type = 'product_sales_status'
+  and dict_value = 'DISABLED';
+
+insert into sys_dict_type
+    (dict_name, dict_type, status, create_by, create_time, update_by, update_time, remark)
+select '商品管控状态', 'product_control_status', '0', 'admin', sysdate(), '', null, '商城商品SPU/SKU独立管控状态'
+where not exists (select 1 from sys_dict_type where dict_type = 'product_control_status');
+
+insert into sys_dict_data
+    (dict_sort, dict_label, dict_value, dict_type, css_class, list_class, is_default, status, create_by, create_time, update_by, update_time, remark)
+select seed.dict_sort, seed.dict_label, seed.dict_value, 'product_control_status', '', seed.list_class, seed.is_default, '0', 'admin', sysdate(), '', null, '商品管控状态'
+from (
+    select 1 as dict_sort, '正常' as dict_label, 'NORMAL' as dict_value, 'success' as list_class, 'Y' as is_default
+    union all select 2, '停用', 'DISABLED', 'danger', 'N'
+) seed
+where not exists (select 1 from sys_dict_data d where d.dict_type = 'product_control_status' and d.dict_value = seed.dict_value);
 
 insert into sys_dict_type
     (dict_name, dict_type, status, create_by, create_time, update_by, update_time, remark)
@@ -177,6 +247,8 @@ from (
     union all select 2482, '商城商品新增', 2, 'product:distribution:add', '商城商品按钮：新增'
     union all select 2483, '商城商品修改', 3, 'product:distribution:edit', '商城商品按钮：修改'
     union all select 2484, '商城商品状态', 4, 'product:distribution:status', '商城商品按钮：状态切换'
+    union all select 2485, '商城商品调价', 5, 'product:distribution:price', '商城商品按钮：调整销售价'
+    union all select 2486, '商城商品操作日志', 6, 'product:distribution:log', '商城商品按钮：操作日志'
 ) seed
 where not exists (select 1 from sys_menu m where m.menu_id = seed.menu_id)
   and not exists (select 1 from sys_menu p where p.perms = seed.perms);

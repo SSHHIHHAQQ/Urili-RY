@@ -1,6 +1,7 @@
 package com.ruoyi.product.domain;
 
 import java.math.BigDecimal;
+import java.util.Date;
 import java.util.List;
 import com.ruoyi.common.core.domain.BaseEntity;
 
@@ -26,6 +27,12 @@ public class ProductSpu extends BaseEntity
     private String mainImageUrl;
     private String detailContent;
     private String spuStatus;
+    private String controlStatus;
+    private String controlReason;
+    private String controlBy;
+    private Date controlTime;
+    private String recoverBy;
+    private Date recoverTime;
     private String sourceType;
     private String sourceRefType;
     private String sourceRefId;
@@ -39,7 +46,10 @@ public class ProductSpu extends BaseEntity
     private BigDecimal salePriceMin;
     private BigDecimal salePriceMax;
     private String currencySummary;
+    private Long availableStock;
     private Integer warehouseCount;
+    private String inventoryStatus;
+    private Date stockUpdateTime;
     private List<ProductSku> skus;
     private List<ProductAttributeValue> attributeValues;
     private List<ProductImage> images;
@@ -74,6 +84,18 @@ public class ProductSpu extends BaseEntity
     public void setDetailContent(String detailContent) { this.detailContent = detailContent; }
     public String getSpuStatus() { return spuStatus; }
     public void setSpuStatus(String spuStatus) { this.spuStatus = spuStatus; }
+    public String getControlStatus() { return controlStatus; }
+    public void setControlStatus(String controlStatus) { this.controlStatus = controlStatus; }
+    public String getControlReason() { return controlReason; }
+    public void setControlReason(String controlReason) { this.controlReason = controlReason; }
+    public String getControlBy() { return controlBy; }
+    public void setControlBy(String controlBy) { this.controlBy = controlBy; }
+    public Date getControlTime() { return controlTime; }
+    public void setControlTime(Date controlTime) { this.controlTime = controlTime; }
+    public String getRecoverBy() { return recoverBy; }
+    public void setRecoverBy(String recoverBy) { this.recoverBy = recoverBy; }
+    public Date getRecoverTime() { return recoverTime; }
+    public void setRecoverTime(Date recoverTime) { this.recoverTime = recoverTime; }
     public String getSourceType() { return sourceType; }
     public void setSourceType(String sourceType) { this.sourceType = sourceType; }
     public String getSourceRefType() { return sourceRefType; }
@@ -100,8 +122,14 @@ public class ProductSpu extends BaseEntity
     public void setSalePriceMax(BigDecimal salePriceMax) { this.salePriceMax = salePriceMax; }
     public String getCurrencySummary() { return currencySummary; }
     public void setCurrencySummary(String currencySummary) { this.currencySummary = currencySummary; }
+    public Long getAvailableStock() { return availableStock; }
+    public void setAvailableStock(Long availableStock) { this.availableStock = availableStock; }
     public Integer getWarehouseCount() { return warehouseCount; }
     public void setWarehouseCount(Integer warehouseCount) { this.warehouseCount = warehouseCount; }
+    public String getInventoryStatus() { return inventoryStatus; }
+    public void setInventoryStatus(String inventoryStatus) { this.inventoryStatus = inventoryStatus; }
+    public Date getStockUpdateTime() { return stockUpdateTime; }
+    public void setStockUpdateTime(Date stockUpdateTime) { this.stockUpdateTime = stockUpdateTime; }
     public List<ProductSku> getSkus() { return skus; }
     public void setSkus(List<ProductSku> skus) { this.skus = skus; }
     public List<ProductAttributeValue> getAttributeValues() { return attributeValues; }

@@ -1,4 +1,4 @@
-import { PlusOutlined } from '@ant-design/icons';
+import { HistoryOutlined, PlusOutlined } from '@ant-design/icons';
 import {
   type ActionType,
   ModalForm,
@@ -36,6 +36,7 @@ import {
   statusOptions,
   yesNoOptions,
 } from '../../constants';
+import ProductConfigChangeLogDrawer from '../../components/ProductConfigChangeLogDrawer';
 import './CategoryAttributeTemplate.css';
 import CategoryTreeFilterPanel from './CategoryTreeFilterPanel';
 import { buildCategoryAttributeColumns } from './categoryAttributeColumns';
@@ -99,6 +100,7 @@ export default function CategoryAttributeTemplate({
   const [modalOpen, setModalOpen] = useState(false);
   const [currentRule, setCurrentRule] =
     useState<API.Product.CategoryAttribute>();
+  const [operationLogOpen, setOperationLogOpen] = useState(false);
 
   const treeData = useMemo(
     () =>
@@ -452,6 +454,13 @@ export default function CategoryAttributeTemplate({
               }}
               toolBarRender={() => [
                 <Button
+                  key="operationLog"
+                  icon={<HistoryOutlined />}
+                  onClick={() => setOperationLogOpen(true)}
+                >
+                  操作日志
+                </Button>,
+                <Button
                   key="add"
                   type="primary"
                   icon={<PlusOutlined />}
@@ -490,6 +499,13 @@ export default function CategoryAttributeTemplate({
           </div>
         </div>
       </div>
+
+      <ProductConfigChangeLogDrawer
+        open={operationLogOpen}
+        onOpenChange={setOperationLogOpen}
+        bizType="CATEGORY_ATTRIBUTE_RULE"
+        title="类目属性模板"
+      />
 
       <ModalForm<API.Product.CategoryAttribute>
         title={

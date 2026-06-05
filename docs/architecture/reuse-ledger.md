@@ -24,9 +24,10 @@
   - `docs/plans/2026-06-05-buyer-distribution-product-read-template-record.md`
   - `docs/plans/2026-06-05-buyer-product-permission-dml-smoke-record.md`
   - `docs/plans/2026-06-05-buyer-portal-product-ui-template-record.md`
+  - `docs/plans/2026-06-05-buyer-portal-product-protable-copy-record.md`
 - 当前用途：
   - 作为 buyer 端商城商品浏览的第一套后端只读模板。
-  - 作为 buyer portal 工作台商城商品卡片的第一套前端模板。
+  - 作为 buyer portal 工作台商城商品卡片的标准 ProTable 前端模板。
   - buyer 端只读浏览平台已上架商品，不承载商品归属、下单、购物车、库存承诺或客户专属价格。
   - product 共享查询提供 `ON_SALE` SPU / `ON_SALE` SKU 的只读口径，buyer facade 负责端入口、端鉴权、DTO 脱敏和业务筛选。
   - buyer 真实运行库权限 DML 与 HTTP smoke 已形成可复跑验收模板。
@@ -40,8 +41,12 @@
   - 真实运行库补权限和 HTTP smoke 已单独成切片；后续 buyer 前端复制时不得重复执行 DML，除非权限 seed 或运行库权限发生新变更。
   - HTTP smoke 必须覆盖无 token 拒绝、buyer 登录、`getInfo` 权限集合、列表、伪造范围参数不生效、详情、SKU、固定不存在商品拒绝和 logout 后旧 token 失效。
   - buyer 前端工作台复制已按 seller portal 商品卡片模板替换 terminal、service、路由、DTO 和断言文本，不重新设计页面结构。
+  - buyer portal 商品主列表必须使用标准 `ProTable`、`getPersistedProTableSearch(...)`、`getProTablePagination(...)` 和 `getProTableScroll(...)`，并固定 `current -> pageNum`、`pageSize -> pageSize` 的若依分页映射。
   - buyer 前端卡片标题使用“商城商品”，不使用 seller 的“我的商城商品”；buyer 页面不展示客户 SPU/SKU、seller 内部编码、系统编码、供货价或后台审计字段。
+  - buyer 商品浏览筛选只暴露 buyer 可用口径；当前前端只保留关键词和分页，不提供 `spuStatus`、seller 客户编码、系统编码、供货价或 sourceType 这类后台/卖家字段筛选。
   - buyer 商品前端模板改动后至少运行 `npm run guard:buyer-portal-product`、`npm run guard:portal-token`、`npm run tsc -- --pretty false` 和 `scripts/smoke/buyer-portal-product-ui-smoke.ps1`。
+  - buyer 商品 service 的列表、详情和 SKU 入口都必须先校验 `PortalLoginSession.terminal == "buyer"`、`subjectId` 和 `accountId`；session 不匹配时必须先返回“登录状态已失效”，且不得调用共享 product service 查询商品。
+  - `BuyerPortalProductServiceImplTest` 已固定非 buyer session 的 fail-closed 契约：列表、详情和 SKU 均不得查询 product service；后续新增 buyer 商品只读入口时先补同类 service 层负向测试，再接 Controller。
 
 ## 买家商品浏览复制前边界
 
@@ -59,8 +64,8 @@
   - buyer 首版只展示销售价和币种；供货价、seller 内部编码、系统 SPU/SKU、后台审计字段、token、Redis key 均不得进入 buyer 响应或页面。
   - buyer 端商品权限写入 `buyer_menu` / `buyer_role_menu`；不得写回若依 `sys_menu` / `sys_role`。
   - buyer 商品路径和权限命名暂定沿用 seller 模板的 `distribution-products` / `buyer:product:distribution:*`；如果改为 `browse-products` / `buyer:product:browse:*`，必须在 buyer 后端切片开始前一次选定。
-  - buyer 后续实现按后端只读模板、权限 DML 与 HTTP smoke、前端工作台复制、浏览器 smoke 与模板验收分切片推进。
-  - portal 401 清理 admin session 的前端隔离问题作为后续独立切片处理，不混进 buyer 商品后端复制。
+  - buyer 商品浏览已按后端只读模板、权限 DML 与 HTTP smoke、前端工作台复制、ProTable 差量复制、浏览器 smoke 与模板验收分切片推进完成；后续只按维护/演进口径更新。
+  - portal 401 清理 admin session 的前端隔离问题已作为独立切片完成，不再作为 buyer 商品浏览复制阻塞项。
 
 ## 卖家端商品模板验收基线
 
@@ -74,7 +79,7 @@
   - 作为 seller portal “我的商城商品”模板是否可以进入复制评估的验收基线。
   - 同时覆盖后端 service 范围控制、端权限 seed 契约、前端模板契约、portal token/query 隔离、真实 HTTP 链路和真实浏览器链路。
 - 复用规则：
-  - 后续复制 buyer 前，必须先确认 buyer 商品浏览业务口径，再按该验收基线替换 terminal、路由、service、权限、DTO、前端断言和 smoke 脚本。
+  - buyer 商品浏览业务口径已确认并完成 ProTable 差量复制；后续 seller 商品模板新增结构变化时，仍先验收 seller，再按 buyer 浏览口径替换 terminal、路由、service、权限、DTO、前端断言和 smoke 脚本。
   - 不允许把 seller 商品拥有关系机械替换成 buyer；buyer 可见性、上架状态、价格口径和库存可见边界需要单独确认。
   - seller 商品模板改动后，至少重新运行 seller service 单测、seller 模块测试、前端两个 guard、`npm run tsc`、后端 HTTP smoke 和前端浏览器 smoke。
 
@@ -85,13 +90,13 @@
   - `scripts/smoke/seller-portal-product-ui-smoke.mjs`
 - 当前用途：
   - 可复跑验收 seller portal “我的商城商品”前端模板。
-  - 覆盖管理端生成 seller 免密票据、seller direct-login、seller portal 加载、token storage 隔离、商品卡片、详情弹窗、可见字段脱敏和退出清理。
+  - 覆盖管理端生成 seller 免密票据、seller direct-login、seller portal 加载、token storage 隔离、商品列表、详情弹窗、可见字段脱敏和退出清理。
   - 默认使用本机 Chrome/Edge 通道，不往 `react-ui/package.json` 增加 Playwright 依赖。
 - 复用规则：
   - seller 商品模板验收时先运行后端 HTTP smoke，再运行该浏览器 smoke。
   - 脚本不得输出 `admin token`、`seller token`、`directLoginToken`、免密 URL、Redis key 或 `.env.local` 内容。
   - 验证码开启时脚本只能失败并提示，不得自行修改验证码开关。
-  - buyer 未验收前不要复制该脚本为 buyer 版本；buyer 商品浏览口径确认后再替换 terminal、路由、service 和断言文本。
+  - buyer 版本已按独立买家浏览口径另行完成；后续 seller 模板新增结构性变化时，先验收 seller，再按 buyer 业务口径复制差量。
 
 ## 卖家端商品前端模板契约守卫
 
@@ -106,11 +111,13 @@
   - 防止 seller 商品卡片被放入 buyer 分支。
   - 防止 seller portal 商品页面直接调用 `request(...)`、导入管理端 product service、硬编码 API 路径或复用管理端 `API.ProductDistribution` 类型。
   - 防止 seller 商品列表 service 透传客户端身份范围参数。
+  - 固定 seller portal 商品列表必须使用标准 ProTable、统一筛选展开持久化、统一分页和统一滚动配置。
 - 复用规则：
-  - 后续先验收 seller 模板，再复制 buyer；复制前必须先确认 buyer 商品浏览可见性、上架状态、价格口径和库存可见边界。
+  - buyer 商品浏览 ProTable 差量已按 seller 模板复制完成；后续 seller 模板新增结构变化时，仍先确认 buyer 浏览可见性、上架状态、价格口径和库存可见边界，再复制差量。
   - seller portal 商品页面必须通过 `@/services/portal/session` 调用端内 service，不要在页面中手写 Authorization、API 路径或管理端 service。
   - seller portal 商品响应类型必须使用 `API.Partner.SellerPortalProduct` / `API.Partner.SellerPortalProductSku`，不要把管理端商品 DTO 当作端内 API 标准。
-  - 修改 seller portal 商品模板后必须运行 `npm run guard:seller-portal-product`。
+  - seller portal 商品主列表必须使用 `ProTable`、`getPersistedProTableSearch(...)`、`getProTablePagination(...)` 和 `getProTableScroll(...)`；详情弹窗内 SKU 小明细表可以保留 Ant Design `Table`。
+  - 修改 seller portal 商品模板后必须运行 `npm run guard:seller-portal-product` 和 `npm run tsc -- --pretty false`。
 
 ## 若依字典
 
@@ -193,9 +200,11 @@
 - 位置：
   - `RuoYi-Vue/product`
   - `RuoYi-Vue/sql/20260604_product_category_attribute_seed.sql`
+  - `RuoYi-Vue/sql/20260605_product_config_change_log.sql`
   - `react-ui/src/pages/Product/Category/index.tsx`
   - `react-ui/src/pages/Product/Attribute/index.tsx`
   - `react-ui/src/pages/Product/components/ProductImportModal.tsx`
+  - `react-ui/src/pages/Product/components/ProductConfigChangeLogDrawer.tsx`
   - `react-ui/src/services/product/product.ts`
   - `react-ui/src/types/product/product.d.ts`
 - 当前用途：
@@ -203,6 +212,7 @@
   - 管理端维护平台级商品属性库和属性自定义选项。
   - 管理端维护类目属性配置，并预览按祖先链继承合并后的发布 schema。
   - 管理端导入商品分类、商品属性和商品属性选项。
+  - 管理端按具体分类、属性、属性选项和类目属性规则查看业务级修改记录。
 - 复用规则：
   - `product` 是商品共享基础域，不是 admin / seller / buyer 之外的第四个端。
   - 管理端配置入口使用 `/product/admin/**`，权限走若依 `sys_menu` / `sys_role`。
@@ -213,6 +223,8 @@
   - 类目属性规则统一通过 `IProductConfigService.previewCategorySchema(categoryId)` 计算，不要在前端或其他模块手写继承合并逻辑。
   - 商品配置导入统一使用 `ProductConfigImportService` 和 `ProductImportModal` 的“下载模板、校验、确认导入”流程，不要在分类页、属性页分别复制上传解析和结果表格。
   - 商品配置导入模板统一使用 `ProductImportTemplateService` 输出“正式导入 sheet + 填写示例 sheet + 字段说明 sheet”；第一个 sheet 保持空白，示例只供复制参考，避免误导入。
+  - 商品配置修改记录统一使用 `ProductConfigChangeLogService`、`ProductConfigChangeLogMapper` 和 `ProductConfigChangeLogDrawer`；页面只传 `bizType` 和 `bizId`，不要在各页面重复实现 JSON diff 展示。
+  - `sys_oper_log` 继续作为若依系统级接口审计；`product_config_change_log` 只记录商品配置业务对象的字段级变更。
   - 导入模板只使用业务 code 定位，不让用户填写数据库主键；分类父级使用父级分类编码，属性选项使用属性编码。
   - 导入只支持新增和更新，不支持导入删除；删除仍必须走页面操作和后端业务校验。
   - 商品分类、属性库和类目属性模板仍只负责配置，不承载正式商城商品、SKU、库存、价格、商品审核和外部平台属性同步。
@@ -307,6 +319,24 @@
   - 后续维护 seller/buyer 端同构接口时，只替换 terminal、路径、权限点、日志 title、seed 表名和验证主体，不重新设计。
   - seller/buyer facade 已按各自 terminal 模块收口；后续维护只复制端入口配置，不复制 product schema 计算。
 
+### product 商城商品操作日志辅助模板
+
+- 位置：
+  - `RuoYi-Vue/product/src/main/java/com/ruoyi/product/service/impl/ProductDistributionServiceImpl.java`
+  - `RuoYi-Vue/product/src/main/java/com/ruoyi/product/domain/ProductDistributionOperationLog.java`
+  - `RuoYi-Vue/product/src/main/java/com/ruoyi/product/mapper/ProductDistributionOperationLogMapper.java`
+  - `RuoYi-Vue/product/src/main/resources/mapper/product/ProductDistributionOperationLogMapper.xml`
+  - `RuoYi-Vue/sql/20260605_product_distribution_status_price_log.sql`
+  - `docs/plans/2026-06-05-product-distribution-operation-log-compile-unblock-record.md`
+- 当前用途：
+  - 记录管理端商城商品 SPU / SKU 状态、控制状态和 SKU 销售价变更的业务操作日志。
+  - `sys_oper_log` 仍作为若依接口级审计；`product_distribution_operation_log` 只承载商城商品业务对象字段级变化。
+- 复用规则：
+  - 同一次批量操作必须共用同一个 `batchNo`，不要为每行商品重新生成批次号。
+  - SPU / SKU 状态、控制状态和价格变更应复用现有日志对象构造与字段差异摘要，不要在 controller、mapper XML 或前端重复拼日志。
+  - 日志只记录业务字段变化和操作上下文，不记录 token、Redis key、密码、`.env.local`、数据库连接串或其他敏感信息。
+  - 后续补真实 HTTP / 数据库验收时，需要单独核验操作前后数据、日志行数、字段差异和操作者，不把编译通过当作业务验收完成。
+
 ### 卖家端我的商城商品只读后端模板
 
 - 位置：
@@ -322,18 +352,20 @@
   - 作为 seller 端真实业务接口的数据范围控制标准模板。
   - 提供卖家端自己的商城商品列表、详情和 SKU 只读接口。
   - 端入口放在 `seller` 模块，实际只读消费 `product` 共享模块的 `IProductDistributionService`；`product` 模块不承载 `/seller/**` 路由。
-  - 当前只完成 seller 模板，buyer 不在本切片复制；待卖家验收通过后，再按同构规则复制买家或单独设计买家浏览口径。
+  - seller 模板已形成后端只读范围控制基线；buyer 已按独立买家浏览口径另行完成复制，后续新增 seller 结构性变化仍需先验收 seller，再按 buyer 口径复制差量。
 - 复用规则：
   - 列表、详情和 SKU 查询的数据范围必须来自 `PortalSessionContext.requireSession("seller")` 得到的 `PortalLoginSession.subjectId`，不得信任前端传入的 `sellerId`、`subjectId`、`accountId` 或 `terminal`。
   - Service 必须创建新的查询对象并写入当前 `sellerId`；不得直接修改或透传前端提交的 `ProductSpu` 查询对象。
   - 允许复制的列表筛选字段仅限业务筛选字段，例如 `keyword`、`sellerSpuCode`、`sellerSkuCode`、`productName`、`productNameEn`、`categoryId`、`spuStatus`；`systemSpuCode`、`systemSkuCode`、`sourceType` 等管理端或系统字段不得作为 seller 端范围来源。
   - 列表 DTO 转换必须保留 PageHelper 分页元数据，避免 `getDataTable(...)` 只能读到当前页条数。
   - 详情和 SKU 列表必须先读取商品并校验 `product.sellerId == session.subjectId`；不属于当前卖家的商品统一按“商城商品不存在”处理。
+  - 列表、详情和 SKU 查询都必须先校验 `PortalLoginSession.terminal == "seller"`、`subjectId` 和 `accountId`；session 不匹配时必须先返回“登录状态已失效”，且不得调用共享 product service 查询商品。
   - seller 端响应使用 `SellerPortalProduct` / `SellerPortalProductSku` DTO，不直接返回 `ProductSpu` / `ProductSku`，避免把 `sellerId`、系统 SPU/SKU、`BaseEntity` 审计字段或后台范围字段作为端内 API 标准。
   - 端入口必须使用方法级 `@Anonymous` + `@PortalPreAuthorize(terminal = "seller", hasPermi = "...")` + `@PortalLog(terminal = "seller", ...)`，并继续受 `TerminalRouteOwnershipTest` 和 `TerminalSeedPermissionContractTest` 约束。
-  - 当前权限点为 `seller:product:distribution:list` 和 `seller:product:distribution:query`，只读 seed 已写入 `seller_menu` 和 active seller role 授权；远程运行库已补 seller 端权限 DML，未执行 DDL，未复制 buyer。
+  - 当前权限点为 `seller:product:distribution:list` 和 `seller:product:distribution:query`，只读 seed 已写入 `seller_menu` 和 active seller role 授权；远程运行库已补 seller 端权限 DML。buyer 端商品浏览权限已按独立买家口径在 buyer 侧另行完成。
   - 脚本化烟测必须覆盖 seller 登录、列表、伪造客户端范围参数、详情、SKU、响应字段脱敏、跨卖家详情/SKU 负向访问和 logout 清理；烟测不得输出 token、JWT、Redis key、`.env.local` 或数据库连接明文。
   - buyer 端后续如果复制该模板，只能替换 terminal、路径、权限前缀、日志 title、service 名称、DTO 名称和测试名；不能把 seller 商品拥有关系机械改成 buyer 拥有关系，买家浏览商品的可见性规则需要单独确认。
+  - `SellerPortalProductServiceImplTest` 已固定非 seller session 的 fail-closed 契约：列表、详情和 SKU 均不得查询 product service；后续修改 `IProductDistributionService` 接口时，需要同步维护 seller/buyer portal service fake，避免测试编译漂移。
 
 ### 卖家端我的商城商品前端工作台模板
 
@@ -345,11 +377,12 @@
 - 当前用途：
   - 在 seller portal 工作台只读展示当前 seller 的商城商品列表、详情和 SKU。
   - 作为 seller 端真实业务列表接入的前端模板，配合后端 `SellerPortalProductDistributionController` 使用。
-  - 当前只落 seller，不复制 buyer。
+  - seller 主列表已升级为标准 ProTable 模板；buyer 已按 buyer 浏览口径完成 ProTable 差量复制。
 - 复用规则：
   - seller portal 商品请求必须通过 `services/portal/session.ts`，使用 seller token，并显式 `isToken: false`；不要回退复用管理端 `access_token`。
   - 列表参数必须经过 `sanitizePortalQueryParams(...)`，不得把 `sellerId`、`buyerId`、`subjectId`、`accountId`、`sellerAccountId`、`buyerAccountId` 或 `terminal` 作为端内数据范围传给后端。
   - seller portal 商品类型使用 `API.Partner.SellerPortalProduct` / `SellerPortalProductSku`，不要直接复用管理端 `API.ProductDistribution.Spu` 作为端内响应标准。
+  - seller portal 商品主列表必须复用 `getPersistedProTableSearch(...)` 保存筛选区展开/收起状态，使用 `current -> pageNum` 和 `pageSize -> pageSize` 映射调用若依分页接口。
   - 商品详情和 SKU 均从 seller portal 接口读取；前端只负责展示，不做 seller 归属判断。
   - buyer 后续不能机械复制 seller 商品拥有关系；必须先确认买家商品浏览可见性、上架状态、价格口径和库存边界。
 
@@ -361,15 +394,57 @@
   - 防止 `product` 共享模块重新暴露 `/seller...` 或 `/buyer...` 端入口。
   - 防止 seller/buyer 受保护 portal handler 漏掉方法级 `@Anonymous`、`@PortalPreAuthorize`、`@PortalLog` 或当前会话派生。
   - 防止 seller/buyer 受保护 portal handler 在方法签名中接收前端传入的 `sellerId`、`buyerId`、`subjectId`、`accountId` 或 `terminal` 作为身份范围边界。
+  - 防止 seller/buyer 受保护 portal handler 使用若依后台 `SecurityUtils.getLoginUser/getUserId/getUsername`、`LoginUser` 或 `SysUser` 作为端内身份兜底。
 - 复用规则：
   - seller/buyer 受保护端入口新增 controller 时，文件名应使用 `*Portal*Controller.java`，并避免把认证入口之外的真实业务接口放进 `*PortalAuthController.java`。
   - `TerminalRouteOwnershipTest` 会自动发现 seller/buyer 模块 controller 目录下的受保护 portal controller；新增真实业务 controller 后不需要手工维护硬编码清单。
   - seller 受保护端入口新增后先跑 seller 模板守卫；确认通过后，再按同构规则复制 buyer，只替换 terminal、路径、权限前缀和日志 title。
   - 端内业务 handler 可以接收真实业务参数，例如 `categoryId`、筛选对象或分页参数；但不能把 `sellerId`、`buyerId`、`subjectId`、`accountId`、`terminal` 作为请求参数或路径参数接入。
+  - 受 `@PortalPreAuthorize` 保护的端内 handler 不得在缺失端内上下文时回退到若依后台登录上下文；缺少 `PortalSessionContext` 或 terminal 不匹配时必须直接拒绝。
   - 如果某个端内查询 DTO 内含 `subjectId` 或 `accountId`，Controller 或 Service 必须用 `PortalSessionContext` 中的当前会话覆盖这些字段；更稳的模板是提供 session-scoped Service 方法，在 Service 内强制设置范围。
   - 当前账号日志这类带 `subjectId` / `accountId` 的 DTO，标准模板必须使用 session-scoped Service；Controller 覆盖 DTO 只作为历史兼容，不作为后续新增模板。
   - seller/buyer 端登录和免密消费入口属于认证入口例外，不纳入受保护 handler 模板检查；真正业务接口必须纳入。
   - 该测试只证明端入口模板不漏；具体业务权限点、数据范围、字段脱敏和审计内容仍要在对应业务接口测试或接口烟测中验证。
+
+### 端内日志 SQL 独立 DDL 守卫
+
+- 位置：
+  - `RuoYi-Vue/sql/20260604_three_terminal_isolation_migration.sql`
+  - `RuoYi-Vue/sql/20260604_three_terminal_legacy_sys_user_account_backfill.sql`
+  - `RuoYi-Vue/sql/seller_buyer_management_seed.sql`
+  - `RuoYi-Vue/ruoyi-system/src/test/java/com/ruoyi/system/architecture/TerminalSqlIsolationContractTest.java`
+  - `docs/plans/2026-06-05-terminal-log-sql-explicit-ddl-record.md`
+  - `docs/plans/2026-06-05-terminal-legacy-sys-user-backfill-isolation-record.md`
+- 当前用途：
+  - 固定 seller/buyer 端内登录日志和操作日志表必须使用显式独立 DDL。
+  - 防止 `seller_login_log` / `buyer_login_log` 通过 `LIKE sys_logininfor` 派生。
+  - 防止 `seller_oper_log` / `buyer_oper_log` 通过 `LIKE sys_oper_log` 派生。
+  - 固定当前主三端隔离迁移脚本不得再从 `sys_user` 回填 seller/buyer 端账号；历史混用账号库回填只能放在明确标记的 legacy helper 中。
+- 复用规则：
+  - 管理端继续使用若依 `sys_logininfor` / `sys_oper_log`；seller/buyer 端内日志只写各自端内日志表。
+  - 新增或调整端内日志表时，应显式列出端主体 ID、端账号 ID、业务日志字段和索引，不从若依 `sys_*` 日志表复制结构。
+  - 当前主三端隔离 SQL 不能包含 `migrate_*_account_from_sys_user`、`join sys_user` 或类似账号回填逻辑。
+  - `20260604_three_terminal_legacy_sys_user_account_backfill.sql` 只用于历史库仍有 `seller_account.user_id` / `buyer_account.user_id` 指向 `sys_user` 的迁出场景；如需使用，必须在主三端隔离迁移脚本之前执行。
+  - 新环境、当前远程验证库和后续业务增量不得执行 legacy helper，也不得重新把端账号绑定回 `sys_user`。
+  - 调整三端隔离 SQL 或综合 seed 后，至少运行 `mvn -pl ruoyi-system "-Dtest=TerminalSqlIsolationContractTest,TerminalSeedPermissionContractTest" test`。
+
+### PortalOperLogService 端内写入路由
+
+- 位置：
+  - `RuoYi-Vue/ruoyi-system/src/main/java/com/ruoyi/system/service/impl/PortalOperLogServiceImpl.java`
+  - `RuoYi-Vue/ruoyi-system/src/main/java/com/ruoyi/system/mapper/PortalOperLogMapper.java`
+  - `RuoYi-Vue/ruoyi-system/src/main/resources/mapper/system/PortalOperLogMapper.xml`
+  - `RuoYi-Vue/ruoyi-system/src/test/java/com/ruoyi/system/service/impl/PortalOperLogServiceImplTest.java`
+- 当前用途：
+  - 固定 `@PortalLog` 生成的 `PortalOperLog` 按 terminal 写入对应端内操作日志表。
+  - seller terminal 只能调用 `insertSellerOperLog(...)`，最终落到 `seller_oper_log`。
+  - buyer terminal 只能调用 `insertBuyerOperLog(...)`，最终落到 `buyer_oper_log`。
+  - 未知 terminal 必须 fail loud，不允许静默回落到管理端 `sys_oper_log`。
+- 复用规则：
+  - 端内业务接口继续使用 `@PortalLog` + `AsyncFactory.recordPortalOper(...)` + `IPortalOperLogService` 写入端内操作日志，不得改用 `ISysOperLogService`。
+  - 管理端接口继续使用若依 `@Log` / `sys_oper_log`；seller/buyer 端内接口继续使用 `@PortalLog` / `seller_oper_log` / `buyer_oper_log`。
+  - 后续如果增加新的端类型，必须先扩展 `PortalOperLogServiceImplTest` 和 mapper XML，再接入 controller。
+  - 调整端内操作日志写入路由后，至少运行 `mvn -pl ruoyi-system -am "-Dtest=PortalOperLogServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`。
 
 ### 卖家/买家管理端权限契约守卫
 
@@ -387,7 +462,7 @@
   - 校验共享前端模板必须按 `directLogin` 和 `ticket:list` 权限显隐主体行入口、账号行入口、全局审计入口和免密票据 tab。
   - 卖家/买家账号维护均已按卖家标准模板细化权限：账号列表、新增、编辑、密码重置、账号角色查询和账号角色分配分别使用 `seller:admin:account:*` / `buyer:admin:account:*`，不得继续复用主体 `query/add/edit/resetPwd` 或端内角色维护权限。
   - 卖家/买家主体详情仍分别使用 `seller:admin:query` / `buyer:admin:query`；主体/账号免密代入仍使用 `*:admin:directLogin`；主体/账号会话和强制踢出仍使用 `*:admin:forceLogout`；这些敏感控制不并入账号 CRUD 权限。
-  - `PermissionServiceAccountPermissionTest` 覆盖若依实际 `@ss.hasPermi(...)` 运行时判断，证明只有主体权限或端内角色维护权限时不能通过 `*:admin:account:*`。
+  - `PermissionServiceAccountPermissionTest` 覆盖若依实际 `@ss.hasPermi(...)` 运行时判断，证明只有主体权限或端内角色维护权限时不能通过 `*:admin:account:*`，账号 reset/lock/forceLogout 权限不能通过 `*:admin:directLogin` / `*:admin:ticket:list`，directLogin/ticket 权限也不能误授权账号操作或强制踢出。
   - `AdminAccountPermissionUiContractTest` 覆盖前端显隐契约，证明 seller/buyer 页面必须配置 `accountPermissions`，公共账号入口和账号弹窗按钮必须用账号域权限控制。
 - 复用规则：
   - 后续新增 `AdminSeller*Controller` 时先跑卖家测试；确认卖家模板通过后，再按同构规则复制到买家测试。
@@ -460,13 +535,15 @@
 - 当前用途：
   - 管理端为卖家端、买家端生成免密登录 token。
   - 卖家端、买家端登录入口消费免密登录 token。
-  - 明文一次性 payload 写入 Redis，默认有效期 30 分钟；审计票据写入 `portal_direct_login_ticket`，只保存 `token_hash`，不保存明文 token。
+  - 明文一次性 token 只返回给管理端用于生成短时登录链接；审计票据写入 `portal_direct_login_ticket`，只保存 `token_hash`，不保存明文 token。
+  - Redis payload 默认有效期 30 分钟，key 使用 `portal_direct_login:{token_hash}`，payload 不保存明文 token 字段。
   - 端地址优先读取若依参数配置 `portal.seller.web.url`、`portal.buyer.web.url`，未配置时使用本地验证占位地址。
 - 复用规则：
   - 只复用在卖家端、买家端这类门户入口的免密登录场景。
   - 只负责生成和消费一次性 token；目标端消费后仍由 seller/buyer service 创建端 session，不绕过目标端账号、角色、菜单和权限模型。
+  - 目标端消费免密 token 时，必须在票据标记 `USED` 和删除 Redis payload 之前完成当前主体/端账号状态校验；主体停用、账号停用、账号锁定、目标账号不存在或目标账号已改绑到其他主体时，不得消耗票据。seller/buyer service 通过 `consumeToken(..., validator)` 注入当前状态校验，`PortalDirectLoginSupportTest` 固定 validator 失败时不 mark used、不删 Redis。
   - 后续三端拆分后，卖家端/买家端应各自保留 token 消费入口，并读取自己的端账号、角色、菜单和权限体系。
-  - `PortalDirectLoginSupportTest` 已守住 token hash 入库、Redis payload 30 分钟 TTL、一次性消费、跨端拒绝、过期标记和代入原因必填；后续改动免密链路时必须同步跑该测试。
+  - `PortalDirectLoginSupportTest` 已守住 token hash 入库、Redis hash key、Redis payload 不含 token 字段、30 分钟 TTL、一次性消费、跨端拒绝、过期标记和代入原因必填；后续改动免密链路时必须同步跑该测试。
 
 ### PortalDirectLoginTicketMapper
 
@@ -530,6 +607,10 @@
   - `RuoYi-Vue/ruoyi-system/src/main/java/com/ruoyi/system/service/support/PortalPermissionChecker.java`
   - `RuoYi-Vue/ruoyi-system/src/main/java/com/ruoyi/system/service/support/PortalSessionContext.java`
   - `RuoYi-Vue/ruoyi-system/src/main/java/com/ruoyi/system/service/IPortalPermissionCheckService.java`
+  - `RuoYi-Vue/seller/src/test/java/com/ruoyi/seller/service/impl/SellerPortalPermissionServiceImplPortalAccessTest.java`
+  - `RuoYi-Vue/seller/src/test/java/com/ruoyi/seller/service/impl/SellerPortalPermissionServiceImplMenuTreeTest.java`
+  - `RuoYi-Vue/buyer/src/test/java/com/ruoyi/buyer/service/impl/BuyerPortalPermissionServiceImplPortalAccessTest.java`
+  - `RuoYi-Vue/buyer/src/test/java/com/ruoyi/buyer/service/impl/BuyerPortalPermissionServiceImplMenuTreeTest.java`
 - 当前用途：
   - 为卖家端、买家端接口提供统一的端内权限注解。
   - 统一解析端 token、校验 terminal、读取端内权限集合。
@@ -538,15 +619,21 @@
   - `PortalPreAuthorizeAspect` 会把校验通过的 `PortalLoginSession` 写入 `PortalSessionContext`，供当前请求内 Controller、Service 和日志切面复用。
   - 当前已覆盖 `/seller/getInfo`、`/seller/getRouters`、`/buyer/getInfo`、`/buyer/getRouters`。
   - 卖家端已在权限服务中回查 `seller_session` 在线状态，买家端已按同一模板回查 `buyer_session` 在线状态；Redis token 只是入口缓存，DB session 失效后，对应端受保护接口必须拒绝旧 token。
+  - `SellerPortalPermissionServiceImplPortalAccessTest` / `BuyerPortalPermissionServiceImplPortalAccessTest` 已固定端内权限 service 会话 fail-closed 契约：`selectPortalPermissionInfo(...)`、`selectPermissions(...)` 必须复用同一会话守卫；畸形 session 不得继续查询主体、账号或 DB session；DB session 缺失、已退出、已过期或状态非在线时，权限 service 必须返回登录失效。
+  - `SellerPortalPermissionServiceImplMenuTreeTest` / `BuyerPortalPermissionServiceImplMenuTreeTest` 已固定 `selectPortalMenuTree(...)` 的独立菜单树读取契约：离线 DB session 不得查询端内菜单；在线 session 必须用当前 `subjectId/accountId` 查询端内 mapper，并通过 `PortalPermissionSupport.buildMenuTree(...)` 返回父子树。
 - 复用规则：
   - seller/buyer portal 端受保护接口必须方法级同时声明 `@Anonymous` 和 `@PortalPreAuthorize`：`@Anonymous` 只负责放行若依外层登录过滤，`@PortalPreAuthorize` 负责端 token、terminal 和权限校验。
   - 不要在 seller/buyer portal controller 上使用类级 `@Anonymous`；新增方法如果漏挂 `@PortalPreAuthorize`，类级匿名会让接口无意公开。
   - 后续卖家端真实业务接口优先使用 `@PortalPreAuthorize(terminal = "seller", ...)`。
   - 后续买家端真实业务接口优先使用 `@PortalPreAuthorize(terminal = "buyer", ...)`。
+  - seller/buyer 端 `selectPortalPermissionInfo(...)`、`selectPermissions(...)`、`selectPortalMenuTree(...)` 都必须先经过 `assertActiveSellerSession(...)` / `assertActiveBuyerSession(...)`；守卫必须先校验 session 形态：`session` 非空、terminal 匹配、`subjectId` 非空、`accountId` 非空、`tokenId` 非空白；任一不满足都按 401 登录失效处理，且不得继续查询主体、账号、角色、菜单或 DB session。
+  - seller/buyer 端 `selectPortalPermissionInfo(...)` 正向返回必须以当前 session 的 `subjectId/accountId` 查询端内 mapper：seller 读取 `seller_account_role/seller_role/seller_role_menu/seller_menu`，buyer 读取 `buyer_account_role/buyer_role/buyer_role_menu/buyer_menu`；返回的 `roles` / `permissions` 不得来自管理端 `sys_role` / `sys_menu`。
+  - `SellerPortalPermissionServiceImplTest` / `BuyerPortalPermissionServiceImplTest` 只保留 `assignAccountRoles...` 角色绑定写操作测试；`SellerPortalPermissionServiceImplPortalAccessTest` / `BuyerPortalPermissionServiceImplPortalAccessTest` 承载端内访问、会话守卫和权限信息返回；`SellerPortalPermissionServiceImplMenuTreeTest` / `BuyerPortalPermissionServiceImplMenuTreeTest` 承载菜单树读取测试。后续不要把三类 fake 重新混回一个 500 行以上测试文件。
   - seller 端 `@PortalPreAuthorize` 鉴权必须继续经过 `SellerPortalPermissionServiceImpl.assertActiveSellerSession(...)`，并以 `seller_session.status='0'`、`logout_time is null`、`expire_time >= sysdate()` 作为当前会话仍有效的 DB 兜底判断。
   - buyer 端 `@PortalPreAuthorize` 鉴权必须继续经过 `BuyerPortalPermissionServiceImpl.assertActiveBuyerSession(...)`，并以 `buyer_session.status='0'`、`logout_time is null`、`expire_time >= sysdate()` 作为当前会话仍有效的 DB 兜底判断。
   - 不要在 Controller 或 Service 里重复手写 token 解析、权限集合读取、`*:*:*` 判断和端类型判断。
   - 端内接口需要当前主体或账号时，优先从 `PortalSessionContext.requireSession("seller" / "buyer")` 获取 `subjectId`、`accountId` 和 `terminal`。
+  - 受保护端内接口不得用若依后台 `SecurityUtils`、`LoginUser`、`SysUser` 或 `@ss` 权限上下文推导 seller/buyer 主体、端账号或数据范围；管理端 `/seller/admin/**`、`/buyer/admin/**` 继续走若依后台上下文。
   - 端内主动退出也必须先经过 `@PortalPreAuthorize`，再用 `PortalSessionContext` 中的当前会话删除对应 Redis token 和更新当前 session 行；不要让前端传 `tokenId`、`sellerId`、`buyerId` 或 `accountId` 决定退出范围。
   - 端内当前账号修改密码也必须先经过 `@PortalPreAuthorize`，再从 `PortalSessionContext` 读取当前会话；请求体只允许包含旧密码、新密码和确认密码，不允许传目标账号 ID。
   - 涉及密码、token、密钥的端内接口必须关闭响应日志或保证脱敏；`oldPassword`、`newPassword`、`confirmPassword` 不得写入 Markdown、日志或前端状态持久化。
@@ -674,6 +761,7 @@
 - 位置：`react-ui/src/utils/proTableSearch.ts`
 - 方法：
   - `getPersistedProTableSearch(config, storageKey?)`
+  - `getActionSafeProTableSearchSpan(fieldCount)`
   - `getProTablePagination(configOrPageSize?)`
   - `getProTableScroll(x, config?)`
   - `getProTableColumnsState(persistenceKey, config?)`
@@ -682,6 +770,7 @@
   - 标准 ProTable 分页器，统一开启每页条数切换，并避免使用受控 `pageSize` 导致切换无效。
   - 标准 ProTable 滚动配置，统一传入 `scroll.y` 让 Ant Design 生成 fixed-header 结构，避免表头跟随数据行一起滚动。
   - 标准 ProTable 列设置持久化，使用 localStorage 记住用户调整过的列显示状态。
+  - 字段数量已知的页面可以在 `getPersistedProTableSearch({ fieldCount })` 中声明查询字段数，由全局工具选择避开整行刚好占满的响应式断点，防止查询/重置/展开动作区被单独挤到下一行。
   - 当前先服务 `react-ui` 管理端；后续拆出 `seller-ui` / `buyer-ui` 后，卖家端和买家端列表页继续复用同一套筛选预设。
 - 复用规则：
   - 后续新增 ProTable 页面时，使用 `getPersistedProTableSearch(...)`，不要直接写散落的 `search={{ ... }}`。
@@ -693,6 +782,7 @@
   - 三端前端筛选区必须按内容区宽度响应式降列：宽屏优先一行 5 个筛选字段并给查询动作预留位置，中屏默认 4 个字段，小屏降为 2 个字段；宁可换行，不允许把输入框压缩成不可用的小块。
   - 当前默认收起态显示 5 个筛选字段，避免 6 个字段刚好占满一行后，查询/重置/展开按钮被挤到第二行并贴近表格。
   - 当前 `lg` 断点按 4 列展示，避免 9 个展开筛选字段刚好占满 `3 x 3` 后，查询/重置/收起按钮被单独挤到第 4 行右侧。
+  - 查询字段数固定且容易刚好填满某个断点的页面，例如 8 个字段的第三方仓库，必须传入 `fieldCount`，不要在页面私有 CSS 里移动查询按钮。
   - 日期范围、金额区间、余额区间、库存区间等长控件默认占 2 个筛选格；普通输入框也要保留最小可用宽度。
   - 弹窗内小表格、纯明细表、无查询条件表格等确有理由的场景可显式 `search={false}`，但不要另起一套页面内筛选布局。
   - 同一业务指标的最小/最大查询条件统一做成一个区间字段，例如余额、金额、库存数量；优先使用 Ant Design 原生组合控件和默认输入框样式，不自定义特殊容器，不使用假的禁用输入框，前端提交时再拆成后端需要的最小/最大参数。
@@ -757,6 +847,7 @@
   - 筛选折叠状态可通过 `PartnerModuleConfig.searchStorageKey` 固定到业务 key，避免路由变化后丢失用户的展开/收起状态。
   - 账号入口权限通过 `PartnerModuleConfig.accountPermissions.list` 控制；卖家和买家均已配置各自的 `*:admin:account:list`，未配置时只作为历史兼容回退到旧的 `${moduleKey}:admin:query`。
   - 复制到买家时只替换端类型、文案、字段配置、权限标识和 service；不要把买家充值占位或买家字段反向带回卖家。
+  - `react-ui/scripts/check-partner-management-template.mjs` 已作为管理端 seller/buyer 同构模板守卫接入 `npm run lint`；后续改 `Seller/index.tsx`、`Buyer/index.tsx`、`react-ui/src/services/seller/seller.ts`、`react-ui/src/services/buyer/buyer.ts` 或 `PartnerManagement` 公共组件时，必须保持页面只通过共享模板配置接入，service 不串端、不调用 `/system/*`，账号、角色、菜单、部门、日志、会话和免密能力配置齐全。
 
 ### PartnerAccountModal / PartnerAccountRoleModal
 
@@ -780,6 +871,15 @@
   - 账号级免密代入通过 `PartnerModuleConfig.services.directLoginAccount` 注入，seller 使用 `/seller/admin/sellers/{sellerId}/accounts/{accountId}/directLogin`，buyer 使用 `/buyer/admin/buyers/{buyerId}/accounts/{accountId}/directLogin`；不要在公共组件内写 seller/buyer 路径分支。
   - 账号级免密确认框必须填写代入原因；前端不展示或记录免密 token 明文，后端返回链接只用于打开目标端短时入口。
   - `SellerServiceImplTest` / `BuyerServiceImplTest` 已守住账号级免密 service 行为：成功票据必须绑定传入的端内账号，跨主体账号必须拒绝，主体停用时必须拒绝。
+  - `SellerServiceImplTest` / `BuyerServiceImplTest` 已守住免密票据消费前状态复验：票据生成后如果主体停用、账号停用、账号锁定、账号不存在或账号已改绑到其他主体，direct-login 入口必须在 `PortalDirectLoginSupport` 标记票据 `USED` 之前拒绝，且不得创建端登录 session。
+  - `SellerServiceImplTest` / `BuyerServiceImplTest` 已按同一模板补充端账号生命周期守卫：账号新增密码加密和默认 `STAFF`、部门归属校验、默认密码重置、停用账号强踢、登录成功最后登录/会话/日志写入、停用账号登录拒绝、当前账号会话范围和 current 标记。后续维护必须先改 seller 模板并验收，再复制 buyer，只替换 terminal、字段、service 和文案。
+  - 管理端重置 seller/buyer 端账号密码后必须强制踢出该端账号既有会话，并通过 `PortalTokenSupport.deleteLoginTokens` 删除对应 terminal 的 Redis token；自定义新密码、恢复默认密码、重置主体主账号密码三种入口都必须遵守该规则。`SellerServiceImplTest` / `BuyerServiceImplTest` 已按“seller 模板先验收、buyer 同构复制”覆盖该规则。
+  - `SellerServiceImpl` / `BuyerServiceImpl` 已补 Service 级主账号唯一性兜底：手工新增第二个 `OWNER` 必须拒绝；账号编辑时不采纳前端 payload 的 `accountRole`，始终保留当前账号角色。`SellerServiceImplTest` / `BuyerServiceImplTest` 已按同一模板覆盖该规则；数据库层 OWNER 唯一约束也已通过独立 DDL 落地。
+  - `PartnerSupport.normalizeAccountRole(...)` 集中维护端账号角色白名单，当前合法值为 `OWNER` / `ADMIN` / `STAFF`；seller/buyer service 必须调用该 helper，不要在两端各自散写角色判断。
+  - `RuoYi-Vue/sql/20260605_terminal_owner_account_unique_constraint.sql` 已补数据库层 OWNER 唯一约束：`seller_account.owner_unique_seller_id` / `buyer_account.owner_unique_buyer_id` 为生成列，分别通过 `uk_seller_account_owner` / `uk_buyer_account_owner` 限制每个主体只能有一个 `OWNER`。初始化 SQL 和三端迁移 SQL 已同步该约束。
+  - seller 账号锁定/解锁已作为标准模板落地，buyer 已按同一模板复制完成：`seller_account.lock_status` / `buyer_account.lock_status` 与 `lock_reason` 均独立于账号 `status`；管理端权限点分别为 `seller:admin:account:lock` 和 `buyer:admin:account:lock`。锁定必须填写原因并强踢该端账号会话，解锁只清锁定字段且不恢复旧会话。前端通过 `PartnerModuleConfig.services.lockAccount` / `unlockAccount` 可选能力展示锁定列和“更多”操作，不在公共组件内写 seller/buyer 路径分支。
+  - seller 与 buyer 账号锁定低权限负向验收均已跑通：临时管理端角色只给对应 `*:admin:account:list`，不给 `*:admin:account:lock`，必须能打开账号弹窗、看到锁定状态列，但不能看到锁定/解锁动作，后端锁定/解锁接口必须返回 `403` 且账号锁定字段不变。后续复制其它同构账号能力时，继续先验收一端模板，再只替换 terminal、权限、字段和 service。
+  - `SellerAdminPermissionContractTest` / `BuyerAdminPermissionContractTest` / `AdminAccountPermissionUiContractTest` / `PermissionServiceAccountPermissionTest` 已共同守住账号锁定权限契约：controller 必须使用 `*:admin:account:lock`，前端必须声明 `accountPermissions.lock` 并通过 `access.hasPerms(accountPermissions.lock...)` 控制入口，权限服务不能把主体权限或角色权限误当成账号锁定权限。
   - 该测试只守 service 数据范围，不替代管理端接口 `@PreAuthorize`、菜单按钮权限、审计日志和浏览器烟测。
   - `SellerPortalPermissionServiceImplTest` / `BuyerPortalPermissionServiceImplTest` 已守住账号角色绑定 service 行为：账号必须属于当前主体，角色必须属于当前主体；清空角色只删除当前端账号绑定，不批量插入空角色。
   - 后续改造 `assignAccountRoles(...)` 时继续复用 `PortalPermissionSupport.sanitizeIds(...)`，不要在 seller/buyer service 中各自重写 roleId 过滤、去重规则。
@@ -969,18 +1069,23 @@
 
 - 位置：
   - `react-ui/src/access.ts`
+  - `react-ui/src/app.tsx`
+  - `react-ui/src/requestErrorConfig.ts`
   - `react-ui/src/services/portal/session.ts`
   - `react-ui/src/types/seller-buyer/party.d.ts`
+  - `react-ui/src/utils/portalRequest.ts`
 - 当前用途：
   - 管理端继续使用原有 `access_token` / `refresh_token` / `expireTime`，避免影响当前 admin 登录。
   - 卖家端、买家端预留独立 token key：`seller_*` / `buyer_*`。
   - `portal/session.ts` 统一封装卖家端、买家端登录、免密登录、主动退出、修改当前账号密码、`getInfo`、`getRouters`、主体资料、当前账号资料、端内账号只读列表、端内部门只读列表、端内角色只读列表、当前账号日志只读接口和当前账号会话只读接口。
   - `scripts/check-portal-token-isolation.mjs` 作为前端端内 token 静态守卫，已接入 `npm run lint`。
   - `scripts/check-portal-token-isolation.mjs` 同时作为前端 portal 请求身份范围参数静态守卫，防止 portal 页面或 service 绕过端 token，把 `sellerId`、`buyerId`、`subjectId`、`accountId`、`sellerAccountId`、`buyerAccountId`、`terminal` 等客户端身份范围字段作为请求参数发送。
+  - `app.tsx` 和 `requestErrorConfig.ts` 的 401 处理通过 `getPortalTerminalFromApiUrl(...)` 区分 portal 请求和管理端请求：portal 401 只清对应 seller/buyer 端 token，不清管理端 `access_token` / `admin_remote_menu`，也不跳管理端登录页。
 - 复用规则：
   - 后续三端物理拆分时，卖家端、买家端前端优先复用 `setTerminalSessionToken`、`getTerminalAccessToken`、`clearTerminalSessionToken`，不要重新设计 localStorage key。
   - 后续端内页面调用当前账号、主体资料、菜单、权限和退出登录时，优先复用 `sellerPortalSessionService` / `buyerPortalSessionService` 或底层 `portal*` 方法，不要在页面里直接拼 `/seller` / `/buyer` 路径。
   - `portal/session.ts` 的登录、免密登录和端内请求必须显式设置 `isToken: false`，避免全局请求拦截器注入管理端 token。
+  - `/api/seller/**`、`/api/buyer/**` 的非 admin portal 请求发生 401 时，只能调用 `clearTerminalSessionToken('seller'|'buyer')`；`/api/seller/admin/**`、`/api/buyer/admin/**` 仍属于管理端后台接口，继续按 admin session 过期处理。
   - `persistPortalLogin(result, expectedTerminal)` 必须校验后端返回 `terminal` 与当前 URL 端类型一致；不一致时清理相关端内 token 并返回失败，不能把 seller token 写入 buyer key，也不能写入管理端 `access_token`。
   - `src/pages/Portal/**` 和 `src/services/portal/**` 禁止调用管理端 `getAccessToken`、`setSessionToken`、`clearSessionToken`，也不得出现裸 `access_token` / `portal_login_token`；新增端内前端能力后必须运行 `npm run guard:portal-token`。
   - `src/pages/Portal/**` 不得直接调用 `request(...)` 或硬编码 `/api/seller`、`/api/buyer`；页面必须通过 `PORTAL_SERVICE` 或 `@/services/portal/session` 统一出口调用端内接口。
@@ -1023,6 +1128,8 @@
   - RuoYi `startPage()` 只作用于 Service 内第一条查询；列表 Service 方法不要先做会消耗分页的前置校验查询，数据范围必须写进最终 session 列表 SQL。
   - 管理端列表查询可以按主体 ID 或账号 ID 收窄范围，但仍不得输出 JWT、Redis key、密码、`directLoginToken` 或 session `tokenId`。
   - 管理端会话弹窗只展示状态、登录账号、登录 IP、登录时间、过期时间、退出时间；不得展示 `tokenId`、JWT、Redis key、Authorization header 或原始 token。
+  - `SellerAdminPermissionContractTest` / `BuyerAdminPermissionContractTest` / `AdminAccountPermissionUiContractTest` / `PermissionServiceAccountPermissionTest` 已共同守住会话与强制踢出权限契约：controller 会话列表和强踢方法必须使用 `*:admin:forceLogout`，前端主体行和账号行必须通过 `access.hasPerms(\`${permPrefix}:forceLogout\`)` 控制“会话 / 强制踢出”，账号权限或主体编辑权限不得误授权强踢。
+  - 旧目标追踪中“管理端前端 session 列表 UI 尚未接入 / buyer UI 仍未复制”的表述已过期；当前会话列表 UI 以 `PartnerSessionModal`、Seller/Buyer 配置和本台账为准。
   - 当前 `react-ui/` 仍是管理端验证入口；该基础层只为后续物理拆分降低重复改造，不代表现在立即复制 `seller-ui` / `buyer-ui`。
 
 ### 三端前端直登入口与端内工作台模板
@@ -1227,3 +1334,32 @@
   - 页面文案使用“同步清单”，不要在用户界面展示“候选”。
   - 表格列、状态文本、接口类型继续集中维护，不要在页面内复制大段 option 或状态映射。
   - 分页接口进入 `startPage()` 后，Service 不要再先做 `selectOne` 预查，避免污染 PageHelper 上下文。
+
+## 仓库模块
+
+### warehouse 仓库主数据模块
+
+- 位置：
+  - `RuoYi-Vue/warehouse`
+  - `RuoYi-Vue/sql/warehouse_management_seed.sql`
+  - `RuoYi-Vue/sql/warehouse_us_address_seed.sql`
+  - `react-ui/src/pages/Warehouse`
+  - `react-ui/src/services/warehouse/warehouse.ts`
+  - `react-ui/src/types/warehouse/warehouse.d.ts`
+- 当前用途：
+  - 管理端“仓库管理 / 官方仓库”和“仓库管理 / 第三方仓库”首版。
+  - `warehouse` 作为系统仓库主数据事实源，`official_warehouse` / `third_party_warehouse` 作为 1:1 类型扩展表。
+  - 第三方仓只保存 `seller_id`，展示时关联 seller 主体信息。
+  - 官方仓同步复用现有 `upstream_system_warehouse_pairing`，不在官方仓表复制上游配对字段。
+  - 官方仓同步清单直接读取现有 `upstream_system_warehouse_candidate`，页面文案使用“同步清单”，不要重新维护一份上游仓库数据。
+  - 结算币种复用 `finance_currency` 启用币种 options。
+  - 国家/地区复用 `country_region`，仓库地址保存国家 code。
+  - 美国州/城市使用 `us_state` / `us_city`，仅在 `countryCode = US` 时启用联动；其他国家保持普通文本输入。
+- 复用规则：
+  - 后续商品、库存、订单、履约需要选择系统仓库时，优先读取 `warehouse` 主数据，不要重新维护仓库选项。
+  - 官方仓与上游主仓仓库配对继续以 `upstream_system_warehouse_pairing` 为事实源，不要把 `externalWarehouseCode` 等字段重复放回官方仓扩展表。
+  - 官方仓列表展示主仓接入名称时通过 `upstream_system_warehouse_pairing.connection_code` 联查 `upstream_system_connection`，不要在 `warehouse` 或 `official_warehouse` 冗余主仓名称。
+  - 商品发布页等旧页面若仍有静态仓库选项，应优先替换成 `warehouse` 正常仓库 options，不再新增页面内硬编码仓库。
+  - 第三方仓归属卖家校验必须通过 seller 模块或稳定 facade，不要直接信任前端传入的 seller 展示字段。
+  - 地址组件继续复用 `WarehouseFields` 的国家/美国州城市联动口径，不要在官方仓和第三方仓页面分别维护两套逻辑。
+  - 美国完整城市数据来自 U.S. Census Gazetteer Places seed，后续更新必须记录来源 URL、数据年份和导入脚本。

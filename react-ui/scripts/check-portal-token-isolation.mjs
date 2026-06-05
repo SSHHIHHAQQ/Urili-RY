@@ -14,6 +14,9 @@ const portalServiceFile = path.join(
   'portal',
   'session.ts',
 );
+const appFile = path.join(root, 'src', 'app.tsx');
+const requestErrorConfigFile = path.join(root, 'src', 'requestErrorConfig.ts');
+const portalRequestFile = path.join(root, 'src', 'utils', 'portalRequest.ts');
 const forbiddenPatterns = [
   /\bgetAccessToken\b/,
   /\bsetSessionToken\b/,
@@ -119,6 +122,48 @@ if (fs.existsSync(portalServiceFile)) {
   }
 } else {
   violations.push('src/services/portal/session.ts is missing');
+}
+
+if (fs.existsSync(portalRequestFile)) {
+  const source = read(portalRequestFile);
+  if (!/getPortalTerminalFromApiUrl/.test(source)) {
+    violations.push(
+      'src/utils/portalRequest.ts must export getPortalTerminalFromApiUrl',
+    );
+  }
+  for (const adminPrefix of ['/api/seller/admin', '/api/buyer/admin']) {
+    if (!source.includes(adminPrefix)) {
+      violations.push(
+        `src/utils/portalRequest.ts must exclude management API prefix ${adminPrefix}`,
+      );
+    }
+  }
+} else {
+  violations.push('src/utils/portalRequest.ts is missing');
+}
+
+for (const file of [appFile, requestErrorConfigFile]) {
+  const relativePath = path.relative(root, file).replaceAll(path.sep, '/');
+  if (!fs.existsSync(file)) {
+    violations.push(`${relativePath} is missing`);
+    continue;
+  }
+  const source = read(file);
+  for (const expected of [
+    'getPortalTerminalFromApiUrl',
+    'clearTerminalSessionToken',
+  ]) {
+    if (!source.includes(expected)) {
+      violations.push(
+        `${relativePath} must handle portal 401 with ${expected}`,
+      );
+    }
+  }
+  if (!/clearTerminalSessionToken\s*\(\s*portalTerminal\s*\)/.test(source)) {
+    violations.push(
+      `${relativePath} must clear only the matched portal terminal token on portal 401`,
+    );
+  }
 }
 
 if (violations.length > 0) {

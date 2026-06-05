@@ -315,6 +315,7 @@ public class SellerPortalPermissionServiceImpl implements ISellerPortalPermissio
 
     private SellerAccount assertActiveSellerSession(PortalLoginSession session)
     {
+        assertSellerSessionShape(session);
         Seller seller = sellerService.selectSellerById(session.getSubjectId());
         SellerAccount account = assertSellerAccount(session.getSubjectId(), session.getAccountId());
         if (!PartnerSupport.STATUS_NORMAL.equals(seller.getStatus()))
@@ -325,11 +326,24 @@ public class SellerPortalPermissionServiceImpl implements ISellerPortalPermissio
         {
             throw new ServiceException("卖家端账号已停用");
         }
+        if (PartnerSupport.isAccountLocked(account.getLockStatus()))
+        {
+            throw new ServiceException("卖家端账号已锁定");
+        }
         if (sellerMapper.countOnlineSellerSession(session.getSubjectId(), session.getAccountId(), session.getTokenId()) <= 0)
         {
             throw new ServiceException("登录状态已失效", HttpStatus.UNAUTHORIZED);
         }
         return account;
+    }
+
+    private void assertSellerSessionShape(PortalLoginSession session)
+    {
+        if (session == null || !"seller".equals(session.getTerminal()) || session.getSubjectId() == null
+                || session.getAccountId() == null || StringUtils.isBlank(session.getTokenId()))
+        {
+            throw new ServiceException("登录状态已失效", HttpStatus.UNAUTHORIZED);
+        }
     }
 
     private Set<String> splitPermissions(List<String> values)

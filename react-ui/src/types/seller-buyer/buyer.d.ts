@@ -79,6 +79,8 @@ declare namespace API.Partner {
   export interface BuyerAccount extends PortalAccountBase {
     buyerAccountId?: number;
     buyerId?: number;
+    lockStatus?: string;
+    lockReason?: string;
   }
 
   export interface BuyerAccountListResult {

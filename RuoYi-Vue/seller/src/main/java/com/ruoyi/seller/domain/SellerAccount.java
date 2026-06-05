@@ -13,6 +13,10 @@ public class SellerAccount extends PortalAccount
 
     private Long sellerId;
 
+    private String lockStatus;
+
+    private String lockReason;
+
     public Long getSellerAccountId()
     {
         return sellerAccountId;
@@ -31,5 +35,25 @@ public class SellerAccount extends PortalAccount
     public void setSellerId(Long sellerId)
     {
         this.sellerId = sellerId;
+    }
+
+    public String getLockStatus()
+    {
+        return lockStatus;
+    }
+
+    public void setLockStatus(String lockStatus)
+    {
+        this.lockStatus = lockStatus;
+    }
+
+    public String getLockReason()
+    {
+        return lockReason;
+    }
+
+    public void setLockReason(String lockReason)
+    {
+        this.lockReason = lockReason;
     }
 }

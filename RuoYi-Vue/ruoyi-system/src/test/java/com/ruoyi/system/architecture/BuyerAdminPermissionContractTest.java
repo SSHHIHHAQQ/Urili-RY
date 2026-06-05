@@ -65,6 +65,12 @@ public class BuyerAdminPermissionContractTest
         assertHandlerPermission(handlers, "editAccount", "buyer:admin:account:edit", violations);
         assertHandlerPermission(handlers, "resetPassword", "buyer:admin:account:resetPwd", violations);
         assertHandlerPermission(handlers, "resetDefaultPassword", "buyer:admin:account:resetPwd", violations);
+        assertHandlerPermission(handlers, "lockAccount", "buyer:admin:account:lock", violations);
+        assertHandlerPermission(handlers, "unlockAccount", "buyer:admin:account:lock", violations);
+        assertHandlerPermission(handlers, "sessions", "buyer:admin:forceLogout", violations);
+        assertHandlerPermission(handlers, "accountSessions", "buyer:admin:forceLogout", violations);
+        assertHandlerPermission(handlers, "forceLogoutBuyer", "buyer:admin:forceLogout", violations);
+        assertHandlerPermission(handlers, "forceLogoutBuyerAccount", "buyer:admin:forceLogout", violations);
 
         if (!violations.isEmpty())
         {

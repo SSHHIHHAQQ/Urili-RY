@@ -90,9 +90,12 @@ create table if not exists seller_account (
   phonenumber           varchar(32)     default ''                 comment '手机',
   account_role          varchar(32)     not null default 'OWNER'   comment '卖家侧账号角色',
   status                char(1)         not null default '0'       comment '账号状态：0正常 1停用',
+  lock_status           char(1)         not null default '0'       comment '锁定状态：0未锁定 1已锁定',
+  lock_reason           varchar(500)    not null default ''        comment '锁定原因',
   last_login_ip         varchar(128)    default ''                 comment '最后登录IP',
   last_login_time       datetime                                   comment '最后登录时间',
   pwd_update_time       datetime                                   comment '密码最后更新时间',
+  owner_unique_seller_id bigint(20) generated always as (case when account_role = 'OWNER' then seller_id else null end) stored comment 'OWNER唯一约束辅助列',
   create_by             varchar(64)     default ''                 comment '创建者',
   create_time           datetime                                   comment '创建时间',
   update_by             varchar(64)     default ''                 comment '更新者',
@@ -100,7 +103,9 @@ create table if not exists seller_account (
   remark                varchar(500)    default ''                 comment '备注',
   primary key (seller_account_id),
   unique key uk_seller_account_username (user_name),
-  key idx_seller_account_seller_status (seller_id, status)
+  unique key uk_seller_account_owner (owner_unique_seller_id),
+  key idx_seller_account_seller_status (seller_id, status),
+  key idx_seller_account_seller_lock (seller_id, lock_status)
 ) engine=innodb auto_increment=1 comment = '卖家端账号表';
 
 create table if not exists buyer_account (
@@ -114,9 +119,12 @@ create table if not exists buyer_account (
   phonenumber           varchar(32)     default ''                 comment '手机',
   account_role          varchar(32)     not null default 'OWNER'   comment '买家侧账号角色',
   status                char(1)         not null default '0'       comment '账号状态：0正常 1停用',
+  lock_status           char(1)         not null default '0'       comment '锁定状态：0未锁定 1已锁定',
+  lock_reason           varchar(500)    not null default ''        comment '锁定原因',
   last_login_ip         varchar(128)    default ''                 comment '最后登录IP',
   last_login_time       datetime                                   comment '最后登录时间',
   pwd_update_time       datetime                                   comment '密码最后更新时间',
+  owner_unique_buyer_id bigint(20) generated always as (case when account_role = 'OWNER' then buyer_id else null end) stored comment 'OWNER唯一约束辅助列',
   create_by             varchar(64)     default ''                 comment '创建者',
   create_time           datetime                                   comment '创建时间',
   update_by             varchar(64)     default ''                 comment '更新者',
@@ -124,7 +132,9 @@ create table if not exists buyer_account (
   remark                varchar(500)    default ''                 comment '备注',
   primary key (buyer_account_id),
   unique key uk_buyer_account_username (user_name),
-  key idx_buyer_account_buyer_status (buyer_id, status)
+  unique key uk_buyer_account_owner (owner_unique_buyer_id),
+  key idx_buyer_account_buyer_status (buyer_id, status),
+  key idx_buyer_account_buyer_lock (buyer_id, lock_status)
 ) engine=innodb auto_increment=1 comment = '买家端账号表';
 
 create table if not exists seller_dept (
@@ -469,8 +479,18 @@ where not exists (select 1 from sys_dict_type where dict_type = 'seller_account_
 
 insert into sys_dict_type
     (dict_name, dict_type, status, create_by, create_time, update_by, update_time, remark)
+select '卖家账号锁定状态', 'seller_account_lock_status', '0', 'admin', sysdate(), '', null, '卖家账号锁定状态'
+where not exists (select 1 from sys_dict_type where dict_type = 'seller_account_lock_status');
+
+insert into sys_dict_type
+    (dict_name, dict_type, status, create_by, create_time, update_by, update_time, remark)
 select '买家账号角色', 'buyer_account_role', '0', 'admin', sysdate(), '', null, '买家账号角色'
 where not exists (select 1 from sys_dict_type where dict_type = 'buyer_account_role');
+
+insert into sys_dict_type
+    (dict_name, dict_type, status, create_by, create_time, update_by, update_time, remark)
+select '买家账号锁定状态', 'buyer_account_lock_status', '0', 'admin', sysdate(), '', null, '买家账号锁定状态'
+where not exists (select 1 from sys_dict_type where dict_type = 'buyer_account_lock_status');
 
 insert into sys_dict_data
     (dict_sort, dict_label, dict_value, dict_type, css_class, list_class, is_default, status, create_by, create_time, update_by, update_time, remark)
@@ -486,6 +506,28 @@ join (
 ) seed
 where not exists (
     select 1 from sys_dict_data d where d.dict_type = role_type.dict_type and d.dict_value = seed.dict_value
+);
+
+insert into sys_dict_data
+    (dict_sort, dict_label, dict_value, dict_type, css_class, list_class, is_default, status, create_by, create_time, update_by, update_time, remark)
+select seed.dict_sort, seed.dict_label, seed.dict_value, 'seller_account_lock_status', '', seed.list_class, seed.is_default, '0', 'admin', sysdate(), '', null, '卖家账号锁定状态'
+from (
+    select 1 as dict_sort, '未锁定' as dict_label, '0' as dict_value, 'Y' as is_default, 'success' as list_class
+    union all select 2, '已锁定', '1', 'N', 'danger'
+) seed
+where not exists (
+    select 1 from sys_dict_data d where d.dict_type = 'seller_account_lock_status' and d.dict_value = seed.dict_value
+);
+
+insert into sys_dict_data
+    (dict_sort, dict_label, dict_value, dict_type, css_class, list_class, is_default, status, create_by, create_time, update_by, update_time, remark)
+select seed.dict_sort, seed.dict_label, seed.dict_value, 'buyer_account_lock_status', '', seed.list_class, seed.is_default, '0', 'admin', sysdate(), '', null, '买家账号锁定状态'
+from (
+    select 1 as dict_sort, '未锁定' as dict_label, '0' as dict_value, 'Y' as is_default, 'success' as list_class
+    union all select 2, '已锁定', '1', 'N', 'danger'
+) seed
+where not exists (
+    select 1 from sys_dict_data d where d.dict_type = 'buyer_account_lock_status' and d.dict_value = seed.dict_value
 );
 
 insert into sys_dict_type
@@ -692,6 +734,9 @@ values
     (2312, '卖家账号修改', 2011, 135, '#', '', '', '',
      1, 0, 'F', '0', '0', 'seller:admin:account:edit', '#', 'admin',
      sysdate(), '', null, ''),
+    (2322, '卖家账号锁定解锁', 2011, 138, '#', '', '', '',
+     1, 0, 'F', '0', '0', 'seller:admin:account:lock', '#', 'admin',
+     sysdate(), '', null, ''),
     (2313, '卖家账号重置密码', 2011, 140, '#', '', '', '',
      1, 0, 'F', '0', '0', 'seller:admin:account:resetPwd', '#', 'admin',
      sysdate(), '', null, ''),
@@ -718,6 +763,9 @@ values
      sysdate(), '', null, ''),
     (2318, '买家账号修改', 2012, 135, '#', '', '', '',
      1, 0, 'F', '0', '0', 'buyer:admin:account:edit', '#', 'admin',
+     sysdate(), '', null, ''),
+    (2323, '买家账号锁定解锁', 2012, 138, '#', '', '', '',
+     1, 0, 'F', '0', '0', 'buyer:admin:account:lock', '#', 'admin',
      sysdate(), '', null, ''),
     (2319, '买家账号重置密码', 2012, 140, '#', '', '', '',
      1, 0, 'F', '0', '0', 'buyer:admin:account:resetPwd', '#', 'admin',

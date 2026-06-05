@@ -9,6 +9,13 @@ export async function getDistributionProductList(params?: Record<string, any>) {
   });
 }
 
+export async function getDistributionSkuList(params?: Record<string, any>) {
+  return request<API.ProductDistribution.SkuPageResult>(`${baseUrl}/skus/list`, {
+    method: 'GET',
+    params,
+  });
+}
+
 export async function getDistributionProduct(spuId: number) {
   return request<API.ProductDistribution.InfoResult>(`${baseUrl}/${spuId}`, {
     method: 'GET',
@@ -57,5 +64,59 @@ export async function getDistributionProductSkus(spuId: number) {
   return request<API.ProductDistribution.SkuListResult>(
     `${baseUrl}/${spuId}/skus`,
     { method: 'GET' },
+  );
+}
+
+export async function batchUpdateDistributionStatus(
+  ownerType: 'SPU' | 'SKU',
+  ids: number[],
+  status: string,
+  syncSkuStatus?: boolean,
+) {
+  return request<API.Result>(`${baseUrl}/status/batch`, {
+    method: 'PUT',
+    data: {
+      ownerType,
+      status,
+      ...(ownerType === 'SPU' && syncSkuStatus !== undefined ? { syncSkuStatus } : {}),
+      ...(ownerType === 'SPU' ? { spuIds: ids } : { skuIds: ids }),
+    },
+  });
+}
+
+export async function batchUpdateDistributionControlStatus(
+  ownerType: 'SPU' | 'SKU',
+  ids: number[],
+  controlStatus: string,
+  reason?: string,
+) {
+  return request<API.Result>(`${baseUrl}/control-status/batch`, {
+    method: 'PUT',
+    data: {
+      ownerType,
+      controlStatus,
+      reason,
+      ...(ownerType === 'SPU' ? { spuIds: ids } : { skuIds: ids }),
+    },
+  });
+}
+
+export async function batchUpdateDistributionSkuSalePrices(
+  items: { skuId: number; salePrice: number }[],
+  reason?: string,
+) {
+  return request<API.Result>(`${baseUrl}/skus/sale-prices`, {
+    method: 'PUT',
+    data: { items, reason },
+  });
+}
+
+export async function getDistributionOperationLogList(params?: Record<string, any>) {
+  return request<API.ProductDistribution.OperationLogPageResult>(
+    `${baseUrl}/operation-logs/list`,
+    {
+      method: 'GET',
+      params,
+    },
   );
 }

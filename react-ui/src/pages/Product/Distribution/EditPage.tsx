@@ -11,11 +11,14 @@ import {
   updateDistributionProduct,
 } from '@/services/product/distributionProduct';
 import { getAdminSellerList } from '@/services/seller/seller';
+import {
+  getOfficialWarehouseList,
+  getThirdPartyWarehouseList,
+} from '@/services/warehouse/warehouse';
 import { message } from '@/utils/feedback';
 import { SEARCHABLE_SELECT_PROPS, SEARCHABLE_TREE_SELECT_PROPS } from '@/utils/selectSearch';
 import { buildCategoryTree } from '../categoryTree';
 import { yesNoOptions } from '../constants';
-import { salesStatusOptions } from './constants';
 import DetailContentBuilder from './components/DetailContentBuilder';
 import ProductImageSection from './components/ProductImageSection';
 import SkuMatrixEditor from './components/SkuMatrixEditor';
@@ -35,19 +38,9 @@ const ATTRIBUTE_DATE_FORMAT = 'YYYY-MM-DD';
 type WarehouseOption = {
   label: string;
   value: string;
-  countryCode: string;
-  countryName: string;
   currencyCode: string;
   currencyLabel: string;
 };
-
-const warehouseOptions: WarehouseOption[] = [
-  { label: '上海仓（中国 / CNY）', value: 'CN-SH', countryCode: 'CN', countryName: '中国', currencyCode: 'CNY', currencyLabel: '人民币 (CNY)' },
-  { label: '深圳仓（中国 / CNY）', value: 'CN-SZ', countryCode: 'CN', countryName: '中国', currencyCode: 'CNY', currencyLabel: '人民币 (CNY)' },
-  { label: '洛杉矶仓（美国 / USD）', value: 'US-LA', countryCode: 'US', countryName: '美国', currencyCode: 'USD', currencyLabel: '美元 (USD)' },
-  { label: '新泽西仓（美国 / USD）', value: 'US-NJ', countryCode: 'US', countryName: '美国', currencyCode: 'USD', currencyLabel: '美元 (USD)' },
-  { label: '汉堡仓（德国 / EUR）', value: 'DE-HH', countryCode: 'DE', countryName: '德国', currencyCode: 'EUR', currencyLabel: '欧元 (EUR)' },
-];
 
 function parseAttributeJsonArray(value?: string) {
   if (!value) return [];
@@ -86,9 +79,26 @@ function stripSkuRows(rows: (API.ProductDistribution.Sku & { rowKey?: string })[
   return rows.map(({ rowKey: _rowKey, ...row }) => row);
 }
 
+function toWarehouseOption(warehouse: API.Warehouse.Warehouse): WarehouseOption {
+  const value = String(warehouse.warehouseCode || warehouse.warehouseId || '');
+  const currencyCode = warehouse.settlementCurrency || '';
+  const warehouseText = warehouse.warehouseName || warehouse.warehouseCode || value;
+  return {
+    label: `${warehouseText}（${warehouse.warehouseCode || '-'} / ${currencyCode || '-'}）`,
+    value,
+    currencyCode,
+    currencyLabel: currencyCode,
+  };
+}
+
 export default function ProductDistributionEditPage() {
   const params = useParams<{ spuId?: string }>();
   const spuId = params.spuId ? Number(params.spuId) : undefined;
+  const focusSkuId = useMemo(() => {
+    const value = new URLSearchParams(history.location.search).get('skuId');
+    const numberValue = value ? Number(value) : undefined;
+    return Number.isFinite(numberValue) ? numberValue : undefined;
+  }, []);
   const isEdit = !!spuId;
   const [form] = Form.useForm<ProductEditValues>();
   const mainImageUrl = Form.useWatch('mainImageUrl', form);
@@ -98,6 +108,7 @@ export default function ProductDistributionEditPage() {
   const [categories, setCategories] = useState<API.Product.Category[]>([]);
   const [schema, setSchema] = useState<API.Product.CategoryAttribute[]>([]);
   const [sellerOptions, setSellerOptions] = useState<{ label: string; value: number }[]>([]);
+  const [warehouseOptions, setWarehouseOptions] = useState<WarehouseOption[]>([]);
   const [galleryUrls, setGalleryUrls] = useState<string[]>([]);
   const [detailBlocks, setDetailBlocks] = useState<DetailContentBlock[]>([]);
   const [selectedWarehouseCodes, setSelectedWarehouseCodes] = useState<string[]>([]);
@@ -123,6 +134,16 @@ export default function ProductDistributionEditPage() {
         })),
       );
     });
+
+    Promise.all([
+      getOfficialWarehouseList({ pageNum: 1, pageSize: 500, status: '0' }),
+      getThirdPartyWarehouseList({ pageNum: 1, pageSize: 500, status: '0' }),
+    ]).then(([officialWarehouseResp, thirdPartyWarehouseResp]) => {
+      setWarehouseOptions([
+        ...(officialWarehouseResp.code === 200 ? officialWarehouseResp.rows || [] : []),
+        ...(thirdPartyWarehouseResp.code === 200 ? thirdPartyWarehouseResp.rows || [] : []),
+      ].map(toWarehouseOption).filter((item) => item.value));
+    }).catch(() => setWarehouseOptions([]));
   }, []);
 
   useEffect(() => {
@@ -174,10 +195,9 @@ export default function ProductDistributionEditPage() {
     () => selectedWarehouseCodes
       .map((code) => warehouseOptions.find((item) => item.value === code))
       .filter(Boolean) as WarehouseOption[],
-    [selectedWarehouseCodes],
+    [selectedWarehouseCodes, warehouseOptions],
   );
 
-  const selectedWarehouseCountry = selectedWarehouses[0]?.countryName;
   const derivedCurrencyCode = selectedWarehouses[0]?.currencyCode;
   const derivedCurrencyLabel = selectedWarehouses[0]?.currencyLabel;
 
@@ -185,9 +205,13 @@ export default function ProductDistributionEditPage() {
     const nextWarehouses = nextCodes
       .map((code) => warehouseOptions.find((item) => item.value === code))
       .filter(Boolean) as WarehouseOption[];
-    const countryCodes = new Set(nextWarehouses.map((item) => item.countryCode));
-    if (countryCodes.size > 1) {
-      message.warning('发货仓库必须属于同一个国家');
+    if (nextWarehouses.some((item) => !item.currencyCode)) {
+      message.warning('所选发货仓库未维护币种');
+      return;
+    }
+    const currencyCodes = new Set(nextWarehouses.map((item) => item.currencyCode));
+    if (currencyCodes.size > 1) {
+      message.warning('发货仓库必须选择相同币种');
       return;
     }
     setSelectedWarehouseCodes(nextCodes);
@@ -225,14 +249,13 @@ export default function ProductDistributionEditPage() {
     const common = {
       name,
       label: item.attributeName,
-      extra: item.helpText,
       rules: item.requiredFlag === 'Y' ? [{ required: true, message: `请输入${item.attributeName}` }] : undefined,
     };
     if (item.attributeType === 'NUMBER') {
       return (
         <Form.Item key={itemKey} {...common}>
           <InputNumber
-            addonAfter={item.unit || undefined}
+            suffix={item.unit || undefined}
             precision={item.valuePrecision}
             placeholder={item.placeholder || `请输入${item.attributeName || ''}`}
             style={{ width: '100%' }}
@@ -299,13 +322,19 @@ export default function ProductDistributionEditPage() {
       message.error('至少需要维护一个 SKU');
       return;
     }
+    const nextSpuStatus = isEdit
+      ? product?.spuStatus || values.spuStatus || 'DRAFT'
+      : targetStatus || values.spuStatus || 'DRAFT';
     const cleanSkus = stripSkuRows(skuRows).map((sku) => ({
       ...sku,
       currencyCode: derivedCurrencyCode || sku.currencyCode,
+      skuStatus: targetStatus === 'READY' && (!sku.skuStatus || sku.skuStatus === 'DRAFT')
+        ? 'READY'
+        : sku.skuStatus || 'DRAFT',
     }));
-    const invalidPriceSku = cleanSkus.find((sku) => sku.supplyPrice === undefined || sku.salePrice === undefined);
+    const invalidPriceSku = cleanSkus.find((sku) => sku.supplyPrice === undefined);
     if (invalidPriceSku) {
-      message.error('请补齐 SKU 的供货价和销售价');
+      message.error('请补齐 SKU 的供货价');
       return;
     }
     const missingCurrencySku = cleanSkus.find((sku) => !sku.currencyCode);
@@ -317,7 +346,7 @@ export default function ProductDistributionEditPage() {
     const payload: API.ProductDistribution.Spu = {
       ...values,
       detailContent: serializeDetailContent(detailBlocks),
-      spuStatus: targetStatus || values.spuStatus || 'DRAFT',
+      spuStatus: nextSpuStatus,
       skus: cleanSkus,
       attributeValues: buildAttributeValues(values),
       images: [
@@ -391,18 +420,12 @@ export default function ProductDistributionEditPage() {
                   mode="multiple"
                   value={selectedWarehouseCodes}
                   options={warehouseOptions}
-                  placeholder="选择同一国家的发货仓库"
+                  placeholder="选择币种相同的发货仓库"
                   onChange={handleWarehouseChange}
                 />
               </Form.Item>
-              <Form.Item label="仓库国家">
-                <Input value={selectedWarehouseCountry || '-'} disabled />
-              </Form.Item>
               <Form.Item label="币种">
                 <Input value={derivedCurrencyLabel || derivedCurrencyCode || '-'} disabled />
-              </Form.Item>
-              <Form.Item name="spuStatus" label="SPU状态" rules={[{ required: true, message: '请选择状态' }]}>
-                <Select options={salesStatusOptions} />
               </Form.Item>
             </div>
             <Form.Item name="sellingPoint" label="商品卖点">
@@ -437,6 +460,7 @@ export default function ProductDistributionEditPage() {
           <section className={styles.formSection}>
             <SkuMatrixEditor
               value={skuRows}
+              focusSkuId={focusSkuId}
               currencyCode={derivedCurrencyCode}
               currencyLabel={derivedCurrencyLabel}
               onChange={setSkuRows}
@@ -448,8 +472,16 @@ export default function ProductDistributionEditPage() {
           <Card size="small" className={styles.editActionCard}>
             <Space>
               <Button onClick={() => history.push('/product/distribution')}>取消</Button>
-              <Button loading={saving} icon={<SaveOutlined />} onClick={() => submit('DRAFT')}>保存草稿</Button>
-              <Button type="primary" loading={saving} onClick={() => submit('READY')}>保存为待上架</Button>
+              {isEdit ? (
+                <Button type="primary" loading={saving} icon={<SaveOutlined />} onClick={() => submit()}>
+                  保存
+                </Button>
+              ) : (
+                <>
+                  <Button loading={saving} icon={<SaveOutlined />} onClick={() => submit('DRAFT')}>保存草稿</Button>
+                  <Button type="primary" loading={saving} onClick={() => submit('READY')}>保存为待上架</Button>
+                </>
+              )}
             </Space>
           </Card>
         </Affix>

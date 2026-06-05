@@ -1,6 +1,6 @@
 -- Three-terminal isolation migration for seller/buyer portal accounts.
 -- Confirmed scope: remote DDL/DML is allowed for this task.
--- Admin remains on RuoYi sys_*; seller/buyer portal accounts move off sys_user.
+-- Admin remains on RuoYi sys_*; seller/buyer portal accounts use independent terminal tables.
 
 set names utf8mb4;
 
@@ -62,6 +62,20 @@ begin
   end if;
 end//
 
+drop procedure if exists assert_no_duplicate_owner_account//
+create procedure assert_no_duplicate_owner_account(in p_table varchar(64), in p_subject_column varchar(64), in p_message varchar(128))
+begin
+  set @duplicate_owner_count = 0;
+  set @sql = concat('select count(*) into @duplicate_owner_count from (select ', p_subject_column,
+      ' from ', p_table, ' where account_role = ''OWNER'' group by ', p_subject_column, ' having count(*) > 1) t');
+  prepare stmt from @sql;
+  execute stmt;
+  deallocate prepare stmt;
+  if @duplicate_owner_count > 0 then
+    signal sqlstate '45000' set message_text = p_message;
+  end if;
+end//
+
 delimiter ;
 
 create table if not exists seller_account (
@@ -75,9 +89,12 @@ create table if not exists seller_account (
   phonenumber           varchar(32)     default '',
   account_role          varchar(32)     not null default 'OWNER',
   status                char(1)         not null default '0',
+  lock_status           char(1)         not null default '0',
+  lock_reason           varchar(500)    not null default '',
   last_login_ip         varchar(128)    default '',
   last_login_time       datetime,
   pwd_update_time       datetime,
+  owner_unique_seller_id bigint(20) generated always as (case when account_role = 'OWNER' then seller_id else null end) stored,
   create_by             varchar(64)     default '',
   create_time           datetime,
   update_by             varchar(64)     default '',
@@ -85,7 +102,9 @@ create table if not exists seller_account (
   remark                varchar(500)    default '',
   primary key (seller_account_id),
   unique key uk_seller_account_username (user_name),
-  key idx_seller_account_seller_status (seller_id, status)
+  unique key uk_seller_account_owner (owner_unique_seller_id),
+  key idx_seller_account_seller_status (seller_id, status),
+  key idx_seller_account_seller_lock (seller_id, lock_status)
 ) engine=innodb auto_increment=1 comment = '卖家端账号表';
 
 create table if not exists buyer_account (
@@ -99,9 +118,12 @@ create table if not exists buyer_account (
   phonenumber           varchar(32)     default '',
   account_role          varchar(32)     not null default 'OWNER',
   status                char(1)         not null default '0',
+  lock_status           char(1)         not null default '0',
+  lock_reason           varchar(500)    not null default '',
   last_login_ip         varchar(128)    default '',
   last_login_time       datetime,
   pwd_update_time       datetime,
+  owner_unique_buyer_id bigint(20) generated always as (case when account_role = 'OWNER' then buyer_id else null end) stored,
   create_by             varchar(64)     default '',
   create_time           datetime,
   update_by             varchar(64)     default '',
@@ -109,7 +131,9 @@ create table if not exists buyer_account (
   remark                varchar(500)    default '',
   primary key (buyer_account_id),
   unique key uk_buyer_account_username (user_name),
-  key idx_buyer_account_buyer_status (buyer_id, status)
+  unique key uk_buyer_account_owner (owner_unique_buyer_id),
+  key idx_buyer_account_buyer_status (buyer_id, status),
+  key idx_buyer_account_buyer_lock (buyer_id, lock_status)
 ) engine=innodb auto_increment=1 comment = '买家端账号表';
 
 call add_column_if_missing('seller_account', 'dept_id', 'bigint(20) default null');
@@ -118,9 +142,12 @@ call add_column_if_missing('seller_account', 'nick_name', 'varchar(30) null');
 call add_column_if_missing('seller_account', 'password', 'varchar(100) null');
 call add_column_if_missing('seller_account', 'email', 'varchar(50) null');
 call add_column_if_missing('seller_account', 'phonenumber', 'varchar(32) null');
+call add_column_if_missing('seller_account', 'lock_status', 'char(1) not null default ''0''');
+call add_column_if_missing('seller_account', 'lock_reason', 'varchar(500) not null default ''''');
 call add_column_if_missing('seller_account', 'last_login_ip', 'varchar(128) null');
 call add_column_if_missing('seller_account', 'last_login_time', 'datetime null');
 call add_column_if_missing('seller_account', 'pwd_update_time', 'datetime null');
+call add_column_if_missing('seller_account', 'owner_unique_seller_id', 'bigint(20) generated always as (case when account_role = ''OWNER'' then seller_id else null end) stored');
 
 call add_column_if_missing('buyer_account', 'dept_id', 'bigint(20) default null');
 call add_column_if_missing('buyer_account', 'user_name', 'varchar(30) null');
@@ -128,62 +155,12 @@ call add_column_if_missing('buyer_account', 'nick_name', 'varchar(30) null');
 call add_column_if_missing('buyer_account', 'password', 'varchar(100) null');
 call add_column_if_missing('buyer_account', 'email', 'varchar(50) null');
 call add_column_if_missing('buyer_account', 'phonenumber', 'varchar(32) null');
+call add_column_if_missing('buyer_account', 'lock_status', 'char(1) not null default ''0''');
+call add_column_if_missing('buyer_account', 'lock_reason', 'varchar(500) not null default ''''');
 call add_column_if_missing('buyer_account', 'last_login_ip', 'varchar(128) null');
 call add_column_if_missing('buyer_account', 'last_login_time', 'datetime null');
 call add_column_if_missing('buyer_account', 'pwd_update_time', 'datetime null');
-
-delimiter //
-
-drop procedure if exists migrate_seller_account_from_sys_user//
-create procedure migrate_seller_account_from_sys_user()
-begin
-  if exists (
-    select 1 from information_schema.columns
-    where table_schema = database() and table_name = 'seller_account' and column_name = 'user_id'
-  ) then
-    set @dml = 'update seller_account a left join sys_user u on u.user_id = a.user_id
-      set a.user_name = coalesce(nullif(a.user_name, ''''), u.user_name, concat(''seller_'', a.seller_account_id)),
-          a.nick_name = coalesce(nullif(a.nick_name, ''''), u.nick_name, a.user_name),
-          a.password = coalesce(nullif(a.password, ''''), u.password, ''''),
-          a.email = coalesce(nullif(a.email, ''''), u.email, ''''),
-          a.phonenumber = coalesce(nullif(a.phonenumber, ''''), u.phonenumber, ''''),
-          a.status = coalesce(nullif(a.status, ''''), u.status, ''0''),
-          a.last_login_ip = coalesce(nullif(a.last_login_ip, ''''), u.login_ip, ''''),
-          a.last_login_time = coalesce(a.last_login_time, u.login_date),
-          a.pwd_update_time = coalesce(a.pwd_update_time, u.pwd_update_date, sysdate())';
-    prepare stmt from @dml;
-    execute stmt;
-    deallocate prepare stmt;
-  end if;
-end//
-
-drop procedure if exists migrate_buyer_account_from_sys_user//
-create procedure migrate_buyer_account_from_sys_user()
-begin
-  if exists (
-    select 1 from information_schema.columns
-    where table_schema = database() and table_name = 'buyer_account' and column_name = 'user_id'
-  ) then
-    set @dml = 'update buyer_account a left join sys_user u on u.user_id = a.user_id
-      set a.user_name = coalesce(nullif(a.user_name, ''''), u.user_name, concat(''buyer_'', a.buyer_account_id)),
-          a.nick_name = coalesce(nullif(a.nick_name, ''''), u.nick_name, a.user_name),
-          a.password = coalesce(nullif(a.password, ''''), u.password, ''''),
-          a.email = coalesce(nullif(a.email, ''''), u.email, ''''),
-          a.phonenumber = coalesce(nullif(a.phonenumber, ''''), u.phonenumber, ''''),
-          a.status = coalesce(nullif(a.status, ''''), u.status, ''0''),
-          a.last_login_ip = coalesce(nullif(a.last_login_ip, ''''), u.login_ip, ''''),
-          a.last_login_time = coalesce(a.last_login_time, u.login_date),
-          a.pwd_update_time = coalesce(a.pwd_update_time, u.pwd_update_date, sysdate())';
-    prepare stmt from @dml;
-    execute stmt;
-    deallocate prepare stmt;
-  end if;
-end//
-
-delimiter ;
-
-call migrate_seller_account_from_sys_user();
-call migrate_buyer_account_from_sys_user();
+call add_column_if_missing('buyer_account', 'owner_unique_buyer_id', 'bigint(20) generated always as (case when account_role = ''OWNER'' then buyer_id else null end) stored');
 
 update seller_account
 set user_name = coalesce(nullif(user_name, ''), concat('seller_', seller_account_id)),
@@ -192,6 +169,8 @@ set user_name = coalesce(nullif(user_name, ''), concat('seller_', seller_account
     email = coalesce(email, ''),
     phonenumber = coalesce(phonenumber, ''),
     status = coalesce(nullif(status, ''), '0'),
+    lock_status = case when lock_status in ('0', '1') then lock_status else '0' end,
+    lock_reason = coalesce(lock_reason, ''),
     pwd_update_time = coalesce(pwd_update_time, sysdate());
 
 update buyer_account
@@ -201,6 +180,8 @@ set user_name = coalesce(nullif(user_name, ''), concat('buyer_', buyer_account_i
     email = coalesce(email, ''),
     phonenumber = coalesce(phonenumber, ''),
     status = coalesce(nullif(status, ''), '0'),
+    lock_status = case when lock_status in ('0', '1') then lock_status else '0' end,
+    lock_reason = coalesce(lock_reason, ''),
     pwd_update_time = coalesce(pwd_update_time, sysdate());
 
 call drop_index_if_exists('seller_account', 'uk_seller_account_user');
@@ -214,6 +195,12 @@ alter table seller_account modify user_name varchar(30) not null, modify nick_na
 alter table buyer_account modify user_name varchar(30) not null, modify nick_name varchar(30) not null default '', modify password varchar(100) not null default '';
 call add_index_if_missing('seller_account', 'uk_seller_account_username', 'unique key uk_seller_account_username (user_name)');
 call add_index_if_missing('buyer_account', 'uk_buyer_account_username', 'unique key uk_buyer_account_username (user_name)');
+call assert_no_duplicate_owner_account('seller_account', 'seller_id', 'seller_account has duplicate OWNER accounts');
+call assert_no_duplicate_owner_account('buyer_account', 'buyer_id', 'buyer_account has duplicate OWNER accounts');
+call add_index_if_missing('seller_account', 'uk_seller_account_owner', 'unique key uk_seller_account_owner (owner_unique_seller_id)');
+call add_index_if_missing('buyer_account', 'uk_buyer_account_owner', 'unique key uk_buyer_account_owner (owner_unique_buyer_id)');
+call add_index_if_missing('seller_account', 'idx_seller_account_seller_lock', 'key idx_seller_account_seller_lock (seller_id, lock_status)');
+call add_index_if_missing('buyer_account', 'idx_buyer_account_buyer_lock', 'key idx_buyer_account_buyer_lock (buyer_id, lock_status)');
 
 create table if not exists seller_dept (
   seller_dept_id bigint(20) not null auto_increment,
@@ -369,25 +356,101 @@ create table if not exists buyer_role_menu (
   primary key (buyer_role_id, buyer_menu_id)
 ) engine=innodb comment = '买家端角色菜单关联表';
 
-create table if not exists seller_login_log like sys_logininfor;
-alter table seller_login_log change info_id info_id bigint(20) not null auto_increment;
+create table if not exists seller_login_log (
+  info_id bigint(20) not null auto_increment,
+  seller_id bigint(20) default null,
+  seller_account_id bigint(20) default null,
+  user_name varchar(30) default '',
+  ipaddr varchar(128) default '',
+  login_location varchar(255) default '',
+  browser varchar(50) default '',
+  os varchar(50) default '',
+  status char(1) default '0',
+  msg varchar(255) default '',
+  login_time datetime,
+  primary key (info_id),
+  key idx_seller_login_log_account_time (seller_account_id, login_time),
+  key idx_seller_login_log_seller_time (seller_id, login_time)
+) engine=innodb auto_increment=1 comment = '卖家端登录日志表';
 call add_column_if_missing('seller_login_log', 'seller_id', 'bigint(20) default null');
 call add_column_if_missing('seller_login_log', 'seller_account_id', 'bigint(20) default null');
+call add_index_if_missing('seller_login_log', 'idx_seller_login_log_account_time', 'key idx_seller_login_log_account_time (seller_account_id, login_time)');
+call add_index_if_missing('seller_login_log', 'idx_seller_login_log_seller_time', 'key idx_seller_login_log_seller_time (seller_id, login_time)');
 
-create table if not exists buyer_login_log like sys_logininfor;
-alter table buyer_login_log change info_id info_id bigint(20) not null auto_increment;
+create table if not exists buyer_login_log (
+  info_id bigint(20) not null auto_increment,
+  buyer_id bigint(20) default null,
+  buyer_account_id bigint(20) default null,
+  user_name varchar(30) default '',
+  ipaddr varchar(128) default '',
+  login_location varchar(255) default '',
+  browser varchar(50) default '',
+  os varchar(50) default '',
+  status char(1) default '0',
+  msg varchar(255) default '',
+  login_time datetime,
+  primary key (info_id),
+  key idx_buyer_login_log_account_time (buyer_account_id, login_time),
+  key idx_buyer_login_log_buyer_time (buyer_id, login_time)
+) engine=innodb auto_increment=1 comment = '买家端登录日志表';
 call add_column_if_missing('buyer_login_log', 'buyer_id', 'bigint(20) default null');
 call add_column_if_missing('buyer_login_log', 'buyer_account_id', 'bigint(20) default null');
+call add_index_if_missing('buyer_login_log', 'idx_buyer_login_log_account_time', 'key idx_buyer_login_log_account_time (buyer_account_id, login_time)');
+call add_index_if_missing('buyer_login_log', 'idx_buyer_login_log_buyer_time', 'key idx_buyer_login_log_buyer_time (buyer_id, login_time)');
 
-create table if not exists seller_oper_log like sys_oper_log;
-alter table seller_oper_log change oper_id oper_id bigint(20) not null auto_increment;
+create table if not exists seller_oper_log (
+  oper_id bigint(20) not null auto_increment,
+  seller_id bigint(20) default null,
+  seller_account_id bigint(20) default null,
+  title varchar(50) default '',
+  business_type int default 0,
+  method varchar(200) default '',
+  request_method varchar(10) default '',
+  oper_name varchar(30) default '',
+  oper_url varchar(255) default '',
+  oper_ip varchar(128) default '',
+  oper_location varchar(255) default '',
+  oper_param varchar(2000) default '',
+  json_result varchar(2000) default '',
+  status int default 0,
+  error_msg varchar(2000) default '',
+  oper_time datetime,
+  cost_time bigint(20) default 0,
+  primary key (oper_id),
+  key idx_seller_oper_log_account_time (seller_account_id, oper_time),
+  key idx_seller_oper_log_seller_time (seller_id, oper_time)
+) engine=innodb auto_increment=1 comment = '卖家端操作日志表';
 call add_column_if_missing('seller_oper_log', 'seller_id', 'bigint(20) default null');
 call add_column_if_missing('seller_oper_log', 'seller_account_id', 'bigint(20) default null');
+call add_index_if_missing('seller_oper_log', 'idx_seller_oper_log_account_time', 'key idx_seller_oper_log_account_time (seller_account_id, oper_time)');
+call add_index_if_missing('seller_oper_log', 'idx_seller_oper_log_seller_time', 'key idx_seller_oper_log_seller_time (seller_id, oper_time)');
 
-create table if not exists buyer_oper_log like sys_oper_log;
-alter table buyer_oper_log change oper_id oper_id bigint(20) not null auto_increment;
+create table if not exists buyer_oper_log (
+  oper_id bigint(20) not null auto_increment,
+  buyer_id bigint(20) default null,
+  buyer_account_id bigint(20) default null,
+  title varchar(50) default '',
+  business_type int default 0,
+  method varchar(200) default '',
+  request_method varchar(10) default '',
+  oper_name varchar(30) default '',
+  oper_url varchar(255) default '',
+  oper_ip varchar(128) default '',
+  oper_location varchar(255) default '',
+  oper_param varchar(2000) default '',
+  json_result varchar(2000) default '',
+  status int default 0,
+  error_msg varchar(2000) default '',
+  oper_time datetime,
+  cost_time bigint(20) default 0,
+  primary key (oper_id),
+  key idx_buyer_oper_log_account_time (buyer_account_id, oper_time),
+  key idx_buyer_oper_log_buyer_time (buyer_id, oper_time)
+) engine=innodb auto_increment=1 comment = '买家端操作日志表';
 call add_column_if_missing('buyer_oper_log', 'buyer_id', 'bigint(20) default null');
 call add_column_if_missing('buyer_oper_log', 'buyer_account_id', 'bigint(20) default null');
+call add_index_if_missing('buyer_oper_log', 'idx_buyer_oper_log_account_time', 'key idx_buyer_oper_log_account_time (buyer_account_id, oper_time)');
+call add_index_if_missing('buyer_oper_log', 'idx_buyer_oper_log_buyer_time', 'key idx_buyer_oper_log_buyer_time (buyer_id, oper_time)');
 
 create table if not exists seller_session (
   token_id varchar(64) not null,
@@ -431,5 +494,4 @@ drop procedure if exists add_column_if_missing;
 drop procedure if exists drop_column_if_exists;
 drop procedure if exists drop_index_if_exists;
 drop procedure if exists add_index_if_missing;
-drop procedure if exists migrate_seller_account_from_sys_user;
-drop procedure if exists migrate_buyer_account_from_sys_user;
+drop procedure if exists assert_no_duplicate_owner_account;

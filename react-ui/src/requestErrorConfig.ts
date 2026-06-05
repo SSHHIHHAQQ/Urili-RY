@@ -1,9 +1,10 @@
 import type { RequestOptions } from '@@/plugin-request/request';
 import type { RequestConfig } from '@umijs/max';
 import { getIntl, history } from '@umijs/max';
-import { message, notification } from '@/utils/feedback';
-import { clearSessionToken } from '@/access';
+import { clearSessionToken, clearTerminalSessionToken } from '@/access';
 import { PageEnum } from '@/enums/pagesEnums';
+import { message, notification } from '@/utils/feedback';
+import { getPortalTerminalFromApiUrl } from '@/utils/portalRequest';
 
 const PORTAL_ROUTE_PREFIXES = ['/seller/direct-login', '/buyer/direct-login', '/seller/portal', '/buyer/portal'];
 
@@ -24,7 +25,12 @@ function isUnauthorizedCode(code: unknown) {
   return Number(code) === 401;
 }
 
-function handleUnauthorized() {
+function handleUnauthorized(requestUrl?: string) {
+  const portalTerminal = getPortalTerminalFromApiUrl(requestUrl);
+  if (portalTerminal) {
+    clearTerminalSessionToken(portalTerminal);
+    return;
+  }
   clearSessionToken();
   redirectToLogin();
 }
@@ -68,13 +74,14 @@ export const errorConfig: RequestConfig = {
     // 错误接收及处理
     errorHandler: (error: any, opts: any) => {
       if (opts?.skipErrorHandler) throw error;
+      const requestUrl = error?.config?.url || error?.response?.config?.url || opts?.url;
       // 我们的 errorThrower 抛出的错误。
       if (error.name === 'BizError') {
         const errorInfo: ResponseStructure | undefined = error.info;
         if (errorInfo) {
           const { errorMessage, errorCode } = errorInfo;
           if (isUnauthorizedCode(errorCode)) {
-            handleUnauthorized();
+            handleUnauthorized(requestUrl);
             return;
           }
           switch (errorInfo.showType) {
@@ -94,7 +101,7 @@ export const errorConfig: RequestConfig = {
               });
               break;
             case ErrorShowType.REDIRECT:
-              handleUnauthorized();
+              handleUnauthorized(requestUrl);
               break;
             default:
               message.error(errorMessage);
@@ -104,7 +111,7 @@ export const errorConfig: RequestConfig = {
         // Axios 的错误
         // 请求成功发出且服务器也响应了状态码，但状态代码超出了 2xx 的范围
         if (isUnauthorizedCode(error.response.status)) {
-          handleUnauthorized();
+          handleUnauthorized(requestUrl);
           return;
         }
         message.error(`Response status:${error.response.status}`);

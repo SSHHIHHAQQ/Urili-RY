@@ -294,3 +294,12 @@ export async function deleteCategoryAttribute(categoryAttributeId: number) {
     { method: 'DELETE' },
   );
 }
+
+export async function getProductConfigChangeLogList(
+  params?: Record<string, any>,
+) {
+  return request<API.Product.PageResult<API.Product.ConfigChangeLog>>(
+    `${baseUrl}/change-logs/list`,
+    { method: 'GET', params },
+  );
+}

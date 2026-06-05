@@ -89,6 +89,8 @@ type PartnerService = {
   changeRoleStatus: (id: number, data: Pick<API.Partner.PortalRole, 'roleId' | 'status'>) => Promise<API.Result>;
   removeRoles: (id: number, roleIds: number[]) => Promise<API.Result>;
   resetAccountDefaultPassword: (data: any) => Promise<API.Result>;
+  lockAccount?: (id: number, accountId: number, lockReason: string) => Promise<API.Result>;
+  unlockAccount?: (id: number, accountId: number) => Promise<API.Result>;
   listSubjectSessions?: (id: number, params?: Record<string, any>) => Promise<API.Partner.PortalAuditPageResult<API.Partner.PortalSessionProfile>>;
   listAccountSessions?: (id: number, accountId: number, params?: Record<string, any>) => Promise<API.Partner.PortalAuditPageResult<API.Partner.PortalSessionProfile>>;
   forceLogoutSubject: (id: number) => Promise<API.Result>;
@@ -125,6 +127,7 @@ export type PartnerModuleConfig = {
     list: string;
     add: string;
     edit: string;
+    lock?: string;
     resetPwd: string;
     roleQuery: string;
     roleEdit: string;

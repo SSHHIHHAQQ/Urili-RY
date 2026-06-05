@@ -35,6 +35,8 @@ import {
 import SourceProductDetailDrawer from './SourceProductDetailDrawer';
 import styles from './style.module.css';
 
+const SOURCE_PRODUCT_SEARCH_FIELD_COUNT = 8;
+
 function cleanParams(params: Record<string, any>) {
   return Object.fromEntries(
     Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== ''),
@@ -97,11 +99,6 @@ export default function SourceProductLibraryPage() {
   };
 
   const columns: ProColumns<API.Integration.SourceProductItem>[] = [
-    {
-      title: '关键词',
-      dataIndex: 'keyword',
-      hideInTable: true,
-    },
     {
       title: '来源系统',
       dataIndex: 'systemKind',
@@ -291,7 +288,10 @@ export default function SourceProductLibraryPage() {
         rowKey={(record) => `${record.connectionCode}:${record.masterSku}`}
         columns={columns}
         columnsState={getProTableColumnsState('source-product-library-columns')}
-        search={getPersistedProTableSearch({ labelWidth: 96 }, 'source-product-library')}
+        search={getPersistedProTableSearch(
+          { labelWidth: 96, fieldCount: SOURCE_PRODUCT_SEARCH_FIELD_COUNT },
+          'source-product-library',
+        )}
         request={async (params) => {
           const { current, pageSize, ...filters } = params;
           const resp = await getSourceProductList(

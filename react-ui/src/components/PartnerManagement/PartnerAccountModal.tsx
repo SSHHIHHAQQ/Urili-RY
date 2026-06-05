@@ -72,6 +72,11 @@ const statusOptions: SelectOption[] = [
   { label: '停用', value: '1', searchText: '1 停用' },
 ];
 
+const lockStatusOptions: SelectOption[] = [
+  { label: '未锁定', value: '0', searchText: '0 未锁定' },
+  { label: '已锁定', value: '1', searchText: '1 已锁定' },
+];
+
 const compactCellTextStyle: React.CSSProperties = {
   display: 'block',
   overflow: 'hidden',
@@ -138,6 +143,10 @@ function optionLabel(options: SelectOption[], value?: string) {
   return options.find((option) => option.value === value)?.label || value || '-';
 }
 
+function isAccountLocked(account: AccountRecord) {
+  return account.lockStatus === '1';
+}
+
 function buildAccountPayload(
   config: PartnerModuleConfig,
   partnerId: number,
@@ -190,6 +199,7 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
   const [accounts, setAccounts] = useState<AccountRecord[]>([]);
   const [deptTree, setDeptTree] = useState<API.Partner.PortalTreeNode[]>([]);
   const [accountRoleOptions, setAccountRoleOptions] = useState<SelectOption[]>(fallbackAccountRoleOptions);
+  const [accountLockStatusOptions, setAccountLockStatusOptions] = useState<SelectOption[]>(lockStatusOptions);
   const [accountFormOpen, setAccountFormOpen] = useState(false);
   const [currentAccount, setCurrentAccount] = useState<AccountRecord>();
   const [roleModalOpen, setRoleModalOpen] = useState(false);
@@ -210,6 +220,10 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
   };
   const canAssignAccountRoles = access.hasPerms(accountPermissions.roleQuery)
     && access.hasPerms(accountPermissions.roleEdit);
+  const accountLockEnabled = Boolean(config.services.lockAccount && config.services.unlockAccount);
+  const canLockAccount = accountLockEnabled
+    && Boolean(accountPermissions.lock)
+    && access.hasPerms(accountPermissions.lock as string);
   const currentAccountId = getAccountId(config, currentAccount);
 
   const roleSelectOptions = useMemo(
@@ -256,8 +270,13 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
       getDictSelectOption(`${config.moduleKey}_account_role`)
         .then((data) => setAccountRoleOptions(normalizeDictSelectOptions(data as DictSelectRawOption[], fallbackAccountRoleOptions)))
         .catch(() => setAccountRoleOptions(fallbackAccountRoleOptions));
+      if (accountLockEnabled) {
+        getDictSelectOption(`${config.moduleKey}_account_lock_status`)
+          .then((data) => setAccountLockStatusOptions(normalizeDictSelectOptions(data as DictSelectRawOption[], lockStatusOptions)))
+          .catch(() => setAccountLockStatusOptions(lockStatusOptions));
+      }
     }
-  }, [open, partnerId, config.moduleKey]);
+  }, [open, partnerId, config.moduleKey, accountLockEnabled]);
 
   const openAccountForm = (account?: AccountRecord) => {
     setCurrentAccount(account);
@@ -343,6 +362,69 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
           return;
         }
         message.error(resp.msg || '强制踢出失败');
+      },
+    });
+  };
+
+  const handleLockAccount = (account: AccountRecord) => {
+    const accountId = getAccountId(config, account);
+    if (!partnerId || !accountId || !config.services.lockAccount) {
+      return;
+    }
+    let lockReason = '';
+    modal.confirm({
+      title: `确认锁定账号 ${account.userName || account.nickName || accountId} 吗？`,
+      okText: '锁定',
+      content: (
+        <Flex vertical gap={8}>
+          <Typography.Text>锁定后该账号不可登录，当前在线会话会立即失效。</Typography.Text>
+          <Typography.Text>锁定原因</Typography.Text>
+          <Input.TextArea
+            rows={3}
+            maxLength={500}
+            showCount
+            placeholder="请输入锁定原因"
+            onChange={(event) => {
+              lockReason = event.target.value;
+            }}
+          />
+        </Flex>
+      ),
+      onOk: async () => {
+        const normalizedReason = lockReason.trim();
+        if (!normalizedReason) {
+          message.error('请输入锁定原因');
+          throw new Error('LOCK_REASON_REQUIRED');
+        }
+        const resp = await config.services.lockAccount?.(partnerId, accountId, normalizedReason);
+        if (resp?.code === 200) {
+          message.success('账号已锁定');
+          await loadAccounts();
+          return;
+        }
+        message.error(resp?.msg || '账号锁定失败');
+        throw new Error('LOCK_ACCOUNT_FAILED');
+      },
+    });
+  };
+
+  const handleUnlockAccount = (account: AccountRecord) => {
+    const accountId = getAccountId(config, account);
+    if (!partnerId || !accountId || !config.services.unlockAccount) {
+      return;
+    }
+    modal.confirm({
+      title: `确认解锁账号 ${account.userName || account.nickName || accountId} 吗？`,
+      content: '解锁后不会恢复旧会话，账号需要重新登录。',
+      onOk: async () => {
+        const resp = await config.services.unlockAccount?.(partnerId, accountId);
+        if (resp?.code === 200) {
+          message.success('账号已解锁');
+          await loadAccounts();
+          return;
+        }
+        message.error(resp?.msg || '账号解锁失败');
+        throw new Error('UNLOCK_ACCOUNT_FAILED');
       },
     });
   };
@@ -433,6 +515,16 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
       width: 76,
       render: (value) => <Tag color={value === '0' ? 'success' : 'default'}>{optionLabel(statusOptions, value)}</Tag>,
     },
+    ...(accountLockEnabled ? [{
+      title: '锁定',
+      dataIndex: 'lockStatus',
+      width: 86,
+      render: (value: string, record: AccountRecord) => (
+        <Tag color={value === '1' ? 'error' : 'success'} title={record.lockReason || undefined}>
+          {optionLabel(accountLockStatusOptions, value || '0')}
+        </Tag>
+      ),
+    }] : []),
     {
       title: '时间',
       dataIndex: 'timeInfo',
@@ -451,9 +543,13 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
       dataIndex: 'option',
       width: 160,
       render: (_, record) => {
+        const locked = isAccountLocked(record);
         const moreItems = [
-          access.hasPerms(`${permPrefix}:directLogin`) && config.services.directLoginAccount
+          access.hasPerms(`${permPrefix}:directLogin`) && config.services.directLoginAccount && !locked
             ? { key: 'directLogin', label: `登录${config.label}端` }
+            : null,
+          canLockAccount
+            ? { key: locked ? 'unlockAccount' : 'lockAccount', label: locked ? '解锁账号' : '锁定账号' }
             : null,
           access.hasPerms(accountPermissions.resetPwd)
             ? { key: 'resetPwd', label: '重置密码' }
@@ -491,6 +587,12 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
                   onClick: ({ key }) => {
                     if (key === 'directLogin') {
                       handleDirectLoginAccount(record);
+                    }
+                    if (key === 'lockAccount') {
+                      handleLockAccount(record);
+                    }
+                    if (key === 'unlockAccount') {
+                      handleUnlockAccount(record);
                     }
                     if (key === 'resetPwd') {
                       handleResetPassword(record);

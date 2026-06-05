@@ -20,6 +20,12 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="mainImageUrl"    column="main_image_url"   />
         <result property="detailContent"   column="detail_content"   />
         <result property="spuStatus"       column="spu_status"       />
+        <result property="controlStatus"   column="control_status"   />
+        <result property="controlReason"   column="control_reason"   />
+        <result property="controlBy"       column="control_by"       />
+        <result property="controlTime"     column="control_time"     />
+        <result property="recoverBy"       column="recover_by"       />
+        <result property="recoverTime"     column="recover_time"     />
         <result property="sourceType"      column="source_type"      />
         <result property="sourceRefType"   column="source_ref_type"  />
         <result property="sourceRefId"     column="source_ref_id"    />
@@ -30,7 +36,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="salePriceMin"    column="sale_price_min"   />
         <result property="salePriceMax"    column="sale_price_max"   />
         <result property="currencySummary" column="currency_summary" />
+        <result property="availableStock"  column="available_stock"  />
         <result property="warehouseCount"  column="warehouse_count"  />
+        <result property="inventoryStatus" column="inventory_status" />
+        <result property="stockUpdateTime" column="stock_update_time" />
         <result property="createBy"        column="create_by"        />
         <result property="createTime"      column="create_time"      />
         <result property="updateBy"        column="update_by"        />
@@ -42,6 +51,14 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <id     property="skuId"           column="sku_id"           />
         <result property="spuId"           column="spu_id"           />
         <result property="sellerId"        column="seller_id"        />
+        <result property="systemSpuCode"   column="system_spu_code"  />
+        <result property="sellerSpuCode"   column="seller_spu_code"  />
+        <result property="sellerName"      column="seller_name"      />
+        <result property="categoryId"      column="category_id"      />
+        <result property="categoryName"    column="category_name"    />
+        <result property="productName"     column="product_name"     />
+        <result property="productNameEn"   column="product_name_en"  />
+        <result property="spuStatus"       column="spu_status"       />
         <result property="systemSkuCode"   column="system_sku_code"  />
         <result property="sellerSkuCode"   column="seller_sku_code"  />
         <result property="color"           column="color"            />
@@ -60,9 +77,19 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="salePrice"       column="sale_price"       />
         <result property="currencyCode"    column="currency_code"    />
         <result property="skuStatus"       column="sku_status"       />
+        <result property="controlStatus"   column="control_status"   />
+        <result property="spuControlStatus" column="spu_control_status" />
+        <result property="controlReason"   column="control_reason"   />
+        <result property="controlBy"       column="control_by"       />
+        <result property="controlTime"     column="control_time"     />
+        <result property="recoverBy"       column="recover_by"       />
+        <result property="recoverTime"     column="recover_time"     />
         <result property="sortOrder"       column="sort_order"       />
         <result property="delFlag"         column="del_flag"         />
+        <result property="availableStock"  column="available_stock"  />
         <result property="warehouseCount"  column="warehouse_count"  />
+        <result property="inventoryStatus" column="inventory_status" />
+        <result property="stockUpdateTime" column="stock_update_time" />
         <result property="createBy"        column="create_by"        />
         <result property="createTime"      column="create_time"      />
         <result property="updateBy"        column="update_by"        />
@@ -113,7 +140,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                s.sale_price_min,
                s.sale_price_max,
                s.currency_summary,
-               null as warehouse_count
+               null as available_stock,
+               null as warehouse_count,
+               null as inventory_status,
+               null as stock_update_time
         from product_spu p
         left join (
             select spu_id,
@@ -125,6 +155,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                    case when count(distinct currency_code) = 1 then min(currency_code) else 'MULTI' end as currency_summary
             from product_sku
             where del_flag = '0'
+              and control_status = 'NORMAL'
             group by spu_id
         ) s on s.spu_id = p.spu_id
     </sql>
@@ -137,7 +168,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                s.sale_price_min,
                s.sale_price_max,
                s.currency_summary,
-               null as warehouse_count
+               null as available_stock,
+               null as warehouse_count,
+               null as inventory_status,
+               null as stock_update_time
         from product_spu p
         inner join (
             select spu_id,
@@ -148,6 +182,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             from product_sku
             where del_flag = '0'
               and sku_status = 'ON_SALE'
+              and control_status = 'NORMAL'
             group by spu_id
         ) s on s.spu_id = p.spu_id
     </sql>
@@ -191,6 +226,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <if test="spuStatus != null and spuStatus != ''">
             and p.spu_status = #{spuStatus}
         </if>
+        <if test="controlStatus != null and controlStatus != ''">
+            and p.control_status = #{controlStatus}
+        </if>
         <if test="systemSkuCode != null and systemSkuCode != ''">
             and exists (
                 select 1 from product_sku sk
@@ -214,6 +252,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <include refid="spuOnSaleAggregateSelect"/>
         where p.del_flag = '0'
           and p.spu_status = 'ON_SALE'
+          and p.control_status = 'NORMAL'
         <if test="keyword != null and keyword != ''">
             and (
                 p.product_name like concat('%', #{keyword}, '%')
@@ -246,6 +285,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         where p.spu_id = #{spuId}
           and p.del_flag = '0'
           and p.spu_status = 'ON_SALE'
+          and p.control_status = 'NORMAL'
         limit 1
     </select>
 
@@ -253,13 +293,13 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         insert into product_spu(
             system_spu_code, seller_spu_code, seller_id, seller_no, seller_name,
             category_id, category_code, category_name, product_name, product_name_en, selling_point,
-            main_image_url, detail_content, spu_status, source_type, source_ref_type, source_ref_id,
-            del_flag, create_by, create_time, remark
+            main_image_url, detail_content, spu_status, control_status, control_reason, source_type, source_ref_type, source_ref_id,
+            del_flag, create_by, create_time, update_by, update_time, remark
         ) values (
             #{systemSpuCode}, #{sellerSpuCode}, #{sellerId}, #{sellerNo}, #{sellerName},
             #{categoryId}, #{categoryCode}, #{categoryName}, #{productName}, #{productNameEn}, #{sellingPoint},
-            #{mainImageUrl}, #{detailContent}, #{spuStatus}, #{sourceType}, #{sourceRefType}, #{sourceRefId},
-            '0', #{createBy}, sysdate(), #{remark}
+            #{mainImageUrl}, #{detailContent}, #{spuStatus}, #{controlStatus}, #{controlReason}, #{sourceType}, #{sourceRefType}, #{sourceRefId},
+            '0', #{createBy}, sysdate(), #{updateBy}, sysdate(), #{remark}
         )
     </insert>
 
@@ -278,6 +318,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             main_image_url = #{mainImageUrl},
             detail_content = #{detailContent},
             spu_status = #{spuStatus},
+            control_status = #{controlStatus},
+            control_reason = #{controlReason},
             update_by = #{updateBy},
             update_time = sysdate(),
             remark = #{remark}
@@ -288,6 +330,26 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <update id="updateSpuStatus">
         update product_spu
         set spu_status = #{status},
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where spu_id = #{spuId}
+          and del_flag = '0'
+    </update>
+
+    <update id="updateSpuControlStatus">
+        update product_spu
+        set control_status = #{controlStatus},
+            control_reason = #{reason},
+            <choose>
+                <when test="controlStatus == 'DISABLED'">
+                    control_by = #{updateBy},
+                    control_time = sysdate(),
+                </when>
+                <otherwise>
+                    recover_by = #{updateBy},
+                    recover_time = sysdate(),
+                </otherwise>
+            </choose>
             update_by = #{updateBy},
             update_time = sysdate()
         where spu_id = #{spuId}
@@ -312,31 +374,136 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         </if>
     </select>
 
+    <select id="selectSkuPageList" parameterType="ProductSku" resultMap="ProductSkuResult">
+        select sk.*,
+               p.system_spu_code,
+               p.seller_spu_code,
+               p.seller_name,
+               p.category_id,
+               p.category_name,
+               p.product_name,
+               p.product_name_en,
+               p.spu_status,
+               p.control_status as spu_control_status,
+               null as available_stock,
+               null as warehouse_count,
+               null as inventory_status,
+               null as stock_update_time
+        from product_sku sk
+        inner join product_spu p on p.spu_id = sk.spu_id and p.del_flag = '0'
+        where sk.del_flag = '0'
+        <if test="keyword != null and keyword != ''">
+            and (
+                sk.system_sku_code like concat('%', #{keyword}, '%')
+                or sk.seller_sku_code like concat('%', #{keyword}, '%')
+                or p.system_spu_code like concat('%', #{keyword}, '%')
+                or p.seller_spu_code like concat('%', #{keyword}, '%')
+                or p.product_name like concat('%', #{keyword}, '%')
+                or p.product_name_en like concat('%', #{keyword}, '%')
+            )
+        </if>
+        <if test="systemSkuCode != null and systemSkuCode != ''">
+            and sk.system_sku_code like concat('%', #{systemSkuCode}, '%')
+        </if>
+        <if test="sellerSkuCode != null and sellerSkuCode != ''">
+            and sk.seller_sku_code like concat('%', #{sellerSkuCode}, '%')
+        </if>
+        <if test="systemSpuCode != null and systemSpuCode != ''">
+            and p.system_spu_code like concat('%', #{systemSpuCode}, '%')
+        </if>
+        <if test="sellerSpuCode != null and sellerSpuCode != ''">
+            and p.seller_spu_code like concat('%', #{sellerSpuCode}, '%')
+        </if>
+        <if test="productName != null and productName != ''">
+            and (
+                p.product_name like concat('%', #{productName}, '%')
+                or p.product_name_en like concat('%', #{productName}, '%')
+            )
+        </if>
+        <if test="sellerId != null">
+            and sk.seller_id = #{sellerId}
+        </if>
+        <if test="categoryId != null">
+            and p.category_id = #{categoryId}
+        </if>
+        <if test="spuStatus != null and spuStatus != ''">
+            and p.spu_status = #{spuStatus}
+        </if>
+        <if test="skuStatus != null and skuStatus != ''">
+            and sk.sku_status = #{skuStatus}
+        </if>
+        <if test="controlStatus != null and controlStatus != '' and controlStatus != 'DISABLED'">
+            and sk.control_status = #{controlStatus}
+            and p.control_status = #{controlStatus}
+        </if>
+        <if test="controlStatus != null and controlStatus == 'DISABLED'">
+            and (sk.control_status = 'DISABLED' or p.control_status = 'DISABLED')
+        </if>
+        order by coalesce(sk.update_time, sk.create_time) desc, sk.sku_id desc
+    </select>
+
     <select id="selectSkuListBySpuId" resultMap="ProductSkuResult">
-        select *,
-               null as warehouse_count
-        from product_sku
-        where spu_id = #{spuId}
-          and del_flag = '0'
+        select sk.*,
+               null as system_spu_code,
+               null as seller_spu_code,
+               null as seller_name,
+               null as category_id,
+               null as category_name,
+               null as product_name,
+               null as product_name_en,
+               null as spu_status,
+               null as spu_control_status,
+               null as available_stock,
+               null as warehouse_count,
+               null as inventory_status,
+               null as stock_update_time
+        from product_sku sk
+        where sk.spu_id = #{spuId}
+          and sk.del_flag = '0'
         order by sort_order asc, sku_id asc
     </select>
 
     <select id="selectOnSaleSkuListBySpuId" resultMap="ProductSkuResult">
-        select *,
-               null as warehouse_count
-        from product_sku
-        where spu_id = #{spuId}
-          and sku_status = 'ON_SALE'
-          and del_flag = '0'
+        select sk.*,
+               null as system_spu_code,
+               null as seller_spu_code,
+               null as seller_name,
+               null as category_id,
+               null as category_name,
+               null as product_name,
+               null as product_name_en,
+               null as spu_status,
+               null as spu_control_status,
+               null as available_stock,
+               null as warehouse_count,
+               null as inventory_status,
+               null as stock_update_time
+        from product_sku sk
+        where sk.spu_id = #{spuId}
+          and sk.sku_status = 'ON_SALE'
+          and sk.control_status = 'NORMAL'
+          and sk.del_flag = '0'
         order by sort_order asc, sku_id asc
     </select>
 
     <select id="selectSkuById" resultMap="ProductSkuResult">
-        select *,
-               null as warehouse_count
-        from product_sku
-        where sku_id = #{skuId}
-          and del_flag = '0'
+        select sk.*,
+               null as system_spu_code,
+               null as seller_spu_code,
+               null as seller_name,
+               null as category_id,
+               null as category_name,
+               null as product_name,
+               null as product_name_en,
+               null as spu_status,
+               null as spu_control_status,
+               null as available_stock,
+               null as warehouse_count,
+               null as inventory_status,
+               null as stock_update_time
+        from product_sku sk
+        where sk.sku_id = #{skuId}
+          and sk.del_flag = '0'
         limit 1
     </select>
 
@@ -346,15 +513,15 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             size, length_value, width_value, height_value, weight,
             material, style, model,
             package_quantity, capacity, sku_image_url, supply_price, sale_price,
-            currency_code, sku_status, sort_order, del_flag, create_by,
-            create_time, remark
+            currency_code, sku_status, control_status, control_reason, sort_order, del_flag, create_by,
+            create_time, update_by, update_time, remark
         ) values (
             #{spuId}, #{sellerId}, #{systemSkuCode}, #{sellerSkuCode}, #{color},
             #{size}, #{lengthValue}, #{widthValue}, #{heightValue}, #{weight},
             #{material}, #{style}, #{model},
             #{packageQuantity}, #{capacity}, #{skuImageUrl}, #{supplyPrice}, #{salePrice},
-            #{currencyCode}, #{skuStatus}, #{sortOrder}, '0', #{createBy},
-            sysdate(), #{remark}
+            #{currencyCode}, #{skuStatus}, #{controlStatus}, #{controlReason}, #{sortOrder}, '0', #{createBy},
+            sysdate(), #{updateBy}, sysdate(), #{remark}
         )
     </insert>
 
@@ -378,6 +545,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             sale_price = #{salePrice},
             currency_code = #{currencyCode},
             sku_status = #{skuStatus},
+            control_status = #{controlStatus},
+            control_reason = #{controlReason},
             sort_order = #{sortOrder},
             update_by = #{updateBy},
             update_time = sysdate(),
@@ -390,6 +559,35 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <update id="updateSkuStatus">
         update product_sku
         set sku_status = #{status},
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where sku_id = #{skuId}
+          and del_flag = '0'
+    </update>
+
+    <update id="updateSkuControlStatus">
+        update product_sku
+        set control_status = #{controlStatus},
+            control_reason = #{reason},
+            <choose>
+                <when test="controlStatus == 'DISABLED'">
+                    control_by = #{updateBy},
+                    control_time = sysdate(),
+                </when>
+                <otherwise>
+                    recover_by = #{updateBy},
+                    recover_time = sysdate(),
+                </otherwise>
+            </choose>
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where sku_id = #{skuId}
+          and del_flag = '0'
+    </update>
+
+    <update id="updateSkuSalePrice">
+        update product_sku
+        set sale_price = #{salePrice},
             update_by = #{updateBy},
             update_time = sysdate()
         where sku_id = #{skuId}
@@ -428,6 +626,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         from product_sku
         where spu_id = #{spuId}
           and sku_status = 'ON_SALE'
+          and control_status = 'NORMAL'
           and del_flag = '0'
     </select>
 

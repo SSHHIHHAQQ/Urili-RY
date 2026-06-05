@@ -33,6 +33,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="sellerShortName"     column="seller_short_name" />
         <result property="warehousePairingId"  column="warehouse_pairing_id" />
         <result property="connectionCode"      column="connection_code" />
+        <result property="masterWarehouseName" column="master_warehouse_name" />
         <result property="upstreamWarehouseCode" column="upstream_warehouse_code" />
         <result property="upstreamWarehouseName" column="upstream_warehouse_name" />
         <result property="pairingStatus"       column="pairing_status" />
@@ -72,11 +73,13 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                w.create_by, w.create_time, w.update_by, w.update_time, w.remark,
                tp.seller_id, s.seller_no, s.seller_code, s.seller_name, s.seller_short_name,
                p.warehouse_pairing_id, p.connection_code, p.upstream_warehouse_code,
-               p.upstream_warehouse_name, p.status as pairing_status
+               p.upstream_warehouse_name, p.status as pairing_status,
+               uc.master_warehouse_name
         from warehouse w
         left join third_party_warehouse tp on tp.warehouse_id = w.warehouse_id
         left join seller s on s.seller_id = tp.seller_id
         left join upstream_system_warehouse_pairing p on p.system_warehouse_code = w.warehouse_code
+        left join upstream_system_connection uc on uc.connection_code = p.connection_code
     </sql>
 
     <select id="selectWarehouseList" parameterType="Warehouse" resultMap="WarehouseResult">
@@ -215,7 +218,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         from us_state
         where status = '0'
         <if test="keyword != null and keyword != ''">
-            and (state_name like concat('%', #{keyword}, '%') or state_code like concat('%', #{keyword}, '%'))
+            and (
+                lower(state_name) like concat('%', lower(#{keyword}), '%')
+                or lower(state_code) like concat('%', lower(#{keyword}), '%')
+            )
         </if>
         order by state_name asc
         limit 100
@@ -226,10 +232,16 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         from us_city
         where status = '0'
         <if test="stateName != null and stateName != ''">
-            and state_name = #{stateName}
+            and (
+                lower(state_name) = lower(#{stateName})
+                or lower(state_code) = lower(#{stateName})
+            )
         </if>
         <if test="keyword != null and keyword != ''">
-            and (city_name like concat('%', #{keyword}, '%') or place_name like concat('%', #{keyword}, '%') or place_type like concat('%', #{keyword}, '%'))
+            and (
+                lower(city_name) like concat('%', lower(#{keyword}), '%')
+                or lower(place_name) like concat('%', lower(#{keyword}), '%')
+            )
         </if>
         order by state_name asc, city_name asc, place_type asc, place_geoid asc
         limit 100

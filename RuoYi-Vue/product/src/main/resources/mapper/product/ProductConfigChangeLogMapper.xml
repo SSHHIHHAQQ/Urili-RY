@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.product.mapper.ProductConfigChangeLogMapper">
+
+    <resultMap type="ProductConfigChangeLog" id="ChangeLogResult">
+        <id     property="logId"         column="log_id"         />
+        <result property="bizType"       column="biz_type"       />
+        <result property="bizId"         column="biz_id"         />
+        <result property="bizCode"       column="biz_code"       />
+        <result property="bizName"       column="biz_name"       />
+        <result property="actionType"    column="action_type"    />
+        <result property="actionSource"  column="action_source"  />
+        <result property="operatorName"  column="operator_name"  />
+        <result property="changeSummary" column="change_summary" />
+        <result property="beforeJson"    column="before_json"    />
+        <result property="afterJson"     column="after_json"     />
+        <result property="diffJson"      column="diff_json"      />
+        <result property="changeTime"    column="change_time"    />
+        <result property="remark"        column="remark"         />
+    </resultMap>
+
+    <select id="selectChangeLogList" parameterType="ProductConfigChangeLog" resultMap="ChangeLogResult">
+        select log_id,
+               biz_type,
+               biz_id,
+               biz_code,
+               biz_name,
+               action_type,
+               action_source,
+               operator_name,
+               change_summary,
+               before_json,
+               after_json,
+               diff_json,
+               change_time,
+               remark
+        from product_config_change_log
+        where 1 = 1
+        <if test="bizTypes != null and bizTypes != ''">
+            and find_in_set(biz_type, #{bizTypes})
+        </if>
+        <if test="bizType != null and bizType != ''">
+            and biz_type = #{bizType}
+        </if>
+        <if test="bizId != null">
+            and biz_id = #{bizId}
+        </if>
+        <if test="actionType != null and actionType != ''">
+            and action_type = #{actionType}
+        </if>
+        <if test="actionSource != null and actionSource != ''">
+            and action_source = #{actionSource}
+        </if>
+        <if test="operatorName != null and operatorName != ''">
+            and operator_name like concat('%', #{operatorName}, '%')
+        </if>
+        <if test="keyword != null and keyword != ''">
+            and (
+                biz_code like concat('%', #{keyword}, '%')
+                or biz_name like concat('%', #{keyword}, '%')
+                or change_summary like concat('%', #{keyword}, '%')
+            )
+        </if>
+        <if test="beginTime != null and beginTime != ''">
+            and change_time &gt;= #{beginTime}
+        </if>
+        <if test="endTime != null and endTime != ''">
+            and change_time &lt;= #{endTime}
+        </if>
+        order by change_time desc, log_id desc
+    </select>
+
+    <insert id="insertChangeLog" parameterType="ProductConfigChangeLog" useGeneratedKeys="true" keyProperty="logId">
+        insert into product_config_change_log(
+            biz_type, biz_id, biz_code, biz_name, action_type, action_source,
+            operator_name, change_summary, before_json, after_json, diff_json,
+            change_time, remark
+        ) values (
+            #{bizType}, #{bizId}, #{bizCode}, #{bizName}, #{actionType}, #{actionSource},
+            #{operatorName}, #{changeSummary}, #{beforeJson}, #{afterJson}, #{diffJson},
+            sysdate(), #{remark}
+        )
+    </insert>
+
+</mapper>

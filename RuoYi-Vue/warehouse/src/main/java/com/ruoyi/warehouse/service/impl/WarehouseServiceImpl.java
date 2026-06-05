@@ -314,6 +314,10 @@ public class WarehouseServiceImpl implements IWarehouseService
             throw new ServiceException("归属卖家不能为空");
         }
         Seller seller = sellerService.selectSellerById(sellerId);
+        if (seller == null)
+        {
+            throw new ServiceException("归属卖家不存在");
+        }
         if (!PartnerSupport.STATUS_NORMAL.equals(seller.getStatus()))
         {
             throw new ServiceException("只能选择正常状态卖家");

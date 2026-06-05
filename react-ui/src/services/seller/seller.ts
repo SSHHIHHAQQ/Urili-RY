@@ -72,6 +72,22 @@ export async function updateAdminSellerAccount(sellerId: number, data: API.Partn
   });
 }
 
+export async function lockAdminSellerAccount(sellerId: number, sellerAccountId: number, lockReason: string) {
+  return request<API.Result>(`/api/seller/admin/sellers/${sellerId}/accounts/${sellerAccountId}/lock`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json;charset=UTF-8',
+    },
+    data: { lockReason },
+  });
+}
+
+export async function unlockAdminSellerAccount(sellerId: number, sellerAccountId: number) {
+  return request<API.Result>(`/api/seller/admin/sellers/${sellerId}/accounts/${sellerAccountId}/unlock`, {
+    method: 'PUT',
+  });
+}
+
 export async function getAdminSellerDepts(sellerId: number) {
   return request<API.Partner.PortalDeptListResult>(`/api/seller/admin/sellers/${sellerId}/depts/list`, {
     method: 'GET',

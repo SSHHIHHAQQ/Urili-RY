@@ -24,6 +24,7 @@ declare namespace API.Warehouse {
     sellerKeyword?: string;
     warehousePairingId?: number;
     connectionCode?: string;
+    masterWarehouseName?: string;
     upstreamWarehouseCode?: string;
     upstreamWarehouseName?: string;
     pairingStatus?: string;

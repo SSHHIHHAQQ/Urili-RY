@@ -36,6 +36,10 @@ public interface ISellerService
 
     public int updateSellerAccount(Long sellerId, SellerAccount account);
 
+    public int lockSellerAccount(Long sellerId, Long sellerAccountId, String lockReason);
+
+    public int unlockSellerAccount(Long sellerId, Long sellerAccountId);
+
     public int resetSellerAccountPassword(SellerAccount account);
 
     public int resetSellerAccountDefaultPassword(SellerAccount account);

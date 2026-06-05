@@ -1,13 +1,28 @@
 package com.ruoyi.product.service;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Consumer;
 import jakarta.servlet.http.HttpServletResponse;
+import org.apache.commons.io.IOUtils;
+import org.apache.poi.ss.usermodel.DataValidation;
+import org.apache.poi.ss.usermodel.DataValidationConstraint;
+import org.apache.poi.ss.usermodel.DataValidationHelper;
+import org.apache.poi.ss.usermodel.Name;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.util.CellRangeAddressList;
+import org.apache.poi.ss.util.CellReference;
+import org.apache.poi.xssf.streaming.SXSSFWorkbook;
+import org.apache.poi.xssf.usermodel.XSSFDataValidation;
 import org.springframework.stereotype.Service;
+import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.poi.ExcelSheet;
 import com.ruoyi.common.utils.poi.ExcelUtil;
 import com.ruoyi.product.domain.importdata.ProductAttributeImportRow;
 import com.ruoyi.product.domain.importdata.ProductAttributeOptionImportRow;
+import com.ruoyi.product.domain.importdata.ProductAttributeTypeSourceRuleRow;
 import com.ruoyi.product.domain.importdata.ProductCategoryImportRow;
 import com.ruoyi.product.domain.importdata.ProductImportFieldHelpRow;
 
@@ -17,6 +32,24 @@ import com.ruoyi.product.domain.importdata.ProductImportFieldHelpRow;
 @Service
 public class ProductImportTemplateService
 {
+    private static final String ATTRIBUTE_IMPORT_SHEET = "商品属性导入";
+
+    private static final String ATTRIBUTE_TYPE_SOURCE_RULE_SHEET = "类型来源规则";
+
+    private static final String ATTRIBUTE_OPTION_SOURCE_HIDDEN_SHEET = "_attribute_option_source";
+
+    private static final int ATTRIBUTE_TEMPLATE_FIRST_DATA_ROW = 1;
+
+    private static final int DEFAULT_EXCEL_UTIL_LAST_VALIDATION_ROW = 100;
+
+    private static final int ATTRIBUTE_TEMPLATE_LAST_DATA_ROW = 1000;
+
+    private static final int ATTRIBUTE_TYPE_COLUMN_INDEX = 2;
+
+    private static final int OPTION_SOURCE_COLUMN_INDEX = 3;
+
+    private static final int STATUS_COLUMN_INDEX = 7;
+
     public void exportCategoryTemplate(HttpServletResponse response)
     {
         ExcelUtil.exportMultiSheet(response, List.of(
@@ -28,11 +61,14 @@ public class ProductImportTemplateService
 
     public void exportAttributeTemplate(HttpServletResponse response)
     {
-        ExcelUtil.exportMultiSheet(response, List.of(
-            new ExcelSheet<ProductAttributeImportRow>("商品属性导入", Collections.emptyList(),
+        exportMultiSheet(response, List.of(
+            new ExcelSheet<ProductAttributeImportRow>(ATTRIBUTE_IMPORT_SHEET, Collections.emptyList(),
                 ProductAttributeImportRow.class),
             new ExcelSheet<ProductAttributeImportRow>("填写示例", attributeExamples(), ProductAttributeImportRow.class),
-            new ExcelSheet<ProductImportFieldHelpRow>("字段说明", attributeHelpRows(), ProductImportFieldHelpRow.class)));
+            new ExcelSheet<ProductImportFieldHelpRow>("字段说明", attributeHelpRows(), ProductImportFieldHelpRow.class),
+            new ExcelSheet<ProductAttributeTypeSourceRuleRow>(ATTRIBUTE_TYPE_SOURCE_RULE_SHEET,
+                attributeTypeSourceRuleRows(), ProductAttributeTypeSourceRuleRow.class)),
+            this::applyAttributeOptionSourceValidation);
     }
 
     public void exportAttributeOptionTemplate(HttpServletResponse response)
@@ -59,19 +95,46 @@ public class ProductImportTemplateService
     private List<ProductAttributeImportRow> attributeExamples()
     {
         return List.of(
+            attributeRow("title_keywords", "标题关键词", "TEXT", "NONE", "", "", 0, "0",
+                "文本属性，选项来源只能填 NONE"),
             attributeRow("washable", "是否可水洗", "BOOLEAN", "NONE", "", "", 0, "0", "布尔属性，不需要自定义选项"),
             attributeRow("battery_included", "是否带电池", "BOOLEAN", "NONE", "", "", 0, "0",
                 "电器类常见布尔属性"),
             attributeRow("clothing_length_cm", "衣长", "NUMBER", "NONE", "", "cm", 1, "0",
-                "数字属性，可配置单位和数值精度"),
+                "数字属性，可配置单位和小数位数"),
             attributeRow("package_weight_g", "包装重量", "NUMBER", "NONE", "", "g", 0, "0",
-                "数字属性，整数值可把数值精度填 0"),
+                "数字属性，整数值可把小数位数填 0"),
+            attributeRow("release_date", "上市日期", "DATE", "NONE", "", "", 0, "0",
+                "日期属性，选项来源只能填 NONE"),
             attributeRow("material", "材质", "SINGLE_SELECT", "ATTRIBUTE_OPTION", "", "", 0, "0",
-                "需要再导入属性选项"),
+                "单选属性，选项值需要再导入属性选项"),
+            attributeRow("color_family", "颜色分类", "MULTI_SELECT", "ATTRIBUTE_OPTION", "", "", 0, "0",
+                "多选属性，选项值需要再导入属性选项"),
             attributeRow("origin_country", "原产国", "SINGLE_SELECT", "SYS_DICT", "product_origin_country", "", 0,
                 "0", "复用若依字典，不需要导入属性选项"),
-            attributeRow("size", "尺码", "SINGLE_SELECT", "ATTRIBUTE_OPTION", "", "", 0, "0",
-                "服装类常见选择属性"));
+            attributeRow("applicable_season", "适用季节", "MULTI_SELECT", "SYS_DICT", "product_season", "", 0,
+                "0", "多选属性也可以复用若依字典"));
+    }
+
+    private List<ProductAttributeTypeSourceRuleRow> attributeTypeSourceRuleRows()
+    {
+        return List.of(
+            typeSourceRuleRow("TEXT", "文本", "NONE", "固定填 NONE，不能维护选项来源", "留空", "留空", "填 0 或留空",
+                "不导入属性选项", "标题关键词 / TEXT / NONE"),
+            typeSourceRuleRow("NUMBER", "数字", "NONE", "固定填 NONE，不能维护选项来源", "留空", "可填 cm、kg、g、pcs 等单位",
+                "填 0-8，表示保留几位小数", "不导入属性选项", "衣长 / NUMBER / NONE / cm / 1"),
+            typeSourceRuleRow("BOOLEAN", "布尔", "NONE", "固定填 NONE，系统按 是 / 否 使用", "留空", "留空", "填 0 或留空",
+                "不导入属性选项", "是否可水洗 / BOOLEAN / NONE"),
+            typeSourceRuleRow("DATE", "日期", "NONE", "固定填 NONE，不能维护选项来源", "留空", "留空", "填 0 或留空",
+                "不导入属性选项", "上市日期 / DATE / NONE"),
+            typeSourceRuleRow("SINGLE_SELECT", "单选", "ATTRIBUTE_OPTION / SYS_DICT",
+                "必须二选一：自定义选项填 ATTRIBUTE_OPTION，复用若依字典填 SYS_DICT", "选项来源为 SYS_DICT 时必填字典类型",
+                "留空", "填 0 或留空", "ATTRIBUTE_OPTION 要在商品属性选项模板中导入选项；SYS_DICT 不导入属性选项",
+                "材质 / SINGLE_SELECT / ATTRIBUTE_OPTION"),
+            typeSourceRuleRow("MULTI_SELECT", "多选", "ATTRIBUTE_OPTION / SYS_DICT",
+                "必须二选一：自定义选项填 ATTRIBUTE_OPTION，复用若依字典填 SYS_DICT", "选项来源为 SYS_DICT 时必填字典类型",
+                "留空", "填 0 或留空", "ATTRIBUTE_OPTION 要在商品属性选项模板中导入选项；SYS_DICT 不导入属性选项",
+                "颜色分类 / MULTI_SELECT / ATTRIBUTE_OPTION"));
     }
 
     private List<ProductAttributeOptionImportRow> attributeOptionExamples()
@@ -107,14 +170,14 @@ public class ProductImportTemplateService
             helpRow(template, "属性类型", "是", "TEXT / NUMBER / BOOLEAN / SINGLE_SELECT / MULTI_SELECT / DATE",
                 "BOOLEAN", "填写中文类型，例如“单选”"),
             helpRow(template, "选项来源", "是",
-                "TEXT / NUMBER / BOOLEAN / DATE 固定填 NONE；SINGLE_SELECT / MULTI_SELECT 填 ATTRIBUTE_OPTION 或 SYS_DICT",
+                "与属性类型联动：TEXT / NUMBER / BOOLEAN / DATE 固定填 NONE；SINGLE_SELECT / MULTI_SELECT 填 ATTRIBUTE_OPTION 或 SYS_DICT",
                 "ATTRIBUTE_OPTION", "文本、数字、布尔、日期属性填写 ATTRIBUTE_OPTION 或 SYS_DICT"),
             helpRow(template, "字典类型", "按条件",
                 "属性类型为 SINGLE_SELECT / MULTI_SELECT 且选项来源为 SYS_DICT 时必填，必须是若依字典类型编码",
                 "product_material", "选项来源不是 SYS_DICT 仍填写字典类型，或填写不存在的字典类型"),
             helpRow(template, "单位", "按条件", "仅 NUMBER 属性可填单位，例如 cm、kg、g；其他属性必须留空", "cm",
                 "TEXT / BOOLEAN / DATE / SINGLE_SELECT / MULTI_SELECT 属性填写单位"),
-            helpRow(template, "数值精度", "按条件", "仅 NUMBER 属性可填，表示保留几位小数；范围 0-8，其他属性填 0 或留空", "2",
+            helpRow(template, "小数位数", "按条件", "仅 NUMBER 属性可填，表示保留几位小数；范围 0-8，其他属性填 0 或留空", "2",
                 "非 NUMBER 属性填写非 0 精度，或 NUMBER 属性填写 9 以上"),
             helpRow(template, "状态", "是", "填写 正常 / 停用", "正常", "填写“启用”等非模板下拉值"),
             helpRow(template, "备注", "否", "内部说明，不参与编码唯一性判断", "用于服装类目", "写入需要系统判断的业务规则"));
@@ -164,6 +227,23 @@ public class ProductImportTemplateService
         return row;
     }
 
+    private ProductAttributeTypeSourceRuleRow typeSourceRuleRow(String attributeType, String typeDescription,
+        String allowedOptionSources, String optionSourceRule, String dictTypeRule, String unitRule,
+        String precisionRule, String optionValueRule, String example)
+    {
+        ProductAttributeTypeSourceRuleRow row = new ProductAttributeTypeSourceRuleRow();
+        row.setAttributeType(attributeType);
+        row.setTypeDescription(typeDescription);
+        row.setAllowedOptionSources(allowedOptionSources);
+        row.setOptionSourceRule(optionSourceRule);
+        row.setDictTypeRule(dictTypeRule);
+        row.setUnitRule(unitRule);
+        row.setPrecisionRule(precisionRule);
+        row.setOptionValueRule(optionValueRule);
+        row.setExample(example);
+        return row;
+    }
+
     private ProductAttributeOptionImportRow attributeOptionRow(String attributeCode, String optionCode,
         String optionLabel, Integer sortOrder, String defaultFlag, String status, String remark)
     {
@@ -189,5 +269,121 @@ public class ProductImportTemplateService
         row.setExample(example);
         row.setCommonMistake(commonMistake);
         return row;
+    }
+
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+    private void exportMultiSheet(HttpServletResponse response, List<ExcelSheet<?>> sheets,
+        Consumer<SXSSFWorkbook> workbookCustomizer)
+    {
+        SXSSFWorkbook wb = new SXSSFWorkbook(500);
+        try
+        {
+            for (ExcelSheet<?> excelSheet : sheets)
+            {
+                ExcelUtil util = new ExcelUtil(excelSheet.getClazz());
+                util.initWithWorkbook(wb, excelSheet.getList(), excelSheet.getSheetName(), excelSheet.getTitle());
+                util.writeSheet();
+            }
+            if (workbookCustomizer != null)
+            {
+                workbookCustomizer.accept(wb);
+            }
+            response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            response.setCharacterEncoding("utf-8");
+            wb.write(response.getOutputStream());
+        }
+        catch (IOException e)
+        {
+            throw new ServiceException("导出商品配置模板失败");
+        }
+        finally
+        {
+            IOUtils.closeQuietly(wb);
+        }
+    }
+
+    private void applyAttributeOptionSourceValidation(SXSSFWorkbook wb)
+    {
+        Sheet attributeSheet = wb.getSheet(ATTRIBUTE_IMPORT_SHEET);
+        if (attributeSheet == null)
+        {
+            return;
+        }
+        Sheet hiddenSheet = wb.createSheet(ATTRIBUTE_OPTION_SOURCE_HIDDEN_SHEET);
+        addOptionSourceRuleName(wb, hiddenSheet, 0, "TYPE_TEXT", "NONE");
+        addOptionSourceRuleName(wb, hiddenSheet, 1, "TYPE_NUMBER", "NONE");
+        addOptionSourceRuleName(wb, hiddenSheet, 2, "TYPE_BOOLEAN", "NONE");
+        addOptionSourceRuleName(wb, hiddenSheet, 3, "TYPE_DATE", "NONE");
+        addOptionSourceRuleName(wb, hiddenSheet, 4, "TYPE_SINGLE_SELECT", "ATTRIBUTE_OPTION", "SYS_DICT");
+        addOptionSourceRuleName(wb, hiddenSheet, 5, "TYPE_MULTI_SELECT", "ATTRIBUTE_OPTION", "SYS_DICT");
+        wb.setSheetHidden(wb.getSheetIndex(hiddenSheet), true);
+        addExplicitListValidation(attributeSheet,
+            new String[] { "TEXT", "NUMBER", "BOOLEAN", "SINGLE_SELECT", "MULTI_SELECT", "DATE" },
+            "必填。先选择属性类型，再按类型联动填写选项来源。", DEFAULT_EXCEL_UTIL_LAST_VALIDATION_ROW + 1,
+            ATTRIBUTE_TEMPLATE_LAST_DATA_ROW, ATTRIBUTE_TYPE_COLUMN_INDEX);
+        addExplicitListValidation(attributeSheet, new String[] { "正常", "停用" }, "填写 正常 / 停用",
+            DEFAULT_EXCEL_UTIL_LAST_VALIDATION_ROW + 1, ATTRIBUTE_TEMPLATE_LAST_DATA_ROW, STATUS_COLUMN_INDEX);
+        DataValidationHelper helper = attributeSheet.getDataValidationHelper();
+        for (int rowIndex = ATTRIBUTE_TEMPLATE_FIRST_DATA_ROW; rowIndex <= ATTRIBUTE_TEMPLATE_LAST_DATA_ROW; rowIndex++)
+        {
+            String formula = "INDIRECT(\"TYPE_\"&$" + CellReference.convertNumToColString(ATTRIBUTE_TYPE_COLUMN_INDEX)
+                + "$" + (rowIndex + 1) + ")";
+            DataValidationConstraint constraint = helper.createFormulaListConstraint(formula);
+            CellRangeAddressList range = new CellRangeAddressList(rowIndex, rowIndex, OPTION_SOURCE_COLUMN_INDEX,
+                OPTION_SOURCE_COLUMN_INDEX);
+            DataValidation validation = helper.createValidation(constraint, range);
+            validation.createPromptBox("选项来源",
+                "先选择属性类型。本列会按属性类型限制：文本/数字/布尔/日期只能 NONE；单选/多选可选 ATTRIBUTE_OPTION 或 SYS_DICT。");
+            validation.setShowPromptBox(true);
+            if (validation instanceof XSSFDataValidation)
+            {
+                validation.setSuppressDropDownArrow(true);
+                validation.setShowErrorBox(true);
+            }
+            else
+            {
+                validation.setSuppressDropDownArrow(false);
+            }
+            attributeSheet.addValidationData(validation);
+        }
+    }
+
+    private void addExplicitListValidation(Sheet sheet, String[] values, String prompt, int firstRow, int lastRow,
+        int columnIndex)
+    {
+        DataValidationHelper helper = sheet.getDataValidationHelper();
+        DataValidationConstraint constraint = helper.createExplicitListConstraint(values);
+        CellRangeAddressList range = new CellRangeAddressList(firstRow, lastRow, columnIndex, columnIndex);
+        DataValidation validation = helper.createValidation(constraint, range);
+        validation.createPromptBox("", prompt);
+        validation.setShowPromptBox(true);
+        if (validation instanceof XSSFDataValidation)
+        {
+            validation.setSuppressDropDownArrow(true);
+            validation.setShowErrorBox(true);
+        }
+        else
+        {
+            validation.setSuppressDropDownArrow(false);
+        }
+        sheet.addValidationData(validation);
+    }
+
+    private void addOptionSourceRuleName(SXSSFWorkbook wb, Sheet hiddenSheet, int rowIndex, String nameName,
+        String... optionSources)
+    {
+        Row row = hiddenSheet.createRow(rowIndex);
+        row.createCell(0).setCellValue(nameName);
+        for (int index = 0; index < optionSources.length; index++)
+        {
+            row.createCell(index + 1).setCellValue(optionSources[index]);
+        }
+        Name name = wb.createName();
+        name.setNameName(nameName);
+        String startColumn = CellReference.convertNumToColString(1);
+        String endColumn = CellReference.convertNumToColString(optionSources.length);
+        int excelRowNum = rowIndex + 1;
+        name.setRefersToFormula("'" + ATTRIBUTE_OPTION_SOURCE_HIDDEN_SHEET + "'!$" + startColumn + "$"
+            + excelRowNum + ":$" + endColumn + "$" + excelRowNum);
     }
 }

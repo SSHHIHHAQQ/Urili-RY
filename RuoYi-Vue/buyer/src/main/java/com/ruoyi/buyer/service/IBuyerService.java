@@ -36,6 +36,10 @@ public interface IBuyerService
 
     public int updateBuyerAccount(Long buyerId, BuyerAccount account);
 
+    public int lockBuyerAccount(Long buyerId, Long buyerAccountId, String lockReason);
+
+    public int unlockBuyerAccount(Long buyerId, Long buyerAccountId);
+
     public int resetBuyerAccountPassword(BuyerAccount account);
 
     public int resetBuyerAccountDefaultPassword(BuyerAccount account);

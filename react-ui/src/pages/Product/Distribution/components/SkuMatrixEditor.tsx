@@ -1,8 +1,9 @@
 import { PlusOutlined } from '@ant-design/icons';
-import { Button, Checkbox, Input, InputNumber, Select, Space, Table, Tag, Typography } from 'antd';
+import { Button, Checkbox, Input, InputNumber, Radio, Space, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { salesStatusOptions, skuSpecFields } from '../constants';
+import type { CSSProperties } from 'react';
+import { skuSpecFields } from '../constants';
 import ImageUploadField from './ImageUploadField';
 import styles from '../style.module.css';
 
@@ -12,10 +13,37 @@ type SkuRow = API.ProductDistribution.Sku & {
 
 type SkuMatrixEditorProps = {
   value: SkuRow[];
+  focusSkuId?: number;
   currencyCode?: string;
   currencyLabel?: string;
   onChange: (value: SkuRow[]) => void;
 };
+
+type MeasurementKind = 'dimension' | 'weight';
+type MeasurementUnitSystem = 'METRIC' | 'IMPERIAL';
+type MeasurementField = 'lengthValue' | 'widthValue' | 'heightValue' | 'weight';
+
+type MeasurementInputProps = {
+  value?: number;
+  unit: string;
+  placeholder?: string;
+  style?: CSSProperties;
+  onChange: (value: string | number | null) => void;
+};
+
+const compactMeasurementUnitOptions = [
+  { label: '公制单位', value: 'METRIC' },
+  { label: '英制单位', value: 'IMPERIAL' },
+];
+
+const measurementUnits: Record<MeasurementUnitSystem, { dimension: 'cm' | 'in'; weight: 'kg' | 'lb' }> = {
+  METRIC: { dimension: 'cm', weight: 'kg' },
+  IMPERIAL: { dimension: 'in', weight: 'lb' },
+};
+
+const dimensionFields: MeasurementField[] = ['lengthValue', 'widthValue', 'heightValue'];
+const measurementFields: MeasurementField[] = [...dimensionFields, 'weight'];
+const maxSelectedSpecCount = 2;
 
 function normalizeSpecValue(value?: string) {
   return (value || '').trim();
@@ -48,11 +76,140 @@ function inferSelectedSpecs(rows: SkuRow[]) {
   const selected = skuSpecFields
     .filter((field) => rows.some((row) => normalizeSpecValue(row[field.value] as string)))
     .map((field) => field.value);
-  return selected.length ? selected : ['color', 'size'] as (keyof API.ProductDistribution.Sku)[];
+  return selected.length
+    ? selected.slice(0, maxSelectedSpecCount)
+    : ['color', 'size'] as (keyof API.ProductDistribution.Sku)[];
+}
+
+function MeasurementInput({
+  value,
+  unit,
+  placeholder,
+  style,
+  onChange,
+}: MeasurementInputProps) {
+  return (
+    <InputNumber
+      min={0}
+      controls={false}
+      value={value}
+      placeholder={placeholder}
+      suffix={<span className={styles.measurementUnitSuffix}>{unit}</span>}
+      className={styles.measurementInput}
+      style={style}
+      onChange={onChange}
+    />
+  );
+}
+
+function normalizeUnit(unit?: string) {
+  const value = unit?.trim().toLowerCase();
+  if (!value) return undefined;
+  if (['cm', '厘米'].includes(value)) return 'cm';
+  if (['in', 'inch', 'inches', '英寸'].includes(value)) return 'in';
+  if (['kg', 'kgs', 'kilogram', 'kilograms', '公斤', '千克'].includes(value)) return 'kg';
+  if (['g', 'gram', 'grams', '克'].includes(value)) return 'g';
+  if (['lb', 'lbs', 'pound', 'pounds', '磅'].includes(value)) return 'lb';
+  return value;
+}
+
+function parseMeasurementValue(value?: string) {
+  const raw = value?.trim();
+  if (!raw) return undefined;
+  const match = raw.match(/^(-?\d+(?:\.\d+)?)\s*(.*)?$/);
+  if (!match) return undefined;
+  const numberValue = Number(match[1]);
+  if (!Number.isFinite(numberValue)) return undefined;
+  return {
+    value: numberValue,
+    unit: normalizeUnit(match[2]),
+  };
+}
+
+function convertMeasurementValue(value: number, fromUnit: string | undefined, toUnit: string, kind: MeasurementKind) {
+  if (!fromUnit || fromUnit === toUnit) return value;
+  if (kind === 'dimension') {
+    const cmValue = fromUnit === 'in' ? value * 2.54 : value;
+    return toUnit === 'in' ? cmValue / 2.54 : cmValue;
+  }
+  let kgValue = value;
+  if (fromUnit === 'g') {
+    kgValue = value / 1000;
+  } else if (fromUnit === 'lb') {
+    kgValue = value / 2.2046226218;
+  }
+  return toUnit === 'lb' ? kgValue * 2.2046226218 : kgValue;
+}
+
+function stripTrailingZero(value: string) {
+  return value.replace(/(\.\d*?[1-9])0+$/, '$1').replace(/\.0+$/, '');
+}
+
+function formatMeasurementNumber(value: number) {
+  return stripTrailingZero(value.toFixed(4));
+}
+
+function toOptionalNumber(value: string | number | null | undefined) {
+  if (value === undefined || value === null || value === '') return undefined;
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : undefined;
+}
+
+function readMeasurementInputValue(value: string | undefined, unit: string, kind: MeasurementKind) {
+  const parsed = parseMeasurementValue(value);
+  if (!parsed) return undefined;
+  return Number(formatMeasurementNumber(convertMeasurementValue(parsed.value, parsed.unit, unit, kind)));
+}
+
+function formatMeasurementInputValue(value: string | number | null | undefined, unit: string) {
+  const numberValue = toOptionalNumber(value);
+  return numberValue === undefined ? undefined : `${formatMeasurementNumber(numberValue)} ${unit}`;
+}
+
+function inferMeasurementUnitSystem(rows: SkuRow[]): MeasurementUnitSystem {
+  const values = rows.flatMap((row) => [
+    row.lengthValue,
+    row.widthValue,
+    row.heightValue,
+    row.weight,
+  ]);
+  return values.some((value) => {
+    const unit = parseMeasurementValue(value)?.unit;
+    return unit === 'in' || unit === 'lb';
+  }) ? 'IMPERIAL' : 'METRIC';
+}
+
+function normalizeMeasurementField(
+  value: string | undefined,
+  unitSystem: MeasurementUnitSystem,
+  kind: MeasurementKind,
+) {
+  const unit = kind === 'dimension' ? measurementUnits[unitSystem].dimension : measurementUnits[unitSystem].weight;
+  const numberValue = readMeasurementInputValue(value, unit, kind);
+  return numberValue === undefined ? undefined : formatMeasurementInputValue(numberValue, unit);
+}
+
+function normalizeSkuMeasurements(row: SkuRow, unitSystem: MeasurementUnitSystem): SkuRow {
+  return {
+    ...row,
+    lengthValue: normalizeMeasurementField(row.lengthValue, unitSystem, 'dimension'),
+    widthValue: normalizeMeasurementField(row.widthValue, unitSystem, 'dimension'),
+    heightValue: normalizeMeasurementField(row.heightValue, unitSystem, 'dimension'),
+    weight: normalizeMeasurementField(row.weight, unitSystem, 'weight'),
+  };
+}
+
+function hasMeasurementChange(current: SkuRow[], next: SkuRow[]) {
+  return current.some((row, index) => {
+    const nextRow = next[index];
+    if (!nextRow) return true;
+    return measurementFields.some((field) => row[field] !== nextRow[field]);
+  });
 }
 
 export default function SkuMatrixEditor({
   value,
+  focusSkuId,
   currencyCode,
   currencyLabel,
   onChange,
@@ -60,18 +217,21 @@ export default function SkuMatrixEditor({
   const [selectedSpecs, setSelectedSpecs] = useState<(keyof API.ProductDistribution.Sku)[]>(['color', 'size']);
   const [specValues, setSpecValues] = useState<Record<string, string[]>>({});
   const [draftValues, setDraftValues] = useState<Record<string, string>>({});
-  const [bulkLengthValue, setBulkLengthValue] = useState<string>();
-  const [bulkWidthValue, setBulkWidthValue] = useState<string>();
-  const [bulkHeightValue, setBulkHeightValue] = useState<string>();
-  const [bulkWeight, setBulkWeight] = useState<string>();
+  const [bulkLengthValue, setBulkLengthValue] = useState<number>();
+  const [bulkWidthValue, setBulkWidthValue] = useState<number>();
+  const [bulkHeightValue, setBulkHeightValue] = useState<number>();
+  const [bulkWeight, setBulkWeight] = useState<number>();
+  const [unitSystem, setUnitSystem] = useState<MeasurementUnitSystem>('METRIC');
   const [bulkSupplyPrice, setBulkSupplyPrice] = useState<number>();
-  const [bulkSalePrice, setBulkSalePrice] = useState<number>();
   const hydratedRowsKeyRef = useRef<string | undefined>(undefined);
+  const currentUnits = measurementUnits[unitSystem];
 
   useEffect(() => {
     const rowsKey = value.map((row) => row.skuId || row.rowKey).join('|');
     if (rowsKey === hydratedRowsKeyRef.current) return;
     hydratedRowsKeyRef.current = rowsKey;
+    const nextUnitSystem = inferMeasurementUnitSystem(value);
+    setUnitSystem(nextUnitSystem);
     const selected = inferSelectedSpecs(value);
     const values: Record<string, string[]> = {};
     selected.forEach((field) => {
@@ -79,6 +239,10 @@ export default function SkuMatrixEditor({
     });
     setSelectedSpecs(selected);
     setSpecValues(values);
+    const normalizedRows = value.map((row) => normalizeSkuMeasurements(row, nextUnitSystem));
+    if (hasMeasurementChange(value, normalizedRows)) {
+      onChange(normalizedRows);
+    }
   }, [value]);
 
   const rows = useMemo(
@@ -86,8 +250,44 @@ export default function SkuMatrixEditor({
     [value],
   );
 
+  useEffect(() => {
+    if (!focusSkuId) return undefined;
+    const timer = window.setTimeout(() => {
+      document.querySelector(`.${styles.focusSkuRow}`)?.scrollIntoView({ block: 'center' });
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [focusSkuId, rows.length]);
+
+  const specCheckboxOptions = useMemo(
+    () => skuSpecFields.map((field) => ({
+      ...field,
+      disabled: selectedSpecs.length >= maxSelectedSpecCount && !selectedSpecs.includes(field.value),
+    })),
+    [selectedSpecs],
+  );
+
   const updateRow = (rowKey: string, patch: Partial<SkuRow>) => {
     onChange(rows.map((row) => (row.rowKey === rowKey ? { ...row, ...patch } : row)));
+  };
+
+  const changeSelectedSpecs = (checked: (keyof API.ProductDistribution.Sku)[]) => {
+    setSelectedSpecs(checked.slice(0, maxSelectedSpecCount));
+  };
+
+  const changeUnitSystem = (nextUnitSystem: MeasurementUnitSystem) => {
+    if (nextUnitSystem === unitSystem) return;
+    setUnitSystem(nextUnitSystem);
+    onChange(rows.map((row) => normalizeSkuMeasurements(row, nextUnitSystem)));
+  };
+
+  const updateMeasurementRow = (
+    row: SkuRow,
+    field: MeasurementField,
+    value: string | number | null,
+    kind: MeasurementKind,
+  ) => {
+    const unit = kind === 'dimension' ? currentUnits.dimension : currentUnits.weight;
+    updateRow(row.rowKey!, { [field]: formatMeasurementInputValue(value, unit) } as Partial<SkuRow>);
   };
 
   const addSpecValue = (field: keyof API.ProductDistribution.Sku) => {
@@ -141,12 +341,11 @@ export default function SkuMatrixEditor({
   const applyBulk = () => {
     onChange(rows.map((row) => ({
       ...row,
-      lengthValue: bulkLengthValue || row.lengthValue,
-      widthValue: bulkWidthValue || row.widthValue,
-      heightValue: bulkHeightValue || row.heightValue,
-      weight: bulkWeight || row.weight,
+      lengthValue: bulkLengthValue === undefined ? row.lengthValue : formatMeasurementInputValue(bulkLengthValue, currentUnits.dimension),
+      widthValue: bulkWidthValue === undefined ? row.widthValue : formatMeasurementInputValue(bulkWidthValue, currentUnits.dimension),
+      heightValue: bulkHeightValue === undefined ? row.heightValue : formatMeasurementInputValue(bulkHeightValue, currentUnits.dimension),
+      weight: bulkWeight === undefined ? row.weight : formatMeasurementInputValue(bulkWeight, currentUnits.weight),
       supplyPrice: bulkSupplyPrice ?? row.supplyPrice,
-      salePrice: bulkSalePrice ?? row.salePrice,
     })));
   };
 
@@ -184,50 +383,54 @@ export default function SkuMatrixEditor({
       ),
     },
     {
-      title: '长度',
+      title: `长度 (${currentUnits.dimension})`,
       dataIndex: 'lengthValue',
-      width: 110,
+      width: 136,
       render: (_, row) => (
-        <Input
-          value={row.lengthValue}
-          placeholder="如 30cm"
-          onChange={(event) => updateRow(row.rowKey!, { lengthValue: event.target.value })}
+        <MeasurementInput
+          value={readMeasurementInputValue(row.lengthValue, currentUnits.dimension, 'dimension')}
+          unit={currentUnits.dimension}
+          placeholder="如 30"
+          onChange={(nextValue) => updateMeasurementRow(row, 'lengthValue', nextValue, 'dimension')}
         />
       ),
     },
     {
-      title: '宽度',
+      title: `宽度 (${currentUnits.dimension})`,
       dataIndex: 'widthValue',
-      width: 110,
+      width: 136,
       render: (_, row) => (
-        <Input
-          value={row.widthValue}
-          placeholder="如 20cm"
-          onChange={(event) => updateRow(row.rowKey!, { widthValue: event.target.value })}
+        <MeasurementInput
+          value={readMeasurementInputValue(row.widthValue, currentUnits.dimension, 'dimension')}
+          unit={currentUnits.dimension}
+          placeholder="如 20"
+          onChange={(nextValue) => updateMeasurementRow(row, 'widthValue', nextValue, 'dimension')}
         />
       ),
     },
     {
-      title: '高度',
+      title: `高度 (${currentUnits.dimension})`,
       dataIndex: 'heightValue',
-      width: 110,
+      width: 136,
       render: (_, row) => (
-        <Input
-          value={row.heightValue}
-          placeholder="如 8cm"
-          onChange={(event) => updateRow(row.rowKey!, { heightValue: event.target.value })}
+        <MeasurementInput
+          value={readMeasurementInputValue(row.heightValue, currentUnits.dimension, 'dimension')}
+          unit={currentUnits.dimension}
+          placeholder="如 8"
+          onChange={(nextValue) => updateMeasurementRow(row, 'heightValue', nextValue, 'dimension')}
         />
       ),
     },
     {
-      title: '重量',
+      title: `重量 (${currentUnits.weight})`,
       dataIndex: 'weight',
-      width: 110,
+      width: 136,
       render: (_, row) => (
-        <Input
-          value={row.weight}
-          placeholder="如 350g"
-          onChange={(event) => updateRow(row.rowKey!, { weight: event.target.value })}
+        <MeasurementInput
+          value={readMeasurementInputValue(row.weight, currentUnits.weight, 'weight')}
+          unit={currentUnits.weight}
+          placeholder="如 0.35"
+          onChange={(nextValue) => updateMeasurementRow(row, 'weight', nextValue, 'weight')}
         />
       ),
     },
@@ -246,42 +449,10 @@ export default function SkuMatrixEditor({
       ),
     },
     {
-      title: '销售价',
-      dataIndex: 'salePrice',
-      width: 120,
-      render: (_, row) => (
-        <div className={styles.priceCell}>
-          <InputNumber
-            min={0}
-            precision={4}
-            value={row.salePrice}
-            style={{ width: '100%' }}
-            onChange={(salePrice) => updateRow(row.rowKey!, { salePrice: salePrice ?? undefined })}
-          />
-          {row.salePrice !== undefined && row.supplyPrice !== undefined && row.salePrice < row.supplyPrice ? (
-            <Typography.Text type="warning" className={styles.priceRiskText}>低于供货价</Typography.Text>
-          ) : null}
-        </div>
-      ),
-    },
-    {
       title: '币种',
       dataIndex: 'currencyCode',
       width: 120,
       render: () => currencyLabel || currencyCode || '-',
-    },
-    {
-      title: '状态',
-      dataIndex: 'skuStatus',
-      width: 110,
-      render: (_, row) => (
-        <Select
-          value={row.skuStatus || 'DRAFT'}
-          options={salesStatusOptions}
-          style={{ width: '100%' }}
-          onChange={(skuStatus) => updateRow(row.rowKey!, { skuStatus })}
-        />
-      ),
     },
     {
       title: '排序',
@@ -321,8 +492,8 @@ export default function SkuMatrixEditor({
         <div className={styles.specPanelTitle}>规格属性</div>
         <Checkbox.Group
           value={selectedSpecs as string[]}
-          options={skuSpecFields}
-          onChange={(checked) => setSelectedSpecs(checked as (keyof API.ProductDistribution.Sku)[])}
+          options={specCheckboxOptions}
+          onChange={(checked) => changeSelectedSpecs(checked as (keyof API.ProductDistribution.Sku)[])}
         />
         <div className={styles.specValueGrid}>
           {selectedSpecs.map((field) => (
@@ -359,37 +530,45 @@ export default function SkuMatrixEditor({
       <div className={styles.bulkPanel}>
         <Space size={8} wrap>
           <Typography.Text strong className={styles.bulkPanelLabel}>
+            单位制
+          </Typography.Text>
+          <Radio.Group
+            optionType="button"
+            buttonStyle="solid"
+            options={compactMeasurementUnitOptions}
+            value={unitSystem}
+            onChange={(event) => changeUnitSystem(event.target.value)}
+          />
+          <Typography.Text strong className={styles.bulkPanelLabel}>
             批量填充
           </Typography.Text>
-          <Space.Compact>
-            <Input
-              allowClear
-              placeholder="长"
-              style={{ width: 96 }}
-              value={bulkLengthValue}
-              onChange={(event) => setBulkLengthValue(event.target.value || undefined)}
-            />
-            <Input
-              allowClear
-              placeholder="宽"
-              style={{ width: 96 }}
-              value={bulkWidthValue}
-              onChange={(event) => setBulkWidthValue(event.target.value || undefined)}
-            />
-            <Input
-              allowClear
-              placeholder="高"
-              style={{ width: 96 }}
-              value={bulkHeightValue}
-              onChange={(event) => setBulkHeightValue(event.target.value || undefined)}
-            />
-          </Space.Compact>
-          <Input
-            allowClear
+          <MeasurementInput
+            placeholder="长"
+            style={{ width: 124 }}
+            value={bulkLengthValue}
+            unit={currentUnits.dimension}
+            onChange={(nextValue) => setBulkLengthValue(toOptionalNumber(nextValue))}
+          />
+          <MeasurementInput
+            placeholder="宽"
+            style={{ width: 124 }}
+            value={bulkWidthValue}
+            unit={currentUnits.dimension}
+            onChange={(nextValue) => setBulkWidthValue(toOptionalNumber(nextValue))}
+          />
+          <MeasurementInput
+            placeholder="高"
+            style={{ width: 124 }}
+            value={bulkHeightValue}
+            unit={currentUnits.dimension}
+            onChange={(nextValue) => setBulkHeightValue(toOptionalNumber(nextValue))}
+          />
+          <MeasurementInput
             placeholder="重量"
-            style={{ width: 112 }}
+            style={{ width: 132 }}
             value={bulkWeight}
-            onChange={(event) => setBulkWeight(event.target.value || undefined)}
+            unit={currentUnits.weight}
+            onChange={(nextValue) => setBulkWeight(toOptionalNumber(nextValue))}
           />
           <InputNumber
             min={0}
@@ -398,14 +577,6 @@ export default function SkuMatrixEditor({
             style={{ width: 140 }}
             value={bulkSupplyPrice}
             onChange={(value) => setBulkSupplyPrice(value ?? undefined)}
-          />
-          <InputNumber
-            min={0}
-            precision={4}
-            placeholder="销售价"
-            style={{ width: 140 }}
-            value={bulkSalePrice}
-            onChange={(value) => setBulkSalePrice(value ?? undefined)}
           />
           <Button type="primary" onClick={applyBulk}>
             应用到全部 SKU
@@ -417,8 +588,9 @@ export default function SkuMatrixEditor({
         rowKey="rowKey"
         columns={columns}
         dataSource={rows}
+        rowClassName={(row) => (focusSkuId && row.skuId === focusSkuId ? styles.focusSkuRow : '')}
         pagination={false}
-        scroll={{ x: 1480 }}
+        scroll={{ x: 1400 }}
         size="small"
       />
     </div>

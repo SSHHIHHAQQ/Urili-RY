@@ -67,7 +67,7 @@ public class PortalDirectLoginSupportTest
     }
 
     @Test
-    public void createTokenShouldPersistHashedTicketAndThirtyMinuteRedisPayload()
+    public void createTokenShouldPersistHashedTicketAndHashKeyedRedisPayload()
     {
         PortalDirectLoginResult result = support.createToken("seller", 7L, "SAAA010001",
                 activeAccount(44L, "seller-owner"), "Need to inspect seller workspace",
@@ -96,14 +96,15 @@ public class PortalDirectLoginSupportTest
         assertTrue(result.getToken().startsWith("seller_"));
         assertEquals(SELLER_WEB_URL + "?directLoginToken=" + result.getToken(), result.getLoginUrl());
 
-        String cacheKey = "portal_direct_login:" + result.getToken();
+        String cacheKey = cacheKey(result.getToken());
         assertEquals(cacheKey, redisCache.lastSetKey);
+        assertFalse(redisCache.lastSetKey.contains(result.getToken()));
         assertEquals(Integer.valueOf(PortalDirectLoginSupport.EXPIRE_MINUTES), redisCache.lastTimeout);
         assertEquals(TimeUnit.MINUTES, redisCache.lastTimeUnit);
 
         PortalDirectLoginToken payload = redisCache.getCacheObject(cacheKey);
         assertNotNull(payload);
-        assertEquals(result.getToken(), payload.getToken());
+        assertPayloadDoesNotExposeDirectLoginToken();
         assertEquals(result.getTicketId(), payload.getTicketId());
         assertEquals("seller", payload.getPortalType());
         assertEquals(Long.valueOf(7L), payload.getPartnerId());
@@ -125,18 +126,34 @@ public class PortalDirectLoginSupportTest
 
         PortalDirectLoginToken payload = support.consumeToken("seller", result.getToken());
 
-        assertEquals(result.getToken(), payload.getToken());
         assertEquals(result.getTicketId(), payload.getTicketId());
         assertEquals(1, ticketMapper.usedCalls);
         assertEquals(result.getTicketId(), ticketMapper.usedTicketId);
         assertNotNull(ticketMapper.usedTime);
         assertEquals("203.0.113.10", ticketMapper.usedIp);
         assertEquals("system", ticketMapper.usedUpdateBy);
-        assertTrue(redisCache.deletedKeys.contains("portal_direct_login:" + result.getToken()));
-        assertNull(redisCache.getCacheObject("portal_direct_login:" + result.getToken()));
+        assertTrue(redisCache.deletedKeys.contains(cacheKey(result.getToken())));
+        assertNull(redisCache.getCacheObject(cacheKey(result.getToken())));
 
         assertThrows(ServiceException.class, () -> support.consumeToken("seller", result.getToken()));
         assertEquals(1, ticketMapper.usedCalls);
+    }
+
+    @Test
+    public void consumeTokenShouldValidateBeforeMarkingTicketUsedOrDeletingRedisPayload()
+    {
+        PortalDirectLoginResult result = support.createToken("seller", 7L, "SAAA010001",
+                activeAccount(44L, "seller-owner"), "Support inspection",
+                PortalDirectLoginSupport.SELLER_WEB_URL_CONFIG_KEY, "http://fallback/seller/direct-login");
+
+        assertThrows(ServiceException.class, () -> support.consumeToken("seller", result.getToken(), payload -> {
+            throw new ServiceException("seller disabled");
+        }));
+
+        assertEquals(0, ticketMapper.usedCalls);
+        assertEquals(0, ticketMapper.expiredCalls);
+        assertFalse(redisCache.deletedKeys.contains(cacheKey(result.getToken())));
+        assertNotNull(redisCache.getCacheObject(cacheKey(result.getToken())));
     }
 
     @Test
@@ -150,15 +167,15 @@ public class PortalDirectLoginSupportTest
 
         assertEquals(0, ticketMapper.usedCalls);
         assertEquals(0, ticketMapper.expiredCalls);
-        assertFalse(redisCache.deletedKeys.contains("portal_direct_login:" + result.getToken()));
-        assertNotNull(redisCache.getCacheObject("portal_direct_login:" + result.getToken()));
+        assertFalse(redisCache.deletedKeys.contains(cacheKey(result.getToken())));
+        assertNotNull(redisCache.getCacheObject(cacheKey(result.getToken())));
     }
 
     @Test
     public void consumeTokenShouldExpireTicketAndDeleteRedisPayloadWhenTicketIsExpired()
     {
         String token = "seller_expired_token";
-        String cacheKey = "portal_direct_login:" + token;
+        String cacheKey = cacheKey(token);
         PortalDirectLoginTicket ticket = new PortalDirectLoginTicket();
         ticket.setTicketId(200L);
         ticket.setTerminal("seller");
@@ -168,7 +185,6 @@ public class PortalDirectLoginSupportTest
         ticketMapper.store(ticket);
 
         PortalDirectLoginToken payload = new PortalDirectLoginToken();
-        payload.setToken(token);
         payload.setTicketId(ticket.getTicketId());
         payload.setPortalType("seller");
         payload.setExpireTime(new Date(System.currentTimeMillis() - 1000L));
@@ -340,6 +356,19 @@ public class PortalDirectLoginSupportTest
         catch (Exception e)
         {
             throw new AssertionError("Unable to hash test token", e);
+        }
+    }
+
+    private static String cacheKey(String token)
+    {
+        return "portal_direct_login:" + hash(token);
+    }
+
+    private static void assertPayloadDoesNotExposeDirectLoginToken()
+    {
+        for (Field field : PortalDirectLoginToken.class.getDeclaredFields())
+        {
+            assertNotEquals("token", field.getName());
         }
     }
 

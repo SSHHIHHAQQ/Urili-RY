@@ -1,4 +1,4 @@
-import { type ProColumns } from '@ant-design/pro-components';
+import type { ProColumns } from '@ant-design/pro-components';
 import { Button } from 'antd';
 import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 import {
@@ -27,11 +27,6 @@ export function buildCategoryAttributeColumns({
   onRemoveRule,
 }: BuildCategoryAttributeColumnsOptions) {
   const baseColumns: ProColumns<API.Product.CategoryAttribute>[] = [
-    {
-      title: '关键词',
-      dataIndex: 'keyword',
-      hideInTable: true,
-    },
     {
       title: '属性名称',
       dataIndex: 'attributeName',
@@ -121,7 +116,7 @@ export function buildCategoryAttributeColumns({
     {
       title: '操作',
       valueType: 'option',
-      width: 130,
+      width: 150,
       render: (_, record) => [
         <Button
           key="edit"

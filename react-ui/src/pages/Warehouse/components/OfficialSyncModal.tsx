@@ -4,7 +4,6 @@ import {
   type ProFormInstance,
   ProFormSelect,
 } from '@ant-design/pro-components';
-import { Alert } from 'antd';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   getOfficialSyncCandidates,
@@ -37,7 +36,7 @@ export default function OfficialSyncModal({
   onOpenChange,
   onSubmit,
 }: OfficialSyncModalProps) {
-  const formRef = useRef<ProFormInstance<API.Warehouse.OfficialSyncRequest>>();
+  const formRef = useRef<ProFormInstance<API.Warehouse.OfficialSyncRequest> | undefined>(undefined);
   const [connections, setConnections] = useState<API.Warehouse.SyncConnection[]>([]);
   const [candidates, setCandidates] = useState<API.Warehouse.SyncCandidate[]>([]);
 
@@ -112,12 +111,6 @@ export default function OfficialSyncModal({
       grid
       colProps={{ span: 12 }}
     >
-      <Alert
-        type="info"
-        showIcon
-        message="选择上游主仓仓库后，系统会创建官方仓并自动写入仓库配对；已配对仓库不能重复同步。"
-        style={{ marginBottom: 16 }}
-      />
       <ProFormSelect
         name="connectionCode"
         label="主仓接入"

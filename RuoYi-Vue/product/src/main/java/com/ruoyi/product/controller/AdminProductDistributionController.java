@@ -16,7 +16,11 @@ import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.core.page.TableDataInfo;
 import com.ruoyi.common.enums.BusinessType;
+import com.ruoyi.product.domain.ProductBatchStatusUpdateRequest;
+import com.ruoyi.product.domain.ProductControlStatusUpdateRequest;
+import com.ruoyi.product.domain.ProductDistributionOperationLog;
 import com.ruoyi.product.domain.ProductSku;
+import com.ruoyi.product.domain.ProductSkuSalePriceUpdateRequest;
 import com.ruoyi.product.domain.ProductSpu;
 import com.ruoyi.product.domain.ProductStatusUpdateRequest;
 import com.ruoyi.product.service.IProductDistributionService;
@@ -37,6 +41,15 @@ public class AdminProductDistributionController extends BaseController
     {
         startPage();
         List<ProductSpu> list = productDistributionService.selectProductList(query);
+        return getDataTable(list);
+    }
+
+    @PreAuthorize("@ss.hasPermi('product:distribution:list')")
+    @GetMapping("/skus/list")
+    public TableDataInfo skuList(ProductSku query)
+    {
+        startPage();
+        List<ProductSku> list = productDistributionService.selectSkuPageList(query);
         return getDataTable(list);
     }
 
@@ -74,12 +87,57 @@ public class AdminProductDistributionController extends BaseController
     }
 
     @PreAuthorize("@ss.hasPermi('product:distribution:status')")
+    @Log(title = "商城商品批量状态", businessType = BusinessType.UPDATE)
+    @PutMapping("/status/batch")
+    public AjaxResult batchUpdateStatus(@RequestBody ProductBatchStatusUpdateRequest request)
+    {
+        if ("SKU".equalsIgnoreCase(request.getOwnerType()))
+        {
+            return toAjax(productDistributionService.batchUpdateSkuStatus(request.getSkuIds(), request.getStatus()));
+        }
+        boolean syncSkuStatus = request.getSyncSkuStatus() == null || request.getSyncSkuStatus();
+        return toAjax(productDistributionService.batchUpdateSpuStatus(request.getSpuIds(), request.getStatus(),
+            syncSkuStatus));
+    }
+
+    @PreAuthorize("@ss.hasPermi('product:distribution:status')")
+    @Log(title = "商城商品管控状态", businessType = BusinessType.UPDATE)
+    @PutMapping("/control-status/batch")
+    public AjaxResult batchUpdateControlStatus(@RequestBody ProductControlStatusUpdateRequest request)
+    {
+        if ("SKU".equalsIgnoreCase(request.getOwnerType()))
+        {
+            return toAjax(productDistributionService.batchUpdateSkuControlStatus(request.getSkuIds(),
+                request.getControlStatus(), request.getReason()));
+        }
+        return toAjax(productDistributionService.batchUpdateSpuControlStatus(request.getSpuIds(),
+            request.getControlStatus(), request.getReason()));
+    }
+
+    @PreAuthorize("@ss.hasPermi('product:distribution:price')")
+    @Log(title = "商城商品SKU销售价", businessType = BusinessType.UPDATE)
+    @PutMapping("/skus/sale-prices")
+    public AjaxResult batchUpdateSkuSalePrice(@RequestBody ProductSkuSalePriceUpdateRequest request)
+    {
+        return toAjax(productDistributionService.batchUpdateSkuSalePrice(request));
+    }
+
+    @PreAuthorize("@ss.hasPermi('product:distribution:status')")
     @Log(title = "商城商品SKU状态", businessType = BusinessType.UPDATE)
     @PutMapping("/{spuId}/skus/{skuId}/status")
     public AjaxResult updateSkuStatus(@PathVariable("spuId") Long spuId, @PathVariable("skuId") Long skuId,
         @RequestBody ProductStatusUpdateRequest request)
     {
         return toAjax(productDistributionService.updateSkuStatus(spuId, skuId, request.getStatus()));
+    }
+
+    @PreAuthorize("@ss.hasPermi('product:distribution:log')")
+    @GetMapping("/operation-logs/list")
+    public TableDataInfo operationLogs(ProductDistributionOperationLog query)
+    {
+        startPage();
+        List<ProductDistributionOperationLog> list = productDistributionService.selectOperationLogList(query);
+        return getDataTable(list);
     }
 
     @PreAuthorize("@ss.hasPermi('product:distribution:query')")

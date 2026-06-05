@@ -1,32 +1,485 @@
 package com.ruoyi.seller.service.impl;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.Test;
 import com.ruoyi.common.constant.Constants;
+import com.ruoyi.common.core.domain.entity.SysUser;
+import com.ruoyi.common.core.domain.model.LoginBody;
+import com.ruoyi.common.core.domain.model.LoginUser;
 import com.ruoyi.common.exception.ServiceException;
+import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.seller.domain.Seller;
 import com.ruoyi.seller.domain.SellerAccount;
 import com.ruoyi.seller.mapper.SellerMapper;
+import com.ruoyi.seller.mapper.SellerPortalDeptMapper;
+import com.ruoyi.system.domain.PortalDept;
 import com.ruoyi.system.domain.PortalAccount;
 import com.ruoyi.system.domain.PortalDirectLoginResult;
+import com.ruoyi.system.domain.PortalDirectLoginToken;
+import com.ruoyi.system.domain.PortalLoginIssue;
 import com.ruoyi.system.domain.PortalLoginLog;
+import com.ruoyi.system.domain.PortalLoginResult;
 import com.ruoyi.system.domain.PortalLoginSession;
 import com.ruoyi.system.domain.PortalOperLog;
+import com.ruoyi.system.domain.PortalSessionProfile;
 import com.ruoyi.system.service.support.PartnerSupport;
 import com.ruoyi.system.service.support.PortalDirectLoginSupport;
+import com.ruoyi.system.service.support.PortalTokenSupport;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 public class SellerServiceImplTest
 {
+    @Test
+    public void insertSellerAccountHashesPasswordDefaultsStaffRoleAndValidatesDept()
+    {
+        authenticateAdmin();
+        Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
+        SellerAccount account = account(null, 11L, " seller-staff ", PartnerSupport.STATUS_NORMAL);
+        account.setNickName("Seller Staff");
+        account.setPassword("U12346");
+        account.setDeptId(33L);
+        RecordingSellerMapper mapper = recordingMapper(seller);
+        RecordingSellerDeptMapper deptMapper = deptMapper(dept(11L, 33L));
+        SellerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper.proxy(),
+            new RecordingPortalTokenSupport());
+
+        int rows = service.insertSellerAccount(11L, account);
+
+        assertEquals(1, rows);
+        assertSame(account, mapper.insertedAccount);
+        assertEquals(Long.valueOf(11L), mapper.insertedAccount.getSellerId());
+        assertEquals("seller-staff", mapper.insertedAccount.getUserName());
+        assertEquals(PartnerSupport.ACCOUNT_ROLE_STAFF, mapper.insertedAccount.getAccountRole());
+        assertEquals(PartnerSupport.STATUS_NORMAL, mapper.insertedAccount.getStatus());
+        assertFalse("U12346".equals(mapper.insertedAccount.getPassword()));
+        assertTrue(SecurityUtils.matchesPassword("U12346", mapper.insertedAccount.getPassword()));
+        assertEquals(Long.valueOf(11L), deptMapper.lastSelectSellerId);
+        assertEquals(Long.valueOf(33L), deptMapper.lastSelectDeptId);
+    }
+
+    @Test
+    public void insertSellerAccountRejectsDeptOutsideSeller()
+    {
+        authenticateAdmin();
+        Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
+        SellerAccount account = account(null, 11L, "seller-staff", PartnerSupport.STATUS_NORMAL);
+        account.setNickName("Seller Staff");
+        account.setPassword("U12346");
+        account.setDeptId(99L);
+        RecordingSellerMapper mapper = recordingMapper(seller);
+        SellerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper().proxy(),
+            new RecordingPortalTokenSupport());
+
+        try
+        {
+            service.insertSellerAccount(11L, account);
+        }
+        catch (ServiceException e)
+        {
+            assertEquals("Seller department does not belong to this seller", e.getMessage());
+            assertEquals(null, mapper.insertedAccount);
+            return;
+        }
+        throw new AssertionError("Expected ServiceException");
+    }
+
+    @Test
+    public void insertSellerAccountRejectsSecondOwnerAccount()
+    {
+        authenticateAdmin();
+        Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
+        SellerAccount owner = account(21L, 11L, "seller-owner", PartnerSupport.STATUS_NORMAL);
+        owner.setAccountRole(PartnerSupport.ACCOUNT_ROLE_OWNER);
+        SellerAccount account = account(null, 11L, "seller-owner-2", PartnerSupport.STATUS_NORMAL);
+        account.setNickName("Second Owner");
+        account.setPassword("U12346");
+        account.setAccountRole("owner");
+        RecordingSellerMapper mapper = recordingMapper(seller, owner);
+        SellerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper().proxy(),
+            new RecordingPortalTokenSupport());
+
+        try
+        {
+            service.insertSellerAccount(11L, account);
+        }
+        catch (ServiceException e)
+        {
+            assertEquals("卖家主账号已存在", e.getMessage());
+            assertEquals(null, mapper.insertedAccount);
+            return;
+        }
+        throw new AssertionError("Expected ServiceException");
+    }
+
+    @Test
+    public void insertSellerAccountRejectsInvalidAccountRole()
+    {
+        authenticateAdmin();
+        Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
+        SellerAccount account = account(null, 11L, "seller-root", PartnerSupport.STATUS_NORMAL);
+        account.setNickName("Seller Root");
+        account.setPassword("U12346");
+        account.setAccountRole("root");
+        RecordingSellerMapper mapper = recordingMapper(seller);
+        SellerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper().proxy(),
+            new RecordingPortalTokenSupport());
+
+        try
+        {
+            service.insertSellerAccount(11L, account);
+        }
+        catch (ServiceException e)
+        {
+            assertEquals("账号角色不正确", e.getMessage());
+            assertEquals(null, mapper.insertedAccount);
+            return;
+        }
+        throw new AssertionError("Expected ServiceException");
+    }
+
+    @Test
+    public void updateSellerAccountPreservesCurrentOwnerRole()
+    {
+        authenticateAdmin();
+        Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
+        SellerAccount owner = account(21L, 11L, "seller-owner", PartnerSupport.STATUS_NORMAL);
+        owner.setAccountRole(PartnerSupport.ACCOUNT_ROLE_OWNER);
+        RecordingSellerMapper mapper = recordingMapper(seller, owner);
+        SellerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper().proxy(),
+            new RecordingPortalTokenSupport());
+        SellerAccount update = new SellerAccount();
+        update.setSellerAccountId(21L);
+        update.setNickName("Seller Owner");
+        update.setAccountRole(PartnerSupport.ACCOUNT_ROLE_STAFF);
+        update.setStatus(PartnerSupport.STATUS_NORMAL);
+
+        int rows = service.updateSellerAccount(11L, update);
+
+        assertEquals(1, rows);
+        assertEquals(PartnerSupport.ACCOUNT_ROLE_OWNER, mapper.updatedAccount.getAccountRole());
+    }
+
+    @Test
+    public void resetSellerAccountPasswordForcesOnlyThatAccountSessionsOut()
+    {
+        authenticateAdmin();
+        Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
+        SellerAccount account = account(22L, 11L, "seller-staff", PartnerSupport.STATUS_NORMAL);
+        RecordingSellerMapper mapper = recordingMapper(seller, account);
+        mapper.onlineTokenIds.add("token-a");
+        mapper.onlineTokenIds.add("token-b");
+        RecordingPortalTokenSupport tokenSupport = new RecordingPortalTokenSupport();
+        SellerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper().proxy(),
+            tokenSupport);
+        SellerAccount payload = new SellerAccount();
+        payload.setSellerAccountId(22L);
+        payload.setPassword("new-secret");
+
+        int rows = service.resetSellerAccountPassword(payload);
+
+        assertEquals(1, rows);
+        assertEquals(Long.valueOf(22L), mapper.resetPasswordAccountId);
+        assertFalse("new-secret".equals(mapper.resetPasswordValue));
+        assertTrue(SecurityUtils.matchesPassword("new-secret", mapper.resetPasswordValue));
+        assertEquals(1, mapper.forceLogoutCallCount);
+        assertEquals(Long.valueOf(11L), mapper.forceLogoutSellerId);
+        assertEquals(Long.valueOf(22L), mapper.forceLogoutAccountId);
+        assertEquals("seller", tokenSupport.deletedTerminal);
+        assertEquals(mapper.onlineTokenIds, tokenSupport.deletedTokenIds);
+    }
+
+    @Test
+    public void resetSellerAccountDefaultPasswordUsesTerminalAccountPasswordAndForcesSessionsOut()
+    {
+        authenticateAdmin();
+        Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
+        SellerAccount account = account(22L, 11L, "seller-staff", PartnerSupport.STATUS_NORMAL);
+        RecordingSellerMapper mapper = recordingMapper(seller, account);
+        mapper.onlineTokenIds.add("token-a");
+        mapper.onlineTokenIds.add("token-b");
+        RecordingPortalTokenSupport tokenSupport = new RecordingPortalTokenSupport();
+        SellerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper().proxy(),
+            tokenSupport);
+        SellerAccount payload = new SellerAccount();
+        payload.setSellerAccountId(22L);
+
+        int rows = service.resetSellerAccountDefaultPassword(payload);
+
+        assertEquals(1, rows);
+        assertEquals(Long.valueOf(22L), mapper.resetPasswordAccountId);
+        assertFalse(PartnerSupport.DEFAULT_OWNER_PASSWORD.equals(mapper.resetPasswordValue));
+        assertTrue(SecurityUtils.matchesPassword(PartnerSupport.DEFAULT_OWNER_PASSWORD, mapper.resetPasswordValue));
+        assertEquals(1, mapper.forceLogoutCallCount);
+        assertEquals(Long.valueOf(11L), mapper.forceLogoutSellerId);
+        assertEquals(Long.valueOf(22L), mapper.forceLogoutAccountId);
+        assertEquals("seller", tokenSupport.deletedTerminal);
+        assertEquals(mapper.onlineTokenIds, tokenSupport.deletedTokenIds);
+    }
+
+    @Test
+    public void resetSellerOwnerPasswordForcesOwnerSessionsOut()
+    {
+        authenticateAdmin();
+        Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
+        SellerAccount owner = account(33L, 11L, "seller-owner", PartnerSupport.STATUS_NORMAL);
+        owner.setAccountRole(PartnerSupport.ACCOUNT_ROLE_OWNER);
+        RecordingSellerMapper mapper = recordingMapper(seller, owner);
+        mapper.onlineTokenIds.add("owner-token-a");
+        mapper.onlineTokenIds.add("owner-token-b");
+        RecordingPortalTokenSupport tokenSupport = new RecordingPortalTokenSupport();
+        SellerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper().proxy(),
+            tokenSupport);
+
+        int rows = service.resetSellerOwnerPassword(11L);
+
+        assertEquals(1, rows);
+        assertEquals(Long.valueOf(33L), mapper.resetPasswordAccountId);
+        assertFalse(PartnerSupport.DEFAULT_OWNER_PASSWORD.equals(mapper.resetPasswordValue));
+        assertTrue(SecurityUtils.matchesPassword(PartnerSupport.DEFAULT_OWNER_PASSWORD, mapper.resetPasswordValue));
+        assertEquals(1, mapper.forceLogoutCallCount);
+        assertEquals(Long.valueOf(11L), mapper.forceLogoutSellerId);
+        assertEquals(Long.valueOf(33L), mapper.forceLogoutAccountId);
+        assertEquals("seller", tokenSupport.deletedTerminal);
+        assertEquals(mapper.onlineTokenIds, tokenSupport.deletedTokenIds);
+    }
+
+    @Test
+    public void updateSellerAccountDisablingAccountForcesOnlyThatAccountSessionsOut()
+    {
+        authenticateAdmin();
+        Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
+        SellerAccount current = account(22L, 11L, "seller-staff", PartnerSupport.STATUS_NORMAL);
+        current.setNickName("Seller Staff");
+        RecordingSellerMapper mapper = recordingMapper(seller, current);
+        mapper.onlineTokenIds.add("token-a");
+        mapper.onlineTokenIds.add("token-b");
+        RecordingPortalTokenSupport tokenSupport = new RecordingPortalTokenSupport();
+        SellerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper().proxy(),
+            tokenSupport);
+        SellerAccount update = new SellerAccount();
+        update.setSellerAccountId(22L);
+        update.setNickName("Seller Staff");
+        update.setStatus("1");
+
+        int rows = service.updateSellerAccount(11L, update);
+
+        assertEquals(1, rows);
+        assertEquals(Long.valueOf(22L), mapper.updatedAccount.getSellerAccountId());
+        assertEquals("seller-staff", mapper.updatedAccount.getUserName());
+        assertEquals("1", mapper.updatedAccount.getStatus());
+        assertEquals(Long.valueOf(11L), mapper.forceLogoutSellerId);
+        assertEquals(Long.valueOf(22L), mapper.forceLogoutAccountId);
+        assertEquals("seller", tokenSupport.deletedTerminal);
+        assertEquals(mapper.onlineTokenIds, tokenSupport.deletedTokenIds);
+    }
+
+    @Test
+    public void lockSellerAccountLocksAccountAndForcesOnlyThatAccountSessionsOut()
+    {
+        authenticateAdmin();
+        Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
+        SellerAccount current = account(22L, 11L, "seller-staff", PartnerSupport.STATUS_NORMAL);
+        RecordingSellerMapper mapper = recordingMapper(seller, current);
+        mapper.onlineTokenIds.add("token-a");
+        mapper.onlineTokenIds.add("token-b");
+        RecordingPortalTokenSupport tokenSupport = new RecordingPortalTokenSupport();
+        SellerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper().proxy(),
+            tokenSupport);
+
+        int rows = service.lockSellerAccount(11L, 22L, " risk review ");
+
+        assertEquals(1, rows);
+        assertEquals(1, mapper.updateLockStatusCallCount);
+        assertEquals(Long.valueOf(11L), mapper.lockStatusSellerId);
+        assertEquals(Long.valueOf(22L), mapper.lockStatusAccountId);
+        assertEquals(PartnerSupport.ACCOUNT_LOCK_STATUS_LOCKED, mapper.lockStatusValue);
+        assertEquals("risk review", mapper.lockReasonValue);
+        assertEquals(Long.valueOf(11L), mapper.forceLogoutSellerId);
+        assertEquals(Long.valueOf(22L), mapper.forceLogoutAccountId);
+        assertEquals("seller", tokenSupport.deletedTerminal);
+        assertEquals(mapper.onlineTokenIds, tokenSupport.deletedTokenIds);
+        assertEquals(1, tokenSupport.deleteLoginTokensCallCount);
+    }
+
+    @Test
+    public void lockSellerAccountRejectsBlankReasonBeforeMutatingOrKicking()
+    {
+        authenticateAdmin();
+        Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
+        SellerAccount current = account(22L, 11L, "seller-staff", PartnerSupport.STATUS_NORMAL);
+        RecordingSellerMapper mapper = recordingMapper(seller, current);
+        RecordingPortalTokenSupport tokenSupport = new RecordingPortalTokenSupport();
+        SellerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper().proxy(),
+            tokenSupport);
+
+        try
+        {
+            service.lockSellerAccount(11L, 22L, " ");
+        }
+        catch (ServiceException e)
+        {
+            assertEquals("锁定原因不能为空", e.getMessage());
+            assertEquals(0, mapper.updateLockStatusCallCount);
+            assertEquals(0, mapper.forceLogoutCallCount);
+            assertEquals(0, tokenSupport.deleteLoginTokensCallCount);
+            return;
+        }
+        throw new AssertionError("Expected ServiceException");
+    }
+
+    @Test
+    public void unlockSellerAccountUnlocksWithoutForceLogout()
+    {
+        authenticateAdmin();
+        Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
+        SellerAccount current = account(22L, 11L, "seller-staff", PartnerSupport.STATUS_NORMAL);
+        current.setLockStatus(PartnerSupport.ACCOUNT_LOCK_STATUS_LOCKED);
+        current.setLockReason("risk review");
+        RecordingSellerMapper mapper = recordingMapper(seller, current);
+        RecordingPortalTokenSupport tokenSupport = new RecordingPortalTokenSupport();
+        SellerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper().proxy(),
+            tokenSupport);
+
+        int rows = service.unlockSellerAccount(11L, 22L);
+
+        assertEquals(1, rows);
+        assertEquals(1, mapper.updateLockStatusCallCount);
+        assertEquals(Long.valueOf(11L), mapper.lockStatusSellerId);
+        assertEquals(Long.valueOf(22L), mapper.lockStatusAccountId);
+        assertEquals(PartnerSupport.ACCOUNT_LOCK_STATUS_UNLOCKED, mapper.lockStatusValue);
+        assertEquals("", mapper.lockReasonValue);
+        assertEquals(0, mapper.forceLogoutCallCount);
+        assertEquals(0, tokenSupport.deleteLoginTokensCallCount);
+    }
+
+    @Test
+    public void loginSellerUpdatesLastLoginSessionAndSuccessLog()
+    {
+        Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
+        SellerAccount account = account(22L, 11L, "seller-staff", PartnerSupport.STATUS_NORMAL);
+        account.setPassword(SecurityUtils.encryptPassword("secret"));
+        RecordingSellerMapper mapper = recordingMapper(seller, account);
+        RecordingPortalTokenSupport tokenSupport = new RecordingPortalTokenSupport();
+        SellerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper().proxy(),
+            tokenSupport);
+        LoginBody loginBody = new LoginBody();
+        loginBody.setUsername("seller-staff");
+        loginBody.setPassword("secret");
+
+        PortalLoginResult result = service.loginSeller(loginBody);
+
+        assertEquals("seller", result.getTerminal());
+        assertEquals(Long.valueOf(11L), result.getSubjectId());
+        assertEquals(Long.valueOf(22L), result.getAccountId());
+        assertEquals(Long.valueOf(22L), mapper.loginInfoAccountId);
+        assertEquals("127.0.0.1", mapper.loginInfoIp);
+        assertSame(tokenSupport.createdSession, mapper.insertedSession);
+        assertEquals(Constants.SUCCESS, mapper.insertedLoginLog.getStatus());
+        assertEquals("登录成功", mapper.insertedLoginLog.getMsg());
+    }
+
+    @Test
+    public void loginSellerRejectsDisabledAccountAndWritesFailureLog()
+    {
+        Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
+        SellerAccount account = account(22L, 11L, "seller-staff", "1");
+        account.setPassword(SecurityUtils.encryptPassword("secret"));
+        RecordingSellerMapper mapper = recordingMapper(seller, account);
+        RecordingPortalTokenSupport tokenSupport = new RecordingPortalTokenSupport();
+        SellerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper().proxy(),
+            tokenSupport);
+        LoginBody loginBody = new LoginBody();
+        loginBody.setUsername("seller-staff");
+        loginBody.setPassword("secret");
+
+        try
+        {
+            service.loginSeller(loginBody);
+        }
+        catch (ServiceException e)
+        {
+            assertEquals("卖家账号已停用", e.getMessage());
+            assertEquals(0, tokenSupport.createLoginCount);
+            assertEquals(Constants.FAIL, mapper.insertedLoginLog.getStatus());
+            assertEquals("卖家账号已停用", mapper.insertedLoginLog.getMsg());
+            assertEquals(Long.valueOf(11L), mapper.insertedLoginLog.getSubjectId());
+            assertEquals(Long.valueOf(22L), mapper.insertedLoginLog.getAccountId());
+            return;
+        }
+        throw new AssertionError("Expected ServiceException");
+    }
+
+    @Test
+    public void loginSellerRejectsLockedAccountAndWritesFailureLog()
+    {
+        Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
+        SellerAccount account = account(22L, 11L, "seller-staff", PartnerSupport.STATUS_NORMAL);
+        account.setLockStatus(PartnerSupport.ACCOUNT_LOCK_STATUS_LOCKED);
+        account.setLockReason("risk review");
+        account.setPassword(SecurityUtils.encryptPassword("secret"));
+        RecordingSellerMapper mapper = recordingMapper(seller, account);
+        RecordingPortalTokenSupport tokenSupport = new RecordingPortalTokenSupport();
+        SellerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper().proxy(),
+            tokenSupport);
+        LoginBody loginBody = new LoginBody();
+        loginBody.setUsername("seller-staff");
+        loginBody.setPassword("secret");
+
+        try
+        {
+            service.loginSeller(loginBody);
+        }
+        catch (ServiceException e)
+        {
+            assertEquals("卖家账号已锁定", e.getMessage());
+            assertEquals(0, tokenSupport.createLoginCount);
+            assertEquals(null, mapper.loginInfoAccountId);
+            assertEquals(null, mapper.insertedSession);
+            assertEquals(Constants.FAIL, mapper.insertedLoginLog.getStatus());
+            assertEquals("卖家账号已锁定", mapper.insertedLoginLog.getMsg());
+            assertEquals(Long.valueOf(11L), mapper.insertedLoginLog.getSubjectId());
+            assertEquals(Long.valueOf(22L), mapper.insertedLoginLog.getAccountId());
+            return;
+        }
+        throw new AssertionError("Expected ServiceException");
+    }
+
+    @Test
+    public void selectSellerOwnSessionListUsesSessionScopeAndMarksCurrent()
+    {
+        Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
+        SellerAccount account = account(22L, 11L, "seller-staff", PartnerSupport.STATUS_NORMAL);
+        RecordingSellerMapper mapper = recordingMapper(seller, account);
+        PortalSessionProfile current = sessionProfile("seller_test_token");
+        PortalSessionProfile other = sessionProfile("seller_other_token");
+        mapper.sessionProfiles.add(current);
+        mapper.sessionProfiles.add(other);
+        SellerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper().proxy(),
+            new RecordingPortalTokenSupport());
+
+        List<PortalSessionProfile> result = service.selectSellerOwnSessionList(session(11L, 22L));
+
+        assertSame(mapper.sessionProfiles, result);
+        assertEquals(Long.valueOf(11L), mapper.sessionProfileSellerId);
+        assertEquals(Long.valueOf(22L), mapper.sessionProfileAccountId);
+        assertEquals(Boolean.TRUE, current.getCurrent());
+        assertEquals(Boolean.FALSE, other.getCurrent());
+    }
+
     @Test
     public void createSellerAccountDirectLoginUsesSelectedSellerAccount()
     {
@@ -86,6 +539,192 @@ public class SellerServiceImplTest
         {
             assertEquals("卖家已停用，不能免密登录", e.getMessage());
             assertEquals(0, directLoginSupport.callCount);
+            return;
+        }
+        throw new AssertionError("Expected ServiceException");
+    }
+
+    @Test
+    public void createSellerAccountDirectLoginRejectsLockedAccountBeforeCreatingToken()
+    {
+        Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
+        SellerAccount account = account(22L, 11L, "seller-staff", PartnerSupport.STATUS_NORMAL);
+        account.setLockStatus(PartnerSupport.ACCOUNT_LOCK_STATUS_LOCKED);
+        RecordingDirectLoginSupport directLoginSupport = new RecordingDirectLoginSupport();
+        SellerServiceImpl service = service(mapper(seller, account), directLoginSupport);
+
+        try
+        {
+            service.createSellerAccountDirectLogin(11L, 22L, "support check");
+        }
+        catch (ServiceException e)
+        {
+            assertEquals("卖家账号已锁定，不能免密登录", e.getMessage());
+            assertEquals(0, directLoginSupport.callCount);
+            return;
+        }
+        throw new AssertionError("Expected ServiceException");
+    }
+
+    @Test
+    public void directLoginSellerUsesCurrentSellerAndAccountState()
+    {
+        Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
+        SellerAccount account = account(22L, 11L, "seller-staff", PartnerSupport.STATUS_NORMAL);
+        RecordingSellerMapper mapper = recordingMapper(seller, account);
+        RecordingDirectLoginSupport directLoginSupport = new RecordingDirectLoginSupport();
+        directLoginSupport.tokenToConsume = directLoginToken("seller", 11L, "SAA010001", 22L, "seller-staff");
+        RecordingPortalTokenSupport tokenSupport = new RecordingPortalTokenSupport();
+        SellerServiceImpl service = service(mapper.proxy(), directLoginSupport, deptMapper().proxy(), tokenSupport);
+
+        PortalLoginResult result = service.directLoginSeller("issued-token");
+
+        assertEquals(1, directLoginSupport.consumeCount);
+        assertEquals("seller", directLoginSupport.consumedPortalType);
+        assertEquals("issued-token", directLoginSupport.consumedTokenValue);
+        assertEquals("seller", result.getTerminal());
+        assertEquals(Long.valueOf(11L), result.getSubjectId());
+        assertEquals(Long.valueOf(22L), result.getAccountId());
+        assertEquals(1, tokenSupport.createLoginCount);
+        assertSame(tokenSupport.createdSession, mapper.insertedSession);
+        assertEquals(Constants.SUCCESS, mapper.insertedLoginLog.getStatus());
+    }
+
+    @Test
+    public void directLoginSellerRejectsDisabledSellerAfterTicketIssued()
+    {
+        Seller seller = seller(11L, "SAA010001", "1");
+        SellerAccount account = account(22L, 11L, "seller-staff", PartnerSupport.STATUS_NORMAL);
+        RecordingSellerMapper mapper = recordingMapper(seller, account);
+        RecordingDirectLoginSupport directLoginSupport = new RecordingDirectLoginSupport();
+        directLoginSupport.tokenToConsume = directLoginToken("seller", 11L, "SAA010001", 22L, "seller-staff");
+        RecordingPortalTokenSupport tokenSupport = new RecordingPortalTokenSupport();
+        SellerServiceImpl service = service(mapper.proxy(), directLoginSupport, deptMapper().proxy(), tokenSupport);
+
+        try
+        {
+            service.directLoginSeller("issued-token");
+        }
+        catch (ServiceException e)
+        {
+            assertEquals(1, directLoginSupport.consumeCount);
+            assertEquals(0, tokenSupport.createLoginCount);
+            assertEquals(null, mapper.insertedSession);
+            assertEquals(Constants.FAIL, mapper.insertedLoginLog.getStatus());
+            assertEquals(Long.valueOf(11L), mapper.insertedLoginLog.getSubjectId());
+            assertEquals(Long.valueOf(22L), mapper.insertedLoginLog.getAccountId());
+            return;
+        }
+        throw new AssertionError("Expected ServiceException");
+    }
+
+    @Test
+    public void directLoginSellerRejectsDisabledAccountAfterTicketIssued()
+    {
+        Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
+        SellerAccount account = account(22L, 11L, "seller-staff", "1");
+        RecordingSellerMapper mapper = recordingMapper(seller, account);
+        RecordingDirectLoginSupport directLoginSupport = new RecordingDirectLoginSupport();
+        directLoginSupport.tokenToConsume = directLoginToken("seller", 11L, "SAA010001", 22L, "seller-staff");
+        RecordingPortalTokenSupport tokenSupport = new RecordingPortalTokenSupport();
+        SellerServiceImpl service = service(mapper.proxy(), directLoginSupport, deptMapper().proxy(), tokenSupport);
+
+        try
+        {
+            service.directLoginSeller("issued-token");
+        }
+        catch (ServiceException e)
+        {
+            assertEquals(1, directLoginSupport.consumeCount);
+            assertEquals(0, tokenSupport.createLoginCount);
+            assertEquals(null, mapper.insertedSession);
+            assertEquals(Constants.FAIL, mapper.insertedLoginLog.getStatus());
+            assertEquals(Long.valueOf(11L), mapper.insertedLoginLog.getSubjectId());
+            assertEquals(Long.valueOf(22L), mapper.insertedLoginLog.getAccountId());
+            return;
+        }
+        throw new AssertionError("Expected ServiceException");
+    }
+
+    @Test
+    public void directLoginSellerRejectsLockedAccountAfterTicketIssued()
+    {
+        Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
+        SellerAccount account = account(22L, 11L, "seller-staff", PartnerSupport.STATUS_NORMAL);
+        account.setLockStatus(PartnerSupport.ACCOUNT_LOCK_STATUS_LOCKED);
+        RecordingSellerMapper mapper = recordingMapper(seller, account);
+        RecordingDirectLoginSupport directLoginSupport = new RecordingDirectLoginSupport();
+        directLoginSupport.tokenToConsume = directLoginToken("seller", 11L, "SAA010001", 22L, "seller-staff");
+        RecordingPortalTokenSupport tokenSupport = new RecordingPortalTokenSupport();
+        SellerServiceImpl service = service(mapper.proxy(), directLoginSupport, deptMapper().proxy(), tokenSupport);
+
+        try
+        {
+            service.directLoginSeller("issued-token");
+        }
+        catch (ServiceException e)
+        {
+            assertEquals(1, directLoginSupport.consumeCount);
+            assertEquals(0, tokenSupport.createLoginCount);
+            assertEquals(null, mapper.insertedSession);
+            assertEquals(Constants.FAIL, mapper.insertedLoginLog.getStatus());
+            assertEquals(Long.valueOf(11L), mapper.insertedLoginLog.getSubjectId());
+            assertEquals(Long.valueOf(22L), mapper.insertedLoginLog.getAccountId());
+            return;
+        }
+        throw new AssertionError("Expected ServiceException");
+    }
+
+    @Test
+    public void directLoginSellerRejectsMissingAccountAfterTicketIssued()
+    {
+        Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
+        RecordingSellerMapper mapper = recordingMapper(seller);
+        RecordingDirectLoginSupport directLoginSupport = new RecordingDirectLoginSupport();
+        directLoginSupport.tokenToConsume = directLoginToken("seller", 11L, "SAA010001", 22L, "seller-staff");
+        RecordingPortalTokenSupport tokenSupport = new RecordingPortalTokenSupport();
+        SellerServiceImpl service = service(mapper.proxy(), directLoginSupport, deptMapper().proxy(), tokenSupport);
+
+        try
+        {
+            service.directLoginSeller("issued-token");
+        }
+        catch (ServiceException e)
+        {
+            assertEquals(1, directLoginSupport.consumeCount);
+            assertEquals(0, tokenSupport.createLoginCount);
+            assertEquals(null, mapper.insertedSession);
+            assertEquals(Constants.FAIL, mapper.insertedLoginLog.getStatus());
+            assertEquals(Long.valueOf(11L), mapper.insertedLoginLog.getSubjectId());
+            assertEquals(null, mapper.insertedLoginLog.getAccountId());
+            return;
+        }
+        throw new AssertionError("Expected ServiceException");
+    }
+
+    @Test
+    public void directLoginSellerRejectsAccountMovedToAnotherSellerAfterTicketIssued()
+    {
+        Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
+        SellerAccount account = account(22L, 99L, "seller-staff", PartnerSupport.STATUS_NORMAL);
+        RecordingSellerMapper mapper = recordingMapper(seller, account);
+        RecordingDirectLoginSupport directLoginSupport = new RecordingDirectLoginSupport();
+        directLoginSupport.tokenToConsume = directLoginToken("seller", 11L, "SAA010001", 22L, "seller-staff");
+        RecordingPortalTokenSupport tokenSupport = new RecordingPortalTokenSupport();
+        SellerServiceImpl service = service(mapper.proxy(), directLoginSupport, deptMapper().proxy(), tokenSupport);
+
+        try
+        {
+            service.directLoginSeller("issued-token");
+        }
+        catch (ServiceException e)
+        {
+            assertEquals(1, directLoginSupport.consumeCount);
+            assertEquals(0, tokenSupport.createLoginCount);
+            assertEquals(null, mapper.insertedSession);
+            assertEquals(Constants.FAIL, mapper.insertedLoginLog.getStatus());
+            assertEquals(Long.valueOf(11L), mapper.insertedLoginLog.getSubjectId());
+            assertEquals(null, mapper.insertedLoginLog.getAccountId());
             return;
         }
         throw new AssertionError("Expected ServiceException");
@@ -155,9 +794,17 @@ public class SellerServiceImplTest
 
     private SellerServiceImpl service(SellerMapper mapper, PortalDirectLoginSupport directLoginSupport)
     {
+        return service(mapper, directLoginSupport, deptMapper().proxy(), new RecordingPortalTokenSupport());
+    }
+
+    private SellerServiceImpl service(SellerMapper mapper, PortalDirectLoginSupport directLoginSupport,
+            SellerPortalDeptMapper deptMapper, PortalTokenSupport portalTokenSupport)
+    {
         SellerServiceImpl service = new SellerServiceImpl();
         setField(service, "sellerMapper", mapper);
+        setField(service, "deptMapper", deptMapper);
         setField(service, "directLoginSupport", directLoginSupport);
+        setField(service, "portalTokenSupport", portalTokenSupport);
         return service;
     }
 
@@ -177,8 +824,32 @@ public class SellerServiceImplTest
         account.setAccountId(accountId);
         account.setSellerId(sellerId);
         account.setUserName(userName);
+        account.setNickName(userName);
         account.setStatus(status);
         return account;
+    }
+
+    private PortalDept dept(Long sellerId, Long deptId)
+    {
+        PortalDept dept = new PortalDept();
+        dept.setSubjectId(sellerId);
+        dept.setDeptId(deptId);
+        dept.setParentId(0L);
+        dept.setDeptName("Sales");
+        dept.setAncestors("0");
+        dept.setStatus(PartnerSupport.STATUS_NORMAL);
+        return dept;
+    }
+
+    private PortalSessionProfile sessionProfile(String tokenId)
+    {
+        PortalSessionProfile profile = new PortalSessionProfile();
+        profile.setTokenId(tokenId);
+        profile.setTerminal("seller");
+        profile.setSubjectId(11L);
+        profile.setAccountId(22L);
+        profile.setUserName("seller-staff");
+        return profile;
     }
 
     private PortalLoginSession session(Long sellerId, Long accountId)
@@ -191,6 +862,19 @@ public class SellerServiceImplTest
         return session;
     }
 
+    private PortalDirectLoginToken directLoginToken(String terminal, Long sellerId, String sellerNo, Long accountId,
+            String username)
+    {
+        PortalDirectLoginToken token = new PortalDirectLoginToken();
+        token.setTicketId(100L);
+        token.setPortalType(terminal);
+        token.setPartnerId(sellerId);
+        token.setPartnerNo(sellerNo);
+        token.setAccountId(accountId);
+        token.setUsername(username);
+        return token;
+    }
+
     private SellerMapper mapper(Seller seller, SellerAccount... accounts)
     {
         return recordingMapper(seller, accounts).proxy();
@@ -199,6 +883,20 @@ public class SellerServiceImplTest
     private RecordingSellerMapper recordingMapper(Seller seller, SellerAccount... accounts)
     {
         return new RecordingSellerMapper(seller, accounts);
+    }
+
+    private RecordingSellerDeptMapper deptMapper(PortalDept... depts)
+    {
+        return new RecordingSellerDeptMapper(depts);
+    }
+
+    private void authenticateAdmin()
+    {
+        SysUser user = new SysUser();
+        user.setUserName("admin");
+        LoginUser loginUser = new LoginUser(1L, 103L, user, Collections.emptySet());
+        SecurityContextHolder.getContext().setAuthentication(
+            new UsernamePasswordAuthenticationToken(loginUser, null, loginUser.getAuthorities()));
     }
 
     private class RecordingSellerMapper implements InvocationHandler
@@ -214,6 +912,46 @@ public class SellerServiceImplTest
         private PortalLoginLog loginLogQuery;
 
         private PortalOperLog operLogQuery;
+
+        private SellerAccount insertedAccount;
+
+        private SellerAccount updatedAccount;
+
+        private int updateLockStatusCallCount;
+
+        private Long lockStatusSellerId;
+
+        private Long lockStatusAccountId;
+
+        private String lockStatusValue;
+
+        private String lockReasonValue;
+
+        private Long resetPasswordAccountId;
+
+        private String resetPasswordValue;
+
+        private final List<String> onlineTokenIds = new ArrayList<>();
+
+        private Long forceLogoutSellerId;
+
+        private Long forceLogoutAccountId;
+
+        private int forceLogoutCallCount;
+
+        private Long loginInfoAccountId;
+
+        private String loginInfoIp;
+
+        private PortalLoginLog insertedLoginLog;
+
+        private PortalLoginSession insertedSession;
+
+        private final List<PortalSessionProfile> sessionProfiles = new ArrayList<>();
+
+        private Long sessionProfileSellerId;
+
+        private Long sessionProfileAccountId;
 
         private RecordingSellerMapper(Seller seller, SellerAccount... accounts)
         {
@@ -243,6 +981,97 @@ public class SellerServiceImplTest
             {
                 return accountById.get((Long) args[0]);
             }
+            if ("selectSellerAccountByUserName".equals(methodName))
+            {
+                for (SellerAccount account : accountById.values())
+                {
+                    if (account.getUserName().equals(args[0]))
+                    {
+                        return account;
+                    }
+                }
+                return null;
+            }
+            if ("selectOwnerSellerAccountBySellerId".equals(methodName))
+            {
+                Long sellerId = (Long) args[0];
+                SellerAccount selected = null;
+                for (SellerAccount account : accountById.values())
+                {
+                    if (sellerId.equals(account.getSellerId())
+                        && PartnerSupport.ACCOUNT_ROLE_OWNER.equals(account.getAccountRole())
+                        && (selected == null || account.getSellerAccountId() < selected.getSellerAccountId()))
+                    {
+                        selected = account;
+                    }
+                }
+                return selected;
+            }
+            if ("insertSellerAccount".equals(methodName))
+            {
+                insertedAccount = (SellerAccount) args[0];
+                return 1;
+            }
+            if ("updateSellerAccount".equals(methodName))
+            {
+                updatedAccount = (SellerAccount) args[0];
+                return 1;
+            }
+            if ("updateSellerAccountLockStatus".equals(methodName))
+            {
+                updateLockStatusCallCount++;
+                lockStatusSellerId = (Long) args[0];
+                lockStatusAccountId = (Long) args[1];
+                lockStatusValue = (String) args[2];
+                lockReasonValue = (String) args[3];
+                SellerAccount account = accountById.get(lockStatusAccountId);
+                if (account != null && lockStatusSellerId.equals(account.getSellerId()))
+                {
+                    account.setLockStatus(lockStatusValue);
+                    account.setLockReason(lockReasonValue);
+                    return 1;
+                }
+                return 0;
+            }
+            if ("resetSellerAccountPassword".equals(methodName))
+            {
+                resetPasswordAccountId = (Long) args[0];
+                resetPasswordValue = (String) args[1];
+                return 1;
+            }
+            if ("selectOnlineSellerSessionTokenIds".equals(methodName))
+            {
+                return onlineTokenIds;
+            }
+            if ("forceLogoutSellerSessions".equals(methodName))
+            {
+                forceLogoutCallCount++;
+                forceLogoutSellerId = (Long) args[0];
+                forceLogoutAccountId = (Long) args[1];
+                return onlineTokenIds.size();
+            }
+            if ("updateSellerAccountLoginInfo".equals(methodName))
+            {
+                loginInfoAccountId = (Long) args[0];
+                loginInfoIp = (String) args[1];
+                return 1;
+            }
+            if ("insertSellerLoginLog".equals(methodName))
+            {
+                insertedLoginLog = (PortalLoginLog) args[0];
+                return 1;
+            }
+            if ("insertSellerSession".equals(methodName))
+            {
+                insertedSession = (PortalLoginSession) args[0];
+                return 1;
+            }
+            if ("selectSellerSessionProfileList".equals(methodName))
+            {
+                sessionProfileSellerId = (Long) args[0];
+                sessionProfileAccountId = (Long) args[1];
+                return sessionProfiles;
+            }
             if ("selectSellerLoginLogList".equals(methodName))
             {
                 loginLogQuery = (PortalLoginLog) args[0];
@@ -256,6 +1085,55 @@ public class SellerServiceImplTest
             if ("toString".equals(methodName))
             {
                 return "SellerServiceImplTestMapper";
+            }
+            if ("hashCode".equals(methodName))
+            {
+                return System.identityHashCode(proxy);
+            }
+            if ("equals".equals(methodName))
+            {
+                return proxy == args[0];
+            }
+            return defaultValue(method.getReturnType());
+        }
+    }
+
+    private class RecordingSellerDeptMapper implements InvocationHandler
+    {
+        private final Map<Long, PortalDept> deptById = new HashMap<>();
+
+        private Long lastSelectSellerId;
+
+        private Long lastSelectDeptId;
+
+        private RecordingSellerDeptMapper(PortalDept... depts)
+        {
+            for (PortalDept dept : depts)
+            {
+                deptById.put(dept.getDeptId(), dept);
+            }
+        }
+
+        private SellerPortalDeptMapper proxy()
+        {
+            return (SellerPortalDeptMapper) Proxy.newProxyInstance(
+                SellerPortalDeptMapper.class.getClassLoader(), new Class<?>[] { SellerPortalDeptMapper.class }, this);
+        }
+
+        @Override
+        public Object invoke(Object proxy, Method method, Object[] args)
+        {
+            String methodName = method.getName();
+            if ("selectSellerDeptById".equals(methodName))
+            {
+                lastSelectSellerId = (Long) args[0];
+                lastSelectDeptId = (Long) args[1];
+                PortalDept dept = deptById.get(lastSelectDeptId);
+                return dept != null && lastSelectSellerId.equals(dept.getSubjectId()) ? dept : null;
+            }
+            if ("toString".equals(methodName))
+            {
+                return "SellerServiceImplTestDeptMapper";
             }
             if ("hashCode".equals(methodName))
             {
@@ -342,6 +1220,14 @@ public class SellerServiceImplTest
 
         private String fallbackWebUrl;
 
+        private PortalDirectLoginToken tokenToConsume;
+
+        private int consumeCount;
+
+        private String consumedPortalType;
+
+        private String consumedTokenValue;
+
         @Override
         public PortalDirectLoginResult createToken(String portalType, Long partnerId, String partnerNo,
                 PortalAccount account, String reason, String webUrlConfigKey, String fallbackWebUrl)
@@ -364,6 +1250,97 @@ public class SellerServiceImplTest
             result.setAccountId(account.getAccountId());
             result.setUsername(account.getUserName());
             return result;
+        }
+
+        @Override
+        public PortalDirectLoginToken consumeToken(String portalType, String token)
+        {
+            return consumeToken(portalType, token, null);
+        }
+
+        @Override
+        public PortalDirectLoginToken consumeToken(String portalType, String token,
+                java.util.function.Consumer<PortalDirectLoginToken> validator)
+        {
+            consumeCount++;
+            consumedPortalType = portalType;
+            consumedTokenValue = token;
+            if (validator != null)
+            {
+                validator.accept(tokenToConsume);
+            }
+            return tokenToConsume;
+        }
+    }
+
+    private static class RecordingPortalTokenSupport extends PortalTokenSupport
+    {
+        private int createLoginCount;
+
+        private PortalLoginSession createdSession;
+
+        private String deletedTerminal;
+
+        private List<String> deletedTokenIds;
+
+        private int deleteLoginTokensCallCount;
+
+        @Override
+        public PortalLoginIssue createLogin(String terminal, Long subjectId, String subjectNo, PortalAccount account)
+        {
+            createLoginCount++;
+            Date loginTime = new Date();
+            PortalLoginSession session = new PortalLoginSession();
+            session.setTokenId(terminal + "_login_token");
+            session.setTerminal(terminal);
+            session.setSubjectId(subjectId);
+            session.setSubjectNo(subjectNo);
+            session.setAccountId(account.getAccountId());
+            session.setUserName(account.getUserName());
+            session.setNickName(account.getNickName());
+            session.setLoginIp("127.0.0.1");
+            session.setLoginTime(loginTime);
+            session.setExpireTime(new Date(loginTime.getTime() + 30L * 60L * 1000L));
+            session.setStatus(PartnerSupport.STATUS_NORMAL);
+            createdSession = session;
+
+            PortalLoginResult result = new PortalLoginResult();
+            result.setToken(terminal + "_jwt");
+            result.setTerminal(terminal);
+            result.setSubjectId(subjectId);
+            result.setSubjectNo(subjectNo);
+            result.setAccountId(account.getAccountId());
+            result.setUsername(account.getUserName());
+            result.setNickName(account.getNickName());
+            result.setExpireMinutes(30);
+            result.setExpireTime(session.getExpireTime());
+
+            PortalLoginIssue issue = new PortalLoginIssue();
+            issue.setResult(result);
+            issue.setSession(session);
+            return issue;
+        }
+
+        @Override
+        public PortalLoginLog buildLoginLog(Long subjectId, Long accountId, String userName, String status, String msg)
+        {
+            PortalLoginLog log = new PortalLoginLog();
+            log.setSubjectId(subjectId);
+            log.setAccountId(accountId);
+            log.setUserName(userName);
+            log.setIpaddr("127.0.0.1");
+            log.setStatus(status);
+            log.setMsg(msg);
+            log.setLoginTime(new Date());
+            return log;
+        }
+
+        @Override
+        public void deleteLoginTokens(String terminal, List<String> tokenIds)
+        {
+            deleteLoginTokensCallCount++;
+            deletedTerminal = terminal;
+            deletedTokenIds = tokenIds;
         }
     }
 }

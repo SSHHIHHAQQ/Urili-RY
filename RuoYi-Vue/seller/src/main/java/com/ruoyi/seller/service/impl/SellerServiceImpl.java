@@ -151,6 +151,7 @@ public class SellerServiceImpl implements ISellerService
         account.setSellerId(sellerId);
         account.setCreateBy(SecurityUtils.getUsername());
         validateSellerAccountDept(sellerId, account.getDeptId());
+        assertSingleSellerOwner(sellerId, account);
         if (sellerMapper.selectSellerAccountByUserName(account.getUserName()) != null)
         {
             throw new ServiceException("登录账号已存在");
@@ -173,7 +174,9 @@ public class SellerServiceImpl implements ISellerService
         account.setAccountId(current.getSellerAccountId());
         account.setSellerId(sellerId);
         account.setUserName(current.getUserName());
-        account.setAccountRole(StringUtils.defaultIfBlank(account.getAccountRole(), current.getAccountRole()));
+        account.setAccountRole(current.getAccountRole());
+        account.setLockStatus(current.getLockStatus());
+        account.setLockReason(current.getLockReason());
         normalizeSellerAccount(account, false);
         validateSellerAccountDept(sellerId, account.getDeptId());
         account.setUpdateBy(SecurityUtils.getUsername());
@@ -186,6 +189,36 @@ public class SellerServiceImpl implements ISellerService
     }
 
     @Override
+    @Transactional
+    public int lockSellerAccount(Long sellerId, Long sellerAccountId, String lockReason)
+    {
+        SellerAccount account = selectSellerAccountById(sellerId, sellerAccountId);
+        String reason = StringUtils.trimToEmpty(lockReason);
+        if (StringUtils.isBlank(reason))
+        {
+            throw new ServiceException("锁定原因不能为空");
+        }
+        if (reason.length() > 500)
+        {
+            throw new ServiceException("锁定原因不能超过500个字符");
+        }
+        int rows = sellerMapper.updateSellerAccountLockStatus(sellerId, account.getSellerAccountId(),
+            PartnerSupport.ACCOUNT_LOCK_STATUS_LOCKED, reason, SecurityUtils.getUsername());
+        forceLogoutSellerSessionScope(sellerId, account.getSellerAccountId());
+        return rows;
+    }
+
+    @Override
+    @Transactional
+    public int unlockSellerAccount(Long sellerId, Long sellerAccountId)
+    {
+        SellerAccount account = selectSellerAccountById(sellerId, sellerAccountId);
+        return sellerMapper.updateSellerAccountLockStatus(sellerId, account.getSellerAccountId(),
+            PartnerSupport.ACCOUNT_LOCK_STATUS_UNLOCKED, "", SecurityUtils.getUsername());
+    }
+
+    @Override
+    @Transactional
     public int resetSellerAccountPassword(SellerAccount account)
     {
         if (StringUtils.isBlank(account.getPassword()))
@@ -198,11 +231,14 @@ public class SellerServiceImpl implements ISellerService
             throw new ServiceException("卖家账号不存在");
         }
         selectSellerById(current.getSellerId());
-        return sellerMapper.resetSellerAccountPassword(current.getSellerAccountId(),
+        int rows = sellerMapper.resetSellerAccountPassword(current.getSellerAccountId(),
             SecurityUtils.encryptPassword(account.getPassword()), SecurityUtils.getUsername());
+        forceLogoutSellerAccountSessionsAfterPasswordReset(rows, current.getSellerId(), current.getSellerAccountId());
+        return rows;
     }
 
     @Override
+    @Transactional
     public int resetSellerAccountDefaultPassword(SellerAccount account)
     {
         SellerAccount current = selectSellerAccountByPayload(account);
@@ -211,11 +247,14 @@ public class SellerServiceImpl implements ISellerService
             throw new ServiceException("卖家账号不存在");
         }
         selectSellerById(current.getSellerId());
-        return sellerMapper.resetSellerAccountPassword(current.getSellerAccountId(),
+        int rows = sellerMapper.resetSellerAccountPassword(current.getSellerAccountId(),
             SecurityUtils.encryptPassword(PartnerSupport.DEFAULT_OWNER_PASSWORD), SecurityUtils.getUsername());
+        forceLogoutSellerAccountSessionsAfterPasswordReset(rows, current.getSellerId(), current.getSellerAccountId());
+        return rows;
     }
 
     @Override
+    @Transactional
     public int resetSellerOwnerPassword(Long sellerId)
     {
         selectSellerById(sellerId);
@@ -224,8 +263,10 @@ public class SellerServiceImpl implements ISellerService
         {
             throw new ServiceException("卖家主账号不存在");
         }
-        return sellerMapper.resetSellerAccountPassword(owner.getSellerAccountId(),
+        int rows = sellerMapper.resetSellerAccountPassword(owner.getSellerAccountId(),
             SecurityUtils.encryptPassword(PartnerSupport.DEFAULT_OWNER_PASSWORD), SecurityUtils.getUsername());
+        forceLogoutSellerAccountSessionsAfterPasswordReset(rows, sellerId, owner.getSellerAccountId());
+        return rows;
     }
 
     @Override
@@ -269,6 +310,7 @@ public class SellerServiceImpl implements ISellerService
         {
             throw new ServiceException("卖家已停用，不能免密登录");
         }
+        assertSellerAccountCanDirectLogin(owner);
         return directLoginSupport.createToken("seller", sellerId, seller.getSellerNo(), owner, reason,
             PortalDirectLoginSupport.SELLER_WEB_URL_CONFIG_KEY,
             "http://127.0.0.1:8001/seller/direct-login");
@@ -287,6 +329,7 @@ public class SellerServiceImpl implements ISellerService
         {
             throw new ServiceException("卖家已停用，不能免密登录");
         }
+        assertSellerAccountCanDirectLogin(account);
         return directLoginSupport.createToken("seller", sellerId, seller.getSellerNo(), account, reason,
             PortalDirectLoginSupport.SELLER_WEB_URL_CONFIG_KEY,
             "http://127.0.0.1:8001/seller/direct-login");
@@ -425,7 +468,8 @@ public class SellerServiceImpl implements ISellerService
     @Override
     public PortalLoginResult directLoginSeller(String directLoginToken)
     {
-        PortalDirectLoginToken token = directLoginSupport.consumeToken("seller", directLoginToken);
+        PortalDirectLoginToken token = directLoginSupport.consumeToken("seller", directLoginToken,
+            this::assertSellerDirectLoginTokenCanLogin);
         Seller seller = sellerMapper.selectSellerById(token.getPartnerId());
         SellerAccount account = sellerMapper.selectSellerAccountById(token.getAccountId());
         if (account == null || !token.getPartnerId().equals(account.getSellerId()))
@@ -438,6 +482,18 @@ public class SellerServiceImpl implements ISellerService
         PortalLoginIssue issue = portalTokenSupport.createLogin("seller", seller.getSellerId(), seller.getSellerNo(), account);
         recordSellerLoginSuccess(account, issue, "免密登录成功");
         return issue.getResult();
+    }
+
+    private void assertSellerDirectLoginTokenCanLogin(PortalDirectLoginToken token)
+    {
+        Seller seller = sellerMapper.selectSellerById(token.getPartnerId());
+        SellerAccount account = sellerMapper.selectSellerAccountById(token.getAccountId());
+        if (account == null || !token.getPartnerId().equals(account.getSellerId()))
+        {
+            recordSellerLoginFailure(token.getPartnerId(), null, token.getUsername(), "免密登录目标账号不存在");
+            throw new ServiceException("免密登录目标账号不存在");
+        }
+        assertSellerCanLogin(seller, account, token.getUsername());
     }
 
     @Override
@@ -481,6 +537,10 @@ public class SellerServiceImpl implements ISellerService
         if (!PartnerSupport.STATUS_NORMAL.equals(account.getStatus()))
         {
             throw new ServiceException("卖家账号已停用");
+        }
+        if (PartnerSupport.isAccountLocked(account.getLockStatus()))
+        {
+            throw new ServiceException("卖家账号已锁定");
         }
         if (StringUtils.isBlank(account.getPassword()) || !SecurityUtils.matchesPassword(oldPassword, account.getPassword()))
         {
@@ -563,13 +623,11 @@ public class SellerServiceImpl implements ISellerService
         }
         account.setEmail(StringUtils.trimToEmpty(account.getEmail()));
         account.setPhonenumber(StringUtils.trimToEmpty(account.getPhonenumber()));
-        if (StringUtils.isBlank(account.getAccountRole()))
-        {
-            account.setAccountRole(PartnerSupport.ACCOUNT_ROLE_STAFF);
-        }
-        account.setAccountRole(account.getAccountRole().toUpperCase());
+        account.setAccountRole(PartnerSupport.normalizeAccountRole(account.getAccountRole()));
         account.setStatus(StringUtils.defaultIfBlank(account.getStatus(), PartnerSupport.STATUS_NORMAL));
         PartnerSupport.assertStatus(account.getStatus());
+        account.setLockStatus(PartnerSupport.normalizeAccountLockStatus(account.getLockStatus()));
+        account.setLockReason(StringUtils.trimToEmpty(account.getLockReason()));
     }
 
     private void validateSellerAccountDept(Long sellerId, Long deptId)
@@ -585,12 +643,33 @@ public class SellerServiceImpl implements ISellerService
         }
     }
 
+    private void assertSingleSellerOwner(Long sellerId, SellerAccount account)
+    {
+        if (!PartnerSupport.ACCOUNT_ROLE_OWNER.equals(account.getAccountRole()))
+        {
+            return;
+        }
+        SellerAccount owner = sellerMapper.selectOwnerSellerAccountBySellerId(sellerId);
+        if (owner != null && owner.getSellerAccountId() != null)
+        {
+            throw new ServiceException("卖家主账号已存在");
+        }
+    }
+
     private int forceLogoutSellerSessionScope(Long sellerId, Long sellerAccountId)
     {
         List<String> tokenIds = sellerMapper.selectOnlineSellerSessionTokenIds(sellerId, sellerAccountId);
         int rows = sellerMapper.forceLogoutSellerSessions(sellerId, sellerAccountId);
         portalTokenSupport.deleteLoginTokens("seller", tokenIds);
         return rows;
+    }
+
+    private void forceLogoutSellerAccountSessionsAfterPasswordReset(int resetRows, Long sellerId, Long sellerAccountId)
+    {
+        if (resetRows > 0)
+        {
+            forceLogoutSellerSessionScope(sellerId, sellerAccountId);
+        }
     }
 
     private SellerAccount selectSellerAccountByPayload(SellerAccount account)
@@ -619,6 +698,27 @@ public class SellerServiceImpl implements ISellerService
         {
             recordSellerLoginFailure(seller.getSellerId(), account, username, "卖家账号已停用");
             throw new ServiceException("卖家账号已停用");
+        }
+        if (PartnerSupport.isAccountLocked(account.getLockStatus()))
+        {
+            recordSellerLoginFailure(seller.getSellerId(), account, username, "卖家账号已锁定");
+            throw new ServiceException("卖家账号已锁定");
+        }
+    }
+
+    private void assertSellerAccountCanDirectLogin(SellerAccount account)
+    {
+        if (account == null)
+        {
+            throw new ServiceException("卖家主账号不存在");
+        }
+        if (!PartnerSupport.STATUS_NORMAL.equals(account.getStatus()))
+        {
+            throw new ServiceException("卖家账号已停用，不能免密登录");
+        }
+        if (PartnerSupport.isAccountLocked(account.getLockStatus()))
+        {
+            throw new ServiceException("卖家账号已锁定，不能免密登录");
         }
     }
 

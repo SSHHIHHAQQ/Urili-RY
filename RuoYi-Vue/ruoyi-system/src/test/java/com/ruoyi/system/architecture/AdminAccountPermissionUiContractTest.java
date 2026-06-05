@@ -25,7 +25,7 @@ public class AdminAccountPermissionUiContractTest
 
         if (!violations.isEmpty())
         {
-            fail("admin account UI actions must be gated by account-scoped permissions:\n"
+            fail("admin account/session UI actions must be gated by terminal-scoped permissions:\n"
                     + String.join("\n", violations));
         }
     }
@@ -40,8 +40,14 @@ public class AdminAccountPermissionUiContractTest
         assertContains(source, "add: '" + terminal + ":admin:account:add'", page, violations);
         assertContains(source, "edit: '" + terminal + ":admin:account:edit'", page, violations);
         assertContains(source, "resetPwd: '" + terminal + ":admin:account:resetPwd'", page, violations);
+        assertContains(source, "lock: '" + terminal + ":admin:account:lock'", page, violations);
         assertContains(source, "roleQuery: '" + terminal + ":admin:account:role:query'", page, violations);
         assertContains(source, "roleEdit: '" + terminal + ":admin:account:role:edit'", page, violations);
+        assertContains(source, "listSubjectSessions: getAdmin" + pageName + "Sessions", page, violations);
+        assertContains(source, "listAccountSessions: getAdmin" + pageName + "AccountSessions", page, violations);
+        assertContains(source, "forceLogoutSubject: forceLogoutAdmin" + pageName + "Sessions", page, violations);
+        assertContains(source, "forceLogoutAccount: forceLogoutAdmin" + pageName + "AccountSessions", page,
+                violations);
     }
 
     private void assertPartnerManagementPageGates(Path workspaceRoot, List<String> violations) throws IOException
@@ -50,6 +56,10 @@ public class AdminAccountPermissionUiContractTest
         String source = Files.readString(page, StandardCharsets.UTF_8);
         assertContains(source, "const accountPermissions = config.accountPermissions ??", page, violations);
         assertContains(source, "hidden={!access.hasPerms(accountPermissions.list)}", page, violations);
+        assertContains(source, "PartnerSessionModal", page, violations);
+        assertContains(source, "config.services.listSubjectSessions", page, violations);
+        assertContains(source, "config.services.forceLogoutSubject", page, violations);
+        assertContains(source, "access.hasPerms(`${permPrefix}:forceLogout`)", page, violations);
     }
 
     private void assertPartnerAccountModalGates(Path workspaceRoot, List<String> violations) throws IOException
@@ -60,8 +70,13 @@ public class AdminAccountPermissionUiContractTest
         assertContains(source, "access.hasPerms(accountPermissions.roleQuery)", modal, violations);
         assertContains(source, "access.hasPerms(accountPermissions.roleEdit)", modal, violations);
         assertContains(source, "access.hasPerms(accountPermissions.resetPwd)", modal, violations);
+        assertContains(source, "access.hasPerms(accountPermissions.lock", modal, violations);
         assertContains(source, "hidden={!access.hasPerms(accountPermissions.edit)}", modal, violations);
         assertContains(source, "hidden={!access.hasPerms(accountPermissions.add)}", modal, violations);
+        assertContains(source, "PartnerSessionModal", modal, violations);
+        assertContains(source, "config.services.listAccountSessions", modal, violations);
+        assertContains(source, "config.services.forceLogoutAccount", modal, violations);
+        assertContains(source, "access.hasPerms(`${permPrefix}:forceLogout`)", modal, violations);
     }
 
     private void assertContains(String source, String expected, Path path, List<String> violations)

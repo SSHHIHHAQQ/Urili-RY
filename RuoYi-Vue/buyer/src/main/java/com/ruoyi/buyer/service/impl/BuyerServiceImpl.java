@@ -151,6 +151,7 @@ public class BuyerServiceImpl implements IBuyerService
         account.setBuyerId(buyerId);
         account.setCreateBy(SecurityUtils.getUsername());
         validateBuyerAccountDept(buyerId, account.getDeptId());
+        assertSingleBuyerOwner(buyerId, account);
         if (buyerMapper.selectBuyerAccountByUserName(account.getUserName()) != null)
         {
             throw new ServiceException("登录账号已存在");
@@ -173,7 +174,9 @@ public class BuyerServiceImpl implements IBuyerService
         account.setAccountId(current.getBuyerAccountId());
         account.setBuyerId(buyerId);
         account.setUserName(current.getUserName());
-        account.setAccountRole(StringUtils.defaultIfBlank(account.getAccountRole(), current.getAccountRole()));
+        account.setAccountRole(current.getAccountRole());
+        account.setLockStatus(current.getLockStatus());
+        account.setLockReason(current.getLockReason());
         normalizeBuyerAccount(account, false);
         validateBuyerAccountDept(buyerId, account.getDeptId());
         account.setUpdateBy(SecurityUtils.getUsername());
@@ -186,6 +189,36 @@ public class BuyerServiceImpl implements IBuyerService
     }
 
     @Override
+    @Transactional
+    public int lockBuyerAccount(Long buyerId, Long buyerAccountId, String lockReason)
+    {
+        BuyerAccount account = selectBuyerAccountById(buyerId, buyerAccountId);
+        String reason = StringUtils.trimToEmpty(lockReason);
+        if (StringUtils.isBlank(reason))
+        {
+            throw new ServiceException("锁定原因不能为空");
+        }
+        if (reason.length() > 500)
+        {
+            throw new ServiceException("锁定原因不能超过500个字符");
+        }
+        int rows = buyerMapper.updateBuyerAccountLockStatus(buyerId, account.getBuyerAccountId(),
+            PartnerSupport.ACCOUNT_LOCK_STATUS_LOCKED, reason, SecurityUtils.getUsername());
+        forceLogoutBuyerSessionScope(buyerId, account.getBuyerAccountId());
+        return rows;
+    }
+
+    @Override
+    @Transactional
+    public int unlockBuyerAccount(Long buyerId, Long buyerAccountId)
+    {
+        BuyerAccount account = selectBuyerAccountById(buyerId, buyerAccountId);
+        return buyerMapper.updateBuyerAccountLockStatus(buyerId, account.getBuyerAccountId(),
+            PartnerSupport.ACCOUNT_LOCK_STATUS_UNLOCKED, "", SecurityUtils.getUsername());
+    }
+
+    @Override
+    @Transactional
     public int resetBuyerAccountPassword(BuyerAccount account)
     {
         if (StringUtils.isBlank(account.getPassword()))
@@ -198,11 +231,14 @@ public class BuyerServiceImpl implements IBuyerService
             throw new ServiceException("买家账号不存在");
         }
         selectBuyerById(current.getBuyerId());
-        return buyerMapper.resetBuyerAccountPassword(current.getBuyerAccountId(),
+        int rows = buyerMapper.resetBuyerAccountPassword(current.getBuyerAccountId(),
             SecurityUtils.encryptPassword(account.getPassword()), SecurityUtils.getUsername());
+        forceLogoutBuyerAccountSessionsAfterPasswordReset(rows, current.getBuyerId(), current.getBuyerAccountId());
+        return rows;
     }
 
     @Override
+    @Transactional
     public int resetBuyerAccountDefaultPassword(BuyerAccount account)
     {
         BuyerAccount current = selectBuyerAccountByPayload(account);
@@ -211,11 +247,14 @@ public class BuyerServiceImpl implements IBuyerService
             throw new ServiceException("买家账号不存在");
         }
         selectBuyerById(current.getBuyerId());
-        return buyerMapper.resetBuyerAccountPassword(current.getBuyerAccountId(),
+        int rows = buyerMapper.resetBuyerAccountPassword(current.getBuyerAccountId(),
             SecurityUtils.encryptPassword(PartnerSupport.DEFAULT_OWNER_PASSWORD), SecurityUtils.getUsername());
+        forceLogoutBuyerAccountSessionsAfterPasswordReset(rows, current.getBuyerId(), current.getBuyerAccountId());
+        return rows;
     }
 
     @Override
+    @Transactional
     public int resetBuyerOwnerPassword(Long buyerId)
     {
         selectBuyerById(buyerId);
@@ -224,8 +263,10 @@ public class BuyerServiceImpl implements IBuyerService
         {
             throw new ServiceException("买家主账号不存在");
         }
-        return buyerMapper.resetBuyerAccountPassword(owner.getBuyerAccountId(),
+        int rows = buyerMapper.resetBuyerAccountPassword(owner.getBuyerAccountId(),
             SecurityUtils.encryptPassword(PartnerSupport.DEFAULT_OWNER_PASSWORD), SecurityUtils.getUsername());
+        forceLogoutBuyerAccountSessionsAfterPasswordReset(rows, buyerId, owner.getBuyerAccountId());
+        return rows;
     }
 
     @Override
@@ -269,6 +310,7 @@ public class BuyerServiceImpl implements IBuyerService
         {
             throw new ServiceException("买家已停用，不能免密登录");
         }
+        assertBuyerAccountCanDirectLogin(owner);
         return directLoginSupport.createToken("buyer", buyerId, buyer.getBuyerNo(), owner, reason,
             PortalDirectLoginSupport.BUYER_WEB_URL_CONFIG_KEY,
             "http://127.0.0.1:8001/buyer/direct-login");
@@ -287,6 +329,7 @@ public class BuyerServiceImpl implements IBuyerService
         {
             throw new ServiceException("买家已停用，不能免密登录");
         }
+        assertBuyerAccountCanDirectLogin(account);
         return directLoginSupport.createToken("buyer", buyerId, buyer.getBuyerNo(), account, reason,
             PortalDirectLoginSupport.BUYER_WEB_URL_CONFIG_KEY,
             "http://127.0.0.1:8001/buyer/direct-login");
@@ -425,7 +468,8 @@ public class BuyerServiceImpl implements IBuyerService
     @Override
     public PortalLoginResult directLoginBuyer(String directLoginToken)
     {
-        PortalDirectLoginToken token = directLoginSupport.consumeToken("buyer", directLoginToken);
+        PortalDirectLoginToken token = directLoginSupport.consumeToken("buyer", directLoginToken,
+            this::assertBuyerDirectLoginTokenCanLogin);
         Buyer buyer = buyerMapper.selectBuyerById(token.getPartnerId());
         BuyerAccount account = buyerMapper.selectBuyerAccountById(token.getAccountId());
         if (account == null || !token.getPartnerId().equals(account.getBuyerId()))
@@ -438,6 +482,18 @@ public class BuyerServiceImpl implements IBuyerService
         PortalLoginIssue issue = portalTokenSupport.createLogin("buyer", buyer.getBuyerId(), buyer.getBuyerNo(), account);
         recordBuyerLoginSuccess(account, issue, "免密登录成功");
         return issue.getResult();
+    }
+
+    private void assertBuyerDirectLoginTokenCanLogin(PortalDirectLoginToken token)
+    {
+        Buyer buyer = buyerMapper.selectBuyerById(token.getPartnerId());
+        BuyerAccount account = buyerMapper.selectBuyerAccountById(token.getAccountId());
+        if (account == null || !token.getPartnerId().equals(account.getBuyerId()))
+        {
+            recordBuyerLoginFailure(token.getPartnerId(), null, token.getUsername(), "免密登录目标账号不存在");
+            throw new ServiceException("免密登录目标账号不存在");
+        }
+        assertBuyerCanLogin(buyer, account, token.getUsername());
     }
 
     @Override
@@ -481,6 +537,10 @@ public class BuyerServiceImpl implements IBuyerService
         if (!PartnerSupport.STATUS_NORMAL.equals(account.getStatus()))
         {
             throw new ServiceException("买家账号已停用");
+        }
+        if (PartnerSupport.isAccountLocked(account.getLockStatus()))
+        {
+            throw new ServiceException("买家账号已锁定");
         }
         if (StringUtils.isBlank(account.getPassword()) || !SecurityUtils.matchesPassword(oldPassword, account.getPassword()))
         {
@@ -563,13 +623,11 @@ public class BuyerServiceImpl implements IBuyerService
         }
         account.setEmail(StringUtils.trimToEmpty(account.getEmail()));
         account.setPhonenumber(StringUtils.trimToEmpty(account.getPhonenumber()));
-        if (StringUtils.isBlank(account.getAccountRole()))
-        {
-            account.setAccountRole(PartnerSupport.ACCOUNT_ROLE_STAFF);
-        }
-        account.setAccountRole(account.getAccountRole().toUpperCase());
+        account.setAccountRole(PartnerSupport.normalizeAccountRole(account.getAccountRole()));
         account.setStatus(StringUtils.defaultIfBlank(account.getStatus(), PartnerSupport.STATUS_NORMAL));
         PartnerSupport.assertStatus(account.getStatus());
+        account.setLockStatus(PartnerSupport.normalizeAccountLockStatus(account.getLockStatus()));
+        account.setLockReason(StringUtils.trimToEmpty(account.getLockReason()));
     }
 
     private void validateBuyerAccountDept(Long buyerId, Long deptId)
@@ -585,12 +643,33 @@ public class BuyerServiceImpl implements IBuyerService
         }
     }
 
+    private void assertSingleBuyerOwner(Long buyerId, BuyerAccount account)
+    {
+        if (!PartnerSupport.ACCOUNT_ROLE_OWNER.equals(account.getAccountRole()))
+        {
+            return;
+        }
+        BuyerAccount owner = buyerMapper.selectOwnerBuyerAccountByBuyerId(buyerId);
+        if (owner != null && owner.getBuyerAccountId() != null)
+        {
+            throw new ServiceException("买家主账号已存在");
+        }
+    }
+
     private int forceLogoutBuyerSessionScope(Long buyerId, Long buyerAccountId)
     {
         List<String> tokenIds = buyerMapper.selectOnlineBuyerSessionTokenIds(buyerId, buyerAccountId);
         int rows = buyerMapper.forceLogoutBuyerSessions(buyerId, buyerAccountId);
         portalTokenSupport.deleteLoginTokens("buyer", tokenIds);
         return rows;
+    }
+
+    private void forceLogoutBuyerAccountSessionsAfterPasswordReset(int resetRows, Long buyerId, Long buyerAccountId)
+    {
+        if (resetRows > 0)
+        {
+            forceLogoutBuyerSessionScope(buyerId, buyerAccountId);
+        }
     }
 
     private BuyerAccount selectBuyerAccountByPayload(BuyerAccount account)
@@ -619,6 +698,27 @@ public class BuyerServiceImpl implements IBuyerService
         {
             recordBuyerLoginFailure(buyer.getBuyerId(), account, username, "买家账号已停用");
             throw new ServiceException("买家账号已停用");
+        }
+        if (PartnerSupport.isAccountLocked(account.getLockStatus()))
+        {
+            recordBuyerLoginFailure(buyer.getBuyerId(), account, username, "买家账号已锁定");
+            throw new ServiceException("买家账号已锁定");
+        }
+    }
+
+    private void assertBuyerAccountCanDirectLogin(BuyerAccount account)
+    {
+        if (account == null)
+        {
+            throw new ServiceException("买家主账号不存在");
+        }
+        if (!PartnerSupport.STATUS_NORMAL.equals(account.getStatus()))
+        {
+            throw new ServiceException("买家账号已停用，不能免密登录");
+        }
+        if (PartnerSupport.isAccountLocked(account.getLockStatus()))
+        {
+            throw new ServiceException("买家账号已锁定，不能免密登录");
         }
     }
 

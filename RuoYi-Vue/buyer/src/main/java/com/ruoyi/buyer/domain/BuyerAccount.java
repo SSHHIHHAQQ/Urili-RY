@@ -13,6 +13,10 @@ public class BuyerAccount extends PortalAccount
 
     private Long buyerId;
 
+    private String lockStatus;
+
+    private String lockReason;
+
     public Long getBuyerAccountId()
     {
         return buyerAccountId;
@@ -31,5 +35,25 @@ public class BuyerAccount extends PortalAccount
     public void setBuyerId(Long buyerId)
     {
         this.buyerId = buyerId;
+    }
+
+    public String getLockStatus()
+    {
+        return lockStatus;
+    }
+
+    public void setLockStatus(String lockStatus)
+    {
+        this.lockStatus = lockStatus;
+    }
+
+    public String getLockReason()
+    {
+        return lockReason;
+    }
+
+    public void setLockReason(String lockReason)
+    {
+        this.lockReason = lockReason;
     }
 }

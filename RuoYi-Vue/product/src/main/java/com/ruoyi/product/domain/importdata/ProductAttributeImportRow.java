@@ -15,11 +15,10 @@ public class ProductAttributeImportRow
     private String attributeName;
 
     @Excel(name = "属性类型", combo = { "TEXT", "NUMBER", "BOOLEAN", "SINGLE_SELECT", "MULTI_SELECT", "DATE" },
-        prompt = "必填，填写 TEXT / NUMBER / BOOLEAN / SINGLE_SELECT / MULTI_SELECT / DATE")
+        prompt = "必填。先选属性类型，再按“类型来源规则”sheet 填写选项来源")
     private String attributeType;
 
-    @Excel(name = "选项来源", combo = { "NONE", "ATTRIBUTE_OPTION", "SYS_DICT" },
-        prompt = "TEXT/NUMBER/BOOLEAN/DATE 填 NONE；SINGLE_SELECT/MULTI_SELECT 填 ATTRIBUTE_OPTION 或 SYS_DICT")
+    @Excel(name = "选项来源", width = 24)
     private String optionSource;
 
     @Excel(name = "字典类型", prompt = "选择型属性且选项来源为 SYS_DICT 时必填")
@@ -28,7 +27,7 @@ public class ProductAttributeImportRow
     @Excel(name = "单位", prompt = "仅 NUMBER 属性可填，例如 cm、kg、g；其他属性留空")
     private String unit;
 
-    @Excel(name = "数值精度", cellType = ColumnType.NUMERIC, defaultValue = "0",
+    @Excel(name = "小数位数", cellType = ColumnType.NUMERIC, defaultValue = "0",
         prompt = "仅 NUMBER 属性可填，表示保留几位小数，范围 0-8；其他属性填 0 或留空")
     private Integer valuePrecision;
 

@@ -264,11 +264,11 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         insert into product_category(
             parent_id, ancestors, category_code, category_name, category_level,
             publish_enabled, sort_order, schema_version, status, del_flag,
-            create_by, create_time, remark
+            create_by, create_time, update_by, update_time, remark
         ) values (
             #{parentId}, #{ancestors}, #{categoryCode}, #{categoryName}, #{categoryLevel},
             #{publishEnabled}, #{sortOrder}, #{schemaVersion}, #{status}, '0',
-            #{createBy}, sysdate(), #{remark}
+            #{createBy}, sysdate(), #{updateBy}, sysdate(), #{remark}
         )
     </insert>
 
@@ -381,10 +381,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <insert id="insertAttribute" parameterType="ProductAttribute" useGeneratedKeys="true" keyProperty="attributeId">
         insert into product_attribute(
             attribute_code, attribute_name, attribute_type, option_source, dict_type,
-            unit, value_precision, status, del_flag, create_by, create_time, remark
+            unit, value_precision, status, del_flag, create_by, create_time, update_by, update_time, remark
         ) values (
             #{attributeCode}, #{attributeName}, #{attributeType}, #{optionSource}, #{dictType},
-            #{unit}, #{valuePrecision}, #{status}, '0', #{createBy}, sysdate(), #{remark}
+            #{unit}, #{valuePrecision}, #{status}, '0', #{createBy}, sysdate(), #{updateBy}, sysdate(), #{remark}
         )
     </insert>
 
@@ -463,10 +463,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <insert id="insertOption" parameterType="ProductAttributeOption" useGeneratedKeys="true" keyProperty="optionId">
         insert into product_attribute_option(
             attribute_id, option_code, option_label, sort_order, default_flag,
-            status, create_by, create_time, remark
+            status, create_by, create_time, update_by, update_time, remark
         ) values (
             #{attributeId}, #{optionCode}, #{optionLabel}, #{sortOrder}, #{defaultFlag},
-            #{status}, #{createBy}, sysdate(), #{remark}
+            #{status}, #{createBy}, sysdate(), #{updateBy}, sysdate(), #{remark}
         )
     </insert>
 
@@ -525,11 +525,11 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         insert into product_category_attribute(
             category_id, attribute_id, rule_mode, required_flag, visible_flag,
             editable_flag, filterable_flag, group_code, sort_order, placeholder,
-            help_text, validation_rule, status, create_by, create_time, remark
+            help_text, validation_rule, status, create_by, create_time, update_by, update_time, remark
         ) values (
             #{categoryId}, #{attributeId}, #{ruleMode}, #{requiredFlag}, #{visibleFlag},
             #{editableFlag}, #{filterableFlag}, #{groupCode}, #{sortOrder}, #{placeholder},
-            #{helpText}, #{validationRule}, #{status}, #{createBy}, sysdate(), #{remark}
+            #{helpText}, #{validationRule}, #{status}, #{createBy}, sysdate(), #{updateBy}, sysdate(), #{remark}
         )
     </insert>
 

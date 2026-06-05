@@ -25,7 +25,7 @@ export default function WarehouseFormModal({
   onOpenChange,
   onSubmit,
 }: WarehouseFormModalProps) {
-  const formRef = useRef<ProFormInstance<API.Warehouse.Warehouse>>();
+  const formRef = useRef<ProFormInstance<API.Warehouse.Warehouse> | undefined>(undefined);
 
   useEffect(() => {
     if (!open) {

@@ -123,6 +123,29 @@ if (componentSource) {
       `${relativePath} must use API.Partner.BuyerPortalProductSku`,
     );
   }
+  for (const requiredToken of [
+    'ProTable',
+    'ProColumns',
+    'getPersistedProTableSearch',
+    'getProTablePagination',
+    'getProTableScroll',
+  ]) {
+    if (!componentSource.includes(requiredToken)) {
+      violations.push(`${relativePath} must use standard ProTable template token ${requiredToken}`);
+    }
+  }
+  if (!componentSource.includes('pageNum: currentPage')) {
+    violations.push(`${relativePath} must map ProTable current to RuoYi pageNum`);
+  }
+  if (!componentSource.includes('pageSize: currentPageSize')) {
+    violations.push(`${relativePath} must map ProTable pageSize to RuoYi pageSize`);
+  }
+  assertNoPattern(
+    componentSource,
+    relativePath,
+    /\bspuStatus\s*:\s*params\.spuStatus\b/,
+    'must not expose buyer product status as a query filter; buyer visibility is fixed to ON_SALE by backend',
+  );
   assertNoPattern(
     componentSource,
     relativePath,

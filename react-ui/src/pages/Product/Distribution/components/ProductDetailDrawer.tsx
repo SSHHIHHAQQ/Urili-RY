@@ -1,6 +1,12 @@
 import { Descriptions, Drawer, Image, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { buildSkuDimensionText, buildSkuSpecText, getSalesStatusText, resolveResourceUrl } from '../constants';
+import {
+  buildSkuDimensionText,
+  buildSkuSpecText,
+  getControlStatusText,
+  getSalesStatusText,
+  resolveResourceUrl,
+} from '../constants';
 import DetailContentPreview from './DetailContentPreview';
 import styles from '../style.module.css';
 
@@ -12,6 +18,22 @@ type ProductDetailDrawerProps = {
 
 function statusText(status?: string) {
   return getSalesStatusText(status);
+}
+
+function controlStatusText(status?: string) {
+  return getControlStatusText(status || 'NORMAL');
+}
+
+function controlStatusTag(record: API.ProductDistribution.Sku) {
+  if (record.spuControlStatus === 'DISABLED') {
+    return <Tag color="error">SPU停用</Tag>;
+  }
+  const status = record.controlStatus || 'NORMAL';
+  return <Tag color={status === 'DISABLED' ? 'error' : 'success'}>{controlStatusText(status)}</Tag>;
+}
+
+function amountText(value?: number | null) {
+  return value === undefined || value === null ? '--' : String(value);
 }
 
 function parseJsonArrayText(value?: string) {
@@ -65,14 +87,20 @@ export default function ProductDetailDrawer({
       width: 220,
       render: (_, record) => buildSkuDimensionText(record) || '--',
     },
-    { title: '供货价', dataIndex: 'supplyPrice', width: 100 },
-    { title: '销售价', dataIndex: 'salePrice', width: 100 },
+    { title: '供货价', dataIndex: 'supplyPrice', width: 100, render: (value) => amountText(value as number) },
+    { title: '销售价', dataIndex: 'salePrice', width: 100, render: (value) => amountText(value as number) },
     { title: '币种', dataIndex: 'currencyCode', width: 90 },
     {
-      title: '状态',
+      title: '销售状态',
       dataIndex: 'skuStatus',
       width: 100,
       render: (value) => <Tag>{statusText(value)}</Tag>,
+    },
+    {
+      title: '管控',
+      dataIndex: 'controlStatus',
+      width: 100,
+      render: (_, record) => controlStatusTag(record),
     },
   ];
 
@@ -93,7 +121,12 @@ export default function ProductDetailDrawer({
             <Descriptions.Item label="英文标题">{product.productNameEn || '--'}</Descriptions.Item>
             <Descriptions.Item label="卖家">{product.sellerName || '--'}</Descriptions.Item>
             <Descriptions.Item label="商品分类">{product.categoryName || '--'}</Descriptions.Item>
-            <Descriptions.Item label="状态">{statusText(product.spuStatus)}</Descriptions.Item>
+            <Descriptions.Item label="销售状态">{statusText(product.spuStatus)}</Descriptions.Item>
+            <Descriptions.Item label="管控状态">
+              <Tag color={product.controlStatus === 'DISABLED' ? 'error' : 'success'}>
+                {controlStatusText(product.controlStatus)}
+              </Tag>
+            </Descriptions.Item>
             <Descriptions.Item label="来源">{product.sourceType || '--'}</Descriptions.Item>
             <Descriptions.Item label="更新时间">{product.updateTime || '--'}</Descriptions.Item>
             <Descriptions.Item label="卖点" span={2}>{product.sellingPoint || '--'}</Descriptions.Item>
@@ -116,7 +149,7 @@ export default function ProductDetailDrawer({
             pagination={false}
             columns={skuColumns}
             dataSource={product.skus || []}
-            scroll={{ x: 1220 }}
+            scroll={{ x: 1320 }}
           />
 
           <Descriptions bordered size="small" column={1} title="类目属性">

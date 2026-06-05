@@ -1,6 +1,8 @@
 package com.ruoyi.product.service;
 
 import java.util.List;
+import com.ruoyi.product.domain.ProductDistributionOperationLog;
+import com.ruoyi.product.domain.ProductSkuSalePriceUpdateRequest;
 import com.ruoyi.product.domain.ProductSpu;
 import com.ruoyi.product.domain.ProductSku;
 
@@ -24,6 +26,20 @@ public interface IProductDistributionService
     int updateSpuStatus(Long spuId, String status);
 
     int updateSkuStatus(Long spuId, Long skuId, String status);
+
+    int batchUpdateSpuStatus(List<Long> spuIds, String status, boolean syncSkuStatus);
+
+    int batchUpdateSkuStatus(List<Long> skuIds, String status);
+
+    int batchUpdateSpuControlStatus(List<Long> spuIds, String controlStatus, String reason);
+
+    int batchUpdateSkuControlStatus(List<Long> skuIds, String controlStatus, String reason);
+
+    int batchUpdateSkuSalePrice(ProductSkuSalePriceUpdateRequest request);
+
+    List<ProductDistributionOperationLog> selectOperationLogList(ProductDistributionOperationLog query);
+
+    List<ProductSku> selectSkuPageList(ProductSku query);
 
     List<ProductSku> selectSkuList(Long spuId);
 
