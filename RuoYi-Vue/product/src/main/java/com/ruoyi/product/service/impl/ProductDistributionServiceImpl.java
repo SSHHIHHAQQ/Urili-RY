@@ -78,12 +78,31 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
     }
 
     @Override
+    public List<ProductSpu> selectOnSaleProductList(ProductSpu query)
+    {
+        List<ProductSpu> products = productDistributionMapper.selectOnSaleProductList(query);
+        for (ProductSpu product : products)
+        {
+            product.setSkus(productDistributionMapper.selectOnSaleSkuListBySpuId(product.getSpuId()));
+        }
+        return products;
+    }
+
+    @Override
     public ProductSpu selectProductById(Long spuId)
     {
         ProductSpu product = requireProduct(spuId);
         product.setSkus(productDistributionMapper.selectSkuListBySpuId(spuId));
         product.setAttributeValues(productDistributionMapper.selectAttributeValuesBySpuId(spuId));
         product.setImages(productDistributionMapper.selectImagesBySpuId(spuId));
+        return product;
+    }
+
+    @Override
+    public ProductSpu selectOnSaleProductById(Long spuId)
+    {
+        ProductSpu product = requireOnSaleProduct(spuId);
+        product.setSkus(productDistributionMapper.selectOnSaleSkuListBySpuId(spuId));
         return product;
     }
 
@@ -161,6 +180,13 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
     {
         requireProduct(spuId);
         return productDistributionMapper.selectSkuListBySpuId(spuId);
+    }
+
+    @Override
+    public List<ProductSku> selectOnSaleSkuList(Long spuId)
+    {
+        requireOnSaleProduct(spuId);
+        return productDistributionMapper.selectOnSaleSkuListBySpuId(spuId);
     }
 
     private void normalizeSpuForSave(ProductSpu product, ProductSpu current)
@@ -449,6 +475,16 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
     private ProductSpu requireProduct(Long spuId)
     {
         ProductSpu product = productDistributionMapper.selectProductById(spuId);
+        if (product == null)
+        {
+            throw new ServiceException("商城商品不存在");
+        }
+        return product;
+    }
+
+    private ProductSpu requireOnSaleProduct(Long spuId)
+    {
+        ProductSpu product = productDistributionMapper.selectOnSaleProductById(spuId);
         if (product == null)
         {
             throw new ServiceException("商城商品不存在");

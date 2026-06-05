@@ -180,6 +180,12 @@
   margin-top: 4px;
 }
 
+.summaryDetailToggle {
+  height: 22px;
+  margin-top: 4px;
+  padding: 0;
+}
+
 .summaryActions {
   display: flex;
   flex: none;

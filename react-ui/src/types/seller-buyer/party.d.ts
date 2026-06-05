@@ -415,6 +415,129 @@ declare namespace API.Partner {
     data: PortalProductCategorySchemaItem[];
   }
 
+  export interface SellerPortalProductSku {
+    skuId?: number;
+    spuId?: number;
+    sellerSkuCode?: string;
+    color?: string;
+    size?: string;
+    lengthValue?: string;
+    widthValue?: string;
+    heightValue?: string;
+    weight?: string;
+    material?: string;
+    style?: string;
+    model?: string;
+    packageQuantity?: string;
+    capacity?: string;
+    skuImageUrl?: string;
+    supplyPrice?: number;
+    salePrice?: number;
+    currencyCode?: string;
+    skuStatus?: string;
+    sortOrder?: number;
+    warehouseCount?: number;
+  }
+
+  export interface SellerPortalProduct {
+    spuId?: number;
+    sellerSpuCode?: string;
+    categoryId?: number;
+    categoryCode?: string;
+    categoryName?: string;
+    productName?: string;
+    productNameEn?: string;
+    sellingPoint?: string;
+    mainImageUrl?: string;
+    detailContent?: string;
+    spuStatus?: string;
+    skuCount?: number;
+    supplyPriceMin?: number;
+    supplyPriceMax?: number;
+    salePriceMin?: number;
+    salePriceMax?: number;
+    currencySummary?: string;
+    warehouseCount?: number;
+    skus?: SellerPortalProductSku[];
+  }
+
+  export interface SellerPortalProductPageResult {
+    code: number;
+    msg: string;
+    total: number;
+    rows: SellerPortalProduct[];
+  }
+
+  export interface SellerPortalProductInfoResult {
+    code: number;
+    msg: string;
+    data: SellerPortalProduct;
+  }
+
+  export interface SellerPortalProductSkuListResult {
+    code: number;
+    msg: string;
+    data: SellerPortalProductSku[];
+  }
+
+  export interface BuyerPortalProductSku {
+    skuId?: number;
+    spuId?: number;
+    color?: string;
+    size?: string;
+    lengthValue?: string;
+    widthValue?: string;
+    heightValue?: string;
+    weight?: string;
+    material?: string;
+    style?: string;
+    model?: string;
+    packageQuantity?: string;
+    capacity?: string;
+    skuImageUrl?: string;
+    salePrice?: number;
+    currencyCode?: string;
+    skuStatus?: string;
+    sortOrder?: number;
+  }
+
+  export interface BuyerPortalProduct {
+    spuId?: number;
+    categoryId?: number;
+    categoryCode?: string;
+    categoryName?: string;
+    productName?: string;
+    productNameEn?: string;
+    sellingPoint?: string;
+    mainImageUrl?: string;
+    detailContent?: string;
+    spuStatus?: string;
+    skuCount?: number;
+    salePriceMin?: number;
+    salePriceMax?: number;
+    currencySummary?: string;
+    skus?: BuyerPortalProductSku[];
+  }
+
+  export interface BuyerPortalProductPageResult {
+    code: number;
+    msg: string;
+    total: number;
+    rows: BuyerPortalProduct[];
+  }
+
+  export interface BuyerPortalProductInfoResult {
+    code: number;
+    msg: string;
+    data: BuyerPortalProduct;
+  }
+
+  export interface BuyerPortalProductSkuListResult {
+    code: number;
+    msg: string;
+    data: BuyerPortalProductSku[];
+  }
+
   export interface PortalDirectLoginTicket {
     ticketId?: number;
     terminal?: string;

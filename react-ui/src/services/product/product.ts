@@ -89,6 +89,7 @@ export async function previewCategoryImport(file: File, updateSupport: boolean) 
       method: 'POST',
       params: { updateSupport },
       data: buildImportFormData(file),
+      skipErrorHandler: true,
     },
   );
 }
@@ -100,6 +101,7 @@ export async function importCategoryData(file: File, updateSupport: boolean) {
       method: 'POST',
       params: { updateSupport },
       data: buildImportFormData(file),
+      skipErrorHandler: true,
     },
   );
 }
@@ -142,6 +144,13 @@ export async function updateAttribute(
   });
 }
 
+export async function updateAttributeStatus(attributeId: number, status: string) {
+  return request<API.Result>(`${baseUrl}/attributes/${attributeId}/status`, {
+    method: 'PUT',
+    data: { status },
+  });
+}
+
 export async function deleteAttribute(attributeId: number) {
   return request<API.Result>(`${baseUrl}/attributes/${attributeId}`, {
     method: 'DELETE',
@@ -163,6 +172,7 @@ export async function previewAttributeImport(file: File, updateSupport: boolean)
       method: 'POST',
       params: { updateSupport },
       data: buildImportFormData(file),
+      skipErrorHandler: true,
     },
   );
 }
@@ -174,6 +184,7 @@ export async function importAttributeData(file: File, updateSupport: boolean) {
       method: 'POST',
       params: { updateSupport },
       data: buildImportFormData(file),
+      skipErrorHandler: true,
     },
   );
 }
@@ -234,6 +245,7 @@ export async function previewAttributeOptionImport(
       method: 'POST',
       params: { updateSupport },
       data: buildImportFormData(file),
+      skipErrorHandler: true,
     },
   );
 }
@@ -248,6 +260,7 @@ export async function importAttributeOptionData(
       method: 'POST',
       params: { updateSupport },
       data: buildImportFormData(file),
+      skipErrorHandler: true,
     },
   );
 }

@@ -50,6 +50,9 @@ public interface ProductConfigMapper
 
     int updateAttribute(ProductAttribute attribute);
 
+    int updateAttributeStatus(@Param("attributeId") Long attributeId, @Param("status") String status,
+        @Param("updateBy") String updateBy);
+
     int deleteAttributeById(@Param("attributeId") Long attributeId, @Param("updateBy") String updateBy);
 
     int countAttributeCategoryBindings(@Param("attributeId") Long attributeId);

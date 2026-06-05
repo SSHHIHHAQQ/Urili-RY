@@ -22,6 +22,7 @@ import com.ruoyi.common.enums.BusinessType;
 import com.ruoyi.common.utils.poi.ExcelUtil;
 import com.ruoyi.product.domain.ProductAttribute;
 import com.ruoyi.product.domain.ProductAttributeOption;
+import com.ruoyi.product.domain.ProductStatusUpdateRequest;
 import com.ruoyi.product.domain.importdata.ProductAttributeImportRow;
 import com.ruoyi.product.domain.importdata.ProductAttributeOptionImportRow;
 import com.ruoyi.product.domain.importdata.ProductImportResult;
@@ -85,6 +86,15 @@ public class AdminProductAttributeController extends BaseController
     {
         attribute.setAttributeId(attributeId);
         return toAjax(productConfigService.updateAttribute(attribute));
+    }
+
+    @PreAuthorize("@ss.hasPermi('product:attribute:edit')")
+    @Log(title = "商品属性状态", businessType = BusinessType.UPDATE)
+    @PutMapping("/{attributeId}/status")
+    public AjaxResult editStatus(@PathVariable("attributeId") Long attributeId,
+        @RequestBody ProductStatusUpdateRequest request)
+    {
+        return toAjax(productConfigService.updateAttributeStatus(attributeId, request.getStatus()));
     }
 
     @PreAuthorize("@ss.hasPermi('product:attribute:remove')")

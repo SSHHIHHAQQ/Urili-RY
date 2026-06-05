@@ -26,7 +26,9 @@ import {
   PORTAL_SERVICE,
   type PortalTerminal,
 } from '../terminal';
+import BuyerDistributionProductList from './BuyerDistributionProductList';
 import BuyerProductSchemaPreview from './BuyerProductSchemaPreview';
+import SellerOwnDistributionProductList from './SellerOwnDistributionProductList';
 import SellerProductSchemaPreview from './SellerProductSchemaPreview';
 
 type PortalHomeData = {
@@ -385,6 +387,16 @@ const PortalHomePage: React.FC = () => {
           ) : terminal === 'buyer' ? (
             <div style={fullGridStyle}>
               <BuyerProductSchemaPreview />
+            </div>
+          ) : null}
+
+          {terminal === 'seller' ? (
+            <div style={fullGridStyle}>
+              <SellerOwnDistributionProductList />
+            </div>
+          ) : terminal === 'buyer' ? (
+            <div style={fullGridStyle}>
+              <BuyerDistributionProductList />
             </div>
           ) : null}
 

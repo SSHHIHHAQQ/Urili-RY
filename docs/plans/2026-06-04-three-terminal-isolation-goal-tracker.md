@@ -1,5 +1,234 @@
 # 三端独立改造目标追踪
 
+## 2026-06-05 买家端商城商品前端工作台复制检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md`、`docs/plans/2026-06-05-buyer-product-browse-copy-boundary-plan.md`、`docs/plans/2026-06-05-buyer-distribution-product-read-template-record.md` 和 `docs/plans/2026-06-05-buyer-product-permission-dml-smoke-record.md` 为开发方向。本轮只做 buyer 前端工作台复制和验收，不做后端，不执行 DDL/DML，不重复补远程权限。
+
+已完成：
+
+- 新增 `BuyerDistributionProductList`，按 seller 商品卡片模板复制 buyer 商城商品卡片。
+- buyer portal 首页已在 `terminal === 'buyer'` 分支渲染 buyer 商品卡片，位置与 seller 商品卡片同构。
+- `react-ui/src/services/portal/session.ts` 新增 buyer 商品列表、详情和 SKU 三个 portal service。
+- `react-ui/src/types/seller-buyer/party.d.ts` 新增 buyer 商品 DTO 和结果类型，不包含 seller 内部字段、系统编码、供货价或后台审计字段。
+- 新增 buyer 商品模板契约守卫 `react-ui/scripts/check-buyer-portal-product-template.mjs`，并接入 `guard:buyer-portal-product` 和 `npm run lint`。
+- `guard:portal-token` 已纳入 `getBuyerPortalDistributionProducts`，固定 buyer 商品列表请求必须净化身份范围参数。
+- 新增 buyer 商品前端浏览器 smoke：
+  - `scripts/smoke/buyer-portal-product-ui-smoke.ps1`
+  - `scripts/smoke/buyer-portal-product-ui-smoke.mjs`
+- 新增执行记录：`docs/plans/2026-06-05-buyer-portal-product-ui-template-record.md`。
+
+验证结果：
+
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:buyer-portal-product`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:seller-portal-product`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:portal-token`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; node --check ..\scripts\smoke\buyer-portal-product-ui-smoke.mjs`：通过。
+- PowerShell 解析 `scripts/smoke/buyer-portal-product-ui-smoke.ps1`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npx biome lint <本切片前端相关文件>`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run tsc -- --pretty false`：通过。
+- `cd E:\Urili-Ruoyi; .\scripts\smoke\buyer-portal-product-ui-smoke.ps1 -BuyerId 2 -TimeoutMs 45000`：通过，覆盖管理端生成 buyer 免密票据、buyer direct-login、buyer portal、token storage 隔离、商品卡片、详情弹窗和退出清理。
+- Browser 插件内置浏览器轻量检查：通过，`/buyer/portal` 可见“买家端”“商品浏览准备”“商城商品”和“详情”。
+- `cd E:\Urili-Ruoyi\react-ui; npm run lint`：三个 guard 通过，但全量 `biome:lint` 命中既有无关文件问题，未作为本切片通过项。
+- `git diff --check -- <本切片相关文件>`：通过，仅有 LF/CRLF 工作区换行提示。
+- 本切片相关文件尾随空白和冲突标记检查：通过。
+- 敏感明文检查：未发现真实连接串、Bearer 明文、免密 token 明文或 JSON token/loginUrl 明文；命中项仅为文档中的“不得输出/省略号示例/环境变量名”说明。
+- `cd E:\Urili-Ruoyi; codegraph sync .`：通过，先输出 `Synced 23 changed files`、`Added: 17, Modified: 6 - 663 nodes in 1.5s`；记录回填后复跑输出 `Synced 2 changed files`、`Added: 2 - 34 nodes in 516ms`。
+
+当前判断：
+
+- buyer 商品浏览已完成后端只读模板、远程权限 DML、HTTP smoke、前端工作台复制、前端契约守卫和浏览器 smoke。
+- buyer 前端首版只读浏览平台 `ON_SALE` 商品，不承载购物车、下单、库存承诺或客户专属价格。
+- 后续如果 seller/buyer 商品卡片继续演进，建议再抽公共端内只读商品列表组件；当前按“先 seller 标准模板，再复制 buyer”的已确认节奏保留两份组件更直接。
+
+## 2026-06-05 买家端商城商品权限 DML 与 HTTP smoke 检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md`、`docs/plans/2026-06-05-buyer-product-browse-copy-boundary-plan.md` 和 `docs/plans/2026-06-05-buyer-distribution-product-read-template-record.md` 为开发方向。本轮只做 buyer 权限 DML 与真实 HTTP smoke，不做 buyer 前端，不执行 DDL，不修改 `sys_menu` / `sys_role`。
+
+已完成：
+
+- 确认当前激活环境为远程 MySQL / 远程 Redis，不使用本地 Docker MySQL / Redis。
+- 向远程 `buyer_menu` 幂等补入：
+  - `buyer:product:distribution:list`
+  - `buyer:product:distribution:query`
+- 向远程 `buyer_role_menu` 幂等补入 active buyer role 对上述两个权限的授权。
+- 新增并加固 buyer 商品 HTTP smoke 脚本：`scripts/smoke/buyer-distribution-product-read-template-smoke.ps1`。
+- 停止旧 8080 后端进程，重建 `ruoyi-admin.jar` 并启动新 jar。
+- 通过 buyer 商品真实 HTTP smoke，覆盖无 token 拒绝、buyer 登录、`getInfo` 权限集合、列表、伪造范围参数不生效、详情、SKU、固定不存在商品拒绝和 logout 后旧 token 失效。
+- 更新执行记录：`docs/plans/2026-06-05-buyer-product-permission-dml-smoke-record.md`。
+- 回填 buyer 后端模板记录：`docs/plans/2026-06-05-buyer-distribution-product-read-template-record.md`。
+- 更新 `docs/architecture/reuse-ledger.md`，登记 buyer 权限 DML 与 HTTP smoke 模板。
+
+验证结果：
+
+- 远程 DML 影响：`buyer_menu` 新增 2 行，`buyer_role_menu` 新增 2 行；执行后目标权限计数均已核对。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-admin -am -DskipTests package`：通过，`BUILD SUCCESS`。
+- `cd E:\Urili-Ruoyi; .\start-backend-local.ps1`：已启动新后端 jar。
+- `GET http://127.0.0.1:8080/captchaImage`：返回 `code=200`，`captchaEnabled=False`；本轮未修改验证码开关。
+- `cd E:\Urili-Ruoyi; .\scripts\smoke\buyer-distribution-product-read-template-smoke.ps1 -BuyerUsername '<管理端列表返回的测试买家账号>' -PageSize 10`：通过。
+- `scripts/smoke/buyer-distribution-product-read-template-smoke.ps1` PowerShell 解析检查：通过。
+- `git diff --check -- <本切片相关文件>`：通过，仅有 LF/CRLF 工作区换行提示。
+- 本切片相关文件尾随空白和冲突标记检查：通过。
+- 敏感明文检查：未发现数据库连接串、明文密码、Bearer token 或 JWT；命中项均为“不得输出/不得展示”的说明文字。
+- `cd E:\Urili-Ruoyi; codegraph sync .`：通过，输出 `Already up to date`。
+
+当前判断：
+
+- buyer 后端只读模板与远程权限已经具备真实 HTTP 验收证据。
+- buyer 前端工作台复制和浏览器 smoke 尚未做。
+- 下一切片建议只做 buyer 前端工作台复制：按 seller portal 商品卡片模板替换 terminal、service、路由、DTO 和断言文本，不重新设计页面结构。
+
+## 2026-06-05 买家端商城商品浏览只读后端模板检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 和 `docs/plans/2026-06-05-buyer-product-browse-copy-boundary-plan.md` 为开发方向。本轮只做 buyer 后端只读模板，不做前端，不执行远程数据库 DDL/DML，不做 HTTP smoke。
+
+已完成：
+
+- 新增 `BuyerPortalProductDistributionController`，提供 buyer 端商城商品列表、详情和 SKU 只读入口。
+- 新增 `IBuyerPortalProductService` / `BuyerPortalProductServiceImpl`，buyer 端身份只用于鉴权和 session 校验，不作为商品归属。
+- 新增 `BuyerPortalProduct` / `BuyerPortalProductSku`，不复用管理端 `ProductSpu` / `ProductSku`，不复用 seller DTO。
+- 扩展 product 共享只读查询：上架商品列表、上架商品详情、上架 SKU 列表，列表聚合只基于 `ON_SALE` SKU。
+- 更新 `seller_buyer_management_seed.sql`，补齐 `buyer:product:distribution:list` 和 `buyer:product:distribution:query` 到 `buyer_menu` 与 active `buyer_role_menu` seed。
+- 新增 `BuyerPortalProductServiceImplTest`，覆盖 buyer session 校验、客户端身份字段忽略、分页元数据保留、上架可见性、DTO 脱敏和 SKU 读取前可见性校验。
+- 新增执行记录：`docs/plans/2026-06-05-buyer-distribution-product-read-template-record.md`。
+- 更新 `docs/architecture/reuse-ledger.md`，登记 buyer 商品浏览只读后端模板。
+
+验证结果：
+
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl buyer -am "-Dtest=BuyerPortalProductServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`Tests run: 8, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl buyer -am test`：通过，buyer 模块 `Tests run: 17, Failures: 0, Errors: 0, Skipped: 0`，依赖模块同轮通过。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system "-Dtest=TerminalRouteOwnershipTest,TerminalSeedPermissionContractTest" test`：通过，`Tests run: 6, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl seller -am "-Dtest=SellerPortalProductServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`Tests run: 6, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system "-Dtest=TerminalAccountIsolationTest,PortalTokenSupportTest,TerminalRouteOwnershipTest,TerminalSeedPermissionContractTest" test`：通过，`Tests run: 12, Failures: 0, Errors: 0, Skipped: 0`。
+- `git diff --check -- <本切片相关文件>`：通过，仅有 LF/CRLF 工作区换行提示。
+- 本切片相关文件尾随空白和冲突标记检查：通过。
+- `cd E:\Urili-Ruoyi; codegraph sync .`：通过，输出 `Synced 11 changed files`、`Added: 6, Modified: 5 - 456 nodes in 1.1s`。
+
+当前判断：
+
+- buyer 后端只读模板已经完成。
+- 远程运行库尚未补 `buyer_menu` / `buyer_role_menu` 权限，因此本轮不做 HTTP smoke。
+- 下一切片建议只做 buyer 权限 DML 与真实 HTTP smoke，不做前端。
+
+## 2026-06-05 买家商品浏览复制前边界检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，并按当前已确认节奏执行：先做一套标准卖家模板，验收通过后复制买家；每个切片只改一类东西。本轮只做 buyer 商品浏览复制前边界记录，不新增 buyer 接口，不改前端，不执行数据库 DDL/DML。
+
+已完成：
+
+- 确认 seller portal “我的商城商品”模板已经完成后端、前端、HTTP smoke、浏览器 smoke 和契约守卫验收。
+- 梳理 buyer 当前只有商品分类和商品 schema 只读入口，尚未落地 buyer 商品列表、详情、SKU 浏览入口。
+- 明确 buyer 商品浏览不能机械复制 seller 商品拥有关系：buyer 的 `subjectId` 只代表登录主体，不代表商品归属。
+- 明确 buyer 首版推荐口径：只读浏览平台 `ON_SALE` SPU 和 `ON_SALE` SKU，且列表价格聚合基于 `ON_SALE` SKU；只展示销售价和币种，不展示供货价、seller 内部编码、系统 SPU/SKU、后台审计字段或 token 字段。
+- 明确 buyer 商品路径和权限命名暂定沿用 seller 模板的 `distribution-products` / `buyer:product:distribution:*`；如果后续决定改为 `browse-products` / `buyer:product:browse:*`，必须在 buyer 后端切片开始前一次选定，不混用两套命名。
+- 明确旧 `sys_*` 混用、`PortalAccountSupport` / `PortalAccountMapper` 回退方向禁止恢复。
+- 新增边界方案：`docs/plans/2026-06-05-buyer-product-browse-copy-boundary-plan.md`。
+
+当前判断：
+
+- seller 模板可以作为结构模板复制，但 buyer 必须替换业务谓词、DTO、权限和验收断言。
+- buyer 后续建议按四个切片推进：后端只读模板、远程权限 DML 与 HTTP smoke、前端工作台复制、浏览器 smoke 与模板验收。
+- portal 请求 401 可能清理 admin session 的隔离瑕疵作为后续独立 token/session 加固项处理，不混入 buyer 商品后端切片。
+- 本轮没有执行数据库写入；涉及 `buyer_menu` / `buyer_role_menu` 的远程 DML 需要在后续独立切片中记录目标数据源、执行类型和影响范围。
+
+验证结果：
+
+- `git diff --check -- <本切片相关 Markdown>`：通过，仅有 LF/CRLF 工作区换行提示。
+- 本切片相关 Markdown 尾随空白和冲突标记检查：通过。
+- `cd E:\Urili-Ruoyi; codegraph sync .`：通过，输出 `Already up to date`。
+
+## 2026-06-05 卖家端商品模板验收检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，并按当前节奏执行：先做一套标准卖家模板，验收通过后再复制买家；每个切片只改一类东西。本轮只做 seller portal “我的商城商品”模板验收，不复制 buyer，不改后端接口，不执行数据库 DDL/DML。
+
+已完成：
+
+- 复跑 seller 商品只读 service 单测。
+- 复跑端路由归属和 seller/buyer seed 权限契约测试。
+- 复跑 seller 模块完整测试。
+- 复跑 seller 商品前端模板契约守卫。
+- 复跑 portal token / query 参数隔离守卫。
+- 复跑前端 TypeScript 检查。
+- 复跑后端真实 HTTP smoke。
+- 复跑前端真实浏览器 smoke。
+- 新增验收记录：`docs/plans/2026-06-05-seller-portal-product-template-acceptance-record.md`。
+- 更新 `docs/architecture/reuse-ledger.md`，登记 seller 商品模板验收基线。
+
+验证结果：
+
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl seller "-Dtest=SellerPortalProductServiceImplTest" test`：通过，`Tests run: 6, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system "-Dtest=TerminalRouteOwnershipTest,TerminalSeedPermissionContractTest" test`：通过，`Tests run: 6, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:seller-portal-product`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:portal-token`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run tsc`：通过。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl seller test`：通过，`Tests run: 15, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi; .\scripts\smoke\seller-own-distribution-product-read-template-smoke.ps1 -SellerUsername '594165649@qq.com' -OtherSellerUsername '1234'`：通过，覆盖 seller 登录、列表、伪造客户端范围参数、详情、SKU、字段脱敏、跨 seller 拒绝和 logout 清理。
+- `cd E:\Urili-Ruoyi; .\scripts\smoke\seller-portal-product-ui-smoke.ps1 -SellerId 5`：通过，覆盖 seller 免密代入、token storage 隔离、商品卡片、详情弹窗和退出清理。
+
+当前判断：
+
+- seller portal “我的商城商品”模板已完成后端契约、前端契约、真实 HTTP 链路和真实浏览器链路验收。
+- buyer 仍未复制；复制前必须先确认 buyer 商品浏览业务口径，不得机械套用 seller 商品拥有关系。
+
+## 2026-06-05 卖家端商品前端浏览器烟测脚本检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，并按当前节奏执行：先做一套标准卖家模板，验收通过后再复制买家；每个切片只改一类东西。本轮只补 seller portal 商品前端可复跑浏览器验收脚本，不复制 buyer，不改后端，不执行数据库 DDL/DML。
+
+已完成：
+
+- 新增 `scripts/smoke/seller-portal-product-ui-smoke.ps1`。
+- 新增 `scripts/smoke/seller-portal-product-ui-smoke.mjs`。
+- 脚本默认通过管理端 `admin / admin123` 创建 seller 免密票据，进入 `/seller/portal` 验证“我的商城商品”卡片和详情弹窗。
+- 脚本验证 fresh browser context 下只写入 `seller_access_token`，不写入 `access_token` 或 `buyer_access_token`。
+- 脚本验证页面可见文本不包含 `sellerId`、`systemSpuCode`、`systemSkuCode`、`tokenId`、`Authorization`。
+- 脚本不会输出 `admin token`、`seller token`、`directLoginToken`、免密 URL、Redis key 或 `.env.local` 内容。
+- 新增执行记录：`docs/plans/2026-06-05-seller-portal-product-ui-smoke-script-record.md`。
+- 更新 `docs/architecture/reuse-ledger.md`，登记 seller 商品前端浏览器烟测脚本。
+
+验证结果：
+
+- `GET http://127.0.0.1:8080/captchaImage`：返回 `code=200`，`captchaEnabled=False`。
+- `GET http://127.0.0.1:8001`：返回 HTTP 200。
+- 本机 Chrome 和 Edge 通道均可 headless launch。
+- `cd E:\Urili-Ruoyi\react-ui; npx biome check ..\scripts\smoke\seller-portal-product-ui-smoke.mjs`：通过。
+- `cd E:\Urili-Ruoyi; node --check scripts/smoke/seller-portal-product-ui-smoke.mjs`：通过。
+- PowerShell 解析检查：通过。
+- `cd E:\Urili-Ruoyi; .\scripts\smoke\seller-portal-product-ui-smoke.ps1 -SellerId 5`：通过，覆盖 seller 免密代入、token storage 隔离、商品卡片、详情弹窗和退出清理。
+
+当前判断：
+
+- seller portal “我的商城商品”已有可复跑浏览器验收脚本，可以作为 seller 模板验收门槛。
+- buyer 仍未复制；复制前必须先确认 buyer 商品浏览口径，并按 seller 已验收模板替换 terminal、路由、service 和断言文本。
+
+## 2026-06-05 卖家端商品前端模板契约守卫检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，并按当前节奏执行：先做一套标准卖家模板，验收通过后再复制买家；每个切片只改一类东西。本轮只加固 seller portal 商品前端模板契约，不复制 buyer，不改后端，不执行数据库 DDL/DML。
+
+已完成：
+
+- 新增 `react-ui/scripts/check-seller-portal-product-template.mjs`。
+- 新增 `react-ui` 脚本 `guard:seller-portal-product`，并接入 `npm run lint`。
+- 守卫固定 `SellerOwnDistributionProductList.tsx` 必须通过 `@/services/portal/session` 调用 seller 商品 service。
+- 守卫固定 seller 商品组件使用 `API.Partner.SellerPortalProduct` / `API.Partner.SellerPortalProductSku`，不得复用管理端 `API.ProductDistribution`。
+- 守卫固定 portal 首页只在 `terminal === 'seller'` 分支渲染 seller 商品卡片。
+- 守卫固定 seller 商品列表 service 必须使用 `sanitizePortalQueryParams(params)`，并继续显式 `isToken:false`。
+- 新增执行记录：`docs/plans/2026-06-05-seller-portal-product-template-contract-guard-record.md`。
+- 更新 `docs/architecture/reuse-ledger.md`，登记 seller 商品前端模板契约守卫。
+
+验证结果：
+
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:seller-portal-product`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:portal-token`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run tsc`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npx biome check scripts/check-seller-portal-product-template.mjs`：通过。
+- `git diff --check -- <本切片相关文件>`：通过，仅有 LF/CRLF 工作区换行提示。
+- 本切片相关文件尾随空白和冲突标记检查：通过。
+- `cd E:\Urili-Ruoyi; codegraph sync .`：通过，新增脚本索引输出 `Synced 1 changed files`、`Added: 1 - 24 nodes`；记录回填后再次同步输出 `Synced 2 changed files`、`Modified: 2 - 100 nodes`。
+
+当前判断：
+
+- seller portal “我的商城商品”前端模板已有独立契约守卫，可以作为后续 seller 模板验收的一部分。
+- buyer 仍未复制；复制 buyer 前必须先完成 seller 验收，并确认 buyer 商品浏览口径不是 seller 商品拥有关系的机械替换。
+
 日期：2026-06-04
 
 ## 参考方向
@@ -65,13 +294,14 @@
 | 管理端审计 UI 与查询 | 已完成 | 卖家/买家管理已按同构模板接入审计弹窗，可查询登录日志、操作日志和免密票据；端内操作日志第一批写入链路已覆盖 `getInfo` / `getRouters` |
 | 免密代入审计原因 | 已完成并已实测 | 管理端生成卖家/买家端免密代入票据时必须填写代入原因，并写入 `portal_direct_login_ticket.reason`；真实接口烟测已确认未填原因会被拒绝、原因可在审计列表读回、票据消费后变为 `USED` |
 | 前端直登入口与端内工作台 | 第一版已完成，token 持久化已加固 | 当前 `react-ui/` 已落地 `/seller/direct-login`、`/buyer/direct-login`、`/seller/portal`、`/buyer/portal`；seller/buyer 工作台已分别接入商品 Schema 前端消费卡片；`persistPortalLogin` 已校验 expected terminal，portal token 静态守卫已接入 `npm run lint`；该工作台是验证型入口，后续物理拆分可迁移模板 |
-| 前端 portal 请求身份范围参数守卫 | 已完成 | 已在 `portal/session.ts` 清洗日志/会话 query 参数，并扩展 `guard:portal-token`，防止 `src/pages/Portal/**` 和 `src/services/portal/**` 直接请求、硬编码端 API 或把 `sellerId` / `buyerId` / `subjectId` / `accountId` 等客户端身份范围字段作为请求参数发送 |
+| 前端 portal 请求身份范围参数守卫 | 已完成，已覆盖 seller 商品列表 | 已在 `portal/session.ts` 清洗日志、会话和 seller 商品列表 query 参数，并扩展 `guard:portal-token`，防止 `src/pages/Portal/**` 和 `src/services/portal/**` 直接请求、硬编码端 API 或把 `sellerId` / `buyerId` / `subjectId` / `accountId` / `terminal` 等客户端身份范围字段作为请求参数发送 |
 | 端内当前账号日志接口 | 已完成，双端已加固 | 已落地 seller/buyer 当前账号登录日志、操作日志只读接口；seller/buyer 均已从“Controller 覆盖 DTO”升级为“Service 内按 `PortalLoginSession` 强制收敛范围”，买家端已按卖家模板只替换 terminal、service、controller、mapper、测试名和文案完成同构复制 |
 | 端内当前账号会话接口 | 已完成 | 已落地 seller/buyer 当前账号会话只读接口；查询范围由 `PortalSessionContext` 推导，只返回当前端账号自己的会话，不返回 `tokenId`、JWT、Redis key 或密码字段 |
 | 端内会话响应脱敏契约守卫 | 已完成 | 已新增 `PortalSessionProfileTest`，固定 `PortalSessionProfile.tokenId` 不得序列化输出，防止端内和管理端会话列表响应泄漏 tokenId |
 | 端内商品分类与 Schema 只读接口 | 已完成 | 已落地 seller/buyer 端可发布商品分类列表和商品 schema 只读接口；seller/buyer 商品分类/schema 端入口均已从 product controller 收口到各自 terminal facade，product 只保留共享 schema service |
 | 端内商品 Schema 前端消费模板 | 已完成 | `react-ui` 的 `/seller/portal` 已接入商品发布准备卡片，`/buyer/portal` 已按卖家模板接入商品浏览准备卡片；均通过端 service 真实消费对应端商品分类和 Schema 接口，不复用管理端 token |
 | 卖家端我的商城商品只读后端模板 | 卖家模板已完成，已补脚本化烟测，待验收后复制买家 | 已新增 seller 端自己的商品列表、详情和 SKU 只读入口；数据范围由 `PortalLoginSession.subjectId` 强制收敛，响应使用 seller DTO，不直接返回 product 管理端实体；远程运行库已补 seller 端两个只读权限及角色授权，并新增可复跑 HTTP 烟测脚本；本切片没有复制 buyer |
+| 卖家端我的商城商品前端工作台模板 | seller 已完成，待验收后复制买家 | `react-ui` 的 `/seller/portal` 已接入“我的商城商品”只读卡片，真实消费 seller 端商品列表、详情和 SKU 接口；请求继续使用 seller token 和 `isToken:false`，并过滤客户端身份范围字段；本切片没有复制 buyer |
 | 免密登录响应日志脱敏 | 已完成 | 管理端 seller/buyer directLogin 的 `@Log` 已关闭响应体记录；真实验证 `sys_oper_log` 未写入 `token` / `loginUrl` / `directLoginToken` |
 | Portal Controller 匿名放行硬化 | 已完成 | `SellerPortalController` / `BuyerPortalController` 已移除类级 `@Anonymous`，12 个 seller 映射和 12 个 buyer 映射均改为方法级 `@Anonymous` + `@PortalPreAuthorize` |
 | 端内 Controller 鉴权模板守卫 | 已完成 | `TerminalRouteOwnershipTest` 已覆盖 product 不承载 seller/buyer 端入口，并覆盖 seller/buyer 受保护 portal handler 必须方法级 `@Anonymous` + `@PortalPreAuthorize` + `@PortalLog` + `PortalSessionContext.requireSession(...)` |
@@ -3683,3 +3913,82 @@
 - 当前 seller 模板适合作为后续 seller 端同类业务接口的基线：Controller 只负责端入口、鉴权、分页和返回；Service 负责基于 `PortalLoginSession` 做数据范围和响应字段收敛。
 - 真实后端运行验收已通过，seller 模板可以进入用户验收；但 buyer 仍未复制。
 - buyer 端后续不应机械复制 seller 商品拥有关系。若要做买家商品浏览，需要先确认商品可见性、上架状态、价格口径和库存可见边界，再按已验收模板替换 terminal、路径、权限点、service、DTO 和测试。
+
+## 2026-06-05 卖家端我的商城商品前端工作台模板检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，并遵守“先做一套标准卖家模板，验收通过后再复制买家；每个切片只改一类东西”的节奏。本轮只处理 seller portal 前端工作台接入，不复制 buyer，不改后端接口，不执行数据库 DDL/DML，不改权限 seed。
+
+已完成：
+
+- 更新 `react-ui/src/types/seller-buyer/party.d.ts`，新增 seller 端商品只读 DTO 类型。
+- 更新 `react-ui/src/services/portal/session.ts`，新增 seller 端商品列表、详情和 SKU service。
+- 新增 `react-ui/src/pages/Portal/Home/SellerOwnDistributionProductList.tsx`：
+  - 展示“我的商城商品”只读列表。
+  - 支持分页、刷新、详情弹窗和 SKU 表。
+  - 不展示 `sellerId`、系统 SPU/SKU、token 或后台审计字段。
+- 更新 `react-ui/src/pages/Portal/Home/index.tsx`，仅当 `terminal === 'seller'` 时展示“我的商城商品”卡片。
+- 新增执行记录：`docs/plans/2026-06-05-seller-portal-distribution-product-ui-template-record.md`。
+- 更新 `docs/architecture/reuse-ledger.md`，登记 seller 前端工作台模板。
+
+边界说明：
+
+- 本轮没有复制 buyer；买家商品浏览仍需单独确认可见性、上架状态、价格口径和库存边界。
+- 本轮没有新增或修改后端接口，没有执行远程数据库 DDL/DML，没有变更权限 seed。
+- 浏览器验收生成了 seller 免密登录票据、seller 登录/退出日志和会话记录；本记录不输出任何 token、directLoginToken 或登录 URL。
+
+验证结果：
+
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:portal-token`：通过，`Portal token isolation guard passed.`。
+- `cd E:\Urili-Ruoyi\react-ui; npm run tsc`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npx biome check src/pages/Portal/Home/SellerOwnDistributionProductList.tsx src/services/portal/session.ts src/types/seller-buyer/party.d.ts`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npx biome check src/pages/Portal/Home/SellerOwnDistributionProductList.tsx src/pages/Portal/Home/index.tsx src/services/portal/session.ts src/types/seller-buyer/party.d.ts`：未作为通过项；`Portal/Home/index.tsx` 存在大量既有格式化差异，已避免整文件格式化造成无关 diff。
+- `git diff --check -- <本切片相关文件>`：通过，仅有 LF/CRLF 工作区换行提示。
+- 相关文件尾随空白和冲突标记检查：通过。
+- `cd E:\Urili-Ruoyi; codegraph sync .`：通过，输出 `Synced 6 changed files`，`Added: 1, Modified: 5 - 210 nodes`。
+
+浏览器验收：
+
+- 8080 后端和 8001 前端均已监听。
+- 通过管理端免密票据进入 `/seller/portal`。
+- DOM 验证出现“卖家端”“商品发布准备”“我的商城商品”“客户SPU”和商品列。
+- 点击商品“详情”后，弹窗出现“商品详情”“客户SKU”“SKU规格”和“商品状态”。
+- 截图检查未发现新增卡片或详情弹窗明显遮挡、错位。
+- 浏览器控制台错误检查：无 error / warning / warn。
+- 验收结束后通过 UI 点击“退出”，页面回到 `/user/login`。
+
+当前判断：
+
+- seller 端“我的商城商品”前端工作台模板已经和后端只读模板贯通，可以进入 seller 模板验收。
+- buyer 仍未复制；后续复制前必须先确认买家商品浏览口径。
+
+## 2026-06-05 卖家端商品列表前端查询范围守卫补强检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，只处理一类问题：seller portal 商品列表前端 service 必须纳入 portal query 参数清洗静态守卫。本轮不复制 buyer，不改后端接口，不执行数据库 DDL/DML，不启动三端前端物理拆分。
+
+已完成：
+
+- 更新 `react-ui/scripts/check-portal-token-isolation.mjs`：
+  - `portalQueryFunctions` 新增 `getSellerPortalDistributionProducts`。
+  - 新增 `PORTAL_SCOPE_PARAM_KEYS` 必须包含 `terminal` 的静态检查。
+- 新增执行记录：`docs/plans/2026-06-05-seller-product-portal-query-scope-guard-record.md`。
+- 更新 `docs/architecture/reuse-ledger.md`，登记 seller 商品列表查询参数清洗守卫规则。
+
+边界说明：
+
+- 首次尝试把 `terminal:` 加入全局禁止对象键正则后，守卫误伤合法端配置和 TypeScript 函数参数；已改为检查 sanitizer 清单必须包含 `terminal`。
+- 真实数据范围仍以后端 `PortalLoginSession.subjectId` 为准；前端守卫只防止误传和回归。
+
+验证结果：
+
+- `cd E:\Urili-Ruoyi\react-ui; npx biome check --write scripts/check-portal-token-isolation.mjs`：通过并格式化脚本。
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:portal-token`：通过，`Portal token isolation guard passed.`。
+- `cd E:\Urili-Ruoyi\react-ui; npm run tsc`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npx biome check scripts/check-portal-token-isolation.mjs`：通过。
+- `git diff --check -- <本切片相关文件>`：通过，仅有 LF/CRLF 工作区换行提示。
+- 相关文件尾随空白和冲突标记检查：通过。
+- `cd E:\Urili-Ruoyi; codegraph sync .`：通过，输出 `Already up to date`。
+
+当前判断：
+
+- seller portal 商品列表 service 已被静态守卫纳入查询参数清洗契约。
+- buyer 仍未复制；后续复制前必须先完成 seller 模板验收并确认买家商品浏览口径。

@@ -136,7 +136,7 @@ export default function CategoryAttributeTemplate({
     [attributes],
   );
 
-  const categoryStatusParam =
+  const categoryEffectiveStatusParam =
     categoryStatus === 'ALL' ? undefined : categoryStatus;
 
   const loadAttributeOptions = useCallback(async (keyword = '') => {
@@ -157,7 +157,7 @@ export default function CategoryAttributeTemplate({
       try {
         const resp = await getCategoryChildren({
           parentId,
-          status: categoryStatusParam,
+          effectiveStatus: categoryEffectiveStatusParam,
         });
         const rows = normalizeLazyCategoryRows(resp.data || []);
         loadedCategoryParentIds.current.add(parentId);
@@ -173,7 +173,7 @@ export default function CategoryAttributeTemplate({
         setCategoryTreeLoading(false);
       }
     },
-    [categoryStatusParam],
+    [categoryEffectiveStatusParam],
   );
 
   const searchCategoryRows = useCallback(
@@ -195,7 +195,7 @@ export default function CategoryAttributeTemplate({
       try {
         const resp = await searchCategories({
           keyword: categoryKeyword || undefined,
-          status: categoryStatusParam,
+          effectiveStatus: categoryEffectiveStatusParam,
           categoryLevel:
             categoryLevel === 'ALL' ? undefined : Number(categoryLevel),
           leafOnly: leafOnly || undefined,
@@ -235,7 +235,7 @@ export default function CategoryAttributeTemplate({
     [
       categoryKeyword,
       categoryLevel,
-      categoryStatusParam,
+      categoryEffectiveStatusParam,
       leafOnly,
     ],
   );
@@ -268,7 +268,12 @@ export default function CategoryAttributeTemplate({
       loadedCategoryParentIds.current.clear();
       setExpandedCategoryKeys([]);
       setAutoExpandParent(false);
-      if (categoryKeyword.trim() || categoryLevel !== 'ALL' || leafOnly) {
+      if (
+        categoryKeyword.trim() ||
+        categoryLevel !== 'ALL' ||
+        leafOnly ||
+        categoryStatus === '1'
+      ) {
         setCategorySearchMode(true);
         searchCategoryRows();
         return;
@@ -286,6 +291,7 @@ export default function CategoryAttributeTemplate({
     return () => window.clearTimeout(timer);
   }, [
     categoryKeyword,
+    categoryStatus,
     categoryLevel,
     leafOnly,
     loadCategoryChildren,

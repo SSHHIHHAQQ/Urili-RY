@@ -19,6 +19,8 @@ public class ProductCategory extends BaseEntity
     private Integer sortOrder;
     private Integer schemaVersion;
     private String status;
+    private String effectiveStatus;
+    private Boolean disabledByAncestor;
     private String delFlag;
     private Integer childrenCount;
     private String keyword;
@@ -123,6 +125,26 @@ public class ProductCategory extends BaseEntity
     public void setStatus(String status)
     {
         this.status = status;
+    }
+
+    public String getEffectiveStatus()
+    {
+        return effectiveStatus;
+    }
+
+    public void setEffectiveStatus(String effectiveStatus)
+    {
+        this.effectiveStatus = effectiveStatus;
+    }
+
+    public Boolean getDisabledByAncestor()
+    {
+        return disabledByAncestor;
+    }
+
+    public void setDisabledByAncestor(Boolean disabledByAncestor)
+    {
+        this.disabledByAncestor = disabledByAncestor;
     }
 
     public String getDelFlag()

@@ -174,6 +174,37 @@ export async function getSellerPortalProductSchema(categoryId: number) {
   );
 }
 
+export async function getSellerPortalDistributionProducts(params?: Record<string, any>) {
+  return request<API.Partner.SellerPortalProductPageResult>(
+    buildPortalUrl('seller', '/product/distribution-products/list'),
+    {
+      method: 'GET',
+      headers: { ...buildPortalAuthHeaders('seller'), isToken: false },
+      params: sanitizePortalQueryParams(params),
+    },
+  );
+}
+
+export async function getSellerPortalDistributionProduct(spuId: number) {
+  return request<API.Partner.SellerPortalProductInfoResult>(
+    buildPortalUrl('seller', `/product/distribution-products/${spuId}`),
+    {
+      method: 'GET',
+      headers: { ...buildPortalAuthHeaders('seller'), isToken: false },
+    },
+  );
+}
+
+export async function getSellerPortalDistributionProductSkus(spuId: number) {
+  return request<API.Partner.SellerPortalProductSkuListResult>(
+    buildPortalUrl('seller', `/product/distribution-products/${spuId}/skus`),
+    {
+      method: 'GET',
+      headers: { ...buildPortalAuthHeaders('seller'), isToken: false },
+    },
+  );
+}
+
 export async function getBuyerPortalProductCategories() {
   return request<API.Partner.PortalProductCategoryListResult>(
     buildPortalUrl('buyer', '/product/categories'),
@@ -187,6 +218,37 @@ export async function getBuyerPortalProductCategories() {
 export async function getBuyerPortalProductSchema(categoryId: number) {
   return request<API.Partner.PortalProductSchemaResult>(
     buildPortalUrl('buyer', `/product/categories/${categoryId}/schema`),
+    {
+      method: 'GET',
+      headers: { ...buildPortalAuthHeaders('buyer'), isToken: false },
+    },
+  );
+}
+
+export async function getBuyerPortalDistributionProducts(params?: Record<string, any>) {
+  return request<API.Partner.BuyerPortalProductPageResult>(
+    buildPortalUrl('buyer', '/product/distribution-products/list'),
+    {
+      method: 'GET',
+      headers: { ...buildPortalAuthHeaders('buyer'), isToken: false },
+      params: sanitizePortalQueryParams(params),
+    },
+  );
+}
+
+export async function getBuyerPortalDistributionProduct(spuId: number) {
+  return request<API.Partner.BuyerPortalProductInfoResult>(
+    buildPortalUrl('buyer', `/product/distribution-products/${spuId}`),
+    {
+      method: 'GET',
+      headers: { ...buildPortalAuthHeaders('buyer'), isToken: false },
+    },
+  );
+}
+
+export async function getBuyerPortalDistributionProductSkus(spuId: number) {
+  return request<API.Partner.BuyerPortalProductSkuListResult>(
+    buildPortalUrl('buyer', `/product/distribution-products/${spuId}/skus`),
     {
       method: 'GET',
       headers: { ...buildPortalAuthHeaders('buyer'), isToken: false },

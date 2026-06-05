@@ -16,6 +16,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="sortOrder"      column="sort_order"       />
         <result property="schemaVersion"  column="schema_version"   />
         <result property="status"         column="status"           />
+        <result property="effectiveStatus" column="effective_status" />
+        <result property="disabledByAncestor" column="disabled_by_ancestor" />
         <result property="delFlag"        column="del_flag"         />
         <result property="childrenCount"  column="children_count"   />
         <result property="createBy"       column="create_by"        />
@@ -103,6 +105,20 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         left join product_attribute a on a.attribute_id = ca.attribute_id
     </sql>
 
+    <sql id="categoryAncestorDisabledCondition">
+        exists (
+            select 1
+            from product_category ap
+            where ap.del_flag = '0'
+              and ap.status = '1'
+              and find_in_set(ap.category_id, c.ancestors) &gt; 0
+        )
+    </sql>
+
+    <sql id="categoryEffectiveDisabledCondition">
+        (c.status = '1' or <include refid="categoryAncestorDisabledCondition"/>)
+    </sql>
+
     <sql id="categorySelect">
         select c.category_id,
                c.parent_id,
@@ -120,6 +136,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                c.sort_order,
                c.schema_version,
                c.status,
+               case when <include refid="categoryEffectiveDisabledCondition"/> then '1' else '0' end as effective_status,
+               case when c.status = '0' and <include refid="categoryAncestorDisabledCondition"/> then 1 else 0 end as disabled_by_ancestor,
                c.del_flag,
                ifnull(child.children_count, 0) as children_count,
                c.create_by,
@@ -169,6 +187,16 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         </if>
         <if test="status != null and status != ''">
             and c.status = #{status}
+        </if>
+        <if test="effectiveStatus != null and effectiveStatus != ''">
+            <choose>
+                <when test='effectiveStatus == "0"'>
+                    and not <include refid="categoryEffectiveDisabledCondition"/>
+                </when>
+                <otherwise>
+                    and <include refid="categoryEffectiveDisabledCondition"/>
+                </otherwise>
+            </choose>
         </if>
         <if test="leafOnly != null and leafOnly">
             and ifnull(child.children_count, 0) = 0
@@ -373,6 +401,15 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             update_by = #{updateBy},
             update_time = sysdate(),
             remark = #{remark}
+        where attribute_id = #{attributeId}
+          and del_flag = '0'
+    </update>
+
+    <update id="updateAttributeStatus">
+        update product_attribute
+        set status = #{status},
+            update_by = #{updateBy},
+            update_time = sysdate()
         where attribute_id = #{attributeId}
           and del_flag = '0'
     </update>

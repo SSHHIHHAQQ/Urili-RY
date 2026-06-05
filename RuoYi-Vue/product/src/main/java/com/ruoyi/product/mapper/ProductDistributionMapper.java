@@ -14,7 +14,11 @@ public interface ProductDistributionMapper
 {
     List<ProductSpu> selectProductList(ProductSpu query);
 
+    List<ProductSpu> selectOnSaleProductList(ProductSpu query);
+
     ProductSpu selectProductById(@Param("spuId") Long spuId);
+
+    ProductSpu selectOnSaleProductById(@Param("spuId") Long spuId);
 
     int insertSpu(ProductSpu spu);
 
@@ -28,6 +32,8 @@ public interface ProductDistributionMapper
         @Param("excludeSpuId") Long excludeSpuId);
 
     List<ProductSku> selectSkuListBySpuId(@Param("spuId") Long spuId);
+
+    List<ProductSku> selectOnSaleSkuListBySpuId(@Param("spuId") Long spuId);
 
     ProductSku selectSkuById(@Param("skuId") Long skuId);
 

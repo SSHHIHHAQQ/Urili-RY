@@ -11,7 +11,11 @@ public interface IProductDistributionService
 {
     List<ProductSpu> selectProductList(ProductSpu query);
 
+    List<ProductSpu> selectOnSaleProductList(ProductSpu query);
+
     ProductSpu selectProductById(Long spuId);
+
+    ProductSpu selectOnSaleProductById(Long spuId);
 
     int insertProduct(ProductSpu product);
 
@@ -22,4 +26,6 @@ public interface IProductDistributionService
     int updateSkuStatus(Long spuId, Long skuId, String status);
 
     List<ProductSku> selectSkuList(Long spuId);
+
+    List<ProductSku> selectOnSaleSkuList(Long spuId);
 }

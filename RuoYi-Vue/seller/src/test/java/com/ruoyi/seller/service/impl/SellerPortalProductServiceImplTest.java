@@ -251,9 +251,21 @@ public class SellerPortalProductServiceImplTest
         }
 
         @Override
+        public List<ProductSpu> selectOnSaleProductList(ProductSpu query)
+        {
+            return productListResult;
+        }
+
+        @Override
         public ProductSpu selectProductById(Long spuId)
         {
             productByIdArg = spuId;
+            return productByIdResult;
+        }
+
+        @Override
+        public ProductSpu selectOnSaleProductById(Long spuId)
+        {
             return productByIdResult;
         }
 
@@ -286,6 +298,12 @@ public class SellerPortalProductServiceImplTest
         {
             skuListSpuId = spuId;
             return skuListResult;
+        }
+
+        @Override
+        public List<ProductSku> selectOnSaleSkuList(Long spuId)
+        {
+            return selectSkuList(spuId);
         }
     }
 }

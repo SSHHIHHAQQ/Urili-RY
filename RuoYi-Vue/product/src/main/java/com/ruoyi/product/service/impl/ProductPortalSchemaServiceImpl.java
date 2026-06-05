@@ -31,7 +31,7 @@ public class ProductPortalSchemaServiceImpl implements IProductPortalSchemaServi
     public List<PortalProductCategory> selectPortalCategories()
     {
         ProductCategory query = new ProductCategory();
-        query.setStatus(STATUS_NORMAL);
+        query.setEffectiveStatus(STATUS_NORMAL);
         query.setPublishEnabled(YES);
 
         List<PortalProductCategory> result = new ArrayList<>();
@@ -46,7 +46,7 @@ public class ProductPortalSchemaServiceImpl implements IProductPortalSchemaServi
     public List<PortalProductCategorySchemaItem> selectPortalSchema(Long categoryId)
     {
         ProductCategory category = productConfigService.selectCategoryById(categoryId);
-        if (!STATUS_NORMAL.equals(category.getStatus()))
+        if (!STATUS_NORMAL.equals(category.getEffectiveStatus()))
         {
             throw new ServiceException("Product category is disabled");
         }

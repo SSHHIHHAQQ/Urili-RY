@@ -11,6 +11,8 @@ declare namespace API.Product {
     sortOrder?: number;
     schemaVersion?: number;
     status?: string;
+    effectiveStatus?: string;
+    disabledByAncestor?: boolean;
     childrenCount?: number;
     keyword?: string;
     leafOnly?: boolean;

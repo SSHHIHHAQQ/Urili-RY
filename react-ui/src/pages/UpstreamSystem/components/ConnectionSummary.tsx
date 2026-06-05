@@ -1,13 +1,15 @@
 import {
   CheckCircleOutlined,
+  DownOutlined,
   EditOutlined,
   KeyOutlined,
   SafetyCertificateOutlined,
   StopOutlined,
   SyncOutlined,
+  UpOutlined,
 } from '@ant-design/icons';
 import { Button, Popconfirm, Tooltip, Typography } from 'antd';
-import type { ReactNode } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { settlementTypeText, systemKindText } from '../constants';
 import { statusTag } from '../helpers';
 import styles from '../style.module.css';
@@ -52,8 +54,13 @@ export default function ConnectionSummary({
   onSync,
   onToggleStatus,
 }: ConnectionSummaryProps) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const systemKind =
     systemKindText[connection.systemKind || ''] || connection.systemKind || '-';
+
+  useEffect(() => {
+    setDetailsOpen(false);
+  }, [connection.connectionCode]);
 
   return (
     <div className={styles.summaryPanel}>
@@ -68,6 +75,15 @@ export default function ConnectionSummary({
           <Typography.Text type="secondary" className={styles.summarySubtitle}>
             {connection.connectionCode} · {systemKind}
           </Typography.Text>
+          <Button
+            className={styles.summaryDetailToggle}
+            icon={detailsOpen ? <UpOutlined /> : <DownOutlined />}
+            size="small"
+            type="link"
+            onClick={() => setDetailsOpen((open) => !open)}
+          >
+            {detailsOpen ? '收起详情' : '展开详情'}
+          </Button>
         </div>
         <div className={styles.summaryActions}>
           <Tooltip title="编辑主仓资料">
@@ -130,30 +146,35 @@ export default function ConnectionSummary({
           </Popconfirm>
         </div>
       </div>
-      <div className={styles.summaryGrid}>
-        <SummaryItem
-          label="授权状态"
-          value={statusTag(
-            connection.credentialStatus ||
-              (connection.appKeyMask ? 'CONFIGURED' : undefined),
-          )}
-        />
-        <SummaryItem label="最近同步" value={connection.lastSyncTime || '-'} />
-        <SummaryItem
-          label="最近授权"
-          value={connection.lastAuthorizedTime || '-'}
-        />
-        <SummaryItem
-          label="请求日志数"
-          value={connection.requestLogCount ?? 0}
-        />
-        <SummaryItem
-          label="结算类型"
-          value={settlementText(connection.settlementType)}
-        />
-        <SummaryItem label="Key" value={connection.appKeyMask || '-'} />
-        <SummaryItem label="备注" value={connection.remark || '-'} wide />
-      </div>
+      {detailsOpen ? (
+        <div className={styles.summaryGrid}>
+          <SummaryItem
+            label="授权状态"
+            value={statusTag(
+              connection.credentialStatus ||
+                (connection.appKeyMask ? 'CONFIGURED' : undefined),
+            )}
+          />
+          <SummaryItem
+            label="最近同步"
+            value={connection.lastSyncTime || '-'}
+          />
+          <SummaryItem
+            label="最近授权"
+            value={connection.lastAuthorizedTime || '-'}
+          />
+          <SummaryItem
+            label="请求日志数"
+            value={connection.requestLogCount ?? 0}
+          />
+          <SummaryItem
+            label="结算类型"
+            value={settlementText(connection.settlementType)}
+          />
+          <SummaryItem label="Key" value={connection.appKeyMask || '-'} />
+          <SummaryItem label="备注" value={connection.remark || '-'} wide />
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -1,5 +1,117 @@
 # 复用台账
 
+## 买家端商城商品浏览只读后端模板
+
+- 位置：
+  - `RuoYi-Vue/buyer/src/main/java/com/ruoyi/buyer/controller/BuyerPortalProductDistributionController.java`
+  - `RuoYi-Vue/buyer/src/main/java/com/ruoyi/buyer/service/IBuyerPortalProductService.java`
+  - `RuoYi-Vue/buyer/src/main/java/com/ruoyi/buyer/service/impl/BuyerPortalProductServiceImpl.java`
+  - `RuoYi-Vue/buyer/src/main/java/com/ruoyi/buyer/domain/BuyerPortalProduct.java`
+  - `RuoYi-Vue/buyer/src/main/java/com/ruoyi/buyer/domain/BuyerPortalProductSku.java`
+  - `RuoYi-Vue/buyer/src/test/java/com/ruoyi/buyer/service/impl/BuyerPortalProductServiceImplTest.java`
+  - `RuoYi-Vue/product/src/main/java/com/ruoyi/product/service/IProductDistributionService.java`
+  - `RuoYi-Vue/product/src/main/resources/mapper/product/ProductDistributionMapper.xml`
+  - `RuoYi-Vue/sql/seller_buyer_management_seed.sql`
+  - `react-ui/src/pages/Portal/Home/BuyerDistributionProductList.tsx`
+  - `react-ui/src/pages/Portal/Home/index.tsx`
+  - `react-ui/src/services/portal/session.ts`
+  - `react-ui/src/types/seller-buyer/party.d.ts`
+  - `react-ui/scripts/check-buyer-portal-product-template.mjs`
+  - `react-ui/scripts/check-portal-token-isolation.mjs`
+  - `scripts/smoke/buyer-distribution-product-read-template-smoke.ps1`
+  - `scripts/smoke/buyer-portal-product-ui-smoke.ps1`
+  - `scripts/smoke/buyer-portal-product-ui-smoke.mjs`
+  - `docs/plans/2026-06-05-buyer-distribution-product-read-template-record.md`
+  - `docs/plans/2026-06-05-buyer-product-permission-dml-smoke-record.md`
+  - `docs/plans/2026-06-05-buyer-portal-product-ui-template-record.md`
+- 当前用途：
+  - 作为 buyer 端商城商品浏览的第一套后端只读模板。
+  - 作为 buyer portal 工作台商城商品卡片的第一套前端模板。
+  - buyer 端只读浏览平台已上架商品，不承载商品归属、下单、购物车、库存承诺或客户专属价格。
+  - product 共享查询提供 `ON_SALE` SPU / `ON_SALE` SKU 的只读口径，buyer facade 负责端入口、端鉴权、DTO 脱敏和业务筛选。
+  - buyer 真实运行库权限 DML 与 HTTP smoke 已形成可复跑验收模板。
+  - buyer 前端契约守卫和浏览器 smoke 已形成可复跑验收模板。
+- 复用规则：
+  - buyer 商品浏览只展示 `ON_SALE` SPU 和 `ON_SALE` SKU；列表价格、币种和 SKU 数量必须基于 `ON_SALE` SKU。
+  - buyer 请求不能传 `buyerId`、`subjectId`、`accountId`、`terminal` 决定数据范围，也不能使用 `sellerId`、系统编码、seller 客户编码、sourceType 或 spuStatus 作为 buyer 浏览筛选。
+  - buyer DTO 不暴露 `sellerId`、`sellerNo`、`sellerName`、`sellerSpuCode`、`sellerSkuCode`、`systemSpuCode`、`systemSkuCode`、供货价、后台审计字段、token 或 Redis key。
+  - product 管理端商品查询继续保持原行为；不要为了 buyer 浏览直接改管理端 `selectProductList(...)` 的含义。
+  - buyer 端权限写入 `buyer_menu` / `buyer_role_menu`，不写入若依 `sys_menu` / `sys_role`。
+  - 真实运行库补权限和 HTTP smoke 已单独成切片；后续 buyer 前端复制时不得重复执行 DML，除非权限 seed 或运行库权限发生新变更。
+  - HTTP smoke 必须覆盖无 token 拒绝、buyer 登录、`getInfo` 权限集合、列表、伪造范围参数不生效、详情、SKU、固定不存在商品拒绝和 logout 后旧 token 失效。
+  - buyer 前端工作台复制已按 seller portal 商品卡片模板替换 terminal、service、路由、DTO 和断言文本，不重新设计页面结构。
+  - buyer 前端卡片标题使用“商城商品”，不使用 seller 的“我的商城商品”；buyer 页面不展示客户 SPU/SKU、seller 内部编码、系统编码、供货价或后台审计字段。
+  - buyer 商品前端模板改动后至少运行 `npm run guard:buyer-portal-product`、`npm run guard:portal-token`、`npm run tsc -- --pretty false` 和 `scripts/smoke/buyer-portal-product-ui-smoke.ps1`。
+
+## 买家商品浏览复制前边界
+
+- 位置：
+  - `docs/plans/2026-06-05-buyer-product-browse-copy-boundary-plan.md`
+  - `docs/plans/2026-06-05-seller-portal-product-template-acceptance-record.md`
+- 当前用途：
+  - 作为 seller 商品模板验收后复制 buyer 商品浏览前的业务边界。
+  - 固定 buyer 商品浏览不能机械复制 seller 商品拥有关系。
+  - 固定首版 buyer 浏览口径为平台已上架 SPU/SKU 只读浏览。
+- 复用规则：
+  - 后续复制 buyer 时只复用 seller 的端入口结构、DTO 收敛方式、guard 和 smoke 验收方法，不复用 seller 的 `sellerId = 当前 subjectId` 商品归属谓词。
+  - buyer 首版列表只浏览 `ON_SALE` SPU 和 `ON_SALE` SKU；列表价格聚合必须基于 `ON_SALE` SKU，不能把草稿、待上架或已下架 SKU 的价格带进 buyer 列表。
+  - buyer 端商品 DTO 不直接复用管理端 `ProductSpu` / `ProductSku`，也不复用 seller DTO。
+  - buyer 首版只展示销售价和币种；供货价、seller 内部编码、系统 SPU/SKU、后台审计字段、token、Redis key 均不得进入 buyer 响应或页面。
+  - buyer 端商品权限写入 `buyer_menu` / `buyer_role_menu`；不得写回若依 `sys_menu` / `sys_role`。
+  - buyer 商品路径和权限命名暂定沿用 seller 模板的 `distribution-products` / `buyer:product:distribution:*`；如果改为 `browse-products` / `buyer:product:browse:*`，必须在 buyer 后端切片开始前一次选定。
+  - buyer 后续实现按后端只读模板、权限 DML 与 HTTP smoke、前端工作台复制、浏览器 smoke 与模板验收分切片推进。
+  - portal 401 清理 admin session 的前端隔离问题作为后续独立切片处理，不混进 buyer 商品后端复制。
+
+## 卖家端商品模板验收基线
+
+- 位置：
+  - `docs/plans/2026-06-05-seller-portal-product-template-acceptance-record.md`
+  - `scripts/smoke/seller-own-distribution-product-read-template-smoke.ps1`
+  - `scripts/smoke/seller-portal-product-ui-smoke.ps1`
+  - `react-ui/scripts/check-seller-portal-product-template.mjs`
+  - `react-ui/scripts/check-portal-token-isolation.mjs`
+- 当前用途：
+  - 作为 seller portal “我的商城商品”模板是否可以进入复制评估的验收基线。
+  - 同时覆盖后端 service 范围控制、端权限 seed 契约、前端模板契约、portal token/query 隔离、真实 HTTP 链路和真实浏览器链路。
+- 复用规则：
+  - 后续复制 buyer 前，必须先确认 buyer 商品浏览业务口径，再按该验收基线替换 terminal、路由、service、权限、DTO、前端断言和 smoke 脚本。
+  - 不允许把 seller 商品拥有关系机械替换成 buyer；buyer 可见性、上架状态、价格口径和库存可见边界需要单独确认。
+  - seller 商品模板改动后，至少重新运行 seller service 单测、seller 模块测试、前端两个 guard、`npm run tsc`、后端 HTTP smoke 和前端浏览器 smoke。
+
+## 卖家端商品前端浏览器烟测脚本
+
+- 位置：
+  - `scripts/smoke/seller-portal-product-ui-smoke.ps1`
+  - `scripts/smoke/seller-portal-product-ui-smoke.mjs`
+- 当前用途：
+  - 可复跑验收 seller portal “我的商城商品”前端模板。
+  - 覆盖管理端生成 seller 免密票据、seller direct-login、seller portal 加载、token storage 隔离、商品卡片、详情弹窗、可见字段脱敏和退出清理。
+  - 默认使用本机 Chrome/Edge 通道，不往 `react-ui/package.json` 增加 Playwright 依赖。
+- 复用规则：
+  - seller 商品模板验收时先运行后端 HTTP smoke，再运行该浏览器 smoke。
+  - 脚本不得输出 `admin token`、`seller token`、`directLoginToken`、免密 URL、Redis key 或 `.env.local` 内容。
+  - 验证码开启时脚本只能失败并提示，不得自行修改验证码开关。
+  - buyer 未验收前不要复制该脚本为 buyer 版本；buyer 商品浏览口径确认后再替换 terminal、路由、service 和断言文本。
+
+## 卖家端商品前端模板契约守卫
+
+- 位置：
+  - `react-ui/scripts/check-seller-portal-product-template.mjs`
+  - `react-ui/src/pages/Portal/Home/SellerOwnDistributionProductList.tsx`
+  - `react-ui/src/pages/Portal/Home/index.tsx`
+  - `react-ui/src/services/portal/session.ts`
+  - `react-ui/package.json`
+- 当前用途：
+  - 固定 seller portal “我的商城商品”前端模板契约。
+  - 防止 seller 商品卡片被放入 buyer 分支。
+  - 防止 seller portal 商品页面直接调用 `request(...)`、导入管理端 product service、硬编码 API 路径或复用管理端 `API.ProductDistribution` 类型。
+  - 防止 seller 商品列表 service 透传客户端身份范围参数。
+- 复用规则：
+  - 后续先验收 seller 模板，再复制 buyer；复制前必须先确认 buyer 商品浏览可见性、上架状态、价格口径和库存可见边界。
+  - seller portal 商品页面必须通过 `@/services/portal/session` 调用端内 service，不要在页面中手写 Authorization、API 路径或管理端 service。
+  - seller portal 商品响应类型必须使用 `API.Partner.SellerPortalProduct` / `API.Partner.SellerPortalProductSku`，不要把管理端商品 DTO 当作端内 API 标准。
+  - 修改 seller portal 商品模板后必须运行 `npm run guard:seller-portal-product`。
+
 ## 若依字典
 
 ### 主体类型
@@ -222,6 +334,24 @@
   - 当前权限点为 `seller:product:distribution:list` 和 `seller:product:distribution:query`，只读 seed 已写入 `seller_menu` 和 active seller role 授权；远程运行库已补 seller 端权限 DML，未执行 DDL，未复制 buyer。
   - 脚本化烟测必须覆盖 seller 登录、列表、伪造客户端范围参数、详情、SKU、响应字段脱敏、跨卖家详情/SKU 负向访问和 logout 清理；烟测不得输出 token、JWT、Redis key、`.env.local` 或数据库连接明文。
   - buyer 端后续如果复制该模板，只能替换 terminal、路径、权限前缀、日志 title、service 名称、DTO 名称和测试名；不能把 seller 商品拥有关系机械改成 buyer 拥有关系，买家浏览商品的可见性规则需要单独确认。
+
+### 卖家端我的商城商品前端工作台模板
+
+- 位置：
+  - `react-ui/src/types/seller-buyer/party.d.ts`
+  - `react-ui/src/services/portal/session.ts`
+  - `react-ui/src/pages/Portal/Home/SellerOwnDistributionProductList.tsx`
+  - `react-ui/src/pages/Portal/Home/index.tsx`
+- 当前用途：
+  - 在 seller portal 工作台只读展示当前 seller 的商城商品列表、详情和 SKU。
+  - 作为 seller 端真实业务列表接入的前端模板，配合后端 `SellerPortalProductDistributionController` 使用。
+  - 当前只落 seller，不复制 buyer。
+- 复用规则：
+  - seller portal 商品请求必须通过 `services/portal/session.ts`，使用 seller token，并显式 `isToken: false`；不要回退复用管理端 `access_token`。
+  - 列表参数必须经过 `sanitizePortalQueryParams(...)`，不得把 `sellerId`、`buyerId`、`subjectId`、`accountId`、`sellerAccountId`、`buyerAccountId` 或 `terminal` 作为端内数据范围传给后端。
+  - seller portal 商品类型使用 `API.Partner.SellerPortalProduct` / `SellerPortalProductSku`，不要直接复用管理端 `API.ProductDistribution.Spu` 作为端内响应标准。
+  - 商品详情和 SKU 均从 seller portal 接口读取；前端只负责展示，不做 seller 归属判断。
+  - buyer 后续不能机械复制 seller 商品拥有关系；必须先确认买家商品浏览可见性、上架状态、价格口径和库存边界。
 
 ### 端内 Controller 鉴权模板守卫
 
@@ -846,7 +976,7 @@
   - 卖家端、买家端预留独立 token key：`seller_*` / `buyer_*`。
   - `portal/session.ts` 统一封装卖家端、买家端登录、免密登录、主动退出、修改当前账号密码、`getInfo`、`getRouters`、主体资料、当前账号资料、端内账号只读列表、端内部门只读列表、端内角色只读列表、当前账号日志只读接口和当前账号会话只读接口。
   - `scripts/check-portal-token-isolation.mjs` 作为前端端内 token 静态守卫，已接入 `npm run lint`。
-  - `scripts/check-portal-token-isolation.mjs` 同时作为前端 portal 请求身份范围参数静态守卫，防止 portal 页面或 service 绕过端 token，把 `sellerId`、`buyerId`、`subjectId`、`accountId`、`sellerAccountId`、`buyerAccountId` 等客户端身份范围字段作为请求参数发送。
+  - `scripts/check-portal-token-isolation.mjs` 同时作为前端 portal 请求身份范围参数静态守卫，防止 portal 页面或 service 绕过端 token，把 `sellerId`、`buyerId`、`subjectId`、`accountId`、`sellerAccountId`、`buyerAccountId`、`terminal` 等客户端身份范围字段作为请求参数发送。
 - 复用规则：
   - 后续三端物理拆分时，卖家端、买家端前端优先复用 `setTerminalSessionToken`、`getTerminalAccessToken`、`clearTerminalSessionToken`，不要重新设计 localStorage key。
   - 后续端内页面调用当前账号、主体资料、菜单、权限和退出登录时，优先复用 `sellerPortalSessionService` / `buyerPortalSessionService` 或底层 `portal*` 方法，不要在页面里直接拼 `/seller` / `/buyer` 路径。
@@ -855,7 +985,8 @@
   - `src/pages/Portal/**` 和 `src/services/portal/**` 禁止调用管理端 `getAccessToken`、`setSessionToken`、`clearSessionToken`，也不得出现裸 `access_token` / `portal_login_token`；新增端内前端能力后必须运行 `npm run guard:portal-token`。
   - `src/pages/Portal/**` 不得直接调用 `request(...)` 或硬编码 `/api/seller`、`/api/buyer`；页面必须通过 `PORTAL_SERVICE` 或 `@/services/portal/session` 统一出口调用端内接口。
   - 受保护 portal 请求不得把 `sellerId`、`buyerId`、`subjectId`、`accountId`、`sellerAccountId`、`buyerAccountId` 作为 query/body/request params 发送；`terminal` 只允许作为前端本地端类型选择、URL 判断、`persistPortalLogin(..., expectedTerminal)` 和 `getTerminalAccessToken(terminal)` 的本地参数。
-  - `portal/session.ts` 的日志和会话查询必须使用 `sanitizePortalQueryParams(params)` 清洗参数；分页、日志安全筛选和商品 `categoryId` 这类业务参数可以保留，但端内数据范围必须由端 token 和后端 `PortalSessionContext` 推导。
+  - `portal/session.ts` 的日志、会话和 seller 商品列表查询必须使用 `sanitizePortalQueryParams(params)` 清洗参数；分页、日志安全筛选和商品 `categoryId` 这类业务参数可以保留，但端内数据范围必须由端 token 和后端 `PortalSessionContext` 推导。
+  - `PORTAL_SCOPE_PARAM_KEYS` 必须包含 `terminal`；`terminal` 只允许作为前端本地端类型参数，不允许作为 portal query 参数传给后端决定数据范围。
   - 后续端内安全设置或个人中心修改密码时，优先调用 `sellerPortalSessionService.updatePassword` / `buyerPortalSessionService.updatePassword`；页面不要传主体 ID、账号 ID，也不要持久化旧密码、新密码或确认密码。
   - 后续端内安全中心或个人中心展示当前账号会话时，优先调用 `sellerPortalSessionService.getSessions` / `buyerPortalSessionService.getSessions`；页面不要传主体 ID、账号 ID、`tokenId` 或 Redis key。
 

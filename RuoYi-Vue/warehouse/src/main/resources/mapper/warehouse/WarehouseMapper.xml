@@ -1,0 +1,257 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.warehouse.mapper.WarehouseMapper">
+
+    <resultMap type="Warehouse" id="WarehouseResult">
+        <id     property="warehouseId"         column="warehouse_id" />
+        <result property="warehouseCode"       column="warehouse_code" />
+        <result property="warehouseName"       column="warehouse_name" />
+        <result property="warehouseKind"       column="warehouse_kind" />
+        <result property="countryCode"         column="country_code" />
+        <result property="stateProvince"       column="state_province" />
+        <result property="city"                column="city" />
+        <result property="postalCode"          column="postal_code" />
+        <result property="addressLine1"        column="address_line1" />
+        <result property="addressLine2"        column="address_line2" />
+        <result property="contactName"         column="contact_name" />
+        <result property="contactPhone"        column="contact_phone" />
+        <result property="contactEmail"        column="contact_email" />
+        <result property="companyName"         column="company_name" />
+        <result property="settlementCurrency"  column="settlement_currency" />
+        <result property="status"              column="status" />
+        <result property="createBy"            column="create_by" />
+        <result property="createTime"          column="create_time" />
+        <result property="updateBy"            column="update_by" />
+        <result property="updateTime"          column="update_time" />
+        <result property="remark"              column="remark" />
+        <result property="sellerId"            column="seller_id" />
+        <result property="sellerNo"            column="seller_no" />
+        <result property="sellerCode"          column="seller_code" />
+        <result property="sellerName"          column="seller_name" />
+        <result property="sellerShortName"     column="seller_short_name" />
+        <result property="warehousePairingId"  column="warehouse_pairing_id" />
+        <result property="connectionCode"      column="connection_code" />
+        <result property="upstreamWarehouseCode" column="upstream_warehouse_code" />
+        <result property="upstreamWarehouseName" column="upstream_warehouse_name" />
+        <result property="pairingStatus"       column="pairing_status" />
+    </resultMap>
+
+    <resultMap type="UsState" id="UsStateResult">
+        <id     property="stateId"   column="state_id" />
+        <result property="stateCode" column="state_code" />
+        <result property="stateName" column="state_name" />
+        <result property="status"    column="status" />
+    </resultMap>
+
+    <resultMap type="UsCity" id="UsCityResult">
+        <id     property="cityId"     column="city_id" />
+        <result property="placeGeoid" column="place_geoid" />
+        <result property="stateCode"  column="state_code" />
+        <result property="stateName"  column="state_name" />
+        <result property="cityName"   column="city_name" />
+        <result property="placeName"  column="place_name" />
+        <result property="placeType"  column="place_type" />
+        <result property="status"     column="status" />
+    </resultMap>
+
+    <resultMap type="WarehouseOption" id="WarehouseOptionResult">
+        <result property="label"      column="label" />
+        <result property="value"      column="value" />
+        <result property="code"       column="code" />
+        <result property="name"       column="name" />
+        <result property="searchText" column="search_text" />
+    </resultMap>
+
+    <sql id="WarehouseSelect">
+        select w.warehouse_id, w.warehouse_code, w.warehouse_name, w.warehouse_kind,
+               w.country_code, w.state_province, w.city, w.postal_code,
+               w.address_line1, w.address_line2, w.contact_name, w.contact_phone,
+               w.contact_email, w.company_name, w.settlement_currency, w.status,
+               w.create_by, w.create_time, w.update_by, w.update_time, w.remark,
+               tp.seller_id, s.seller_no, s.seller_code, s.seller_name, s.seller_short_name,
+               p.warehouse_pairing_id, p.connection_code, p.upstream_warehouse_code,
+               p.upstream_warehouse_name, p.status as pairing_status
+        from warehouse w
+        left join third_party_warehouse tp on tp.warehouse_id = w.warehouse_id
+        left join seller s on s.seller_id = tp.seller_id
+        left join upstream_system_warehouse_pairing p on p.system_warehouse_code = w.warehouse_code
+    </sql>
+
+    <select id="selectWarehouseList" parameterType="Warehouse" resultMap="WarehouseResult">
+        <include refid="WarehouseSelect" />
+        <where>
+            <if test="warehouseKind != null and warehouseKind != ''">
+                and w.warehouse_kind = #{warehouseKind}
+            </if>
+            <if test="warehouseCode != null and warehouseCode != ''">
+                and w.warehouse_code like concat('%', #{warehouseCode}, '%')
+            </if>
+            <if test="warehouseName != null and warehouseName != ''">
+                and w.warehouse_name like concat('%', #{warehouseName}, '%')
+            </if>
+            <if test="countryCode != null and countryCode != ''">
+                and w.country_code = #{countryCode}
+            </if>
+            <if test="stateProvince != null and stateProvince != ''">
+                and w.state_province like concat('%', #{stateProvince}, '%')
+            </if>
+            <if test="city != null and city != ''">
+                and w.city like concat('%', #{city}, '%')
+            </if>
+            <if test="settlementCurrency != null and settlementCurrency != ''">
+                and w.settlement_currency = #{settlementCurrency}
+            </if>
+            <if test="status != null and status != ''">
+                and w.status = #{status}
+            </if>
+            <if test="sellerId != null">
+                and tp.seller_id = #{sellerId}
+            </if>
+            <if test="sellerKeyword != null and sellerKeyword != ''">
+                and (
+                    s.seller_no like concat('%', #{sellerKeyword}, '%')
+                    or s.seller_code like concat('%', #{sellerKeyword}, '%')
+                    or s.seller_name like concat('%', #{sellerKeyword}, '%')
+                    or s.seller_short_name like concat('%', #{sellerKeyword}, '%')
+                )
+            </if>
+        </where>
+        order by w.create_time desc, w.warehouse_id desc
+    </select>
+
+    <select id="selectWarehouseById" parameterType="Long" resultMap="WarehouseResult">
+        <include refid="WarehouseSelect" />
+        where w.warehouse_id = #{warehouseId}
+        limit 1
+    </select>
+
+    <select id="selectWarehouseByCode" parameterType="String" resultMap="WarehouseResult">
+        <include refid="WarehouseSelect" />
+        where w.warehouse_code = #{warehouseCode}
+        limit 1
+    </select>
+
+    <select id="countWarehouseCode" resultType="int">
+        select count(1)
+        from warehouse
+        where warehouse_code = #{warehouseCode}
+        <if test="excludeWarehouseId != null">
+            and warehouse_id &lt;&gt; #{excludeWarehouseId}
+        </if>
+    </select>
+
+    <insert id="insertWarehouse" parameterType="Warehouse" useGeneratedKeys="true" keyProperty="warehouseId">
+        insert into warehouse(
+            warehouse_code, warehouse_name, warehouse_kind, country_code, state_province,
+            city, postal_code, address_line1, address_line2, contact_name, contact_phone,
+            contact_email, company_name, settlement_currency, status, create_by, create_time, remark
+        ) values (
+            #{warehouseCode}, #{warehouseName}, #{warehouseKind}, #{countryCode}, #{stateProvince},
+            #{city}, #{postalCode}, #{addressLine1}, #{addressLine2}, #{contactName}, #{contactPhone},
+            #{contactEmail}, #{companyName}, #{settlementCurrency}, #{status}, #{createBy}, sysdate(), #{remark}
+        )
+    </insert>
+
+    <update id="updateWarehouse" parameterType="Warehouse">
+        update warehouse
+        set warehouse_name = #{warehouseName},
+            country_code = #{countryCode},
+            state_province = #{stateProvince},
+            city = #{city},
+            postal_code = #{postalCode},
+            address_line1 = #{addressLine1},
+            address_line2 = #{addressLine2},
+            contact_name = #{contactName},
+            contact_phone = #{contactPhone},
+            contact_email = #{contactEmail},
+            company_name = #{companyName},
+            settlement_currency = #{settlementCurrency},
+            status = #{status},
+            update_by = #{updateBy},
+            update_time = sysdate(),
+            remark = #{remark}
+        where warehouse_id = #{warehouseId}
+    </update>
+
+    <update id="updateWarehouseStatus">
+        update warehouse
+        set status = #{status},
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where warehouse_id = #{warehouseId}
+    </update>
+
+    <insert id="insertOfficialWarehouse" parameterType="Warehouse">
+        insert into official_warehouse(warehouse_id, create_by, create_time, remark)
+        values (#{warehouseId}, #{createBy}, sysdate(), #{remark})
+    </insert>
+
+    <update id="updateOfficialWarehouse" parameterType="Warehouse">
+        update official_warehouse
+        set update_by = #{updateBy},
+            update_time = sysdate(),
+            remark = #{remark}
+        where warehouse_id = #{warehouseId}
+    </update>
+
+    <insert id="insertThirdPartyWarehouse" parameterType="Warehouse">
+        insert into third_party_warehouse(warehouse_id, seller_id, create_by, create_time, remark)
+        values (#{warehouseId}, #{sellerId}, #{createBy}, sysdate(), #{remark})
+    </insert>
+
+    <update id="updateThirdPartyWarehouse" parameterType="Warehouse">
+        update third_party_warehouse
+        set seller_id = #{sellerId},
+            update_by = #{updateBy},
+            update_time = sysdate(),
+            remark = #{remark}
+        where warehouse_id = #{warehouseId}
+    </update>
+
+    <select id="selectUsStateList" resultMap="UsStateResult">
+        select state_id, state_code, state_name, status
+        from us_state
+        where status = '0'
+        <if test="keyword != null and keyword != ''">
+            and (state_name like concat('%', #{keyword}, '%') or state_code like concat('%', #{keyword}, '%'))
+        </if>
+        order by state_name asc
+        limit 100
+    </select>
+
+    <select id="selectUsCityList" resultMap="UsCityResult">
+        select city_id, place_geoid, state_code, state_name, city_name, place_name, place_type, status
+        from us_city
+        where status = '0'
+        <if test="stateName != null and stateName != ''">
+            and state_name = #{stateName}
+        </if>
+        <if test="keyword != null and keyword != ''">
+            and (city_name like concat('%', #{keyword}, '%') or place_name like concat('%', #{keyword}, '%') or place_type like concat('%', #{keyword}, '%'))
+        </if>
+        order by state_name asc, city_name asc, place_type asc, place_geoid asc
+        limit 100
+    </select>
+
+    <select id="selectNormalSellerOptions" resultMap="WarehouseOptionResult">
+        select concat(seller_code, ' - ', seller_short_name) as label,
+               seller_id as value,
+               seller_code as code,
+               seller_name as name,
+               concat(seller_no, ' ', seller_code, ' ', seller_name, ' ', seller_short_name) as search_text
+        from seller
+        where status = '0'
+        <if test="keyword != null and keyword != ''">
+            and (
+                seller_no like concat('%', #{keyword}, '%')
+                or seller_code like concat('%', #{keyword}, '%')
+                or seller_name like concat('%', #{keyword}, '%')
+                or seller_short_name like concat('%', #{keyword}, '%')
+            )
+        </if>
+        order by seller_code asc, seller_id asc
+        limit 100
+    </select>
+</mapper>

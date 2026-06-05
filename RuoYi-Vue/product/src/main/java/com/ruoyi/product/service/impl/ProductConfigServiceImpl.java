@@ -37,6 +37,8 @@ public class ProductConfigServiceImpl implements IProductConfigService
 
     private static final String STATUS_NORMAL = "0";
 
+    private static final String STATUS_DISABLED = "1";
+
     private static final String YES = "Y";
 
     private static final String NO = "N";
@@ -156,6 +158,7 @@ public class ProductConfigServiceImpl implements IProductConfigService
         category.setPublishEnabled(derivedPublishEnabled(category.getCategoryId()));
         category.setUpdateBy(currentUsername());
         int rows = productConfigMapper.updateCategory(category);
+        invalidateSchemaByCategoryId(category.getCategoryId());
         return rows;
     }
 
@@ -245,6 +248,20 @@ public class ProductConfigServiceImpl implements IProductConfigService
         invalidateSchemaByAttributeId(attribute.getAttributeId());
         int rows = productConfigMapper.updateAttribute(attribute);
         return rows;
+    }
+
+    @Override
+    @Transactional
+    public int updateAttributeStatus(Long attributeId, String status)
+    {
+        ProductAttribute current = selectAttributeById(attributeId);
+        String targetStatus = normalizeStatus(status, "商品属性状态不能为空");
+        if (targetStatus.equals(current.getStatus()))
+        {
+            return 1;
+        }
+        invalidateSchemaByAttributeId(attributeId);
+        return productConfigMapper.updateAttributeStatus(attributeId, targetStatus, currentUsername());
     }
 
     @Override
@@ -643,6 +660,16 @@ public class ProductConfigServiceImpl implements IProductConfigService
     {
         String result = StringUtils.defaultIfBlank(value, defaultValue).trim().toUpperCase();
         return YES.equals(result) ? YES : NO;
+    }
+
+    private String normalizeStatus(String value, String message)
+    {
+        String result = requireTrim(value, message);
+        if (!STATUS_NORMAL.equals(result) && !STATUS_DISABLED.equals(result))
+        {
+            throw new ServiceException("状态值不正确：" + result);
+        }
+        return result;
     }
 
     private int defaultInt(Integer value)

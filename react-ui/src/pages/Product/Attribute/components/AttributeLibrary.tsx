@@ -10,7 +10,7 @@ import {
   ProFormTextArea,
   ProTable,
 } from '@ant-design/pro-components';
-import { Button, Form, Modal } from 'antd';
+import { Button, Form, Switch } from 'antd';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   addAttribute,
@@ -23,9 +23,10 @@ import {
   previewAttributeImport,
   previewAttributeOptionImport,
   updateAttribute,
+  updateAttributeStatus,
 } from '@/services/product/product';
 import { getDictTypeOptionSelect } from '@/services/system/dict';
-import { message } from '@/utils/feedback';
+import { message, modal } from '@/utils/feedback';
 import { getPersistedProTableSearch, getProTableScroll } from '@/utils/proTableSearch';
 import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 import {
@@ -35,7 +36,6 @@ import {
   optionArrayToValueEnum,
   optionSourceOptions,
   selectAttributeOptionSourceOptions,
-  statusOptions,
   statusValueEnum,
 } from '../../constants';
 import ProductImportModal from '../../components/ProductImportModal';
@@ -99,6 +99,7 @@ export default function AttributeLibrary({ access }: AttributeLibraryProps) {
   const [attributeImportOpen, setAttributeImportOpen] = useState(false);
   const [optionImportOpen, setOptionImportOpen] = useState(false);
   const [optionListOpen, setOptionListOpen] = useState(false);
+  const [statusUpdatingId, setStatusUpdatingId] = useState<number>();
   const [currentAttribute, setCurrentAttribute] = useState<API.Product.Attribute>();
   const [optionAttribute, setOptionAttribute] = useState<API.Product.Attribute>();
   const [dictTypeOptions, setDictTypeOptions] = useState<
@@ -170,7 +171,7 @@ export default function AttributeLibrary({ access }: AttributeLibraryProps) {
     if (!attributeId) {
       return;
     }
-    Modal.confirm({
+    modal.confirm({
       title: '删除商品属性',
       content: `确认删除 ${record.attributeName}？已被类目引用的属性会被后端拒绝删除。`,
       okText: '确认',
@@ -181,6 +182,43 @@ export default function AttributeLibrary({ access }: AttributeLibraryProps) {
           '属性已删除',
         );
         if (ok) actionRef.current?.reload();
+      },
+    });
+  };
+
+  const changeAttributeStatus = (
+    record: API.Product.Attribute,
+    targetStatus: string,
+  ) => {
+    const attributeId = record.attributeId;
+    if (!attributeId || record.status === targetStatus) {
+      return;
+    }
+    const actionText = targetStatus === '0' ? '启用' : '停用';
+    modal.confirm({
+      title: `${actionText}商品属性`,
+      content:
+        targetStatus === '0'
+          ? `确认启用 ${record.attributeName}？启用后可继续被类目属性模板选择。`
+          : `确认停用 ${record.attributeName}？停用后卖家上传商品时不会再使用该属性。`,
+      okText: `确认${actionText}`,
+      cancelText: '取消',
+      okButtonProps: {
+        danger: targetStatus === '1',
+      },
+      onOk: async () => {
+        setStatusUpdatingId(attributeId);
+        try {
+          const ok = resultOk(
+            await updateAttributeStatus(attributeId, targetStatus),
+            `属性已${actionText}`,
+          );
+          if (ok) {
+            actionRef.current?.reload();
+          }
+        } finally {
+          setStatusUpdatingId(undefined);
+        }
       },
     });
   };
@@ -241,6 +279,22 @@ export default function AttributeLibrary({ access }: AttributeLibraryProps) {
       valueEnum: statusValueEnum,
       fieldProps: SEARCHABLE_SELECT_PROPS,
       width: 100,
+      render: (_, record) =>
+        access.hasPerms('product:attribute:edit') ? (
+          <Switch
+            checked={record.status === '0'}
+            checkedChildren="启用"
+            unCheckedChildren="停用"
+            loading={statusUpdatingId === record.attributeId}
+            onChange={(checked) =>
+              changeAttributeStatus(record, checked ? '0' : '1')
+            }
+          />
+        ) : record.status === '0' ? (
+          '正常'
+        ) : (
+          '停用'
+        ),
     },
     {
       title: '更新时间',
@@ -448,13 +502,6 @@ export default function AttributeLibrary({ access }: AttributeLibraryProps) {
             ) : null
           }
         </ProFormDependency>
-        <ProFormSelect
-          name="status"
-          label="状态"
-          options={statusOptions}
-          fieldProps={SEARCHABLE_SELECT_PROPS}
-          rules={[{ required: true, message: '请选择状态' }]}
-        />
         <ProFormTextArea name="remark" label="备注" />
       </ModalForm>
 

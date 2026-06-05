@@ -33,6 +33,8 @@ public interface IProductConfigService
 
     int updateAttribute(ProductAttribute attribute);
 
+    int updateAttributeStatus(Long attributeId, String status);
+
     int deleteAttributeById(Long attributeId);
 
     List<ProductAttributeOption> selectOptionList(Long attributeId);

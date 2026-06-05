@@ -19,6 +19,10 @@ function isLeafCategory(category: API.Product.Category) {
   return !category.children?.length;
 }
 
+function getCategoryFilterStatus(category: API.Product.Category) {
+  return category.effectiveStatus || category.status;
+}
+
 function categoryMatches(
   category: API.Product.Category,
   filters: {
@@ -33,7 +37,7 @@ function categoryMatches(
     [category.categoryName, category.categoryCode, path.join('/')].join(' '),
   );
   const statusMatched =
-    filters.status === 'ALL' || category.status === filters.status;
+    filters.status === 'ALL' || getCategoryFilterStatus(category) === filters.status;
   const levelMatched =
     filters.level === 'ALL' || String(category.categoryLevel || '') === filters.level;
   const keywordMatched = !keyword || searchText.includes(keyword);
@@ -122,7 +126,7 @@ export function filterCategoryTree(
         [category.categoryName, category.categoryCode, path.join('/')].join(' '),
       );
       const statusMatched =
-        filters.status === 'ALL' || category.status === filters.status;
+        filters.status === 'ALL' || getCategoryFilterStatus(category) === filters.status;
       const levelMatched =
         filters.level === 'ALL' ||
         String(category.categoryLevel || '') === filters.level;

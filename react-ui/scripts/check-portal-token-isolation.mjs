@@ -7,7 +7,13 @@ const sourceRoots = [
   path.join(root, 'src', 'services', 'portal'),
 ];
 const portalPagesRoot = path.join(root, 'src', 'pages', 'Portal');
-const portalServiceFile = path.join(root, 'src', 'services', 'portal', 'session.ts');
+const portalServiceFile = path.join(
+  root,
+  'src',
+  'services',
+  'portal',
+  'session.ts',
+);
 const forbiddenPatterns = [
   /\bgetAccessToken\b/,
   /\bsetSessionToken\b/,
@@ -21,6 +27,8 @@ const portalQueryFunctions = [
   'getPortalLoginLogs',
   'getPortalOperLogs',
   'getPortalSessions',
+  'getSellerPortalDistributionProducts',
+  'getBuyerPortalDistributionProducts',
 ];
 
 function walk(dir) {
@@ -55,39 +63,58 @@ for (const file of sourceRoots.flatMap(walk)) {
     }
   }
   if (forbiddenScopeObjectKeyPattern.test(source)) {
-    violations.push(`${relativePath} must not send portal identity scope object keys`);
+    violations.push(
+      `${relativePath} must not send portal identity scope object keys`,
+    );
   }
   if (file.startsWith(portalPagesRoot)) {
     if (/\brequest\s*(?:<[^;]+?>)?\s*\(/.test(source)) {
-      violations.push(`${relativePath} must use portal session services instead of direct request(...) calls`);
+      violations.push(
+        `${relativePath} must use portal session services instead of direct request(...) calls`,
+      );
     }
     if (/['"`]\/api\/(?:seller|buyer)\b/.test(source)) {
-      violations.push(`${relativePath} must not hardcode seller/buyer API paths`);
+      violations.push(
+        `${relativePath} must not hardcode seller/buyer API paths`,
+      );
     }
   }
 }
 
 if (fs.existsSync(portalServiceFile)) {
   const source = read(portalServiceFile);
-  const requestCount = [...source.matchAll(/\brequest(?:<[^;]+?>)?\s*\(/g)].length;
-  const isTokenFalseCount = [...source.matchAll(/\bisToken\s*:\s*false\b/g)].length;
+  const requestCount = [...source.matchAll(/\brequest(?:<[^;]+?>)?\s*\(/g)]
+    .length;
+  const isTokenFalseCount = [...source.matchAll(/\bisToken\s*:\s*false\b/g)]
+    .length;
   if (requestCount !== isTokenFalseCount) {
     violations.push(
       `src/services/portal/session.ts must set isToken:false on every portal request; request=${requestCount}, isToken:false=${isTokenFalseCount}`,
     );
   }
   if (!/\bfunction\s+sanitizePortalQueryParams\b/.test(source)) {
-    violations.push('src/services/portal/session.ts must define sanitizePortalQueryParams for portal query params');
+    violations.push(
+      'src/services/portal/session.ts must define sanitizePortalQueryParams for portal query params',
+    );
+  }
+  if (!/PORTAL_SCOPE_PARAM_KEYS[\s\S]*['"`]terminal['"`]/.test(source)) {
+    violations.push(
+      'src/services/portal/session.ts must sanitize terminal from portal query params',
+    );
   }
   if (/\n\s*params\s*,/.test(source)) {
-    violations.push('src/services/portal/session.ts must not pass raw params into portal requests');
+    violations.push(
+      'src/services/portal/session.ts must not pass raw params into portal requests',
+    );
   }
   for (const fnName of portalQueryFunctions) {
     const functionPattern = new RegExp(
       `function\\s+${fnName}[\\s\\S]*?params\\s*:\\s*sanitizePortalQueryParams\\(params\\)`,
     );
     if (!functionPattern.test(source)) {
-      violations.push(`${fnName} must sanitize portal query params before request`);
+      violations.push(
+        `${fnName} must sanitize portal query params before request`,
+      );
     }
   }
 } else {

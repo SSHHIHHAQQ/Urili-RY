@@ -129,6 +129,29 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         ) s on s.spu_id = p.spu_id
     </sql>
 
+    <sql id="spuOnSaleAggregateSelect">
+        select p.*,
+               s.sku_count,
+               null as supply_price_min,
+               null as supply_price_max,
+               s.sale_price_min,
+               s.sale_price_max,
+               s.currency_summary,
+               null as warehouse_count
+        from product_spu p
+        inner join (
+            select spu_id,
+                   count(1) as sku_count,
+                   min(sale_price) as sale_price_min,
+                   max(sale_price) as sale_price_max,
+                   case when count(distinct currency_code) = 1 then min(currency_code) else 'MULTI' end as currency_summary
+            from product_sku
+            where del_flag = '0'
+              and sku_status = 'ON_SALE'
+            group by spu_id
+        ) s on s.spu_id = p.spu_id
+    </sql>
+
     <select id="selectProductList" parameterType="ProductSpu" resultMap="ProductSpuResult">
         <include refid="spuAggregateSelect"/>
         where p.del_flag = '0'
@@ -187,10 +210,42 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         order by p.update_time desc, p.spu_id desc
     </select>
 
+    <select id="selectOnSaleProductList" parameterType="ProductSpu" resultMap="ProductSpuResult">
+        <include refid="spuOnSaleAggregateSelect"/>
+        where p.del_flag = '0'
+          and p.spu_status = 'ON_SALE'
+        <if test="keyword != null and keyword != ''">
+            and (
+                p.product_name like concat('%', #{keyword}, '%')
+                or p.product_name_en like concat('%', #{keyword}, '%')
+                or p.category_name like concat('%', #{keyword}, '%')
+                or p.selling_point like concat('%', #{keyword}, '%')
+            )
+        </if>
+        <if test="productName != null and productName != ''">
+            and p.product_name like concat('%', #{productName}, '%')
+        </if>
+        <if test="productNameEn != null and productNameEn != ''">
+            and p.product_name_en like concat('%', #{productNameEn}, '%')
+        </if>
+        <if test="categoryId != null">
+            and p.category_id = #{categoryId}
+        </if>
+        order by p.update_time desc, p.spu_id desc
+    </select>
+
     <select id="selectProductById" resultMap="ProductSpuResult">
         <include refid="spuAggregateSelect"/>
         where p.spu_id = #{spuId}
           and p.del_flag = '0'
+        limit 1
+    </select>
+
+    <select id="selectOnSaleProductById" resultMap="ProductSpuResult">
+        <include refid="spuOnSaleAggregateSelect"/>
+        where p.spu_id = #{spuId}
+          and p.del_flag = '0'
+          and p.spu_status = 'ON_SALE'
         limit 1
     </select>
 
@@ -262,6 +317,16 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                null as warehouse_count
         from product_sku
         where spu_id = #{spuId}
+          and del_flag = '0'
+        order by sort_order asc, sku_id asc
+    </select>
+
+    <select id="selectOnSaleSkuListBySpuId" resultMap="ProductSkuResult">
+        select *,
+               null as warehouse_count
+        from product_sku
+        where spu_id = #{spuId}
+          and sku_status = 'ON_SALE'
           and del_flag = '0'
         order by sort_order asc, sku_id asc
     </select>
