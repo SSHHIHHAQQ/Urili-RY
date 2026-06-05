@@ -13,7 +13,7 @@ import {
 import { Button, Descriptions, Space, Tag, Typography } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { message } from '@/utils/feedback';
-import { getPersistedProTableSearch } from '@/utils/proTableSearch';
+import { getPersistedProTableSearch, getProTableScroll } from '@/utils/proTableSearch';
 import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 import {
   getSyncConfig,
@@ -250,6 +250,7 @@ export default function SyncSettingsPanel({
           actionRef={syncLogActionRef}
           rowKey="syncLogId"
           columns={syncLogColumns}
+          scroll={getProTableScroll(1200)}
           search={getPersistedProTableSearch(
             { labelWidth: 100 },
             'finance-currency-sync-log',

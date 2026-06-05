@@ -23,6 +23,20 @@ function isPortalRoute(pathname?: string) {
   return PORTAL_ROUTE_PREFIXES.some((prefix) => pathname === prefix || pathname?.startsWith(`${prefix}/`));
 }
 
+function redirectToLogin() {
+  const { pathname, search, hash } = history.location;
+  if (pathname === PageEnum.LOGIN || isPortalRoute(pathname)) {
+    return;
+  }
+  const redirect = `${pathname}${search || ''}${hash || ''}`;
+  history.replace(`${PageEnum.LOGIN}?redirect=${encodeURIComponent(redirect)}`);
+}
+
+function clearAdminSession() {
+  clearSessionToken();
+  setRemoteMenu(null);
+}
+
 /**
  * @see  https://umijs.org/zh-CN/plugins/plugin-initial-state
  * */
@@ -38,7 +52,7 @@ export async function getInitialState(): Promise<{
         skipErrorHandler: true,
       });
       if (!response?.user) {
-        clearSessionToken();
+        clearAdminSession();
         return undefined;
       }
       const avatar =
@@ -51,10 +65,8 @@ export async function getInitialState(): Promise<{
       } as API.CurrentUser;
     } catch (error) {
       console.log(error);
-      clearSessionToken();
-      if (history.location.pathname !== PageEnum.LOGIN && !isPortalRoute(history.location.pathname)) {
-        history.push(PageEnum.LOGIN);
-      }
+      clearAdminSession();
+      redirectToLogin();
     }
     return undefined;
   };
@@ -106,7 +118,7 @@ export const layout: RunTimeLayoutConfig = ({ initialState, setInitialState }) =
       const { location } = history;
       // 如果没有登录，重定向到 login
       if (!initialState?.currentUser && location.pathname !== PageEnum.LOGIN && !isPortalRoute(location.pathname)) {
-        history.push(PageEnum.LOGIN);
+        redirectToLogin();
       }
     },
     layoutBgImgList: [
@@ -178,8 +190,12 @@ export async function onRouteChange({ location }: { clientRoutes: any; location:
   if (isPortalRoute(location.pathname)) {
     return;
   }
+  if (location.pathname !== PageEnum.LOGIN && !getAccessToken()) {
+    redirectToLogin();
+    return;
+  }
   const menus = getRemoteMenu();
-  if (menus !== null || location.pathname === PageEnum.LOGIN || !getAccessToken()) {
+  if (menus !== null || location.pathname === PageEnum.LOGIN) {
     return;
   }
 
@@ -188,10 +204,8 @@ export async function onRouteChange({ location }: { clientRoutes: any; location:
     setRemoteMenu(routers);
   } catch (error) {
     console.log(error);
-    clearSessionToken();
-    if (history.location.pathname !== PageEnum.LOGIN) {
-      history.push(PageEnum.LOGIN);
-    }
+    clearAdminSession();
+    redirectToLogin();
   }
 }
 
@@ -213,6 +227,8 @@ export function render(oldRender: () => void) {
   }
   const token = getAccessToken();
   if(!token || token?.length === 0) {
+    clearAdminSession();
+    redirectToLogin();
     oldRender();
     return;
   }
@@ -220,8 +236,7 @@ export function render(oldRender: () => void) {
     setRemoteMenu(res);
   }).catch(error => {
     console.log(error);
-    clearSessionToken();
-    setRemoteMenu([]);
+    clearAdminSession();
   }).finally(() => {
     oldRender();
   });
@@ -247,7 +262,7 @@ export const request: any = {
         if (expireTime) {
           const left = Number(expireTime) - Date.now();
           if (left < 0) {
-            clearSessionToken();
+            clearAdminSession();
           } else {
             const accessToken = getAccessToken();
             if (accessToken) {
@@ -255,7 +270,7 @@ export const request: any = {
             }
           }
         } else {
-          clearSessionToken();
+          clearAdminSession();
         }
       }
       return { url, options };

@@ -359,6 +359,62 @@ declare namespace API.Partner {
     current?: boolean;
   }
 
+  export interface PortalProductCategory {
+    categoryId?: number;
+    parentId?: number;
+    categoryCode?: string;
+    categoryName?: string;
+    categoryLevel?: number;
+    publishEnabled?: string;
+    sortOrder?: number;
+    schemaVersion?: number;
+    childrenCount?: number;
+  }
+
+  export interface PortalProductAttributeOption {
+    optionCode?: string;
+    optionLabel?: string;
+    sortOrder?: number;
+    defaultFlag?: string;
+    status?: string;
+  }
+
+  export interface PortalProductCategorySchemaItem {
+    categoryId?: number;
+    sourceCategoryName?: string;
+    attributeId?: number;
+    attributeCode?: string;
+    attributeName?: string;
+    attributeType?: string;
+    optionSource?: string;
+    dictType?: string;
+    unit?: string;
+    ruleMode?: string;
+    requiredFlag?: string;
+    visibleFlag?: string;
+    editableFlag?: string;
+    filterableFlag?: string;
+    groupCode?: string;
+    sortOrder?: number;
+    placeholder?: string;
+    helpText?: string;
+    validationRule?: string;
+    status?: string;
+    options?: PortalProductAttributeOption[];
+  }
+
+  export interface PortalProductCategoryListResult {
+    code: number;
+    msg: string;
+    data: PortalProductCategory[];
+  }
+
+  export interface PortalProductSchemaResult {
+    code: number;
+    msg: string;
+    data: PortalProductCategorySchemaItem[];
+  }
+
   export interface PortalDirectLoginTicket {
     ticketId?: number;
     terminal?: string;

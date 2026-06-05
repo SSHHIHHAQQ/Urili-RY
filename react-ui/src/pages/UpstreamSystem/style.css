@@ -23,16 +23,3 @@
 .upstream-sync-tabs .ant-tabs-tabpane-hidden {
   display: none;
 }
-
-.upstream-fill-table .ant-pro-card {
-  border: 0;
-  box-shadow: none;
-}
-
-.upstream-fill-table .ant-pro-card-body {
-  padding: 0;
-}
-
-.upstream-fill-table .ant-pro-table-list-toolbar {
-  display: none;
-}

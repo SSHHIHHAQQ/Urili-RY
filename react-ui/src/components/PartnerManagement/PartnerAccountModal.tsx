@@ -22,6 +22,7 @@ import { getDictSelectOption } from '@/services/system/dict';
 import { SEARCHABLE_SELECT_PROPS, SEARCHABLE_TREE_SELECT_PROPS } from '@/utils/selectSearch';
 import type { PartnerModuleConfig } from './PartnerManagementPage';
 import PartnerAccountRoleModal from './PartnerAccountRoleModal';
+import PartnerSessionModal from './PartnerSessionModal';
 
 type PartnerRecord = Record<string, any>;
 type AccountRecord = API.Partner.PortalAccountBase & Record<string, any>;
@@ -193,10 +194,22 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
   const [currentAccount, setCurrentAccount] = useState<AccountRecord>();
   const [roleModalOpen, setRoleModalOpen] = useState(false);
   const [roleAccount, setRoleAccount] = useState<AccountRecord>();
+  const [sessionModalOpen, setSessionModalOpen] = useState(false);
+  const [sessionAccount, setSessionAccount] = useState<AccountRecord>();
 
   const partnerId = Number(getValue(partner, config.idField) || 0);
   const partnerName = getValue(partner, config.nameField) || getValue(partner, config.codeField) || '';
   const permPrefix = `${config.moduleKey}:admin`;
+  const accountPermissions = config.accountPermissions ?? {
+    list: `${permPrefix}:query`,
+    add: `${permPrefix}:add`,
+    edit: `${permPrefix}:edit`,
+    resetPwd: `${permPrefix}:resetPwd`,
+    roleQuery: `${permPrefix}:role:query`,
+    roleEdit: `${permPrefix}:role:edit`,
+  };
+  const canAssignAccountRoles = access.hasPerms(accountPermissions.roleQuery)
+    && access.hasPerms(accountPermissions.roleEdit);
   const currentAccountId = getAccountId(config, currentAccount);
 
   const roleSelectOptions = useMemo(
@@ -334,41 +347,96 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
     });
   };
 
+  const handleDirectLoginAccount = (account: AccountRecord) => {
+    const accountId = getAccountId(config, account);
+    if (!partnerId || !accountId || !config.services.directLoginAccount) {
+      return;
+    }
+    let reason = '';
+    modal.confirm({
+      title: `生成${config.label}端账号免密登录链接`,
+      okText: '生成并打开',
+      content: (
+        <Flex vertical gap={8}>
+          <Typography.Text>代入原因</Typography.Text>
+          <Input.TextArea
+            rows={3}
+            maxLength={255}
+            showCount
+            placeholder="例如：协助客户排查订单问题"
+            onChange={(event) => {
+              reason = event.target.value;
+            }}
+          />
+        </Flex>
+      ),
+      onOk: async () => {
+        const normalizedReason = reason.trim();
+        if (!normalizedReason) {
+          message.error('请输入免密登录原因');
+          throw new Error('DIRECT_LOGIN_REASON_REQUIRED');
+        }
+        const hide = message.loading('正在生成免密登录链接');
+        try {
+          const resp = await config.services.directLoginAccount?.(
+            partnerId,
+            accountId,
+            normalizedReason,
+          );
+          if (resp?.code === 200 && resp.data?.loginUrl) {
+            window.open(resp.data.loginUrl, '_blank', 'noopener,noreferrer');
+            message.success(`免密登录链接已生成，有效期 ${resp.data.expireMinutes || 30} 分钟`);
+            return;
+          }
+          message.error(resp?.msg || '免密登录链接生成失败');
+          throw new Error('DIRECT_LOGIN_FAILED');
+        } catch (error) {
+          if (!(error instanceof Error && error.message === 'DIRECT_LOGIN_FAILED')) {
+            message.error('免密登录链接生成失败，请重试');
+          }
+          throw error;
+        } finally {
+          hide();
+        }
+      },
+    });
+  };
+
   const columns: ColumnsType<AccountRecord> = [
     {
       title: '登录账号',
       dataIndex: 'userName',
-      width: 150,
+      width: 128,
       render: renderCompactText,
     },
     {
       title: '姓名',
       dataIndex: 'nickName',
-      width: 120,
+      width: 100,
       render: renderCompactText,
     },
     {
       title: '部门',
       dataIndex: 'deptName',
-      width: 140,
+      width: 108,
       render: renderCompactText,
     },
     {
       title: '角色',
       dataIndex: 'accountRole',
-      width: 110,
+      width: 88,
       render: (value) => <Tag color={value === 'OWNER' ? 'blue' : 'default'}>{optionLabel(accountRoleOptions, value)}</Tag>,
     },
     {
       title: '状态',
       dataIndex: 'status',
-      width: 88,
+      width: 76,
       render: (value) => <Tag color={value === '0' ? 'success' : 'default'}>{optionLabel(statusOptions, value)}</Tag>,
     },
     {
       title: '时间',
       dataIndex: 'timeInfo',
-      width: 176,
+      width: 148,
       render: (_, record) => (
         <Flex vertical gap={0}>
           <Typography.Text style={compactCellTextStyle}>{formatDateTimeText(record.createTime)}</Typography.Text>
@@ -381,11 +449,17 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
     {
       title: '操作',
       dataIndex: 'option',
-      width: 190,
+      width: 160,
       render: (_, record) => {
         const moreItems = [
-          access.hasPerms(`${permPrefix}:resetPwd`)
+          access.hasPerms(`${permPrefix}:directLogin`) && config.services.directLoginAccount
+            ? { key: 'directLogin', label: `登录${config.label}端` }
+            : null,
+          access.hasPerms(accountPermissions.resetPwd)
             ? { key: 'resetPwd', label: '重置密码' }
+            : null,
+          access.hasPerms(`${permPrefix}:forceLogout`) && config.services.listAccountSessions
+            ? { key: 'sessions', label: '会话' }
             : null,
           access.hasPerms(`${permPrefix}:forceLogout`)
             ? { key: 'forceLogout', label: '强制踢出' }
@@ -397,7 +471,7 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
             <Button
               type="link"
               size="small"
-              hidden={!access.hasPerms(`${permPrefix}:edit`)}
+              hidden={!access.hasPerms(accountPermissions.edit)}
               onClick={() => openAccountForm(record)}
             >
               编辑
@@ -405,7 +479,7 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
             <Button
               type="link"
               size="small"
-              hidden={!access.hasPerms(`${permPrefix}:role:edit`)}
+              hidden={!canAssignAccountRoles}
               onClick={() => openAccountRoleModal(record)}
             >
               分配角色
@@ -415,8 +489,15 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
                 menu={{
                   items: moreItems,
                   onClick: ({ key }) => {
+                    if (key === 'directLogin') {
+                      handleDirectLoginAccount(record);
+                    }
                     if (key === 'resetPwd') {
                       handleResetPassword(record);
+                    }
+                    if (key === 'sessions') {
+                      setSessionAccount(record);
+                      setSessionModalOpen(true);
                     }
                     if (key === 'forceLogout') {
                       handleForceLogoutAccount(record);
@@ -438,7 +519,7 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
   return (
     <>
       <Modal
-        width={1000}
+        width={1040}
         title={`${config.label}账号 - ${partnerName || '-'}`}
         open={open}
         destroyOnHidden
@@ -458,7 +539,7 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
               type="primary"
               size="small"
               icon={<PlusOutlined />}
-              hidden={!access.hasPerms(`${permPrefix}:add`)}
+              hidden={!access.hasPerms(accountPermissions.add)}
               onClick={() => openAccountForm()}
             >
               新增账号
@@ -466,6 +547,19 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
           )}
         />
       </Modal>
+
+      <PartnerSessionModal
+        config={config}
+        open={sessionModalOpen}
+        partner={partner}
+        account={sessionAccount}
+        onOpenChange={(nextOpen) => {
+          setSessionModalOpen(nextOpen);
+          if (!nextOpen) {
+            setSessionAccount(undefined);
+          }
+        }}
+      />
 
       <PartnerAccountRoleModal
         config={config}
@@ -486,6 +580,7 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
         title={currentAccountId ? '编辑账号' : '新增账号'}
         open={accountFormOpen}
         destroyOnHidden
+        forceRender
         confirmLoading={saving}
         onOk={handleAccountSubmit}
         onCancel={closeAccountForm}

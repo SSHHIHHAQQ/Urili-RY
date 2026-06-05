@@ -1,17 +1,9 @@
-package com.ruoyi.product.controller;
+package com.ruoyi.product.service.impl;
 
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RestController;
-import com.ruoyi.common.annotation.Anonymous;
-import com.ruoyi.common.annotation.PortalLog;
-import com.ruoyi.common.annotation.PortalPreAuthorize;
-import com.ruoyi.common.core.controller.BaseController;
-import com.ruoyi.common.core.domain.AjaxResult;
-import com.ruoyi.common.enums.BusinessType;
+import org.springframework.stereotype.Service;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.product.domain.PortalProductAttributeOption;
 import com.ruoyi.product.domain.PortalProductCategory;
@@ -20,13 +12,13 @@ import com.ruoyi.product.domain.ProductAttributeOption;
 import com.ruoyi.product.domain.ProductCategory;
 import com.ruoyi.product.domain.ProductCategoryAttribute;
 import com.ruoyi.product.service.IProductConfigService;
-import com.ruoyi.system.service.support.PortalSessionContext;
+import com.ruoyi.product.service.IProductPortalSchemaService;
 
 /**
- * Seller/buyer portal read-only product endpoints.
+ * Shared seller/buyer portal product schema queries.
  */
-@RestController
-public class ProductPortalSchemaController extends BaseController
+@Service
+public class ProductPortalSchemaServiceImpl implements IProductPortalSchemaService
 {
     private static final String STATUS_NORMAL = "0";
 
@@ -35,51 +27,8 @@ public class ProductPortalSchemaController extends BaseController
     @Autowired
     private IProductConfigService productConfigService;
 
-    @GetMapping("/seller/product/categories")
-    @Anonymous
-    @PortalPreAuthorize(terminal = "seller", hasPermi = "seller:product:category:list")
-    @PortalLog(terminal = "seller", title = "Seller product categories", businessType = BusinessType.OTHER,
-        isSaveResponseData = false)
-    public AjaxResult sellerCategories()
-    {
-        PortalSessionContext.requireSession("seller");
-        return success(selectPortalCategories());
-    }
-
-    @GetMapping("/seller/product/categories/{categoryId}/schema")
-    @Anonymous
-    @PortalPreAuthorize(terminal = "seller", hasPermi = "seller:product:schema:query")
-    @PortalLog(terminal = "seller", title = "Seller product schema", businessType = BusinessType.OTHER,
-        isSaveResponseData = false)
-    public AjaxResult sellerSchema(@PathVariable("categoryId") Long categoryId)
-    {
-        PortalSessionContext.requireSession("seller");
-        return success(selectPortalSchema(categoryId));
-    }
-
-    @GetMapping("/buyer/product/categories")
-    @Anonymous
-    @PortalPreAuthorize(terminal = "buyer", hasPermi = "buyer:product:category:list")
-    @PortalLog(terminal = "buyer", title = "Buyer product categories", businessType = BusinessType.OTHER,
-        isSaveResponseData = false)
-    public AjaxResult buyerCategories()
-    {
-        PortalSessionContext.requireSession("buyer");
-        return success(selectPortalCategories());
-    }
-
-    @GetMapping("/buyer/product/categories/{categoryId}/schema")
-    @Anonymous
-    @PortalPreAuthorize(terminal = "buyer", hasPermi = "buyer:product:schema:query")
-    @PortalLog(terminal = "buyer", title = "Buyer product schema", businessType = BusinessType.OTHER,
-        isSaveResponseData = false)
-    public AjaxResult buyerSchema(@PathVariable("categoryId") Long categoryId)
-    {
-        PortalSessionContext.requireSession("buyer");
-        return success(selectPortalSchema(categoryId));
-    }
-
-    private List<PortalProductCategory> selectPortalCategories()
+    @Override
+    public List<PortalProductCategory> selectPortalCategories()
     {
         ProductCategory query = new ProductCategory();
         query.setStatus(STATUS_NORMAL);
@@ -93,7 +42,8 @@ public class ProductPortalSchemaController extends BaseController
         return result;
     }
 
-    private List<PortalProductCategorySchemaItem> selectPortalSchema(Long categoryId)
+    @Override
+    public List<PortalProductCategorySchemaItem> selectPortalSchema(Long categoryId)
     {
         ProductCategory category = productConfigService.selectCategoryById(categoryId);
         if (!STATUS_NORMAL.equals(category.getStatus()))

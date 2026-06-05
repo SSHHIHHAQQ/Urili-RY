@@ -19,6 +19,10 @@ import {
   syncUpstreamSku,
 } from '@/services/integration/upstreamSystem';
 import { message } from '@/utils/feedback';
+import {
+  getProTablePagination,
+  getProTableScroll,
+} from '@/utils/proTableSearch';
 import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 import {
   skuPairingStatusOptions,
@@ -259,10 +263,10 @@ export default function SkuSyncPanel({
             success: resp.code === 200,
           };
         }}
-        pagination={{ pageSize: 10 }}
+        pagination={getProTablePagination(10)}
         search={false}
         options={false}
-        scroll={{ x: 1400 }}
+        scroll={getProTableScroll(1400)}
         toolBarRender={false}
       />
     </div>

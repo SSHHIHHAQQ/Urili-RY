@@ -1,0 +1,388 @@
+.editPage {
+  min-height: calc(100vh - 96px);
+  padding-bottom: 88px;
+}
+
+.editHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  margin-bottom: 14px;
+  background: #fff;
+  border: 1px solid #f0f0f0;
+  border-radius: 6px;
+}
+
+.editTitle {
+  color: #1f2937;
+  font-weight: 600;
+  font-size: 18px;
+  line-height: 26px;
+}
+
+.editSubtitle,
+.sectionHint,
+.mutedText {
+  color: #8c8c8c;
+  font-size: 12px;
+}
+
+.readonlySummary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 10px 16px;
+  margin-bottom: 14px;
+  color: #4b5563;
+  background: #f7f9fc;
+  border: 1px solid #edf1f7;
+  border-radius: 6px;
+}
+
+.editForm {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.formSection {
+  padding: 18px;
+  background: #fff;
+  border: 1px solid #f0f0f0;
+  border-radius: 6px;
+}
+
+.sectionTitle {
+  margin-bottom: 12px;
+  color: #1f2937;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
+  gap: 0 16px;
+}
+
+.imageSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.imageSectionHeader {
+  display: flex;
+  justify-content: space-between;
+}
+
+.imageGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.imageSlotWrap {
+  width: 110px;
+}
+
+.imageSlotSmall {
+  width: 72px;
+}
+
+.imageSlotLabel {
+  height: 24px;
+  margin-bottom: 4px;
+  color: #2563eb;
+  font-weight: 500;
+  font-size: 12px;
+  line-height: 24px;
+  text-align: center;
+  background: #e8f1ff;
+  border-radius: 4px;
+}
+
+.imageSlotLabelPlaceholder {
+  height: 24px;
+  margin-bottom: 4px;
+}
+
+.imageSlotLabel span {
+  color: #ff4d4f;
+}
+
+.imageSlot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 110px;
+  height: 110px;
+  overflow: hidden;
+  color: #8c8c8c;
+  background: #fff;
+  border: 1px dashed #d9d9d9;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.imageSlotSmall .imageSlot {
+  width: 64px;
+  height: 64px;
+}
+
+.imageSlotFilled {
+  border-style: solid;
+}
+
+.imageSlot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.imageSlotPlus {
+  font-size: 24px;
+}
+
+.imageSlotMask {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: rgb(0 0 0 / 42%);
+}
+
+.imageSlotFilled:hover .imageSlotMask {
+  display: flex;
+}
+
+.imageSlotMask :global(.ant-btn) {
+  color: #fff;
+}
+
+.addImageSlot {
+  width: 110px;
+  height: 110px;
+  white-space: normal;
+  border-style: dashed;
+}
+
+.editActionCard {
+  border-radius: 0;
+  box-shadow: 0 -8px 18px rgb(0 0 0 / 6%);
+}
+
+.editActionCard :global(.ant-card-body) {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.skuEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.specPanel {
+  padding: 14px;
+  background: #fafafa;
+  border: 1px solid #f0f0f0;
+  border-radius: 6px;
+}
+
+.specPanelTitle,
+.specValueTitle {
+  margin-bottom: 8px;
+  color: #1f2937;
+  font-weight: 600;
+}
+
+.specValueGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 14px 0;
+}
+
+.specValueItem {
+  padding-bottom: 10px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.specValueItem:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.specInput {
+  width: 120px;
+}
+
+.bulkPanel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid #f0f0f0;
+  border-radius: 6px;
+}
+
+.bulkPanel :global(.ant-input-number) {
+  width: 180px;
+}
+
+.priceRiskText {
+  font-size: 12px;
+}
+
+.priceCell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.detailBuilder {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.detailToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.detailBlockList,
+.detailDrawerBody,
+.detailPreview {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.detailBlock {
+  padding: 14px;
+  background: #fafafa;
+  border: 1px solid #f0f0f0;
+  border-radius: 6px;
+}
+
+.detailBlockHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.detailBlockActions {
+  display: flex;
+  gap: 6px;
+}
+
+.detailImageTextGrid {
+  display: grid;
+  grid-template-columns: 130px minmax(260px, 1fr);
+  gap: 14px;
+}
+
+.detailTextFields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.detailParamTable {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.detailParamRow {
+  display: grid;
+  grid-template-columns: minmax(160px, 240px) minmax(220px, 1fr) 64px;
+  gap: 10px;
+  align-items: center;
+}
+
+.detailEmpty {
+  padding: 28px;
+  color: #8c8c8c;
+  text-align: center;
+  background: #fafafa;
+  border: 1px dashed #d9d9d9;
+  border-radius: 6px;
+}
+
+.detailPreview p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.detailPreviewImageText {
+  display: grid;
+  grid-template-columns: 120px minmax(220px, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.detailPreviewTitle {
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.detailPreviewParams {
+  border: 1px solid #f0f0f0;
+  border-radius: 6px;
+}
+
+.detailPreviewParamRow {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.detailPreviewParamRow:last-child {
+  border-bottom: 0;
+}
+
+.detailPreviewParamRow span {
+  padding: 8px 10px;
+}
+
+.detailPreviewParamRow span:first-child {
+  color: #4b5563;
+  background: #fafafa;
+}
+
+@media (max-width: 1100px) {
+  .formGrid {
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .editHeader {
+    position: static;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .detailImageTextGrid,
+  .detailPreviewImageText,
+  .detailParamRow {
+    grid-template-columns: 1fr;
+  }
+}

@@ -16,6 +16,34 @@ export async function getCategoryList(params?: Record<string, any>) {
   );
 }
 
+export async function getCategoryChildren(params?: Record<string, any>) {
+  return request<API.Product.InfoResult<API.Product.Category[]>>(
+    `${baseUrl}/categories/children`,
+    { method: 'GET', params },
+  );
+}
+
+export async function searchCategories(params?: Record<string, any>) {
+  return request<API.Product.PageResult<API.Product.Category>>(
+    `${baseUrl}/categories/search`,
+    { method: 'GET', params },
+  );
+}
+
+export async function getCategoryOptions(params?: Record<string, any>) {
+  return request<API.Product.InfoResult<API.Product.Category[]>>(
+    `${baseUrl}/categories/options`,
+    { method: 'GET', params },
+  );
+}
+
+export async function getCategoryPath(categoryId: number) {
+  return request<API.Product.InfoResult<API.Product.Category[]>>(
+    `${baseUrl}/categories/path/${categoryId}`,
+    { method: 'GET' },
+  );
+}
+
 export async function getCategory(categoryId: number) {
   return request<API.Product.InfoResult<API.Product.Category>>(
     `${baseUrl}/categories/${categoryId}`,
@@ -83,10 +111,10 @@ export async function getAttributeList(params?: Record<string, any>) {
   );
 }
 
-export async function getEnabledAttributeList() {
+export async function getEnabledAttributeList(params?: Record<string, any>) {
   return request<API.Product.InfoResult<API.Product.Attribute[]>>(
     `${baseUrl}/attributes/options`,
-    { method: 'GET' },
+    { method: 'GET', params },
   );
 }
 

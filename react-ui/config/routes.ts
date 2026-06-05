@@ -36,6 +36,14 @@ export default [
     component: './Portal/Home',
   },
   {
+    path: '/product/distribution/create',
+    component: './Product/Distribution/EditPage',
+  },
+  {
+    path: '/product/distribution/edit/:spuId',
+    component: './Product/Distribution/EditPage',
+  },
+  {
     path: '*',
     layout: false,
     component: './404',

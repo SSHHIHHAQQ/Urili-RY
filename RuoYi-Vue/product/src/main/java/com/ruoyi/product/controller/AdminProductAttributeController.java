@@ -56,9 +56,10 @@ public class AdminProductAttributeController extends BaseController
 
     @PreAuthorize("@ss.hasPermi('product:attribute:list')")
     @GetMapping("/options")
-    public AjaxResult attributeOptions()
+    public AjaxResult attributeOptions(ProductAttribute query)
     {
-        return success(productConfigService.selectEnabledAttributeList());
+        startPage();
+        return success(productConfigService.selectEnabledAttributeList(query));
     }
 
     @PreAuthorize("@ss.hasPermi('product:attribute:query')")

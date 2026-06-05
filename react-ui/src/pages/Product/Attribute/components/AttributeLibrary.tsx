@@ -26,7 +26,7 @@ import {
 } from '@/services/product/product';
 import { getDictTypeOptionSelect } from '@/services/system/dict';
 import { message } from '@/utils/feedback';
-import { getPersistedProTableSearch } from '@/utils/proTableSearch';
+import { getPersistedProTableSearch, getProTableScroll } from '@/utils/proTableSearch';
 import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 import {
   attributeTypeOptions,
@@ -294,6 +294,7 @@ export default function AttributeLibrary({ access }: AttributeLibraryProps) {
         actionRef={actionRef}
         rowKey="attributeId"
         columns={columns}
+        scroll={getProTableScroll(1450)}
         search={getPersistedProTableSearch({ labelWidth: 90 }, 'product-attribute')}
         request={async (params) => {
           const resp = await getAttributeList(params);

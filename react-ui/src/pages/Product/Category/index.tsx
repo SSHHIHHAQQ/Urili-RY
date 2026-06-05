@@ -1,6 +1,5 @@
 import { DownOutlined, ImportOutlined, PlusOutlined } from '@ant-design/icons';
 import {
-  type ActionType,
   ModalForm,
   PageContainer,
   type ProColumns,
@@ -8,27 +7,30 @@ import {
   ProFormSelect,
   ProFormText,
   ProFormTextArea,
-  ProFormTreeSelect,
   ProTable,
 } from '@ant-design/pro-components';
 import { useAccess } from '@umijs/max';
 import { Button, Dropdown, Form, Modal } from 'antd';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import type { Key } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   addCategory,
   deleteCategory,
   downloadCategoryImportTemplate,
-  getCategoryList,
+  getCategoryChildren,
+  getCategoryOptions,
+  getCategoryPath,
   importCategoryData,
   previewCategoryImport,
+  searchCategories,
   updateCategory,
 } from '@/services/product/product';
 import { message } from '@/utils/feedback';
-import { getPersistedProTableSearch } from '@/utils/proTableSearch';
-import { SEARCHABLE_SELECT_PROPS, SEARCHABLE_TREE_SELECT_PROPS } from '@/utils/selectSearch';
-import { buildCategoryTree, toCategoryTreeSelectData } from '../categoryTree';
+import { getPersistedProTableSearch, getProTableScroll } from '@/utils/proTableSearch';
+import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
+import { getCategoryDisplayPath, toCategoryOption } from '../categoryTree';
 import ProductImportModal from '../components/ProductImportModal';
-import { statusOptions, statusValueEnum, yesNoValueEnum } from '../constants';
+import { statusOptions, statusValueEnum } from '../constants';
 
 function resultOk(resp: API.Result, successText: string) {
   if (resp.code === 200) {
@@ -45,30 +47,163 @@ const defaultCategoryValues: Partial<API.Product.Category> = {
   status: '0',
 };
 
+type CategoryQueryParams = Record<string, any>;
+
+function getPlaceholderCategory(parentId: number): API.Product.Category {
+  return {
+    categoryId: -parentId,
+    parentId,
+    categoryName: '加载中...',
+    loadingPlaceholder: true,
+  };
+}
+
+function normalizeCategoryTableRows(
+  rows: API.Product.Category[],
+): API.Product.Category[] {
+  return rows.map((item) => {
+    const hasChildren = Number(item.childrenCount || 0) > 0;
+    const children = item.children?.length
+      ? normalizeCategoryTableRows(item.children)
+      : hasChildren && item.categoryId
+        ? [getPlaceholderCategory(item.categoryId)]
+        : undefined;
+    return {
+      ...item,
+      children,
+    };
+  });
+}
+
+function mergeTableCategoryChildren(
+  rows: API.Product.Category[],
+  parentId: number,
+  children: API.Product.Category[],
+): API.Product.Category[] {
+  return rows.map((item) => {
+    if (item.categoryId === parentId) {
+      return {
+        ...item,
+        children: normalizeCategoryTableRows(children),
+      };
+    }
+    if (item.children?.length) {
+      return {
+        ...item,
+        children: mergeTableCategoryChildren(item.children, parentId, children),
+      };
+    }
+    return item;
+  });
+}
+
+function hasCategorySearchParams(params: CategoryQueryParams) {
+  return Boolean(
+    params.keyword?.trim?.() ||
+      params.categoryName?.trim?.() ||
+      params.categoryCode?.trim?.(),
+  );
+}
+
 export default function ProductCategoryPage() {
   const access = useAccess();
-  const actionRef = useRef<ActionType>(null);
   const [form] = Form.useForm<API.Product.Category>();
-  const [flatCategories, setFlatCategories] = useState<API.Product.Category[]>([]);
+  const loadedParentIds = useRef<Set<number>>(new Set());
+  const [categoryRows, setCategoryRows] = useState<API.Product.Category[]>([]);
+  const [categoryQuery, setCategoryQuery] = useState<CategoryQueryParams>({});
+  const [categorySearchMode, setCategorySearchMode] = useState(false);
+  const [tableLoading, setTableLoading] = useState(false);
+  const [expandedRowKeys, setExpandedRowKeys] = useState<Key[]>([]);
+  const [parentOptions, setParentOptions] = useState<
+    { label: string; value: number }[]
+  >([{ label: '顶级分类', value: 0 }]);
   const [modalOpen, setModalOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [currentCategory, setCurrentCategory] = useState<API.Product.Category>();
 
-  const categoryTree = useMemo(
-    () => buildCategoryTree(flatCategories),
-    [flatCategories],
+  const loadCategoryRows = useCallback(async (params: CategoryQueryParams = {}) => {
+    setTableLoading(true);
+    try {
+      const searchMode = hasCategorySearchParams(params);
+      setCategorySearchMode(searchMode);
+      if (searchMode) {
+        const resp = await searchCategories({
+          ...params,
+          pageNum: 1,
+          pageSize: 200,
+        });
+        setCategoryRows(normalizeCategoryTableRows(resp.rows || []));
+        setExpandedRowKeys([]);
+        loadedParentIds.current.clear();
+        return;
+      }
+      const resp = await getCategoryChildren({
+        parentId: 0,
+        status: params.status,
+      });
+      setCategoryRows(normalizeCategoryTableRows(resp.data || []));
+      setExpandedRowKeys([]);
+      loadedParentIds.current.clear();
+      loadedParentIds.current.add(0);
+    } finally {
+      setTableLoading(false);
+    }
+  }, []);
+
+  const loadCategoryChildren = useCallback(
+    async (parentId: number) => {
+      if (loadedParentIds.current.has(parentId)) {
+        return;
+      }
+      setTableLoading(true);
+      try {
+        const resp = await getCategoryChildren({
+          parentId,
+          status: categoryQuery.status,
+        });
+        setCategoryRows((previous) =>
+          mergeTableCategoryChildren(previous, parentId, resp.data || []),
+        );
+        loadedParentIds.current.add(parentId);
+      } finally {
+        setTableLoading(false);
+      }
+    },
+    [categoryQuery.status],
   );
 
-  const parentTreeData = useMemo(
-    () => [
-      {
-        title: '顶级分类',
-        value: 0,
-        children: toCategoryTreeSelectData(categoryTree),
-      },
-    ],
-    [categoryTree],
-  );
+  const loadParentOptions = useCallback(async (keyword = '') => {
+    const resp = await getCategoryOptions({
+      keyword,
+      status: '0',
+      pageNum: 1,
+      pageSize: 50,
+    });
+    setParentOptions([
+      { label: '顶级分类', value: 0 },
+      ...(resp.data || [])
+        .filter((item) => Boolean(item.categoryId))
+        .map(toCategoryOption),
+    ]);
+  }, []);
+
+  const ensureParentOption = useCallback(async (parentId?: number) => {
+    if (!parentId) {
+      setParentOptions([{ label: '顶级分类', value: 0 }]);
+      return;
+    }
+    const resp = await getCategoryPath(parentId);
+    const pathRows = resp.data || [];
+    const parent = pathRows[pathRows.length - 1];
+    setParentOptions([
+      { label: '顶级分类', value: 0 },
+      parent ? toCategoryOption(parent) : { label: String(parentId), value: parentId },
+    ]);
+  }, []);
+
+  useEffect(() => {
+    loadCategoryRows({});
+  }, [loadCategoryRows]);
 
   useEffect(() => {
     if (!modalOpen) {
@@ -79,6 +214,14 @@ export default function ProductCategoryPage() {
   }, [currentCategory, form, modalOpen]);
 
   const openCreateModal = (parent?: API.Product.Category) => {
+    if (parent?.categoryId) {
+      setParentOptions([
+        { label: '顶级分类', value: 0 },
+        toCategoryOption(parent),
+      ]);
+    } else {
+      loadParentOptions();
+    }
     setCurrentCategory({
       ...defaultCategoryValues,
       parentId: parent?.categoryId || 0,
@@ -87,6 +230,7 @@ export default function ProductCategoryPage() {
   };
 
   const openEditModal = (record: API.Product.Category) => {
+    ensureParentOption(record.parentId);
     setCurrentCategory(record);
     setModalOpen(true);
   };
@@ -100,7 +244,7 @@ export default function ProductCategoryPage() {
       ? await updateCategory(currentCategory.categoryId, payload)
       : await addCategory(payload);
     if (resultOk(resp, currentCategory?.categoryId ? '分类已更新' : '分类已新增')) {
-      actionRef.current?.reload();
+      loadCategoryRows(categoryQuery);
       return true;
     }
     return false;
@@ -121,7 +265,7 @@ export default function ProductCategoryPage() {
           await deleteCategory(categoryId),
           '分类已删除',
         );
-        if (ok) actionRef.current?.reload();
+        if (ok) loadCategoryRows(categoryQuery);
       },
     });
   };
@@ -136,6 +280,12 @@ export default function ProductCategoryPage() {
       title: '分类名称',
       dataIndex: 'categoryName',
       width: 220,
+      render: (_, record) =>
+        record.loadingPlaceholder
+          ? '加载中...'
+          : categorySearchMode
+            ? getCategoryDisplayPath(record)
+            : record.categoryName,
     },
     {
       title: '分类编码',
@@ -146,13 +296,6 @@ export default function ProductCategoryPage() {
       title: '层级',
       dataIndex: 'categoryLevel',
       width: 90,
-      search: false,
-    },
-    {
-      title: '可发布',
-      dataIndex: 'publishEnabled',
-      valueEnum: yesNoValueEnum,
-      width: 100,
       search: false,
     },
     {
@@ -185,62 +328,94 @@ export default function ProductCategoryPage() {
       title: '操作',
       valueType: 'option',
       width: 180,
-      render: (_, record) => [
-        <Button
-          key="edit"
-          type="link"
-          size="small"
-          hidden={!access.hasPerms('product:category:edit')}
-          onClick={() => openEditModal(record)}
-        >
-          编辑
-        </Button>,
-        <Dropdown
-          key="more"
-          menu={{
-            items: [
-              {
-                key: 'addChild',
-                label: '新增下级',
-                disabled: !access.hasPerms('product:category:add'),
-              },
-              {
-                key: 'delete',
-                label: '删除',
-                danger: true,
-                disabled: !access.hasPerms('product:category:remove'),
-              },
+      render: (_, record) =>
+        record.loadingPlaceholder
+          ? []
+          : [
+              <Button
+                key="edit"
+                type="link"
+                size="small"
+                hidden={!access.hasPerms('product:category:edit')}
+                onClick={() => openEditModal(record)}
+              >
+                编辑
+              </Button>,
+              <Dropdown
+                key="more"
+                menu={{
+                  items: [
+                    {
+                      key: 'addChild',
+                      label: '新增下级',
+                      disabled: !access.hasPerms('product:category:add'),
+                    },
+                    {
+                      key: 'delete',
+                      label: '删除',
+                      danger: true,
+                      disabled: !access.hasPerms('product:category:remove'),
+                    },
+                  ],
+                  onClick: ({ key }) => {
+                    if (key === 'addChild') openCreateModal(record);
+                    if (key === 'delete') removeCategory(record);
+                  },
+                }}
+              >
+                <Button type="link" size="small">
+                  更多 <DownOutlined />
+                </Button>
+              </Dropdown>,
             ],
-            onClick: ({ key }) => {
-              if (key === 'addChild') openCreateModal(record);
-              if (key === 'delete') removeCategory(record);
-            },
-          }}
-        >
-          <Button type="link" size="small">
-            更多 <DownOutlined />
-          </Button>
-        </Dropdown>,
-      ],
     },
   ];
 
   return (
     <PageContainer title={false}>
       <ProTable<API.Product.Category>
-        actionRef={actionRef}
         rowKey="categoryId"
         columns={columns}
+        dataSource={categoryRows}
+        loading={tableLoading}
         pagination={false}
-        search={getPersistedProTableSearch({ labelWidth: 90 }, 'product-category')}
-        request={async (params) => {
-          const resp = await getCategoryList(params);
-          const rows = resp.data || [];
-          setFlatCategories(rows);
-          return {
-            data: buildCategoryTree(rows),
-            success: resp.code === 200,
-          };
+        scroll={getProTableScroll(1200)}
+        options={{
+          reload: () => loadCategoryRows(categoryQuery),
+        }}
+        onSubmit={(params) => {
+          setCategoryQuery(params);
+          loadCategoryRows(params);
+        }}
+        onReset={() => {
+          setCategoryQuery({});
+          loadCategoryRows({});
+        }}
+        search={getPersistedProTableSearch(
+          {
+            labelWidth: 90,
+          },
+          'product-category',
+        )}
+        expandable={{
+          expandedRowKeys,
+          onExpand: async (expanded, record) => {
+            if (!record.categoryId || record.loadingPlaceholder) {
+              return;
+            }
+            if (expanded) {
+              await loadCategoryChildren(record.categoryId);
+              setExpandedRowKeys((keys) =>
+                keys.includes(record.categoryId as Key)
+                  ? keys
+                  : [...keys, record.categoryId as Key],
+              );
+              return;
+            }
+            setExpandedRowKeys((keys) =>
+              keys.filter((key) => key !== record.categoryId),
+            );
+          },
         }}
         toolBarRender={() => [
           <Button
@@ -270,7 +445,7 @@ export default function ProductCategoryPage() {
         onDownloadTemplate={downloadCategoryImportTemplate}
         onPreview={previewCategoryImport}
         onImport={importCategoryData}
-        onSuccess={() => actionRef.current?.reload()}
+        onSuccess={() => loadCategoryRows(categoryQuery)}
       />
 
       <ModalForm<API.Product.Category>
@@ -281,14 +456,15 @@ export default function ProductCategoryPage() {
         onOpenChange={setModalOpen}
         onFinish={saveCategory}
       >
-        <ProFormTreeSelect
+        <ProFormSelect
           name="parentId"
           label="上级分类"
           disabled={!!currentCategory?.categoryId}
           fieldProps={{
-            ...SEARCHABLE_TREE_SELECT_PROPS,
-            treeData: parentTreeData,
-            treeDefaultExpandAll: true,
+            ...SEARCHABLE_SELECT_PROPS,
+            filterOption: false,
+            onSearch: loadParentOptions,
+            options: parentOptions,
           }}
           rules={[{ required: true, message: '请选择上级分类' }]}
         />

@@ -1,0 +1,70 @@
+.productCell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+.productTextStack {
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+}
+
+.productText {
+  max-width: 100%;
+}
+
+.subText {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.detailLayout {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.detailImageBox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 180px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #f8fafc;
+}
+
+.detailImage {
+  max-width: 176px;
+  max-height: 176px;
+  object-fit: contain;
+}
+
+.emptyImage {
+  color: #94a3b8;
+}
+
+.detailSummary {
+  min-width: 0;
+}
+
+.descriptionText {
+  max-height: 96px;
+  margin-bottom: 0;
+  overflow: auto;
+}
+
+.hashText {
+  max-width: 100%;
+}
+
+@media (max-width: 768px) {
+  .detailLayout {
+    grid-template-columns: 1fr;
+  }
+}

@@ -22,6 +22,8 @@ public class ProductCategory extends BaseEntity
     private String delFlag;
     private Integer childrenCount;
     private String keyword;
+    private String fullPath;
+    private Boolean leafOnly;
 
     public Long getCategoryId()
     {
@@ -151,5 +153,25 @@ public class ProductCategory extends BaseEntity
     public void setKeyword(String keyword)
     {
         this.keyword = keyword;
+    }
+
+    public String getFullPath()
+    {
+        return fullPath;
+    }
+
+    public void setFullPath(String fullPath)
+    {
+        this.fullPath = fullPath;
+    }
+
+    public Boolean getLeafOnly()
+    {
+        return leafOnly;
+    }
+
+    public void setLeafOnly(Boolean leafOnly)
+    {
+        this.leafOnly = leafOnly;
     }
 }

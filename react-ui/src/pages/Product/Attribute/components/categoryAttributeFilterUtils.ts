@@ -19,11 +19,69 @@ function isLeafCategory(category: API.Product.Category) {
   return !category.children?.length;
 }
 
+function categoryMatches(
+  category: API.Product.Category,
+  filters: {
+    keyword: string;
+    status: string;
+    level: string;
+  },
+  path: string[],
+) {
+  const keyword = normalizeSearchText(filters.keyword);
+  const searchText = normalizeSearchText(
+    [category.categoryName, category.categoryCode, path.join('/')].join(' '),
+  );
+  const statusMatched =
+    filters.status === 'ALL' || category.status === filters.status;
+  const levelMatched =
+    filters.level === 'ALL' || String(category.categoryLevel || '') === filters.level;
+  const keywordMatched = !keyword || searchText.includes(keyword);
+
+  return statusMatched && levelMatched && keywordMatched;
+}
+
+function filterLeafCategories(
+  categories: API.Product.Category[],
+  filters: {
+    keyword: string;
+    status: string;
+    level: string;
+  },
+  parentPath: string[] = [],
+): API.Product.Category[] {
+  return categories.flatMap((category) => {
+    const path = [...parentPath, category.categoryName || ''];
+    if (!isLeafCategory(category)) {
+      return filterLeafCategories(category.children || [], filters, path);
+    }
+    if (!categoryMatches(category, filters, path)) {
+      return [];
+    }
+    return [
+      {
+        ...category,
+        categoryName: path.filter(Boolean).join(' / '),
+        children: undefined,
+      },
+    ];
+  });
+}
+
 export function collectCategoryKeys(categories: API.Product.Category[]): Key[] {
   return categories
     .flatMap((item) => [
       item.categoryId as Key,
       ...collectCategoryKeys(item.children || []),
+    ])
+    .filter((key) => key !== undefined);
+}
+
+export function collectExpandableCategoryKeys(categories: API.Product.Category[]): Key[] {
+  return categories
+    .flatMap((item) => [
+      ...(item.children?.length ? [item.categoryId as Key] : []),
+      ...collectExpandableCategoryKeys(item.children || []),
     ])
     .filter((key) => key !== undefined);
 }
@@ -52,6 +110,9 @@ export function filterCategoryTree(
   },
   parentPath: string[] = [],
 ): API.Product.Category[] {
+  if (filters.leafOnly) {
+    return filterLeafCategories(categories, filters, parentPath);
+  }
   const keyword = normalizeSearchText(filters.keyword);
   return categories
     .map((category) => {

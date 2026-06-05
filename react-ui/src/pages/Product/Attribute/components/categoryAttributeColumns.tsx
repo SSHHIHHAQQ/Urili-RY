@@ -6,7 +6,6 @@ import {
   statusValueEnum,
   yesNoValueEnum,
 } from '../../constants';
-import { sourceScopeValueEnum } from './categoryAttributeFilterUtils';
 
 type AccessLike = {
   hasPerms: (permission: string) => boolean;
@@ -16,7 +15,6 @@ type BuildCategoryAttributeColumnsOptions = {
   access: AccessLike;
   attributeTypeValueEnum: Record<string, { text: string }>;
   attributeGroupValueEnum: Record<string, { text: string }>;
-  sourceCategoryOptions: { label: string; value: number }[];
   onEditRule: (record: API.Product.CategoryAttribute) => void;
   onRemoveRule: (record: API.Product.CategoryAttribute) => void;
 };
@@ -25,7 +23,6 @@ export function buildCategoryAttributeColumns({
   access,
   attributeTypeValueEnum,
   attributeGroupValueEnum,
-  sourceCategoryOptions,
   onEditRule,
   onRemoveRule,
 }: BuildCategoryAttributeColumnsOptions) {
@@ -150,24 +147,6 @@ export function buildCategoryAttributeColumns({
   ];
 
   const schemaColumns: ProColumns<API.Product.CategoryAttribute>[] = [
-    {
-      title: '来源范围',
-      dataIndex: 'sourceScope',
-      valueType: 'select',
-      valueEnum: sourceScopeValueEnum,
-      fieldProps: SEARCHABLE_SELECT_PROPS,
-      hideInTable: true,
-    },
-    {
-      title: '来源类目',
-      dataIndex: 'sourceCategoryId',
-      valueType: 'select',
-      fieldProps: {
-        ...SEARCHABLE_SELECT_PROPS,
-        options: sourceCategoryOptions,
-      },
-      hideInTable: true,
-    },
     {
       title: '来源类目',
       dataIndex: 'sourceCategoryName',

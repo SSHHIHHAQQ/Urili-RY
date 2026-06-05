@@ -23,6 +23,12 @@
             <artifactId>ruoyi-system</artifactId>
         </dependency>
 
+        <!-- 财务币种配置 -->
+        <dependency>
+            <groupId>com.ruoyi</groupId>
+            <artifactId>finance</artifactId>
+        </dependency>
+
     </dependencies>
 
 </project>

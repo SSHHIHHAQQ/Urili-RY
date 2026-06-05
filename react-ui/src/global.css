@@ -73,9 +73,8 @@
 
 .ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-table-search {
   flex: none;
-  max-height: var(--urili-list-search-max-height);
   margin-block-end: var(--urili-list-section-gap);
-  overflow: auto;
+  overflow: visible;
 }
 
 .ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-table-search .ant-pro-query-filter {
@@ -89,7 +88,6 @@
 
 .ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-table-search .ant-form-horizontal .ant-form-item {
   align-items: stretch;
-  display: flex;
   flex-direction: column;
 }
 
@@ -173,6 +171,15 @@
   overflow: hidden;
 }
 
+.ant-pro-page-container
+  .ant-pro-page-container-children-container
+  .ant-pro-table
+  > .ant-pro-card:not(.ant-pro-table-search)
+  > .ant-pro-card-body:not(:has(> .ant-pro-table-list-toolbar)) {
+  /* biome-ignore lint/complexity/noImportantStyles: ProTable writes padding-block-start inline when toolbar is disabled; standard page lists still need top breathing room. */
+  padding-block-start: 12px !important;
+}
+
 .ant-pro-page-container .ant-pro-page-container-children-container .ant-tabs-tabpane-hidden {
   display: none;
 }
@@ -206,6 +213,61 @@
   margin-block-end: 0;
   padding-block-start: 12px;
   border-block-start: 1px solid rgba(5, 5, 5, 0.06);
+}
+
+.urili-fill-table,
+.upstream-fill-table {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table.upstream-fill-table
+  > .ant-pro-card:not(.ant-pro-table-search) {
+  border: 0;
+  box-shadow: none;
+}
+
+.ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table.upstream-fill-table
+  > .ant-pro-card:not(.ant-pro-table-search)
+  > .ant-pro-card-body {
+  /* biome-ignore lint/complexity/noImportantStyles: embedded upstream tables intentionally remove the page-list top padding override. */
+  padding: 0 !important;
+}
+
+.ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table.upstream-fill-table
+  .ant-pro-table-list-toolbar {
+  display: none;
+}
+
+.ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table .ant-table-wrapper .ant-table.ant-table-fixed-header {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table .ant-table-wrapper .ant-table.ant-table-fixed-header .ant-table-container {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table .ant-table-wrapper .ant-table.ant-table-fixed-header .ant-table-header {
+  flex: none;
+}
+
+.ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table .ant-table-wrapper .ant-table.ant-table-fixed-header .ant-table-body {
+  flex: 1;
+  min-height: 0;
+  /* biome-ignore lint/complexity/noImportantStyles: Ant Design writes fixed-header body max-height inline from scroll.y; standard list pages need the body to consume remaining height. */
+  max-height: none !important;
+  /* biome-ignore lint/complexity/noImportantStyles: Ant Design writes fixed-header body overflow inline; standard list pages need body-only scrolling. */
+  overflow: auto !important;
 }
 
 @media (max-height: 900px) {

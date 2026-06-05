@@ -26,6 +26,7 @@ import com.ruoyi.system.domain.PortalDirectLoginRequest;
 import com.ruoyi.system.domain.PortalDirectLoginTicket;
 import com.ruoyi.system.domain.PortalLoginLog;
 import com.ruoyi.system.domain.PortalOperLog;
+import com.ruoyi.system.domain.PortalSessionProfile;
 
 /**
  * 管理端买家管理
@@ -80,14 +81,14 @@ public class AdminBuyerController extends BaseController
         return toAjax(buyerService.updateBuyerStatus(buyer));
     }
 
-    @PreAuthorize("@ss.hasPermi('buyer:admin:query')")
+    @PreAuthorize("@ss.hasPermi('buyer:admin:account:list')")
     @GetMapping("/{buyerId}/accounts")
     public AjaxResult accounts(@PathVariable("buyerId") Long buyerId)
     {
         return success(buyerService.selectBuyerAccountList(buyerId));
     }
 
-    @PreAuthorize("@ss.hasPermi('buyer:admin:role:query')")
+    @PreAuthorize("@ss.hasPermi('buyer:admin:account:role:query')")
     @GetMapping("/{buyerId}/accounts/{accountId}/roles")
     public AjaxResult accountRoles(@PathVariable("buyerId") Long buyerId, @PathVariable("accountId") Long accountId)
     {
@@ -97,7 +98,7 @@ public class AdminBuyerController extends BaseController
         return ajax;
     }
 
-    @PreAuthorize("@ss.hasPermi('buyer:admin:role:edit')")
+    @PreAuthorize("@ss.hasPermi('buyer:admin:account:role:edit')")
     @Log(title = "买家端账号角色", businessType = BusinessType.GRANT)
     @PutMapping("/{buyerId}/accounts/{accountId}/roles")
     public AjaxResult assignAccountRoles(@PathVariable("buyerId") Long buyerId, @PathVariable("accountId") Long accountId,
@@ -106,7 +107,7 @@ public class AdminBuyerController extends BaseController
         return toAjax(permissionService.assignAccountRoles(buyerId, accountId, assign == null ? null : assign.getRoleIds()));
     }
 
-    @PreAuthorize("@ss.hasPermi('buyer:admin:add')")
+    @PreAuthorize("@ss.hasPermi('buyer:admin:account:add')")
     @Log(title = "买家账号", businessType = BusinessType.INSERT)
     @PostMapping("/{buyerId}/accounts")
     public AjaxResult addAccount(@PathVariable("buyerId") Long buyerId, @Validated @RequestBody BuyerAccount account)
@@ -114,7 +115,7 @@ public class AdminBuyerController extends BaseController
         return toAjax(buyerService.insertBuyerAccount(buyerId, account));
     }
 
-    @PreAuthorize("@ss.hasPermi('buyer:admin:edit')")
+    @PreAuthorize("@ss.hasPermi('buyer:admin:account:edit')")
     @Log(title = "买家账号", businessType = BusinessType.UPDATE)
     @PutMapping("/{buyerId}/accounts")
     public AjaxResult editAccount(@PathVariable("buyerId") Long buyerId, @RequestBody BuyerAccount account)
@@ -122,7 +123,7 @@ public class AdminBuyerController extends BaseController
         return toAjax(buyerService.updateBuyerAccount(buyerId, account));
     }
 
-    @PreAuthorize("@ss.hasPermi('buyer:admin:resetPwd')")
+    @PreAuthorize("@ss.hasPermi('buyer:admin:account:resetPwd')")
     @Log(title = "买家账号", businessType = BusinessType.UPDATE)
     @PutMapping("/accounts/resetPwd")
     public AjaxResult resetPassword(@RequestBody BuyerAccount account)
@@ -130,7 +131,7 @@ public class AdminBuyerController extends BaseController
         return toAjax(buyerService.resetBuyerAccountPassword(account));
     }
 
-    @PreAuthorize("@ss.hasPermi('buyer:admin:resetPwd')")
+    @PreAuthorize("@ss.hasPermi('buyer:admin:account:resetPwd')")
     @Log(title = "买家账号", businessType = BusinessType.UPDATE)
     @PutMapping("/accounts/resetDefaultPwd")
     public AjaxResult resetDefaultPassword(@RequestBody BuyerAccount account)
@@ -144,6 +145,24 @@ public class AdminBuyerController extends BaseController
     public AjaxResult resetOwnerPassword(@PathVariable("buyerId") Long buyerId)
     {
         return toAjax(buyerService.resetBuyerOwnerPassword(buyerId));
+    }
+
+    @PreAuthorize("@ss.hasPermi('buyer:admin:forceLogout')")
+    @GetMapping("/{buyerId}/sessions/list")
+    public TableDataInfo sessions(@PathVariable("buyerId") Long buyerId)
+    {
+        startPage();
+        List<PortalSessionProfile> list = buyerService.selectBuyerSessionList(buyerId);
+        return getDataTable(list);
+    }
+
+    @PreAuthorize("@ss.hasPermi('buyer:admin:forceLogout')")
+    @GetMapping("/{buyerId}/accounts/{accountId}/sessions/list")
+    public TableDataInfo accountSessions(@PathVariable("buyerId") Long buyerId, @PathVariable("accountId") Long accountId)
+    {
+        startPage();
+        List<PortalSessionProfile> list = buyerService.selectBuyerAccountSessionList(buyerId, accountId);
+        return getDataTable(list);
     }
 
     @PreAuthorize("@ss.hasPermi('buyer:admin:forceLogout')")
@@ -169,6 +188,16 @@ public class AdminBuyerController extends BaseController
             @RequestBody(required = false) PortalDirectLoginRequest request)
     {
         return success(buyerService.createBuyerDirectLogin(buyerId, request == null ? null : request.getReason()));
+    }
+
+    @PreAuthorize("@ss.hasPermi('buyer:admin:directLogin')")
+    @Log(title = "买家账号免密登录", businessType = BusinessType.OTHER, isSaveResponseData = false)
+    @PostMapping("/{buyerId}/accounts/{accountId}/directLogin")
+    public AjaxResult accountDirectLogin(@PathVariable("buyerId") Long buyerId, @PathVariable("accountId") Long accountId,
+            @RequestBody(required = false) PortalDirectLoginRequest request)
+    {
+        return success(buyerService.createBuyerAccountDirectLogin(buyerId, accountId,
+            request == null ? null : request.getReason()));
     }
 
     @PreAuthorize("@ss.hasPermi('buyer:admin:loginLog:list')")

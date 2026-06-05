@@ -13,6 +13,8 @@ public interface IProductConfigService
 {
     List<ProductCategory> selectCategoryList(ProductCategory query);
 
+    List<ProductCategory> selectCategoryPath(Long categoryId);
+
     ProductCategory selectCategoryById(Long categoryId);
 
     int insertCategory(ProductCategory category);
@@ -23,7 +25,7 @@ public interface IProductConfigService
 
     List<ProductAttribute> selectAttributeList(ProductAttribute query);
 
-    List<ProductAttribute> selectEnabledAttributeList();
+    List<ProductAttribute> selectEnabledAttributeList(ProductAttribute query);
 
     ProductAttribute selectAttributeById(Long attributeId);
 

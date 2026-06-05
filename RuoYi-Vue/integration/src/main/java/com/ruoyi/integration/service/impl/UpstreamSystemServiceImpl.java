@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.alibaba.fastjson2.JSON;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
+import com.ruoyi.integration.domain.SourceProductItem;
 import com.ruoyi.integration.domain.UpstreamLogisticsChannelPairing;
 import com.ruoyi.integration.domain.UpstreamLogisticsChannelSyncItem;
 import com.ruoyi.integration.domain.UpstreamRequestLog;
@@ -25,6 +26,7 @@ import com.ruoyi.integration.domain.UpstreamSkuSyncState;
 import com.ruoyi.integration.domain.UpstreamSystemConnection;
 import com.ruoyi.integration.domain.UpstreamWarehousePairing;
 import com.ruoyi.integration.domain.UpstreamWarehouseSyncItem;
+import com.ruoyi.integration.domain.query.SourceProductQuery;
 import com.ruoyi.integration.domain.request.LogisticsChannelPairingRequest;
 import com.ruoyi.integration.domain.request.SkuPairingRequest;
 import com.ruoyi.integration.domain.request.UpstreamConnectionInfoRequest;
@@ -367,6 +369,18 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
     }
 
     @Override
+    public List<SourceProductItem> selectSourceProductList(SourceProductQuery query)
+    {
+        SourceProductQuery normalized = normalizeSourceProductQuery(query);
+        List<SourceProductItem> list = upstreamSystemMapper.selectSourceProductList(normalized);
+        for (SourceProductItem item : list)
+        {
+            item.setSystemKindLabel(systemKindLabel(item.getSystemKind()));
+        }
+        return list;
+    }
+
+    @Override
     public List<UpstreamWarehouseSyncItem> selectWarehouseSyncList(String connectionCode, String status)
     {
         selectConnectionByCode(connectionCode);
@@ -560,8 +574,9 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
                 item.setConnectionCode(connectionCode);
                 item.setMasterSku(sku.getSku());
                 item.setMasterProductName(sku.getProductName());
+                copyLingxingSkuFields(item, sku);
                 item.setStatus(UpstreamSystemConstants.STATUS_ACTIVE);
-                item.setSearchText((sku.getSku() + " " + sku.getProductName()).trim());
+                item.setSearchText(buildSkuSearchText(sku));
                 item.setSyncBatchId(syncBatchId);
                 items.add(item);
                 synced++;
@@ -571,6 +586,117 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
         }
         upstreamSystemMapper.markMissingSkus(connectionCode, syncBatchId);
         return synced;
+    }
+
+    private SourceProductQuery normalizeSourceProductQuery(SourceProductQuery query)
+    {
+        SourceProductQuery normalized = query == null ? new SourceProductQuery() : query;
+        normalized.setConnectionCode(trimOptional(normalized.getConnectionCode()));
+        normalized.setSystemKind(normalizeSystemKindOptional(normalized.getSystemKind()));
+        normalized.setMasterWarehouseName(trimOptional(normalized.getMasterWarehouseName()));
+        normalized.setMasterSku(trimOptional(normalized.getMasterSku()));
+        normalized.setProductName(trimOptional(normalized.getProductName()));
+        normalized.setIdentifyCodeKeyword(trimOptional(normalized.getIdentifyCodeKeyword()));
+        normalized.setCategoryKeyword(trimOptional(normalized.getCategoryKeyword()));
+        normalized.setApproveStatus(trimOptional(normalized.getApproveStatus()));
+        normalized.setStatus(trimOptional(normalized.getStatus()));
+        normalized.setPairingStatus(trimOptional(normalized.getPairingStatus()));
+        normalized.setKeyword(trimOptional(normalized.getKeyword()));
+        return normalized;
+    }
+
+    private String normalizeSystemKindOptional(String value)
+    {
+        String trimmed = trimOptional(value);
+        if (StringUtils.isBlank(trimmed))
+        {
+            return null;
+        }
+        if (UpstreamSystemConstants.SYSTEM_KIND_LINGXING_WMS_LEGACY.equals(trimmed))
+        {
+            return UpstreamSystemConstants.SYSTEM_KIND_LINGXING_WMS;
+        }
+        return trimmed;
+    }
+
+    private String systemKindLabel(String systemKind)
+    {
+        String normalized = normalizeSystemKindOptional(systemKind);
+        if (UpstreamSystemConstants.SYSTEM_KIND_LINGXING_WMS.equals(normalized))
+        {
+            return "领星WMS";
+        }
+        return StringUtils.defaultIfBlank(systemKind, "未知来源");
+    }
+
+    private void copyLingxingSkuFields(UpstreamSkuSyncItem item, LingxingProductSku sku)
+    {
+        item.setProductAliasName(sku.getProductAliasName());
+        item.setApproveStatus(sku.getApproveStatus());
+        item.setProductType(sku.getProductType());
+        item.setProductDescription(sku.getProductDescription());
+        item.setImageUrl(sku.getImageUrl());
+        item.setMainCode(sku.getMainCode());
+        item.setOtherCode(sku.getOtherCode());
+        item.setFnsku(sku.getFnsku());
+        item.setCountryOfOriginName(sku.getCountryOfOriginName());
+        item.setCurrencyCode(sku.getCurrencyCode());
+        item.setCustomhouseCode(sku.getCustomhouseCode());
+        item.setDangerousCargo(sku.getDangerousCargo());
+        item.setDeclareNameCn(sku.getDeclareNameCn());
+        item.setDeclareNameEn(sku.getDeclareNameEn());
+        item.setDeclarePrice(sku.getDeclarePrice());
+        item.setHeight(sku.getHeight());
+        item.setHeightBs(sku.getHeightBs());
+        item.setLength(sku.getLength());
+        item.setLengthBs(sku.getLengthBs());
+        item.setWeight(sku.getWeight());
+        item.setWeightBs(sku.getWeightBs());
+        item.setWidth(sku.getWidth());
+        item.setWidthBs(sku.getWidthBs());
+        item.setWmsHeight(sku.getWmsHeight());
+        item.setWmsHeightBs(sku.getWmsHeightBs());
+        item.setWmsLength(sku.getWmsLength());
+        item.setWmsLengthBs(sku.getWmsLengthBs());
+        item.setWmsWeight(sku.getWmsWeight());
+        item.setWmsWeightBs(sku.getWmsWeightBs());
+        item.setWmsWidth(sku.getWmsWidth());
+        item.setWmsWidthBs(sku.getWmsWidthBs());
+        item.setCat1Name(sku.getCat1Name());
+        item.setCat2Name(sku.getCat2Name());
+        item.setCat3Name(sku.getCat3Name());
+        item.setPlatformSkuInfoJson(sku.getPlatformSkuInfoJson());
+        item.setBrazilTaxInfoJson(sku.getBrazilTaxInfoJson());
+        item.setSourcePayloadJson(sku.getSourcePayloadJson());
+        item.setSourcePayloadHash(sku.getSourcePayloadHash());
+    }
+
+    private String buildSkuSearchText(LingxingProductSku sku)
+    {
+        List<String> parts = new ArrayList<>();
+        addSearchPart(parts, sku.getSku());
+        addSearchPart(parts, sku.getProductName());
+        addSearchPart(parts, sku.getProductAliasName());
+        addSearchPart(parts, sku.getMainCode());
+        addSearchPart(parts, sku.getOtherCode());
+        addSearchPart(parts, sku.getFnsku());
+        addSearchPart(parts, sku.getDeclareNameCn());
+        addSearchPart(parts, sku.getDeclareNameEn());
+        addSearchPart(parts, sku.getCustomhouseCode());
+        addSearchPart(parts, sku.getCountryOfOriginName());
+        addSearchPart(parts, sku.getCat1Name());
+        addSearchPart(parts, sku.getCat2Name());
+        addSearchPart(parts, sku.getCat3Name());
+        return String.join(" ", parts);
+    }
+
+    private void addSearchPart(List<String> parts, String value)
+    {
+        String trimmed = StringUtils.trimToEmpty(value);
+        if (StringUtils.isNotBlank(trimmed))
+        {
+            parts.add(trimmed);
+        }
     }
 
     private void checkCredentials(String connectionCode, String appKey, String appSecret)

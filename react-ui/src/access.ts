@@ -113,4 +113,7 @@ export function getTokenExpireTime() {
 
 export function clearSessionToken() {
   clearTerminalSessionToken('admin');
+  if (typeof sessionStorage !== 'undefined') {
+    sessionStorage.removeItem('admin_remote_menu');
+  }
 }

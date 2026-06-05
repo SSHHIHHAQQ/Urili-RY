@@ -264,10 +264,30 @@ export async function forceLogoutAdminBuyerSessions(buyerId: number) {
   });
 }
 
+export async function getAdminBuyerSessions(buyerId: number, params?: Record<string, any>) {
+  return request<API.Partner.PortalAuditPageResult<API.Partner.PortalSessionProfile>>(
+    `/api/buyer/admin/buyers/${buyerId}/sessions/list`,
+    {
+      method: 'GET',
+      params,
+    },
+  );
+}
+
 export async function forceLogoutAdminBuyerAccountSessions(buyerId: number, buyerAccountId: number) {
   return request<API.Result>(`/api/buyer/admin/buyers/${buyerId}/accounts/${buyerAccountId}/sessions`, {
     method: 'DELETE',
   });
+}
+
+export async function getAdminBuyerAccountSessions(buyerId: number, buyerAccountId: number, params?: Record<string, any>) {
+  return request<API.Partner.PortalAuditPageResult<API.Partner.PortalSessionProfile>>(
+    `/api/buyer/admin/buyers/${buyerId}/accounts/${buyerAccountId}/sessions/list`,
+    {
+      method: 'GET',
+      params,
+    },
+  );
 }
 
 export async function createAdminBuyerDirectLogin(buyerId: number, reason: string) {
@@ -278,6 +298,19 @@ export async function createAdminBuyerDirectLogin(buyerId: number, reason: strin
     },
     data: { reason },
   });
+}
+
+export async function createAdminBuyerAccountDirectLogin(buyerId: number, buyerAccountId: number, reason: string) {
+  return request<API.Partner.DirectLoginApiResult>(
+    `/api/buyer/admin/buyers/${buyerId}/accounts/${buyerAccountId}/directLogin`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json;charset=UTF-8',
+      },
+      data: { reason },
+    },
+  );
 }
 
 export async function getAdminBuyerLoginLogs(params?: Record<string, any>) {

@@ -17,6 +17,7 @@ import org.springframework.web.multipart.MultipartFile;
 import com.ruoyi.common.annotation.Log;
 import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
+import com.ruoyi.common.core.page.TableDataInfo;
 import com.ruoyi.common.enums.BusinessType;
 import com.ruoyi.common.utils.poi.ExcelUtil;
 import com.ruoyi.product.domain.ProductCategory;
@@ -48,6 +49,41 @@ public class AdminProductCategoryController extends BaseController
     {
         List<ProductCategory> list = productConfigService.selectCategoryList(query);
         return success(list);
+    }
+
+    @PreAuthorize("@ss.hasPermi('product:category:list')")
+    @GetMapping("/children")
+    public AjaxResult children(ProductCategory query)
+    {
+        if (query.getParentId() == null)
+        {
+            query.setParentId(0L);
+        }
+        return success(productConfigService.selectCategoryList(query));
+    }
+
+    @PreAuthorize("@ss.hasPermi('product:category:list')")
+    @GetMapping("/search")
+    public TableDataInfo search(ProductCategory query)
+    {
+        startPage();
+        List<ProductCategory> list = productConfigService.selectCategoryList(query);
+        return getDataTable(list);
+    }
+
+    @PreAuthorize("@ss.hasPermi('product:category:list')")
+    @GetMapping("/options")
+    public AjaxResult options(ProductCategory query)
+    {
+        startPage();
+        return success(productConfigService.selectCategoryList(query));
+    }
+
+    @PreAuthorize("@ss.hasPermi('product:category:list')")
+    @GetMapping("/path/{categoryId}")
+    public AjaxResult path(@PathVariable("categoryId") Long categoryId)
+    {
+        return success(productConfigService.selectCategoryPath(categoryId));
     }
 
     @PreAuthorize("@ss.hasPermi('product:category:query')")

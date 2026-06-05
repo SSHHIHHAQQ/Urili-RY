@@ -18,7 +18,7 @@ import { Button, Dropdown, Modal, Tabs } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { getDictSelectOption } from '@/services/system/dict';
 import { message } from '@/utils/feedback';
-import { getPersistedProTableSearch } from '@/utils/proTableSearch';
+import { getPersistedProTableSearch, getProTableScroll } from '@/utils/proTableSearch';
 import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 import {
   addCurrency,
@@ -319,6 +319,7 @@ export default function FinanceCurrencyPage() {
       actionRef={actionRef}
       rowKey="currencyCode"
       columns={currencyColumns}
+      scroll={getProTableScroll(1500)}
       search={getPersistedProTableSearch({ labelWidth: 110 }, 'finance-currency')}
       request={async (params) => {
         const resp = await getCurrencyList(params);
@@ -458,6 +459,7 @@ export default function FinanceCurrencyPage() {
             rowKey="rateHistoryId"
             columns={historyColumns}
             search={false}
+            scroll={getProTableScroll(1000)}
             request={async (params) => {
               const resp = await getRateHistoryList(
                 historyCurrency.currencyCode,

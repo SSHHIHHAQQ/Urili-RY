@@ -1,0 +1,103 @@
+.product-category-attribute-template {
+  display: grid;
+  flex: 1 1 0;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 16px;
+  align-items: stretch;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.product-category-attribute-template__category-pane {
+  box-sizing: border-box;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 16px;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid #f0f0f0;
+  border-radius: 6px;
+}
+
+.product-category-attribute-template__rules-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.product-category-attribute-template__table-frame {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.product-category-attribute-template__table-frame--direct {
+  flex: 0 0 clamp(250px, 42%, 390px);
+}
+
+.product-category-attribute-template__table-frame--schema {
+  flex: 1 1 0;
+}
+
+.product-category-attribute-template__rule-table {
+  height: 100%;
+  min-height: 0;
+}
+
+.product-category-attribute-template
+  .product-category-attribute-template__table-frame
+  .ant-pro-table {
+  height: 100%;
+  min-height: 0;
+}
+
+.product-category-attribute-template
+  .product-category-attribute-template__table-frame
+  .ant-pro-table
+  > .ant-pro-card:not(.ant-pro-table-search) {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.product-category-attribute-template
+  .product-category-attribute-template__table-frame
+  .ant-pro-table-list-toolbar {
+  min-height: 44px;
+  padding-block: 6px;
+}
+
+.product-category-attribute-template
+  .product-category-attribute-template__table-frame
+  .ant-pro-table-list-toolbar-container {
+  padding-block: 0;
+}
+
+@media (max-height: 780px) {
+  .product-category-attribute-template {
+    gap: 12px;
+  }
+
+  .product-category-attribute-template__category-pane {
+    padding: 12px;
+  }
+
+  .product-category-attribute-template__rules-pane {
+    gap: 10px;
+  }
+
+  .product-category-attribute-template__table-frame--direct {
+    flex-basis: 260px;
+  }
+}
+
+@media (max-width: 1280px) {
+  .product-category-attribute-template {
+    grid-template-columns: 260px minmax(0, 1fr);
+  }
+}

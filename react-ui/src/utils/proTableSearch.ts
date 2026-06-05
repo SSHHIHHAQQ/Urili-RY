@@ -1,22 +1,41 @@
 import type { ProTableProps } from '@ant-design/pro-components';
 
-type ProTableSearchConfig = Exclude<ProTableProps<Record<string, unknown>, Record<string, unknown>>['search'], false | undefined>;
+type ProTableSearchConfig = Exclude<
+  ProTableProps<Record<string, unknown>, Record<string, unknown>>['search'],
+  false | undefined
+>;
+type ProTablePaginationConfig = Exclude<
+  ProTableProps<Record<string, unknown>, Record<string, unknown>>['pagination'],
+  false | undefined
+>;
+type ProTableScrollConfig = Exclude<
+  ProTableProps<Record<string, unknown>, Record<string, unknown>>['scroll'],
+  false | undefined
+>;
+type ProTableColumnsStateConfig = Exclude<
+  ProTableProps<Record<string, unknown>, Record<string, unknown>>['columnsState'],
+  false | undefined
+>;
 
 const SEARCH_COLLAPSED_STORAGE_PREFIX = 'proTableSearch:collapsed:';
+const DEFAULT_PRO_TABLE_PAGE_SIZE = 20;
+const DEFAULT_PRO_TABLE_PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
-const RESPONSIVE_VERTICAL_SEARCH_SPAN: NonNullable<ProTableSearchConfig['span']> = {
+const RESPONSIVE_VERTICAL_SEARCH_SPAN: NonNullable<
+  ProTableSearchConfig['span']
+> = {
   xs: 24,
   sm: 12,
   md: 12,
   lg: 8,
-  xl: 6,
-  xxl: 4,
+  xl: 4,
+  xxl: 3,
 };
 const DEFAULT_PRO_TABLE_SEARCH_LAYOUT: Pick<
   ProTableSearchConfig,
   'defaultFormItemsNumber' | 'labelWidth' | 'layout' | 'searchGutter' | 'span'
 > = {
-  defaultFormItemsNumber: 6,
+  defaultFormItemsNumber: 5,
   labelWidth: 'auto',
   layout: 'vertical',
   searchGutter: [24, 16],
@@ -33,12 +52,12 @@ function getSearchStorageKey(storageKey?: string) {
   return `${SEARCH_COLLAPSED_STORAGE_PREFIX}${window.location.pathname}`;
 }
 
-function getPersistedCollapsed(storageKey: string) {
+function getPersistedCollapsed(storageKey: string, fallback = false) {
   if (typeof window === 'undefined') {
-    return false;
+    return fallback;
   }
   const value = window.localStorage.getItem(storageKey);
-  return value === null ? false : value === 'true';
+  return value === null ? fallback : value === 'true';
 }
 
 export function getPersistedProTableSearch(
@@ -51,20 +70,68 @@ export function getPersistedProTableSearch(
 
   return {
     ...config,
-    defaultFormItemsNumber: config.defaultFormItemsNumber ?? DEFAULT_PRO_TABLE_SEARCH_LAYOUT.defaultFormItemsNumber,
+    defaultFormItemsNumber:
+      config.defaultFormItemsNumber ??
+      DEFAULT_PRO_TABLE_SEARCH_LAYOUT.defaultFormItemsNumber,
     labelWidth:
       layout === 'horizontal'
         ? config.labelWidth
         : DEFAULT_PRO_TABLE_SEARCH_LAYOUT.labelWidth,
     layout,
-    searchGutter: config.searchGutter ?? DEFAULT_PRO_TABLE_SEARCH_LAYOUT.searchGutter,
+    searchGutter:
+      config.searchGutter ?? DEFAULT_PRO_TABLE_SEARCH_LAYOUT.searchGutter,
     span: config.span ?? DEFAULT_PRO_TABLE_SEARCH_LAYOUT.span,
-    defaultCollapsed: getPersistedCollapsed(key),
+    defaultCollapsed: getPersistedCollapsed(
+      key,
+      config.defaultCollapsed ?? false,
+    ),
     onCollapse: (collapsed) => {
       if (typeof window !== 'undefined') {
         window.localStorage.setItem(key, String(collapsed));
       }
       onCollapse?.(collapsed);
     },
+  };
+}
+
+export function getProTablePagination(
+  config: ProTablePaginationConfig | number = {},
+): ProTablePaginationConfig {
+  const normalizedConfig =
+    typeof config === 'number' ? { defaultPageSize: config } : config;
+  const { pageSize, ...restConfig } =
+    normalizedConfig as ProTablePaginationConfig & {
+      pageSize?: number;
+    };
+
+  return {
+    ...restConfig,
+    defaultPageSize:
+      restConfig.defaultPageSize ?? pageSize ?? DEFAULT_PRO_TABLE_PAGE_SIZE,
+    showSizeChanger: restConfig.showSizeChanger ?? true,
+    pageSizeOptions:
+      restConfig.pageSizeOptions ?? DEFAULT_PRO_TABLE_PAGE_SIZE_OPTIONS,
+  };
+}
+
+export function getProTableScroll(
+  x: ProTableScrollConfig['x'],
+  config: Omit<ProTableScrollConfig, 'x'> = {},
+): ProTableScrollConfig {
+  return {
+    ...config,
+    x,
+    y: config.y ?? '100%',
+  };
+}
+
+export function getProTableColumnsState(
+  persistenceKey: string,
+  config: ProTableColumnsStateConfig = {},
+): ProTableColumnsStateConfig {
+  return {
+    persistenceType: 'localStorage',
+    ...config,
+    persistenceKey,
   };
 }

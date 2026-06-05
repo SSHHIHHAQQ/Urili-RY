@@ -186,7 +186,7 @@ export default function AttributeOptionManager({
         open={open}
         width={760}
         footer={null}
-        destroyOnClose
+        destroyOnHidden
         onCancel={() => onOpenChange(false)}
       >
         <ProTable<API.Product.AttributeOption>
@@ -237,9 +237,19 @@ export default function AttributeOptionManager({
           label="选项名称"
           rules={[{ required: true, message: '请输入选项名称' }]}
         />
-        <ProFormSelect name="defaultFlag" label="默认" options={yesNoOptions} fieldProps={SEARCHABLE_SELECT_PROPS} />
+        <ProFormSelect
+          name="defaultFlag"
+          label="默认"
+          options={yesNoOptions}
+          fieldProps={SEARCHABLE_SELECT_PROPS}
+        />
         <ProFormDigit name="sortOrder" label="排序" min={0} />
-        <ProFormSelect name="status" label="状态" options={statusOptions} fieldProps={SEARCHABLE_SELECT_PROPS} />
+        <ProFormSelect
+          name="status"
+          label="状态"
+          options={statusOptions}
+          fieldProps={SEARCHABLE_SELECT_PROPS}
+        />
         <ProFormTextArea name="remark" label="备注" />
       </ModalForm>
     </>

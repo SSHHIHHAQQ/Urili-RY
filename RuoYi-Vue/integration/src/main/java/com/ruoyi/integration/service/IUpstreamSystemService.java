@@ -1,6 +1,7 @@
 package com.ruoyi.integration.service;
 
 import java.util.List;
+import com.ruoyi.integration.domain.SourceProductItem;
 import com.ruoyi.integration.domain.UpstreamLogisticsChannelPairing;
 import com.ruoyi.integration.domain.UpstreamLogisticsChannelSyncItem;
 import com.ruoyi.integration.domain.UpstreamRequestLog;
@@ -10,6 +11,7 @@ import com.ruoyi.integration.domain.UpstreamSkuSyncState;
 import com.ruoyi.integration.domain.UpstreamSystemConnection;
 import com.ruoyi.integration.domain.UpstreamWarehousePairing;
 import com.ruoyi.integration.domain.UpstreamWarehouseSyncItem;
+import com.ruoyi.integration.domain.query.SourceProductQuery;
 import com.ruoyi.integration.domain.request.LogisticsChannelPairingRequest;
 import com.ruoyi.integration.domain.request.SkuPairingRequest;
 import com.ruoyi.integration.domain.request.UpstreamConnectionInfoRequest;
@@ -42,6 +44,8 @@ public interface IUpstreamSystemService
     UpstreamSyncResult syncAll(String connectionCode);
 
     UpstreamSyncResult syncSkusOnly(String connectionCode);
+
+    List<SourceProductItem> selectSourceProductList(SourceProductQuery query);
 
     List<UpstreamWarehouseSyncItem> selectWarehouseSyncList(String connectionCode, String status);
 

@@ -1,8 +1,8 @@
-import React from 'react';
-import { useAccess } from '@umijs/max';
-import { Modal, Space, Tabs, Tag, Typography } from 'antd';
 import { ProTable, type ProColumns } from '@ant-design/pro-components';
-import { getPersistedProTableSearch } from '@/utils/proTableSearch';
+import { useAccess } from '@umijs/max';
+import { Descriptions, Modal, Space, Tabs, Tag, Typography } from 'antd';
+import React from 'react';
+import { getPersistedProTableSearch, getProTablePagination } from '@/utils/proTableSearch';
 import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 import type { PartnerModuleConfig } from './PartnerManagementPage';
 
@@ -35,6 +35,11 @@ const auditTableWrapperStyle: React.CSSProperties = {
   overflow: 'hidden',
 };
 
+const detailTextStyle: React.CSSProperties = {
+  whiteSpace: 'pre-wrap',
+  wordBreak: 'break-word',
+};
+
 const loginStatusValueEnum = {
   '0': { text: '成功', status: 'Success' },
   '1': { text: '失败', status: 'Error' },
@@ -58,6 +63,11 @@ function getValue(record: PartnerRecord | undefined, field: string) {
 function renderCompactText(value: unknown) {
   const text = value == null || value === '' ? '-' : String(value);
   return <Typography.Text style={compactCellTextStyle} title={text}>{text}</Typography.Text>;
+}
+
+function renderDetailText(value: unknown) {
+  const text = value == null || value === '' ? '-' : String(value);
+  return <Typography.Text style={detailTextStyle}>{text}</Typography.Text>;
 }
 
 function formatDateTimeText(value: unknown) {
@@ -131,6 +141,38 @@ const PartnerAuditModal: React.FC<PartnerAuditModalProps> = ({
   const partnerTitle = partnerId
     ? `${getValue(partner, config.nameField) || getValue(partner, config.noField) || partnerId}`
     : `全部${config.label}`;
+
+  const renderLoginDetail = (record: AuditRecord) => (
+    <Descriptions size="small" column={{ xs: 1, sm: 2, md: 3 }}>
+      <Descriptions.Item label="登录地点">{renderDetailText(record.loginLocation)}</Descriptions.Item>
+      <Descriptions.Item label="浏览器">{renderDetailText(record.browser)}</Descriptions.Item>
+      <Descriptions.Item label="操作系统">{renderDetailText(record.os)}</Descriptions.Item>
+      <Descriptions.Item label="登录提示" span={3}>{renderDetailText(record.msg)}</Descriptions.Item>
+    </Descriptions>
+  );
+
+  const renderOperDetail = (record: AuditRecord) => (
+    <Descriptions size="small" column={{ xs: 1, sm: 2, md: 3 }}>
+      <Descriptions.Item label="请求地址">{renderDetailText(record.operUrl)}</Descriptions.Item>
+      <Descriptions.Item label="操作IP">{renderDetailText(record.operIp)}</Descriptions.Item>
+      <Descriptions.Item label="操作地点">{renderDetailText(record.operLocation)}</Descriptions.Item>
+      <Descriptions.Item label="方法名" span={3}>{renderDetailText(record.method)}</Descriptions.Item>
+      <Descriptions.Item label="异常信息" span={3}>{renderDetailText(record.errorMsg)}</Descriptions.Item>
+    </Descriptions>
+  );
+
+  const renderTicketDetail = (record: AuditRecord) => (
+    <Descriptions size="small" column={{ xs: 1, sm: 2, md: 3 }}>
+      <Descriptions.Item label="目标端">{renderDetailText(record.terminal)}</Descriptions.Item>
+      <Descriptions.Item label="签发人ID">{renderDetailText(record.actingAdminId)}</Descriptions.Item>
+      <Descriptions.Item label="使用IP">{renderDetailText(record.usedIp)}</Descriptions.Item>
+      <Descriptions.Item label="创建人">{renderDetailText(record.createBy)}</Descriptions.Item>
+      <Descriptions.Item label="更新人">{renderDetailText(record.updateBy)}</Descriptions.Item>
+      <Descriptions.Item label="更新时间">{renderDetailText(formatDateTimeText(record.updateTime))}</Descriptions.Item>
+      <Descriptions.Item label="代入原因" span={3}>{renderDetailText(record.reason)}</Descriptions.Item>
+      <Descriptions.Item label="备注" span={3}>{renderDetailText(record.remark)}</Descriptions.Item>
+    </Descriptions>
+  );
 
   const loginLogColumns: ProColumns<AuditRecord>[] = [
     {
@@ -331,6 +373,7 @@ const PartnerAuditModal: React.FC<PartnerAuditModalProps> = ({
     columns: ProColumns<AuditRecord>[],
     request: (params?: Record<string, any>) => Promise<API.Partner.PortalAuditPageResult<any>>,
     subjectField: 'subjectId' | 'targetSubjectId',
+    expandedRowRender: (record: AuditRecord) => React.ReactNode,
   ) => (
     <div style={auditTableWrapperStyle}>
       <ProTable<AuditRecord>
@@ -339,8 +382,11 @@ const PartnerAuditModal: React.FC<PartnerAuditModalProps> = ({
         search={getPersistedProTableSearch({ labelWidth: 88 }, `${config.moduleKey}:audit:${tableKey}`)}
         tableLayout="fixed"
         scroll={{ x: getTableScrollX(columns) }}
-        pagination={{ pageSize: 10 }}
+        pagination={getProTablePagination(10)}
         toolBarRender={false}
+        expandable={{
+          expandedRowRender,
+        }}
         request={(params) => {
           const { current, pageSize, ...rest } = params;
           return request(buildAuditParams(rest, current, pageSize, partnerId, subjectField))
@@ -364,6 +410,7 @@ const PartnerAuditModal: React.FC<PartnerAuditModalProps> = ({
             loginLogColumns,
             config.services.listLoginLogs,
             'subjectId',
+            renderLoginDetail,
           ),
         }
       : null,
@@ -376,6 +423,7 @@ const PartnerAuditModal: React.FC<PartnerAuditModalProps> = ({
             operLogColumns,
             config.services.listOperLogs,
             'subjectId',
+            renderOperDetail,
           ),
         }
       : null,
@@ -388,6 +436,7 @@ const PartnerAuditModal: React.FC<PartnerAuditModalProps> = ({
             ticketColumns,
             config.services.listDirectLoginTickets,
             'targetSubjectId',
+            renderTicketDetail,
           ),
         }
       : null,

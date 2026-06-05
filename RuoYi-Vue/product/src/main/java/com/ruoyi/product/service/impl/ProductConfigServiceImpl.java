@@ -64,6 +64,26 @@ public class ProductConfigServiceImpl implements IProductConfigService
     }
 
     @Override
+    public List<ProductCategory> selectCategoryPath(Long categoryId)
+    {
+        ProductCategory category = selectCategoryById(categoryId);
+        List<ProductCategory> path = new ArrayList<>();
+        String[] ancestorIds = StringUtils.split(category.getAncestors(), ",");
+        if (ancestorIds != null)
+        {
+            for (String ancestorId : ancestorIds)
+            {
+                if (!String.valueOf(ROOT_PARENT_ID).equals(ancestorId))
+                {
+                    path.add(selectCategoryById(Long.valueOf(ancestorId)));
+                }
+            }
+        }
+        path.add(category);
+        return path;
+    }
+
+    @Override
     public ProductCategory selectCategoryById(Long categoryId)
     {
         ProductCategory category = productConfigMapper.selectCategoryById(categoryId);
@@ -159,9 +179,9 @@ public class ProductConfigServiceImpl implements IProductConfigService
     }
 
     @Override
-    public List<ProductAttribute> selectEnabledAttributeList()
+    public List<ProductAttribute> selectEnabledAttributeList(ProductAttribute query)
     {
-        return productConfigMapper.selectEnabledAttributeList();
+        return productConfigMapper.selectEnabledAttributeList(query);
     }
 
     @Override

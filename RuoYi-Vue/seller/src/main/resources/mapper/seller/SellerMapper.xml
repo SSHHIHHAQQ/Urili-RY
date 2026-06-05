@@ -442,7 +442,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                status
         from seller_session
         where seller_id = #{sellerId}
+        <if test="sellerAccountId != null">
           and seller_account_id = #{sellerAccountId}
+        </if>
         order by login_time desc, token_id desc
     </select>
 

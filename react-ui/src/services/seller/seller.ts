@@ -264,10 +264,30 @@ export async function forceLogoutAdminSellerSessions(sellerId: number) {
   });
 }
 
+export async function getAdminSellerSessions(sellerId: number, params?: Record<string, any>) {
+  return request<API.Partner.PortalAuditPageResult<API.Partner.PortalSessionProfile>>(
+    `/api/seller/admin/sellers/${sellerId}/sessions/list`,
+    {
+      method: 'GET',
+      params,
+    },
+  );
+}
+
 export async function forceLogoutAdminSellerAccountSessions(sellerId: number, sellerAccountId: number) {
   return request<API.Result>(`/api/seller/admin/sellers/${sellerId}/accounts/${sellerAccountId}/sessions`, {
     method: 'DELETE',
   });
+}
+
+export async function getAdminSellerAccountSessions(sellerId: number, sellerAccountId: number, params?: Record<string, any>) {
+  return request<API.Partner.PortalAuditPageResult<API.Partner.PortalSessionProfile>>(
+    `/api/seller/admin/sellers/${sellerId}/accounts/${sellerAccountId}/sessions/list`,
+    {
+      method: 'GET',
+      params,
+    },
+  );
 }
 
 export async function createAdminSellerDirectLogin(sellerId: number, reason: string) {
@@ -278,6 +298,19 @@ export async function createAdminSellerDirectLogin(sellerId: number, reason: str
     },
     data: { reason },
   });
+}
+
+export async function createAdminSellerAccountDirectLogin(sellerId: number, sellerAccountId: number, reason: string) {
+  return request<API.Partner.DirectLoginApiResult>(
+    `/api/seller/admin/sellers/${sellerId}/accounts/${sellerAccountId}/directLogin`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json;charset=UTF-8',
+      },
+      data: { reason },
+    },
+  );
 }
 
 export async function getAdminSellerLoginLogs(params?: Record<string, any>) {

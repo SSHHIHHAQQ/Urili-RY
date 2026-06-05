@@ -2,6 +2,7 @@ package com.ruoyi.integration.mapper;
 
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
+import com.ruoyi.integration.domain.SourceProductItem;
 import com.ruoyi.integration.domain.UpstreamLogisticsChannelPairing;
 import com.ruoyi.integration.domain.UpstreamLogisticsChannelSyncItem;
 import com.ruoyi.integration.domain.UpstreamRequestLog;
@@ -12,6 +13,7 @@ import com.ruoyi.integration.domain.UpstreamSkuSyncState;
 import com.ruoyi.integration.domain.UpstreamSystemConnection;
 import com.ruoyi.integration.domain.UpstreamWarehousePairing;
 import com.ruoyi.integration.domain.UpstreamWarehouseSyncItem;
+import com.ruoyi.integration.domain.query.SourceProductQuery;
 
 /**
  * 上游系统管理 Mapper。
@@ -83,6 +85,8 @@ public interface UpstreamSystemMapper
     List<UpstreamSkuSyncItem> selectSkuSyncList(@Param("connectionCode") String connectionCode,
         @Param("status") String status, @Param("pairingStatus") String pairingStatus,
         @Param("field") String field, @Param("keyword") String keyword);
+
+    List<SourceProductItem> selectSourceProductList(SourceProductQuery query);
 
     UpstreamSkuSyncItem selectSkuSyncItem(@Param("connectionCode") String connectionCode, @Param("masterSku") String masterSku);
 

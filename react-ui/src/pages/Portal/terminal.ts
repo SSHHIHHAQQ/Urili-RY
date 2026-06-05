@@ -34,10 +34,21 @@ export function getPortalTerminal(pathname: string): PortalTerminal | undefined 
   return undefined;
 }
 
-export function persistPortalLogin(result: API.Partner.PortalLoginResultData) {
-  const terminal = result.terminal;
+export function persistPortalLogin(
+  result: API.Partner.PortalLoginResultData | undefined,
+  expectedTerminal: PortalTerminal,
+) {
+  if (!result?.token || result.terminal !== expectedTerminal) {
+    clearPortalLogin(expectedTerminal);
+    if (result?.terminal) {
+      clearPortalLogin(result.terminal);
+    }
+    return false;
+  }
+  const terminal = expectedTerminal;
   const expireTime = Date.now() + (result.expireMinutes || 30) * 60 * 1000;
   setTerminalSessionToken(terminal, result.token, result.token, expireTime);
+  return true;
 }
 
 export function clearPortalLogin(terminal: PortalTerminal) {

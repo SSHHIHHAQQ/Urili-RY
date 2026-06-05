@@ -35,13 +35,14 @@ import {
 import type { DictValueEnumObj } from '@/components/DictTag';
 import { uploadCommonFile } from '@/services/common/file';
 import { getDictSelectOption, getDictValueEnum } from '@/services/system/dict';
-import { getPersistedProTableSearch } from '@/utils/proTableSearch';
+import { getPersistedProTableSearch, getProTableScroll } from '@/utils/proTableSearch';
 import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 import PartnerAccountModal from './PartnerAccountModal';
 import PartnerAuditModal from './PartnerAuditModal';
 import PartnerDeptModal from './PartnerDeptModal';
 import PartnerMenuModal from './PartnerMenuModal';
 import PartnerRoleModal from './PartnerRoleModal';
+import PartnerSessionModal from './PartnerSessionModal';
 
 type PartnerRecord = Record<string, any>;
 type AttachmentUploadFile = UploadFile<API.Partner.PartyAttachment>;
@@ -88,12 +89,15 @@ type PartnerService = {
   changeRoleStatus: (id: number, data: Pick<API.Partner.PortalRole, 'roleId' | 'status'>) => Promise<API.Result>;
   removeRoles: (id: number, roleIds: number[]) => Promise<API.Result>;
   resetAccountDefaultPassword: (data: any) => Promise<API.Result>;
+  listSubjectSessions?: (id: number, params?: Record<string, any>) => Promise<API.Partner.PortalAuditPageResult<API.Partner.PortalSessionProfile>>;
+  listAccountSessions?: (id: number, accountId: number, params?: Record<string, any>) => Promise<API.Partner.PortalAuditPageResult<API.Partner.PortalSessionProfile>>;
   forceLogoutSubject: (id: number) => Promise<API.Result>;
   forceLogoutAccount: (id: number, accountId: number) => Promise<API.Result>;
   getAccountRoles: (id: number, accountId: number) => Promise<API.Partner.PortalAccountRoleResult>;
   assignAccountRoles: (id: number, accountId: number, roleIds: number[]) => Promise<API.Result>;
   resetOwnerPassword: (id: number) => Promise<API.Result>;
   directLogin: (id: number, reason: string) => Promise<API.Partner.DirectLoginApiResult>;
+  directLoginAccount?: (id: number, accountId: number, reason: string) => Promise<API.Partner.DirectLoginApiResult>;
   listLoginLogs: (params?: Record<string, any>) => Promise<API.Partner.PortalAuditPageResult<API.Partner.PortalLoginLog>>;
   listOperLogs: (params?: Record<string, any>) => Promise<API.Partner.PortalAuditPageResult<API.Partner.PortalOperLog>>;
   listDirectLoginTickets: (params?: Record<string, any>) => Promise<API.Partner.PortalAuditPageResult<API.Partner.PortalDirectLoginTicket>>;
@@ -115,6 +119,16 @@ export type PartnerModuleConfig = {
   balanceTitle: string;
   showRechargePlaceholder?: boolean;
   levelDictType: string;
+  listTemplate?: 'standard';
+  searchStorageKey?: string;
+  accountPermissions?: {
+    list: string;
+    add: string;
+    edit: string;
+    resetPwd: string;
+    roleQuery: string;
+    roleEdit: string;
+  };
   services: PartnerService;
 };
 
@@ -511,15 +525,26 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
   const [menuModalOpen, setMenuModalOpen] = useState(false);
   const [auditModalOpen, setAuditModalOpen] = useState(false);
   const [auditPartner, setAuditPartner] = useState<PartnerRecord>();
+  const [sessionModalOpen, setSessionModalOpen] = useState(false);
+  const [sessionPartner, setSessionPartner] = useState<PartnerRecord>();
   const [currentPartner, setCurrentPartner] = useState<PartnerRecord>();
   const [attachmentFileList, setAttachmentFileList] = useState<AttachmentUploadFile[]>([]);
 
   const permPrefix = `${config.moduleKey}:admin`;
+  const accountPermissions = config.accountPermissions ?? {
+    list: `${permPrefix}:query`,
+    add: `${permPrefix}:add`,
+    edit: `${permPrefix}:edit`,
+    resetPwd: `${permPrefix}:resetPwd`,
+    roleQuery: `${permPrefix}:role:query`,
+    roleEdit: `${permPrefix}:role:edit`,
+  };
   const hasAuditPermission = access.hasPerms(`${permPrefix}:loginLog:list`)
     || access.hasPerms(`${permPrefix}:operLog:list`)
     || access.hasPerms(`${permPrefix}:ticket:list`);
   const statusValueEnum = getStatusOptions(statusOptions);
   const levelValueEnum = optionsToValueEnum(levelOptions);
+  const useStandardListTemplate = config.listTemplate === 'standard';
 
   useEffect(() => {
     getDictValueEnum('sys_normal_disable').then((data) => setStatusOptions(data));
@@ -714,16 +739,31 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
 
   const columns: ProColumns<PartnerRecord>[] = [
     {
-      title: `内部${config.label}编号`,
+      title: useStandardListTemplate ? `${config.label}编号/代码` : `内部${config.label}编号`,
       dataIndex: config.noField,
       valueType: 'text',
-      width: 128,
-      render: (_, record) => renderCompactText(getValue(record, config.noField)),
+      width: useStandardListTemplate ? 136 : 128,
+      render: (_, record) => {
+        if (!useStandardListTemplate) {
+          return renderCompactText(getValue(record, config.noField));
+        }
+        return (
+          <Flex vertical gap={0}>
+            <Typography.Text style={compactCellTextStyle} title={String(getValue(record, config.noField) || '-')}>
+              {getValue(record, config.noField) || '-'}
+            </Typography.Text>
+            <Typography.Text style={compactSubTextStyle} type="secondary" title={String(getValue(record, config.codeField) || '-')}>
+              {getValue(record, config.codeField) || '-'}
+            </Typography.Text>
+          </Flex>
+        );
+      },
     },
     {
       title: `${config.label}代码`,
       dataIndex: config.codeField,
       valueType: 'text',
+      hideInTable: useStandardListTemplate,
       width: 110,
       render: (_, record) => renderCompactText(getValue(record, config.codeField)),
     },
@@ -731,22 +771,51 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
       title: `${config.label}名称`,
       dataIndex: config.nameField,
       valueType: 'text',
-      width: 180,
-      render: (_, record) => renderCompactText(getValue(record, config.nameField)),
+      width: useStandardListTemplate ? 170 : 180,
+      render: (_, record) => {
+        if (!useStandardListTemplate) {
+          return renderCompactText(getValue(record, config.nameField));
+        }
+        return (
+          <Flex vertical gap={0}>
+            <Typography.Text style={compactCellTextStyle} title={String(getValue(record, config.nameField) || '-')}>
+              {getValue(record, config.nameField) || '-'}
+            </Typography.Text>
+            <Typography.Text style={compactSubTextStyle} type="secondary" title={String(getValue(record, config.shortNameField) || '-')}>
+              {getValue(record, config.shortNameField) || '-'}
+            </Typography.Text>
+          </Flex>
+        );
+      },
     },
     {
       title: `${config.label}简称`,
       dataIndex: config.shortNameField,
       valueType: 'text',
+      hideInTable: useStandardListTemplate,
       width: 120,
       render: (_, record) => renderCompactText(getValue(record, config.shortNameField)),
     },
     {
-      title: '登录账号',
+      title: useStandardListTemplate ? '登录账号/等级' : '登录账号',
       dataIndex: 'username',
       valueType: 'text',
-      width: 140,
-      render: (_, record) => renderCompactText(record.username),
+      width: useStandardListTemplate ? 128 : 140,
+      render: (_, record) => {
+        if (!useStandardListTemplate) {
+          return renderCompactText(record.username);
+        }
+        return (
+          <Flex vertical gap={0}>
+            <Typography.Text style={compactCellTextStyle} title={record.username || '-'}>
+              {record.username || '-'}
+            </Typography.Text>
+            <span>
+              <Tag color="blue">{levelValueEnum[getValue(record, config.levelField)]?.label || getValue(record, config.levelField) || '-'}</Tag>
+            </span>
+          </Flex>
+        );
+      },
     },
     {
       title: '公司名称',
@@ -768,6 +837,7 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
       valueType: 'select',
       valueEnum: levelValueEnum,
       fieldProps: SEARCHABLE_SELECT_PROPS,
+      hideInTable: useStandardListTemplate,
       width: 96,
       render: (_, record) => <Tag color="blue">{levelValueEnum[getValue(record, config.levelField)]?.label || getValue(record, config.levelField) || '-'}</Tag>,
     },
@@ -775,7 +845,7 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
       title: config.balanceTitle,
       dataIndex: 'accountBalance',
       search: false,
-      width: 140,
+      width: useStandardListTemplate ? 112 : 140,
       render: (_, record) => (
         <Flex vertical gap={0}>
           <span>{formatBalance(record)}</span>
@@ -810,7 +880,7 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
       title: '联系人',
       dataIndex: 'contactName',
       search: false,
-      width: 180,
+      width: useStandardListTemplate ? 140 : 180,
       render: (_, record) => (
         <Flex vertical gap={0}>
           <Typography.Text style={compactCellTextStyle}>{record.contactName || '-'}</Typography.Text>
@@ -826,7 +896,7 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
       valueType: 'select',
       valueEnum: statusValueEnum,
       fieldProps: SEARCHABLE_SELECT_PROPS,
-      width: 96,
+      width: useStandardListTemplate ? 78 : 96,
       render: (_, record) => (
         <Switch
           checked={record.status === '0'}
@@ -841,7 +911,7 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
       title: '时间',
       dataIndex: 'timeInfo',
       search: false,
-      width: 170,
+      width: useStandardListTemplate ? 150 : 170,
       render: (_, record) => (
         <Flex vertical gap={0}>
           <Typography.Text style={compactCellTextStyle}>{formatDateTimeText(record.createTime)}</Typography.Text>
@@ -869,7 +939,7 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
       title: '操作',
       dataIndex: 'option',
       valueType: 'option',
-      width: 128,
+      width: useStandardListTemplate ? 136 : 128,
       render: (_, record) => {
         const moreItems: MenuProps['items'] = [];
 
@@ -898,6 +968,12 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
           });
         }
         if (access.hasPerms(`${permPrefix}:forceLogout`)) {
+          if (config.services.listSubjectSessions) {
+            moreItems.push({
+              key: 'sessions',
+              label: '会话',
+            });
+          }
           moreItems.push({
             key: 'forceLogout',
             label: '强制踢出',
@@ -910,7 +986,7 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
           });
         }
 
-        return [
+        const operationItems = [
           <Button
             type="link"
             size="small"
@@ -924,7 +1000,7 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
             type="link"
             size="small"
             key="accounts"
-            hidden={!access.hasPerms(`${permPrefix}:query`)}
+            hidden={!access.hasPerms(accountPermissions.list)}
             onClick={() => {
               setAccountPartner(record);
               setAccountModalOpen(true);
@@ -949,6 +1025,9 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
                     setRoleModalOpen(true);
                   } else if (key === 'resetOwnerPwd') {
                     handleResetOwnerPassword(record);
+                  } else if (key === 'sessions') {
+                    setSessionPartner(record);
+                    setSessionModalOpen(true);
                   } else if (key === 'forceLogout') {
                     handleForceLogoutSubject(record);
                   } else if (key === 'audit') {
@@ -963,7 +1042,13 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
               </a>
             </Dropdown>
           ) : null,
-        ];
+        ].filter(Boolean);
+
+        if (useStandardListTemplate) {
+          return <Space size={2} wrap={false}>{operationItems}</Space>;
+        }
+
+        return operationItems;
       },
     },
   ];
@@ -974,8 +1059,9 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
         actionRef={actionRef}
         rowKey={config.idField}
         headerTitle={config.title}
-        search={getPersistedProTableSearch({ labelWidth: 112 })}
+        search={getPersistedProTableSearch({ labelWidth: 112 }, config.searchStorageKey)}
         columns={columns}
+        scroll={getProTableScroll(useStandardListTemplate ? 1420 : 1500)}
         tableLayout="fixed"
         toolBarRender={() => [
           <Button
@@ -1033,6 +1119,18 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
           setAuditModalOpen(open);
           if (!open) {
             setAuditPartner(undefined);
+          }
+        }}
+      />
+
+      <PartnerSessionModal
+        config={config}
+        open={sessionModalOpen}
+        partner={sessionPartner}
+        onOpenChange={(open) => {
+          setSessionModalOpen(open);
+          if (!open) {
+            setSessionPartner(undefined);
           }
         }}
       />

@@ -95,7 +95,10 @@ export default function ConnectionModal({
               label="结算类型"
               rules={[{ required: true, message: '请选择结算类型' }]}
             >
-              <Select {...SEARCHABLE_SELECT_PROPS} options={settlementOptions} />
+              <Select
+                {...SEARCHABLE_SELECT_PROPS}
+                options={settlementOptions}
+              />
             </Form.Item>
             <Form.Item name="remark" label="备注">
               <Input.TextArea rows={3} maxLength={500} />

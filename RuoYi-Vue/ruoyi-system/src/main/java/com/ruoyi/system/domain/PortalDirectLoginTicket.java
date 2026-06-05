@@ -1,6 +1,7 @@
 package com.ruoyi.system.domain;
 
 import java.util.Date;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.ruoyi.common.core.domain.BaseEntity;
 
 /**
@@ -28,6 +29,7 @@ public class PortalDirectLoginTicket extends BaseEntity
 
     private String reason;
 
+    @JsonIgnore
     private String tokenHash;
 
     private Date expireTime;

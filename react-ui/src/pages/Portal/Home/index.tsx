@@ -26,6 +26,8 @@ import {
   PORTAL_SERVICE,
   type PortalTerminal,
 } from '../terminal';
+import BuyerProductSchemaPreview from './BuyerProductSchemaPreview';
+import SellerProductSchemaPreview from './SellerProductSchemaPreview';
 
 type PortalHomeData = {
   info?: API.Partner.PortalPermissionInfo;
@@ -34,6 +36,10 @@ type PortalHomeData = {
   accounts?: API.Partner.PortalAccountProfile[];
   depts?: API.Partner.PortalDeptProfile[];
   roles?: API.Partner.PortalRoleProfile[];
+};
+
+type PortalSessionRow = API.Partner.PortalSessionProfile & {
+  uiRowKey: string;
 };
 
 type PasswordFormValues = API.Partner.PortalPasswordChangeParams;
@@ -125,7 +131,7 @@ const PortalHomePage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [sessionLoading, setSessionLoading] = useState(false);
   const [data, setData] = useState<PortalHomeData>({});
-  const [sessionRows, setSessionRows] = useState<API.Partner.PortalSessionProfile[]>([]);
+  const [sessionRows, setSessionRows] = useState<PortalSessionRow[]>([]);
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [passwordSubmitting, setPasswordSubmitting] = useState(false);
   const [passwordForm] = Form.useForm<PasswordFormValues>();
@@ -168,7 +174,24 @@ const PortalHomePage: React.FC = () => {
     try {
       const response = await PORTAL_SERVICE[currentTerminal].getSessions({ pageNum: 1, pageSize: 5 });
       if (sessionRequestSeq.current === requestSeq) {
-        setSessionRows(response.rows || []);
+        setSessionRows(
+          (response.rows || [])
+            .slice(0, 5)
+            .map((row, index) => ({
+              ...row,
+              uiRowKey: [
+                row.terminal || currentTerminal,
+                row.accountId || 0,
+                row.userName || '',
+                row.loginTime || '',
+                row.expireTime || '',
+                row.logoutTime || '',
+                row.status || '',
+                row.current ? 'current' : 'history',
+                index,
+              ].join('-'),
+            })),
+        );
       }
     } catch (error) {
       console.log(error);
@@ -244,7 +267,7 @@ const PortalHomePage: React.FC = () => {
     gridColumn: gridColumns > 1 ? 'span 2' : '1 / -1',
   };
   const descriptionColumns = screens.md ? 2 : 1;
-  const sessionColumns: ColumnsType<API.Partner.PortalSessionProfile> = [
+  const sessionColumns: ColumnsType<PortalSessionRow> = [
     {
       title: '状态',
       key: 'status',
@@ -294,7 +317,7 @@ const PortalHomePage: React.FC = () => {
   return (
     <div style={pageStyle}>
       <div style={headerStyle}>
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Typography.Title level={3} style={{ margin: 0 }}>
             {meta.label}
           </Typography.Title>
@@ -323,7 +346,7 @@ const PortalHomePage: React.FC = () => {
 
       <Spin spinning={loading}>
         <div style={contentGridStyle}>
-          <Card title="主体资料" bordered={false} style={wideGridStyle}>
+          <Card title="主体资料" variant="borderless" style={wideGridStyle}>
             <Descriptions column={descriptionColumns} size="small">
               <Descriptions.Item label="主体编号">{displayText(data.subject?.subjectNo)}</Descriptions.Item>
               <Descriptions.Item label="主体代码">{displayText(data.subject?.subjectCode)}</Descriptions.Item>
@@ -334,7 +357,7 @@ const PortalHomePage: React.FC = () => {
             </Descriptions>
           </Card>
 
-          <Card title="当前账号" bordered={false}>
+          <Card title="当前账号" variant="borderless">
             <Descriptions column={1} size="small">
               <Descriptions.Item label="账号">{displayText(data.account?.userName)}</Descriptions.Item>
               <Descriptions.Item label="昵称">{displayText(data.account?.nickName)}</Descriptions.Item>
@@ -343,24 +366,32 @@ const PortalHomePage: React.FC = () => {
             </Descriptions>
           </Card>
 
-          <Card title="端内角色" bordered={false}>
+          <Card title="端内角色" variant="borderless">
             {renderRoleList(data.roles)}
           </Card>
 
-          <Card title="端内部门" bordered={false}>
+          <Card title="端内部门" variant="borderless">
             {renderDeptList(data.depts)}
           </Card>
 
-          <Card title="端内账号" bordered={false}>
+          <Card title="端内账号" variant="borderless">
             <Typography.Text>{data.accounts?.length || 0}</Typography.Text>
           </Card>
 
-          <Card title="当前账号会话" bordered={false} style={fullGridStyle}>
-            <Table<API.Partner.PortalSessionProfile>
+          {terminal === 'seller' ? (
+            <div style={fullGridStyle}>
+              <SellerProductSchemaPreview />
+            </div>
+          ) : terminal === 'buyer' ? (
+            <div style={fullGridStyle}>
+              <BuyerProductSchemaPreview />
+            </div>
+          ) : null}
+
+          <Card title="当前账号会话" variant="borderless" style={fullGridStyle}>
+            <Table<PortalSessionRow>
               size="small"
-              rowKey={(record, index) =>
-                `${record.terminal || terminal}-${record.accountId || 0}-${record.loginTime || 'session'}-${index || 0}`
-              }
+              rowKey="uiRowKey"
               loading={sessionLoading}
               pagination={false}
               columns={sessionColumns}
@@ -370,7 +401,7 @@ const PortalHomePage: React.FC = () => {
             />
           </Card>
 
-          <Card title="权限标识" bordered={false} style={fullGridStyle}>
+          <Card title="权限标识" variant="borderless" style={fullGridStyle}>
             {renderTags(permissions)}
           </Card>
         </div>

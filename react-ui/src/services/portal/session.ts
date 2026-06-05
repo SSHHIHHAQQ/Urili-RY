@@ -7,6 +7,15 @@ const TERMINAL_PATH: Record<PortalTerminal, string> = {
   seller: 'seller',
   buyer: 'buyer',
 };
+const PORTAL_SCOPE_PARAM_KEYS = new Set([
+  'sellerId',
+  'buyerId',
+  'subjectId',
+  'accountId',
+  'sellerAccountId',
+  'buyerAccountId',
+  'terminal',
+]);
 
 function buildPortalUrl(terminal: PortalTerminal, path: string) {
   return `/api/${TERMINAL_PATH[terminal]}${path}`;
@@ -15,6 +24,15 @@ function buildPortalUrl(terminal: PortalTerminal, path: string) {
 function buildPortalAuthHeaders(terminal: PortalTerminal): Record<string, string> | undefined {
   const token = getTerminalAccessToken(terminal);
   return token ? { Authorization: `Bearer ${token}` } : undefined;
+}
+
+function sanitizePortalQueryParams(params?: Record<string, any>) {
+  if (!params) {
+    return undefined;
+  }
+  return Object.fromEntries(
+    Object.entries(params).filter(([key]) => !PORTAL_SCOPE_PARAM_KEYS.has(key)),
+  );
 }
 
 export async function portalLogin(terminal: PortalTerminal, data: API.Partner.PortalLoginParams) {
@@ -109,7 +127,7 @@ export async function getPortalLoginLogs(terminal: PortalTerminal, params?: Reco
     {
       method: 'GET',
       headers: { ...buildPortalAuthHeaders(terminal), isToken: false },
-      params,
+      params: sanitizePortalQueryParams(params),
     },
   );
 }
@@ -120,7 +138,7 @@ export async function getPortalOperLogs(terminal: PortalTerminal, params?: Recor
     {
       method: 'GET',
       headers: { ...buildPortalAuthHeaders(terminal), isToken: false },
-      params,
+      params: sanitizePortalQueryParams(params),
     },
   );
 }
@@ -131,7 +149,47 @@ export async function getPortalSessions(terminal: PortalTerminal, params?: Recor
     {
       method: 'GET',
       headers: { ...buildPortalAuthHeaders(terminal), isToken: false },
-      params,
+      params: sanitizePortalQueryParams(params),
+    },
+  );
+}
+
+export async function getSellerPortalProductCategories() {
+  return request<API.Partner.PortalProductCategoryListResult>(
+    buildPortalUrl('seller', '/product/categories'),
+    {
+      method: 'GET',
+      headers: { ...buildPortalAuthHeaders('seller'), isToken: false },
+    },
+  );
+}
+
+export async function getSellerPortalProductSchema(categoryId: number) {
+  return request<API.Partner.PortalProductSchemaResult>(
+    buildPortalUrl('seller', `/product/categories/${categoryId}/schema`),
+    {
+      method: 'GET',
+      headers: { ...buildPortalAuthHeaders('seller'), isToken: false },
+    },
+  );
+}
+
+export async function getBuyerPortalProductCategories() {
+  return request<API.Partner.PortalProductCategoryListResult>(
+    buildPortalUrl('buyer', '/product/categories'),
+    {
+      method: 'GET',
+      headers: { ...buildPortalAuthHeaders('buyer'), isToken: false },
+    },
+  );
+}
+
+export async function getBuyerPortalProductSchema(categoryId: number) {
+  return request<API.Partner.PortalProductSchemaResult>(
+    buildPortalUrl('buyer', `/product/categories/${categoryId}/schema`),
+    {
+      method: 'GET',
+      headers: { ...buildPortalAuthHeaders('buyer'), isToken: false },
     },
   );
 }

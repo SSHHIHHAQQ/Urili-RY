@@ -683,6 +683,24 @@ values
     (2252, '卖家免密票据列表', 2011, 120, '#', '', '', '',
      1, 0, 'F', '0', '0', 'seller:admin:ticket:list', '#', 'admin',
      sysdate(), '', null, ''),
+    (2310, '卖家账号列表', 2011, 125, '#', '', '', '',
+     1, 0, 'F', '0', '0', 'seller:admin:account:list', '#', 'admin',
+     sysdate(), '', null, ''),
+    (2311, '卖家账号新增', 2011, 130, '#', '', '', '',
+     1, 0, 'F', '0', '0', 'seller:admin:account:add', '#', 'admin',
+     sysdate(), '', null, ''),
+    (2312, '卖家账号修改', 2011, 135, '#', '', '', '',
+     1, 0, 'F', '0', '0', 'seller:admin:account:edit', '#', 'admin',
+     sysdate(), '', null, ''),
+    (2313, '卖家账号重置密码', 2011, 140, '#', '', '', '',
+     1, 0, 'F', '0', '0', 'seller:admin:account:resetPwd', '#', 'admin',
+     sysdate(), '', null, ''),
+    (2314, '卖家账号角色查询', 2011, 145, '#', '', '', '',
+     1, 0, 'F', '0', '0', 'seller:admin:account:role:query', '#', 'admin',
+     sysdate(), '', null, ''),
+    (2315, '卖家账号角色分配', 2011, 150, '#', '', '', '',
+     1, 0, 'F', '0', '0', 'seller:admin:account:role:edit', '#', 'admin',
+     sysdate(), '', null, ''),
     (2253, '买家登录日志列表', 2012, 110, '#', '', '', '',
      1, 0, 'F', '0', '0', 'buyer:admin:loginLog:list', '#', 'admin',
      sysdate(), '', null, ''),
@@ -691,6 +709,24 @@ values
      sysdate(), '', null, ''),
     (2255, '买家免密票据列表', 2012, 120, '#', '', '', '',
      1, 0, 'F', '0', '0', 'buyer:admin:ticket:list', '#', 'admin',
+     sysdate(), '', null, ''),
+    (2316, '买家账号列表', 2012, 125, '#', '', '', '',
+     1, 0, 'F', '0', '0', 'buyer:admin:account:list', '#', 'admin',
+     sysdate(), '', null, ''),
+    (2317, '买家账号新增', 2012, 130, '#', '', '', '',
+     1, 0, 'F', '0', '0', 'buyer:admin:account:add', '#', 'admin',
+     sysdate(), '', null, ''),
+    (2318, '买家账号修改', 2012, 135, '#', '', '', '',
+     1, 0, 'F', '0', '0', 'buyer:admin:account:edit', '#', 'admin',
+     sysdate(), '', null, ''),
+    (2319, '买家账号重置密码', 2012, 140, '#', '', '', '',
+     1, 0, 'F', '0', '0', 'buyer:admin:account:resetPwd', '#', 'admin',
+     sysdate(), '', null, ''),
+    (2320, '买家账号角色查询', 2012, 145, '#', '', '', '',
+     1, 0, 'F', '0', '0', 'buyer:admin:account:role:query', '#', 'admin',
+     sysdate(), '', null, ''),
+    (2321, '买家账号角色分配', 2012, 150, '#', '', '', '',
+     1, 0, 'F', '0', '0', 'buyer:admin:account:role:edit', '#', 'admin',
      sysdate(), '', null, '')
 on duplicate key update
     menu_name = values(menu_name),
@@ -722,3 +758,138 @@ insert into sys_config
 select '买家端前端地址', 'portal.buyer.web.url', 'http://127.0.0.1:8001/buyer/direct-login',
        'Y', 'admin', sysdate(), '', null, '管理端免密登录买家端地址，占位配置'
 where not exists (select 1 from sys_config where config_key = 'portal.buyer.web.url');
+
+-- 端内门户默认角色与权限初始化
+-- 保证只执行综合 seed 的新环境也具备 seller/buyer 端内只读权限和 Owner 角色授权。
+
+insert into seller_role
+    (seller_id, role_name, role_key, role_sort, status, del_flag,
+     create_by, create_time, update_by, update_time, remark)
+select s.seller_id, 'Owner', 'owner', 1, '0', '0',
+       'admin', sysdate(), '', null, '默认卖家端 Owner 角色'
+from seller s
+where s.status = '0'
+  and not exists (
+      select 1
+      from seller_role r
+      where r.seller_id = s.seller_id
+        and r.role_key = 'owner'
+        and r.del_flag = '0'
+  );
+
+insert into buyer_role
+    (buyer_id, role_name, role_key, role_sort, status, del_flag,
+     create_by, create_time, update_by, update_time, remark)
+select b.buyer_id, 'Owner', 'owner', 1, '0', '0',
+       'admin', sysdate(), '', null, '默认买家端 Owner 角色'
+from buyer b
+where b.status = '0'
+  and not exists (
+      select 1
+      from buyer_role r
+      where r.buyer_id = b.buyer_id
+        and r.role_key = 'owner'
+        and r.del_flag = '0'
+  );
+
+insert into seller_menu
+    (menu_name, parent_id, order_num, path, component, query, route_name,
+     is_frame, is_cache, menu_type, visible, status, perms, icon, create_by,
+     create_time, update_by, update_time, remark)
+select seed.menu_name, 0, seed.order_num, '', null, '', '',
+       1, 0, 'F', '0', '0', seed.perms, '#', 'admin',
+       sysdate(), '', null, seed.remark
+from (
+    select '账号列表' as menu_name, 30 as order_num, 'seller:account:list' as perms, '卖家端账号只读列表权限' as remark
+    union all select '部门列表', 40, 'seller:dept:list', '卖家端部门只读列表权限'
+    union all select '角色列表', 41, 'seller:role:list', '卖家端角色只读列表权限'
+    union all select 'Product Category List', 50, 'seller:product:category:list', 'Seller portal product category list permission'
+    union all select 'Product Schema Query', 51, 'seller:product:schema:query', 'Seller portal product schema read permission'
+) seed
+where not exists (
+    select 1 from seller_menu m where m.perms = seed.perms
+);
+
+insert into buyer_menu
+    (menu_name, parent_id, order_num, path, component, query, route_name,
+     is_frame, is_cache, menu_type, visible, status, perms, icon, create_by,
+     create_time, update_by, update_time, remark)
+select seed.menu_name, 0, seed.order_num, '', null, '', '',
+       1, 0, 'F', '0', '0', seed.perms, '#', 'admin',
+       sysdate(), '', null, seed.remark
+from (
+    select '账号列表' as menu_name, 30 as order_num, 'buyer:account:list' as perms, '买家端账号只读列表权限' as remark
+    union all select '部门列表', 40, 'buyer:dept:list', '买家端部门只读列表权限'
+    union all select '角色列表', 41, 'buyer:role:list', '买家端角色只读列表权限'
+    union all select 'Product Category List', 50, 'buyer:product:category:list', 'Buyer portal product category list permission'
+    union all select 'Product Schema Query', 51, 'buyer:product:schema:query', 'Buyer portal product schema read permission'
+) seed
+where not exists (
+    select 1 from buyer_menu m where m.perms = seed.perms
+);
+
+insert into seller_account_role (seller_account_id, seller_role_id)
+select a.seller_account_id, r.seller_role_id
+from seller_account a
+join seller_role r on r.seller_id = a.seller_id
+                  and r.role_key = 'owner'
+                  and r.del_flag = '0'
+where a.account_role = 'OWNER'
+  and not exists (
+      select 1
+      from seller_account_role ar
+      where ar.seller_account_id = a.seller_account_id
+        and ar.seller_role_id = r.seller_role_id
+  );
+
+insert into buyer_account_role (buyer_account_id, buyer_role_id)
+select a.buyer_account_id, r.buyer_role_id
+from buyer_account a
+join buyer_role r on r.buyer_id = a.buyer_id
+                 and r.role_key = 'owner'
+                 and r.del_flag = '0'
+where a.account_role = 'OWNER'
+  and not exists (
+      select 1
+      from buyer_account_role ar
+      where ar.buyer_account_id = a.buyer_account_id
+        and ar.buyer_role_id = r.buyer_role_id
+  );
+
+insert into seller_role_menu (seller_role_id, seller_menu_id)
+select r.seller_role_id, m.seller_menu_id
+from seller_role r
+join seller_menu m on m.perms in (
+    'seller:account:list',
+    'seller:dept:list',
+    'seller:role:list',
+    'seller:product:category:list',
+    'seller:product:schema:query'
+)
+where r.del_flag = '0'
+  and r.status = '0'
+  and not exists (
+      select 1
+      from seller_role_menu rm
+      where rm.seller_role_id = r.seller_role_id
+        and rm.seller_menu_id = m.seller_menu_id
+  );
+
+insert into buyer_role_menu (buyer_role_id, buyer_menu_id)
+select r.buyer_role_id, m.buyer_menu_id
+from buyer_role r
+join buyer_menu m on m.perms in (
+    'buyer:account:list',
+    'buyer:dept:list',
+    'buyer:role:list',
+    'buyer:product:category:list',
+    'buyer:product:schema:query'
+)
+where r.del_flag = '0'
+  and r.status = '0'
+  and not exists (
+      select 1
+      from buyer_role_menu rm
+      where rm.buyer_role_id = r.buyer_role_id
+        and rm.buyer_menu_id = m.buyer_menu_id
+  );

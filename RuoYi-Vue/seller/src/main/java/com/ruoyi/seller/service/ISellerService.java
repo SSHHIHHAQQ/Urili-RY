@@ -42,15 +42,25 @@ public interface ISellerService
 
     public int resetSellerOwnerPassword(Long sellerId);
 
+    public List<PortalSessionProfile> selectSellerSessionList(Long sellerId);
+
+    public List<PortalSessionProfile> selectSellerAccountSessionList(Long sellerId, Long sellerAccountId);
+
     public int forceLogoutSellerSessions(Long sellerId);
 
     public int forceLogoutSellerAccountSessions(Long sellerId, Long sellerAccountId);
 
     public PortalDirectLoginResult createSellerDirectLogin(Long sellerId, String reason);
 
+    public PortalDirectLoginResult createSellerAccountDirectLogin(Long sellerId, Long sellerAccountId, String reason);
+
     public List<PortalLoginLog> selectSellerLoginLogList(PortalLoginLog log);
 
     public List<PortalOperLog> selectSellerOperLogList(PortalOperLog log);
+
+    public List<PortalLoginLog> selectSellerOwnLoginLogList(PortalLoginSession session, PortalLoginLog log);
+
+    public List<PortalOperLog> selectSellerOwnOperLogList(PortalLoginSession session, PortalOperLog log);
 
     public List<PortalSessionProfile> selectSellerOwnSessionList(PortalLoginSession session);
 

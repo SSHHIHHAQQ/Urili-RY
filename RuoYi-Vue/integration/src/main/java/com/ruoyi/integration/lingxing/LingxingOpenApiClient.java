@@ -1,11 +1,13 @@
 package com.ruoyi.integration.lingxing;
 
+import java.math.BigDecimal;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -152,6 +154,45 @@ public class LingxingOpenApiClient
                     LingxingProductSku productSku = new LingxingProductSku();
                     productSku.setSku(sku.trim());
                     productSku.setProductName(productName.trim());
+                    productSku.setProductAliasName(firstString(row, "productAliasName"));
+                    productSku.setApproveStatus(firstString(row, "approveStatus"));
+                    productSku.setProductType(firstInteger(row, "type"));
+                    productSku.setProductDescription(firstString(row, "productDescription"));
+                    productSku.setImageUrl(firstString(row, "imageUrl"));
+                    productSku.setMainCode(firstString(row, "mainCode"));
+                    productSku.setOtherCode(firstString(row, "otherCode"));
+                    productSku.setFnsku(firstString(row, "fnsku"));
+                    productSku.setCountryOfOriginName(firstString(row, "countryOfOriginName"));
+                    productSku.setCurrencyCode(firstString(row, "currencyCode"));
+                    productSku.setCustomhouseCode(firstString(row, "customhouseCode"));
+                    productSku.setDangerousCargo(firstInteger(row, "dangerousCargo"));
+                    productSku.setDeclareNameCn(firstString(row, "declareNameCn"));
+                    productSku.setDeclareNameEn(firstString(row, "declareNameEn"));
+                    productSku.setDeclarePrice(firstBigDecimal(row, "declarePrice"));
+                    productSku.setHeight(firstBigDecimal(row, "height"));
+                    productSku.setHeightBs(firstBigDecimal(row, "heightBs"));
+                    productSku.setLength(firstBigDecimal(row, "length"));
+                    productSku.setLengthBs(firstBigDecimal(row, "lengthBs"));
+                    productSku.setWeight(firstBigDecimal(row, "weight"));
+                    productSku.setWeightBs(firstBigDecimal(row, "weightBs"));
+                    productSku.setWidth(firstBigDecimal(row, "width"));
+                    productSku.setWidthBs(firstBigDecimal(row, "widthBs"));
+                    productSku.setWmsHeight(firstBigDecimal(row, "wmsHeight"));
+                    productSku.setWmsHeightBs(firstBigDecimal(row, "wmsHeightBs"));
+                    productSku.setWmsLength(firstBigDecimal(row, "wmsLength"));
+                    productSku.setWmsLengthBs(firstBigDecimal(row, "wmsLengthBs"));
+                    productSku.setWmsWeight(firstBigDecimal(row, "wmsWeight"));
+                    productSku.setWmsWeightBs(firstBigDecimal(row, "wmsWeightBs"));
+                    productSku.setWmsWidth(firstBigDecimal(row, "wmsWidth"));
+                    productSku.setWmsWidthBs(firstBigDecimal(row, "wmsWidthBs"));
+                    productSku.setCat1Name(firstString(row, "cat1Name"));
+                    productSku.setCat2Name(firstString(row, "cat2Name"));
+                    productSku.setCat3Name(firstString(row, "cat3Name"));
+                    productSku.setPlatformSkuInfoJson(arrayJson(row, "platformSkuInfoList"));
+                    productSku.setBrazilTaxInfoJson(arrayJson(row, "brazilTaxInfoList"));
+                    String sourcePayload = JSON.toJSONString(row);
+                    productSku.setSourcePayloadJson(sourcePayload);
+                    productSku.setSourcePayloadHash(sha256Hex(sourcePayload));
                     skus.add(productSku);
                 }
             }
@@ -375,5 +416,80 @@ public class LingxingOpenApiClient
             }
         }
         return "";
+    }
+
+    private static Integer firstInteger(JSONObject object, String... keys)
+    {
+        for (String key : keys)
+        {
+            Object value = object.get(key);
+            if (value instanceof Number number)
+            {
+                return number.intValue();
+            }
+            if (value instanceof String string && StringUtils.isNotBlank(string))
+            {
+                try
+                {
+                    return Integer.parseInt(string);
+                }
+                catch (NumberFormatException ignored)
+                {
+                }
+            }
+        }
+        return null;
+    }
+
+    private static BigDecimal firstBigDecimal(JSONObject object, String... keys)
+    {
+        for (String key : keys)
+        {
+            Object value = object.get(key);
+            if (value instanceof BigDecimal decimal)
+            {
+                return decimal;
+            }
+            if (value instanceof Number number)
+            {
+                return BigDecimal.valueOf(number.doubleValue());
+            }
+            if (value instanceof String string && StringUtils.isNotBlank(string))
+            {
+                try
+                {
+                    return new BigDecimal(string.trim());
+                }
+                catch (NumberFormatException ignored)
+                {
+                }
+            }
+        }
+        return null;
+    }
+
+    private static String arrayJson(JSONObject object, String key)
+    {
+        JSONArray array = object.getJSONArray(key);
+        return array == null ? "[]" : JSON.toJSONString(array);
+    }
+
+    private static String sha256Hex(String value)
+    {
+        try
+        {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] bytes = digest.digest(StringUtils.defaultString(value).getBytes(StandardCharsets.UTF_8));
+            StringBuilder builder = new StringBuilder(bytes.length * 2);
+            for (byte b : bytes)
+            {
+                builder.append(String.format("%02x", b));
+            }
+            return builder.toString();
+        }
+        catch (Exception ex)
+        {
+            throw new LingxingClientException("LINGXING_HASH_ERROR", "领星产品快照哈希计算失败", false);
+        }
     }
 }

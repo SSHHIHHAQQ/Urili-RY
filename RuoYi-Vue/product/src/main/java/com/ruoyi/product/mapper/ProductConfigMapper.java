@@ -38,7 +38,7 @@ public interface ProductConfigMapper
 
     List<ProductAttribute> selectAttributeList(ProductAttribute query);
 
-    List<ProductAttribute> selectEnabledAttributeList();
+    List<ProductAttribute> selectEnabledAttributeList(ProductAttribute query);
 
     ProductAttribute selectAttributeById(@Param("attributeId") Long attributeId);
 

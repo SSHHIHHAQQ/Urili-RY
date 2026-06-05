@@ -4,7 +4,25 @@ import { request } from '@umijs/max';
 import React, { lazy } from 'react';
 
 
-let remoteMenu: any = null;
+const REMOTE_MENU_STORAGE_KEY = 'admin_remote_menu';
+
+function readStoredRemoteMenu() {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  const rawMenu = window.sessionStorage.getItem(REMOTE_MENU_STORAGE_KEY);
+  if (!rawMenu) {
+    return null;
+  }
+  try {
+    return JSON.parse(rawMenu);
+  } catch {
+    window.sessionStorage.removeItem(REMOTE_MENU_STORAGE_KEY);
+    return null;
+  }
+}
+
+let remoteMenu: any = readStoredRemoteMenu();
 
 const PLANNED_PAGE_COMPONENT = 'Common/PlannedPage/index.tsx';
 
@@ -14,6 +32,14 @@ export function getRemoteMenu() {
 
 export function setRemoteMenu(data: any) {
   remoteMenu = data;
+  if (typeof window === 'undefined') {
+    return;
+  }
+  if (data === null || data === undefined) {
+    window.sessionStorage.removeItem(REMOTE_MENU_STORAGE_KEY);
+    return;
+  }
+  window.sessionStorage.setItem(REMOTE_MENU_STORAGE_KEY, JSON.stringify(data));
 }
 
 function toPageComponentPath(component?: string) {
@@ -62,6 +88,12 @@ function patchRouteItems(route: any, menu: any, parentPath: string) {
       if (menuItem.routes) {
         let hasItem = false;
         let newItem = null;
+        if (route.routes === undefined) {
+          route.routes = [];
+        }
+        if (route.children === undefined) {
+          route.children = [];
+        }
         for (const routeChild of route.routes) {
           if (routeChild.path === menuItem.path) {
             hasItem = true;
@@ -72,9 +104,15 @@ function patchRouteItems(route: any, menu: any, parentPath: string) {
           newItem = {
             path: menuItem.path,
             routes: [],
-            children: []
-          }
-          route.routes.push(newItem)
+            children: [],
+          };
+          route.routes.push(newItem);
+        }
+        if (newItem.routes === undefined) {
+          newItem.routes = [];
+        }
+        if (newItem.children === undefined) {
+          newItem.children = [];
         }
         Object.assign(newItem, {
           name: menuItem.name,
@@ -101,9 +139,19 @@ function patchRouteItems(route: any, menu: any, parentPath: string) {
         hideChildrenInMenu: menuItem.hideChildrenInMenu,
         hideInMenu: menuItem.hideInMenu,
         authority: menuItem.authority,
+      };
+      const routeIndex = route.routes.findIndex((routeItem: any) => routeItem.path === newRoute.path);
+      if (routeIndex >= 0) {
+        Object.assign(route.routes[routeIndex], newRoute);
+      } else {
+        route.routes.push(newRoute);
       }
-      route.children.push(newRoute);
-      route.routes.push(newRoute);
+      const childIndex = route.children.findIndex((routeItem: any) => routeItem.path === newRoute.path);
+      if (childIndex >= 0) {
+        Object.assign(route.children[childIndex], newRoute);
+      } else {
+        route.children.push(newRoute);
+      }
     }
   }
 }
@@ -116,6 +164,9 @@ export function patchRouteWithRemoteMenus(routes: any) {
       proLayout = routeItem;
       break;
     }
+  }
+  if (!proLayout) {
+    return;
   }
   patchRouteItems(proLayout, remoteMenu, '');
 }

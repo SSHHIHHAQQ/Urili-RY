@@ -6,12 +6,15 @@ declare namespace API.Product {
     categoryCode?: string;
     categoryName?: string;
     categoryLevel?: number;
+    fullPath?: string;
     publishEnabled?: string;
     sortOrder?: number;
     schemaVersion?: number;
     status?: string;
     childrenCount?: number;
     keyword?: string;
+    leafOnly?: boolean;
+    loadingPlaceholder?: boolean;
     createBy?: string;
     createTime?: string;
     updateBy?: string;

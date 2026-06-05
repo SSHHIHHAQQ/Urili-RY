@@ -167,11 +167,8 @@ public class SellerPortalController extends BaseController
     public TableDataInfo accountLoginLogs(PortalLoginLog log)
     {
         PortalLoginSession session = PortalSessionContext.requireSession("seller");
-        PortalLoginLog query = log == null ? new PortalLoginLog() : log;
-        query.setSubjectId(session.getSubjectId());
-        query.setAccountId(session.getAccountId());
         startPortalListPage();
-        return getDataTable(sellerService.selectSellerLoginLogList(query));
+        return getDataTable(sellerService.selectSellerOwnLoginLogList(session, log));
     }
 
     @GetMapping("/account/oper-logs")
@@ -181,11 +178,8 @@ public class SellerPortalController extends BaseController
     public TableDataInfo accountOperLogs(PortalOperLog log)
     {
         PortalLoginSession session = PortalSessionContext.requireSession("seller");
-        PortalOperLog query = log == null ? new PortalOperLog() : log;
-        query.setSubjectId(session.getSubjectId());
-        query.setAccountId(session.getAccountId());
         startPortalListPage();
-        return getDataTable(sellerService.selectSellerOperLogList(query));
+        return getDataTable(sellerService.selectSellerOwnOperLogList(session, log));
     }
 
     @GetMapping("/account/sessions")

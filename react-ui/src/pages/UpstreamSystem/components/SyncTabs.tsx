@@ -14,6 +14,10 @@ import {
   getWarehousePairings,
   getWarehouseSyncList,
 } from '@/services/integration/upstreamSystem';
+import {
+  getProTablePagination,
+  getProTableScroll,
+} from '@/utils/proTableSearch';
 import { resultOk, statusTag } from '../helpers';
 import styles from '../style.module.css';
 import type { LogisticsRow, PairingModalState, WarehouseRow } from '../types';
@@ -222,16 +226,19 @@ export default function SyncTabs({
                 <ProTable<WarehouseRow>
                   actionRef={warehouseActionRef}
                   className={`${styles.fillTable} upstream-fill-table`}
-                  rowKey="warehouseCode"
+                  key={`warehouse-${selectedCode}`}
+                  rowKey={(record) => `${selectedCode}:${record.warehouseCode}`}
                   columns={warehouseColumns}
                   search={false}
                   options={false}
                   toolBarRender={false}
-                  scroll={{ x: 1100 }}
+                  scroll={getProTableScroll(1100)}
+                  params={{ selectedCode }}
                   request={async () => {
+                    const requestCode = selectedCode;
                     const [syncResp, pairingResp] = await Promise.all([
-                      getWarehouseSyncList(selectedCode),
-                      getWarehousePairings(selectedCode),
+                      getWarehouseSyncList(requestCode),
+                      getWarehousePairings(requestCode),
                     ]);
                     const pairingMap = new Map(
                       (pairingResp.data || []).map((item) => [
@@ -245,7 +252,7 @@ export default function SyncTabs({
                     }));
                     return { data: rows, success: syncResp.code === 200 };
                   }}
-                  pagination={{ pageSize: 10 }}
+                  pagination={getProTablePagination(10)}
                 />
               </div>
             ),
@@ -258,16 +265,19 @@ export default function SyncTabs({
                 <ProTable<LogisticsRow>
                   actionRef={logisticsActionRef}
                   className={`${styles.fillTable} upstream-fill-table`}
-                  rowKey="channelCode"
+                  key={`logistics-${selectedCode}`}
+                  rowKey={(record) => `${selectedCode}:${record.channelCode}`}
                   columns={logisticsColumns}
                   search={false}
                   options={false}
                   toolBarRender={false}
-                  scroll={{ x: 1000 }}
+                  scroll={getProTableScroll(1000)}
+                  params={{ selectedCode }}
                   request={async () => {
+                    const requestCode = selectedCode;
                     const [syncResp, pairingResp] = await Promise.all([
-                      getLogisticsChannelSyncList(selectedCode),
-                      getLogisticsChannelPairings(selectedCode),
+                      getLogisticsChannelSyncList(requestCode),
+                      getLogisticsChannelPairings(requestCode),
                     ]);
                     const groups = new Map<string, LogisticsRow>();
                     (syncResp.data || []).forEach((item) => {
@@ -297,7 +307,7 @@ export default function SyncTabs({
                     }));
                     return { data: rows, success: syncResp.code === 200 };
                   }}
-                  pagination={{ pageSize: 10 }}
+                  pagination={getProTablePagination(10)}
                 />
               </div>
             ),
@@ -322,21 +332,24 @@ export default function SyncTabs({
               <ProTable<API.Integration.RequestLog>
                 actionRef={logActionRef}
                 className={`${styles.fillTable} upstream-fill-table`}
+                key={`logs-${selectedCode}`}
                 rowKey="requestLogId"
                 columns={logColumns}
+                params={{ selectedCode }}
                 request={async (params) => {
-                  const resp = await getRequestLogList(selectedCode, params);
+                  const requestCode = selectedCode;
+                  const resp = await getRequestLogList(requestCode, params);
                   return {
                     data: resp.rows || [],
                     total: resp.total || 0,
                     success: resp.code === 200,
                   };
                 }}
-                pagination={{ pageSize: 10 }}
+                pagination={getProTablePagination(10)}
                 search={false}
                 options={false}
                 toolBarRender={false}
-                scroll={{ x: 1100 }}
+                scroll={getProTableScroll(1100)}
               />
             ),
           },

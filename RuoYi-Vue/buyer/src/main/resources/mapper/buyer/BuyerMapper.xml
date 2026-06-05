@@ -442,7 +442,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                status
         from buyer_session
         where buyer_id = #{buyerId}
+        <if test="buyerAccountId != null">
           and buyer_account_id = #{buyerAccountId}
+        </if>
         order by login_time desc, token_id desc
     </select>
 

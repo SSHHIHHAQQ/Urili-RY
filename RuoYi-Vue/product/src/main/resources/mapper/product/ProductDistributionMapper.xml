@@ -1,0 +1,408 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.product.mapper.ProductDistributionMapper">
+
+    <resultMap type="ProductSpu" id="ProductSpuResult">
+        <id     property="spuId"           column="spu_id"           />
+        <result property="systemSpuCode"   column="system_spu_code"  />
+        <result property="sellerSpuCode"   column="seller_spu_code"  />
+        <result property="sellerId"        column="seller_id"        />
+        <result property="sellerNo"        column="seller_no"        />
+        <result property="sellerName"      column="seller_name"      />
+        <result property="categoryId"      column="category_id"      />
+        <result property="categoryCode"    column="category_code"    />
+        <result property="categoryName"    column="category_name"    />
+        <result property="productName"     column="product_name"     />
+        <result property="productNameEn"   column="product_name_en"  />
+        <result property="sellingPoint"    column="selling_point"    />
+        <result property="mainImageUrl"    column="main_image_url"   />
+        <result property="detailContent"   column="detail_content"   />
+        <result property="spuStatus"       column="spu_status"       />
+        <result property="sourceType"      column="source_type"      />
+        <result property="sourceRefType"   column="source_ref_type"  />
+        <result property="sourceRefId"     column="source_ref_id"    />
+        <result property="delFlag"         column="del_flag"         />
+        <result property="skuCount"        column="sku_count"        />
+        <result property="supplyPriceMin"  column="supply_price_min" />
+        <result property="supplyPriceMax"  column="supply_price_max" />
+        <result property="salePriceMin"    column="sale_price_min"   />
+        <result property="salePriceMax"    column="sale_price_max"   />
+        <result property="currencySummary" column="currency_summary" />
+        <result property="warehouseCount"  column="warehouse_count"  />
+        <result property="createBy"        column="create_by"        />
+        <result property="createTime"      column="create_time"      />
+        <result property="updateBy"        column="update_by"        />
+        <result property="updateTime"      column="update_time"      />
+        <result property="remark"          column="remark"           />
+    </resultMap>
+
+    <resultMap type="ProductSku" id="ProductSkuResult">
+        <id     property="skuId"           column="sku_id"           />
+        <result property="spuId"           column="spu_id"           />
+        <result property="sellerId"        column="seller_id"        />
+        <result property="systemSkuCode"   column="system_sku_code"  />
+        <result property="sellerSkuCode"   column="seller_sku_code"  />
+        <result property="color"           column="color"            />
+        <result property="size"            column="size"             />
+        <result property="weight"          column="weight"           />
+        <result property="material"        column="material"         />
+        <result property="style"           column="style"            />
+        <result property="model"           column="model"            />
+        <result property="packageQuantity" column="package_quantity" />
+        <result property="capacity"        column="capacity"         />
+        <result property="skuImageUrl"     column="sku_image_url"    />
+        <result property="supplyPrice"     column="supply_price"     />
+        <result property="salePrice"       column="sale_price"       />
+        <result property="currencyCode"    column="currency_code"    />
+        <result property="skuStatus"       column="sku_status"       />
+        <result property="sortOrder"       column="sort_order"       />
+        <result property="delFlag"         column="del_flag"         />
+        <result property="warehouseCount"  column="warehouse_count"  />
+        <result property="createBy"        column="create_by"        />
+        <result property="createTime"      column="create_time"      />
+        <result property="updateBy"        column="update_by"        />
+        <result property="updateTime"      column="update_time"      />
+        <result property="remark"          column="remark"           />
+    </resultMap>
+
+    <resultMap type="ProductAttributeValue" id="AttributeValueResult">
+        <id     property="valueId"               column="value_id"                />
+        <result property="ownerType"             column="owner_type"              />
+        <result property="ownerId"               column="owner_id"                />
+        <result property="spuId"                 column="spu_id"                  />
+        <result property="categoryId"            column="category_id"             />
+        <result property="categorySchemaVersion" column="category_schema_version" />
+        <result property="attributeId"           column="attribute_id"            />
+        <result property="attributeCode"         column="attribute_code"          />
+        <result property="attributeName"         column="attribute_name"          />
+        <result property="attributeType"         column="attribute_type"          />
+        <result property="valueCode"             column="value_code"              />
+        <result property="valueText"             column="value_text"              />
+        <result property="valueNumber"           column="value_number"            />
+        <result property="valueDate"             column="value_date"              />
+        <result property="valueJson"             column="value_json"              />
+        <result property="createBy"              column="create_by"               />
+        <result property="createTime"            column="create_time"             />
+        <result property="updateBy"              column="update_by"               />
+        <result property="updateTime"            column="update_time"             />
+    </resultMap>
+
+    <resultMap type="ProductImage" id="ImageResult">
+        <id     property="imageId"   column="image_id"   />
+        <result property="ownerType" column="owner_type" />
+        <result property="ownerId"   column="owner_id"   />
+        <result property="spuId"     column="spu_id"     />
+        <result property="skuId"     column="sku_id"     />
+        <result property="imageUrl"  column="image_url"  />
+        <result property="imageRole" column="image_role" />
+        <result property="sortOrder" column="sort_order" />
+        <result property="createBy"  column="create_by"  />
+        <result property="createTime" column="create_time" />
+    </resultMap>
+
+    <sql id="spuAggregateSelect">
+        select p.*,
+               ifnull(s.sku_count, 0) as sku_count,
+               s.supply_price_min,
+               s.supply_price_max,
+               s.sale_price_min,
+               s.sale_price_max,
+               s.currency_summary,
+               null as warehouse_count
+        from product_spu p
+        left join (
+            select spu_id,
+                   count(1) as sku_count,
+                   min(supply_price) as supply_price_min,
+                   max(supply_price) as supply_price_max,
+                   min(sale_price) as sale_price_min,
+                   max(sale_price) as sale_price_max,
+                   case when count(distinct currency_code) = 1 then min(currency_code) else 'MULTI' end as currency_summary
+            from product_sku
+            where del_flag = '0'
+            group by spu_id
+        ) s on s.spu_id = p.spu_id
+    </sql>
+
+    <select id="selectProductList" parameterType="ProductSpu" resultMap="ProductSpuResult">
+        <include refid="spuAggregateSelect"/>
+        where p.del_flag = '0'
+        <if test="keyword != null and keyword != ''">
+            and (
+                p.system_spu_code like concat('%', #{keyword}, '%')
+                or p.seller_spu_code like concat('%', #{keyword}, '%')
+                or p.product_name like concat('%', #{keyword}, '%')
+                or p.product_name_en like concat('%', #{keyword}, '%')
+                or exists (
+                    select 1 from product_sku sk
+                    where sk.spu_id = p.spu_id
+                      and sk.del_flag = '0'
+                      and (sk.system_sku_code like concat('%', #{keyword}, '%')
+                           or sk.seller_sku_code like concat('%', #{keyword}, '%'))
+                )
+            )
+        </if>
+        <if test="systemSpuCode != null and systemSpuCode != ''">
+            and p.system_spu_code like concat('%', #{systemSpuCode}, '%')
+        </if>
+        <if test="sellerSpuCode != null and sellerSpuCode != ''">
+            and p.seller_spu_code like concat('%', #{sellerSpuCode}, '%')
+        </if>
+        <if test="productName != null and productName != ''">
+            and p.product_name like concat('%', #{productName}, '%')
+        </if>
+        <if test="productNameEn != null and productNameEn != ''">
+            and p.product_name_en like concat('%', #{productNameEn}, '%')
+        </if>
+        <if test="sellerId != null">
+            and p.seller_id = #{sellerId}
+        </if>
+        <if test="categoryId != null">
+            and p.category_id = #{categoryId}
+        </if>
+        <if test="spuStatus != null and spuStatus != ''">
+            and p.spu_status = #{spuStatus}
+        </if>
+        <if test="systemSkuCode != null and systemSkuCode != ''">
+            and exists (
+                select 1 from product_sku sk
+                where sk.spu_id = p.spu_id
+                  and sk.del_flag = '0'
+                  and sk.system_sku_code like concat('%', #{systemSkuCode}, '%')
+            )
+        </if>
+        <if test="sellerSkuCode != null and sellerSkuCode != ''">
+            and exists (
+                select 1 from product_sku sk
+                where sk.spu_id = p.spu_id
+                  and sk.del_flag = '0'
+                  and sk.seller_sku_code like concat('%', #{sellerSkuCode}, '%')
+            )
+        </if>
+        order by p.update_time desc, p.spu_id desc
+    </select>
+
+    <select id="selectProductById" resultMap="ProductSpuResult">
+        <include refid="spuAggregateSelect"/>
+        where p.spu_id = #{spuId}
+          and p.del_flag = '0'
+        limit 1
+    </select>
+
+    <insert id="insertSpu" parameterType="ProductSpu" useGeneratedKeys="true" keyProperty="spuId">
+        insert into product_spu(
+            system_spu_code, seller_spu_code, seller_id, seller_no, seller_name,
+            category_id, category_code, category_name, product_name, product_name_en, selling_point,
+            main_image_url, detail_content, spu_status, source_type, source_ref_type, source_ref_id,
+            del_flag, create_by, create_time, remark
+        ) values (
+            #{systemSpuCode}, #{sellerSpuCode}, #{sellerId}, #{sellerNo}, #{sellerName},
+            #{categoryId}, #{categoryCode}, #{categoryName}, #{productName}, #{productNameEn}, #{sellingPoint},
+            #{mainImageUrl}, #{detailContent}, #{spuStatus}, #{sourceType}, #{sourceRefType}, #{sourceRefId},
+            '0', #{createBy}, sysdate(), #{remark}
+        )
+    </insert>
+
+    <update id="updateSpu" parameterType="ProductSpu">
+        update product_spu
+        set seller_spu_code = #{sellerSpuCode},
+            seller_id = #{sellerId},
+            seller_no = #{sellerNo},
+            seller_name = #{sellerName},
+            category_id = #{categoryId},
+            category_code = #{categoryCode},
+            category_name = #{categoryName},
+            product_name = #{productName},
+            product_name_en = #{productNameEn},
+            selling_point = #{sellingPoint},
+            main_image_url = #{mainImageUrl},
+            detail_content = #{detailContent},
+            spu_status = #{spuStatus},
+            update_by = #{updateBy},
+            update_time = sysdate(),
+            remark = #{remark}
+        where spu_id = #{spuId}
+          and del_flag = '0'
+    </update>
+
+    <update id="updateSpuStatus">
+        update product_spu
+        set spu_status = #{status},
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where spu_id = #{spuId}
+          and del_flag = '0'
+    </update>
+
+    <select id="countSystemSpuCode" resultType="int">
+        select count(1)
+        from product_spu
+        where system_spu_code = #{systemSpuCode}
+    </select>
+
+    <select id="countSellerSpuCode" resultType="int">
+        select count(1)
+        from product_spu
+        where seller_id = #{sellerId}
+          and seller_spu_code = #{sellerSpuCode}
+          and seller_spu_code &lt;&gt; ''
+          and del_flag = '0'
+        <if test="excludeSpuId != null">
+            and spu_id &lt;&gt; #{excludeSpuId}
+        </if>
+    </select>
+
+    <select id="selectSkuListBySpuId" resultMap="ProductSkuResult">
+        select *,
+               null as warehouse_count
+        from product_sku
+        where spu_id = #{spuId}
+          and del_flag = '0'
+        order by sort_order asc, sku_id asc
+    </select>
+
+    <select id="selectSkuById" resultMap="ProductSkuResult">
+        select *,
+               null as warehouse_count
+        from product_sku
+        where sku_id = #{skuId}
+          and del_flag = '0'
+        limit 1
+    </select>
+
+    <insert id="insertSku" parameterType="ProductSku" useGeneratedKeys="true" keyProperty="skuId">
+        insert into product_sku(
+            spu_id, seller_id, system_sku_code, seller_sku_code, color,
+            size, weight, material, style, model,
+            package_quantity, capacity, sku_image_url, supply_price, sale_price,
+            currency_code, sku_status, sort_order, del_flag, create_by,
+            create_time, remark
+        ) values (
+            #{spuId}, #{sellerId}, #{systemSkuCode}, #{sellerSkuCode}, #{color},
+            #{size}, #{weight}, #{material}, #{style}, #{model},
+            #{packageQuantity}, #{capacity}, #{skuImageUrl}, #{supplyPrice}, #{salePrice},
+            #{currencyCode}, #{skuStatus}, #{sortOrder}, '0', #{createBy},
+            sysdate(), #{remark}
+        )
+    </insert>
+
+    <update id="updateSku" parameterType="ProductSku">
+        update product_sku
+        set seller_id = #{sellerId},
+            seller_sku_code = #{sellerSkuCode},
+            color = #{color},
+            size = #{size},
+            weight = #{weight},
+            material = #{material},
+            style = #{style},
+            model = #{model},
+            package_quantity = #{packageQuantity},
+            capacity = #{capacity},
+            sku_image_url = #{skuImageUrl},
+            supply_price = #{supplyPrice},
+            sale_price = #{salePrice},
+            currency_code = #{currencyCode},
+            sku_status = #{skuStatus},
+            sort_order = #{sortOrder},
+            update_by = #{updateBy},
+            update_time = sysdate(),
+            remark = #{remark}
+        where sku_id = #{skuId}
+          and spu_id = #{spuId}
+          and del_flag = '0'
+    </update>
+
+    <update id="updateSkuStatus">
+        update product_sku
+        set sku_status = #{status},
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where sku_id = #{skuId}
+          and del_flag = '0'
+    </update>
+
+    <update id="deleteSkusBySpuId">
+        update product_sku
+        set del_flag = '2',
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where spu_id = #{spuId}
+          and del_flag = '0'
+    </update>
+
+    <select id="countSystemSkuCode" resultType="int">
+        select count(1)
+        from product_sku
+        where system_sku_code = #{systemSkuCode}
+    </select>
+
+    <select id="countSellerSkuCode" resultType="int">
+        select count(1)
+        from product_sku
+        where seller_id = #{sellerId}
+          and seller_sku_code = #{sellerSkuCode}
+          and seller_sku_code &lt;&gt; ''
+          and del_flag = '0'
+        <if test="excludeSkuId != null">
+            and sku_id &lt;&gt; #{excludeSkuId}
+        </if>
+    </select>
+
+    <select id="countOnSaleSkusBySpuId" resultType="int">
+        select count(1)
+        from product_sku
+        where spu_id = #{spuId}
+          and sku_status = 'ON_SALE'
+          and del_flag = '0'
+    </select>
+
+    <select id="selectAttributeValuesBySpuId" resultMap="AttributeValueResult">
+        select *
+        from product_attribute_value
+        where spu_id = #{spuId}
+        order by value_id asc
+    </select>
+
+    <insert id="insertAttributeValue" parameterType="ProductAttributeValue" useGeneratedKeys="true" keyProperty="valueId">
+        insert into product_attribute_value(
+            owner_type, owner_id, spu_id, category_id, category_schema_version,
+            attribute_id, attribute_code, attribute_name, attribute_type, value_code,
+            value_text, value_number, value_date, value_json, create_by,
+            create_time, update_by, update_time, remark
+        ) values (
+            #{ownerType}, #{ownerId}, #{spuId}, #{categoryId}, #{categorySchemaVersion},
+            #{attributeId}, #{attributeCode}, #{attributeName}, #{attributeType}, #{valueCode},
+            #{valueText}, #{valueNumber}, #{valueDate}, #{valueJson}, #{createBy},
+            sysdate(), #{updateBy}, sysdate(), #{remark}
+        )
+    </insert>
+
+    <delete id="deleteAttributeValuesBySpuId">
+        delete from product_attribute_value
+        where spu_id = #{spuId}
+    </delete>
+
+    <select id="selectImagesBySpuId" resultMap="ImageResult">
+        select *
+        from product_image
+        where spu_id = #{spuId}
+        order by sort_order asc, image_id asc
+    </select>
+
+    <insert id="insertImage" parameterType="ProductImage" useGeneratedKeys="true" keyProperty="imageId">
+        insert into product_image(
+            owner_type, owner_id, spu_id, sku_id, image_url,
+            image_role, sort_order, create_by, create_time
+        ) values (
+            #{ownerType}, #{ownerId}, #{spuId}, #{skuId}, #{imageUrl},
+            #{imageRole}, #{sortOrder}, #{createBy}, sysdate()
+        )
+    </insert>
+
+    <delete id="deleteImagesBySpuId">
+        delete from product_image
+        where spu_id = #{spuId}
+    </delete>
+</mapper>

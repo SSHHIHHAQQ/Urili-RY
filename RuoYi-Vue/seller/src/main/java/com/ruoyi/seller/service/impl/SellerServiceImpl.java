@@ -1,6 +1,8 @@
 package com.ruoyi.seller.service.impl;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -227,6 +229,18 @@ public class SellerServiceImpl implements ISellerService
     }
 
     @Override
+    public List<PortalSessionProfile> selectSellerSessionList(Long sellerId)
+    {
+        return sellerMapper.selectSellerSessionProfileList(sellerId, null);
+    }
+
+    @Override
+    public List<PortalSessionProfile> selectSellerAccountSessionList(Long sellerId, Long sellerAccountId)
+    {
+        return sellerMapper.selectSellerSessionProfileList(sellerId, sellerAccountId);
+    }
+
+    @Override
     @Transactional
     public int forceLogoutSellerSessions(Long sellerId)
     {
@@ -261,6 +275,24 @@ public class SellerServiceImpl implements ISellerService
     }
 
     @Override
+    public PortalDirectLoginResult createSellerAccountDirectLogin(Long sellerId, Long sellerAccountId, String reason)
+    {
+        Seller seller = selectSellerById(sellerId);
+        SellerAccount account = sellerMapper.selectSellerAccountById(sellerAccountId);
+        if (account == null || !sellerId.equals(account.getSellerId()))
+        {
+            throw new ServiceException("卖家账号不存在");
+        }
+        if (!PartnerSupport.STATUS_NORMAL.equals(seller.getStatus()))
+        {
+            throw new ServiceException("卖家已停用，不能免密登录");
+        }
+        return directLoginSupport.createToken("seller", sellerId, seller.getSellerNo(), account, reason,
+            PortalDirectLoginSupport.SELLER_WEB_URL_CONFIG_KEY,
+            "http://127.0.0.1:8001/seller/direct-login");
+    }
+
+    @Override
     public List<PortalLoginLog> selectSellerLoginLogList(PortalLoginLog log)
     {
         return sellerMapper.selectSellerLoginLogList(log);
@@ -273,13 +305,23 @@ public class SellerServiceImpl implements ISellerService
     }
 
     @Override
+    public List<PortalLoginLog> selectSellerOwnLoginLogList(PortalLoginSession session, PortalLoginLog log)
+    {
+        assertSellerSessionAccount(session);
+        return sellerMapper.selectSellerLoginLogList(buildSellerOwnLoginLogQuery(session, log));
+    }
+
+    @Override
+    public List<PortalOperLog> selectSellerOwnOperLogList(PortalLoginSession session, PortalOperLog log)
+    {
+        assertSellerSessionAccount(session);
+        return sellerMapper.selectSellerOperLogList(buildSellerOwnOperLogQuery(session, log));
+    }
+
+    @Override
     public List<PortalSessionProfile> selectSellerOwnSessionList(PortalLoginSession session)
     {
-        if (session == null)
-        {
-            throw new ServiceException("登录状态已失效");
-        }
-        selectSellerAccountById(session.getSubjectId(), session.getAccountId());
+        assertSellerSessionAccount(session);
         List<PortalSessionProfile> sessions = sellerMapper.selectSellerSessionProfileList(
             session.getSubjectId(), session.getAccountId());
         for (PortalSessionProfile profile : sessions)
@@ -287,6 +329,63 @@ public class SellerServiceImpl implements ISellerService
             profile.setCurrent(Objects.equals(session.getTokenId(), profile.getTokenId()));
         }
         return sessions;
+    }
+
+    private void assertSellerSessionAccount(PortalLoginSession session)
+    {
+        if (session == null || session.getSubjectId() == null || session.getAccountId() == null)
+        {
+            throw new ServiceException("登录状态已失效");
+        }
+        selectSellerAccountById(session.getSubjectId(), session.getAccountId());
+    }
+
+    private PortalLoginLog buildSellerOwnLoginLogQuery(PortalLoginSession session, PortalLoginLog log)
+    {
+        PortalLoginLog query = new PortalLoginLog();
+        if (log != null)
+        {
+            query.setUserName(log.getUserName());
+            query.setIpaddr(log.getIpaddr());
+            query.setStatus(log.getStatus());
+            query.setParams(copyTimeRangeParams(log.getParams()));
+        }
+        query.setSubjectId(session.getSubjectId());
+        query.setAccountId(session.getAccountId());
+        return query;
+    }
+
+    private PortalOperLog buildSellerOwnOperLogQuery(PortalLoginSession session, PortalOperLog log)
+    {
+        PortalOperLog query = new PortalOperLog();
+        if (log != null)
+        {
+            query.setTitle(log.getTitle());
+            query.setOperName(log.getOperName());
+            query.setStatus(log.getStatus());
+            query.setParams(copyTimeRangeParams(log.getParams()));
+        }
+        query.setSubjectId(session.getSubjectId());
+        query.setAccountId(session.getAccountId());
+        return query;
+    }
+
+    private HashMap<String, Object> copyTimeRangeParams(Map<String, Object> params)
+    {
+        HashMap<String, Object> queryParams = new HashMap<>();
+        if (params == null)
+        {
+            return queryParams;
+        }
+        if (params.containsKey("beginTime"))
+        {
+            queryParams.put("beginTime", params.get("beginTime"));
+        }
+        if (params.containsKey("endTime"))
+        {
+            queryParams.put("endTime", params.get("endTime"));
+        }
+        return queryParams;
     }
 
     @Override

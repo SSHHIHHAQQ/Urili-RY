@@ -56,6 +56,44 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <id     property="connectionCode"      column="connection_code"       />
         <id     property="masterSku"           column="master_sku"            />
         <result property="masterProductName"   column="master_product_name"   />
+        <result property="productAliasName"    column="product_alias_name"    />
+        <result property="approveStatus"       column="approve_status"        />
+        <result property="productType"         column="product_type"          />
+        <result property="productDescription"  column="product_description"   />
+        <result property="imageUrl"            column="image_url"             />
+        <result property="mainCode"            column="main_code"             />
+        <result property="otherCode"           column="other_code"            />
+        <result property="fnsku"               column="fnsku"                 />
+        <result property="countryOfOriginName" column="country_of_origin_name" />
+        <result property="currencyCode"        column="currency_code"         />
+        <result property="customhouseCode"     column="customhouse_code"      />
+        <result property="dangerousCargo"      column="dangerous_cargo"       />
+        <result property="declareNameCn"       column="declare_name_cn"       />
+        <result property="declareNameEn"       column="declare_name_en"       />
+        <result property="declarePrice"        column="declare_price"         />
+        <result property="height"              column="product_height"        />
+        <result property="heightBs"            column="product_height_bs"     />
+        <result property="length"              column="product_length"        />
+        <result property="lengthBs"            column="product_length_bs"     />
+        <result property="weight"              column="product_weight"        />
+        <result property="weightBs"            column="product_weight_bs"     />
+        <result property="width"               column="product_width"         />
+        <result property="widthBs"             column="product_width_bs"      />
+        <result property="wmsHeight"           column="wms_height"            />
+        <result property="wmsHeightBs"         column="wms_height_bs"         />
+        <result property="wmsLength"           column="wms_length"            />
+        <result property="wmsLengthBs"         column="wms_length_bs"         />
+        <result property="wmsWeight"           column="wms_weight"            />
+        <result property="wmsWeightBs"         column="wms_weight_bs"         />
+        <result property="wmsWidth"            column="wms_width"             />
+        <result property="wmsWidthBs"          column="wms_width_bs"          />
+        <result property="cat1Name"            column="cat1_name"             />
+        <result property="cat2Name"            column="cat2_name"             />
+        <result property="cat3Name"            column="cat3_name"             />
+        <result property="platformSkuInfoJson" column="platform_sku_info_json" />
+        <result property="brazilTaxInfoJson"   column="brazil_tax_info_json"  />
+        <result property="sourcePayloadJson"   column="source_payload_json"   />
+        <result property="sourcePayloadHash"   column="source_payload_hash"   />
         <result property="status"              column="status"                />
         <result property="searchText"          column="search_text"           />
         <result property="syncBatchId"         column="sync_batch_id"         />
@@ -67,6 +105,62 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="systemSku"           column="system_sku"            />
         <result property="systemSkuName"       column="system_sku_name"       />
         <result property="customerName"        column="customer_name"         />
+    </resultMap>
+
+    <resultMap type="SourceProductItem" id="SourceProductResult">
+        <id     property="connectionCode"       column="connection_code"       />
+        <id     property="masterSku"            column="master_sku"            />
+        <result property="systemKind"           column="system_kind"           />
+        <result property="masterWarehouseName"  column="master_warehouse_name" />
+        <result property="masterProductName"    column="master_product_name"   />
+        <result property="productAliasName"     column="product_alias_name"    />
+        <result property="approveStatus"        column="approve_status"        />
+        <result property="productType"          column="product_type"          />
+        <result property="productDescription"   column="product_description"   />
+        <result property="imageUrl"             column="image_url"             />
+        <result property="mainCode"             column="main_code"             />
+        <result property="otherCode"            column="other_code"            />
+        <result property="fnsku"                column="fnsku"                 />
+        <result property="countryOfOriginName"  column="country_of_origin_name" />
+        <result property="currencyCode"         column="currency_code"         />
+        <result property="customhouseCode"      column="customhouse_code"      />
+        <result property="dangerousCargo"       column="dangerous_cargo"       />
+        <result property="declareNameCn"        column="declare_name_cn"       />
+        <result property="declareNameEn"        column="declare_name_en"       />
+        <result property="declarePrice"         column="declare_price"         />
+        <result property="height"               column="product_height"        />
+        <result property="heightBs"             column="product_height_bs"     />
+        <result property="length"               column="product_length"        />
+        <result property="lengthBs"             column="product_length_bs"     />
+        <result property="weight"               column="product_weight"        />
+        <result property="weightBs"             column="product_weight_bs"     />
+        <result property="width"                column="product_width"         />
+        <result property="widthBs"              column="product_width_bs"      />
+        <result property="wmsHeight"            column="wms_height"            />
+        <result property="wmsHeightBs"          column="wms_height_bs"         />
+        <result property="wmsLength"            column="wms_length"            />
+        <result property="wmsLengthBs"          column="wms_length_bs"         />
+        <result property="wmsWeight"            column="wms_weight"            />
+        <result property="wmsWeightBs"          column="wms_weight_bs"         />
+        <result property="wmsWidth"             column="wms_width"             />
+        <result property="wmsWidthBs"           column="wms_width_bs"          />
+        <result property="cat1Name"             column="cat1_name"             />
+        <result property="cat2Name"             column="cat2_name"             />
+        <result property="cat3Name"             column="cat3_name"             />
+        <result property="platformSkuInfoJson"  column="platform_sku_info_json" />
+        <result property="brazilTaxInfoJson"    column="brazil_tax_info_json"  />
+        <result property="sourcePayloadHash"    column="source_payload_hash"   />
+        <result property="status"               column="status"                />
+        <result property="searchText"           column="search_text"           />
+        <result property="syncBatchId"          column="sync_batch_id"         />
+        <result property="firstSeenTime"        column="first_seen_time"       />
+        <result property="lastSeenTime"         column="last_seen_time"        />
+        <result property="updateTime"           column="update_time"           />
+        <result property="pairingStatus"        column="pairing_status"        />
+        <result property="skuPairingId"         column="sku_pairing_id"        />
+        <result property="systemSku"            column="system_sku"            />
+        <result property="systemSkuName"        column="system_sku_name"       />
+        <result property="customerName"         column="customer_name"         />
     </resultMap>
 
     <resultMap type="UpstreamWarehousePairing" id="WarehousePairingResult">
@@ -386,14 +480,70 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
     <insert id="upsertSkuSyncItem" parameterType="UpstreamSkuSyncItem">
         insert into upstream_system_sku_candidate(
-            connection_code, master_sku, master_product_name, status, search_text,
+            connection_code, master_sku, master_product_name,
+            product_alias_name, approve_status, product_type, product_description, image_url,
+            main_code, other_code, fnsku, country_of_origin_name, currency_code, customhouse_code,
+            dangerous_cargo, declare_name_cn, declare_name_en, declare_price,
+            product_height, product_height_bs, product_length, product_length_bs,
+            product_weight, product_weight_bs, product_width, product_width_bs,
+            wms_height, wms_height_bs, wms_length, wms_length_bs,
+            wms_weight, wms_weight_bs, wms_width, wms_width_bs,
+            cat1_name, cat2_name, cat3_name, platform_sku_info_json, brazil_tax_info_json,
+            source_payload_json, source_payload_hash, status, search_text,
             sync_batch_id, first_seen_time, last_seen_time, update_time
         ) values (
-            #{connectionCode}, #{masterSku}, #{masterProductName}, #{status}, #{searchText},
+            #{connectionCode}, #{masterSku}, #{masterProductName},
+            #{productAliasName}, #{approveStatus}, #{productType}, #{productDescription}, #{imageUrl},
+            #{mainCode}, #{otherCode}, #{fnsku}, #{countryOfOriginName}, #{currencyCode}, #{customhouseCode},
+            #{dangerousCargo}, #{declareNameCn}, #{declareNameEn}, #{declarePrice},
+            #{height}, #{heightBs}, #{length}, #{lengthBs},
+            #{weight}, #{weightBs}, #{width}, #{widthBs},
+            #{wmsHeight}, #{wmsHeightBs}, #{wmsLength}, #{wmsLengthBs},
+            #{wmsWeight}, #{wmsWeightBs}, #{wmsWidth}, #{wmsWidthBs},
+            #{cat1Name}, #{cat2Name}, #{cat3Name}, #{platformSkuInfoJson}, #{brazilTaxInfoJson},
+            #{sourcePayloadJson}, #{sourcePayloadHash}, #{status}, #{searchText},
             #{syncBatchId}, sysdate(), sysdate(), sysdate()
         )
         on duplicate key update
             master_product_name = values(master_product_name),
+            product_alias_name = values(product_alias_name),
+            approve_status = values(approve_status),
+            product_type = values(product_type),
+            product_description = values(product_description),
+            image_url = values(image_url),
+            main_code = values(main_code),
+            other_code = values(other_code),
+            fnsku = values(fnsku),
+            country_of_origin_name = values(country_of_origin_name),
+            currency_code = values(currency_code),
+            customhouse_code = values(customhouse_code),
+            dangerous_cargo = values(dangerous_cargo),
+            declare_name_cn = values(declare_name_cn),
+            declare_name_en = values(declare_name_en),
+            declare_price = values(declare_price),
+            product_height = values(product_height),
+            product_height_bs = values(product_height_bs),
+            product_length = values(product_length),
+            product_length_bs = values(product_length_bs),
+            product_weight = values(product_weight),
+            product_weight_bs = values(product_weight_bs),
+            product_width = values(product_width),
+            product_width_bs = values(product_width_bs),
+            wms_height = values(wms_height),
+            wms_height_bs = values(wms_height_bs),
+            wms_length = values(wms_length),
+            wms_length_bs = values(wms_length_bs),
+            wms_weight = values(wms_weight),
+            wms_weight_bs = values(wms_weight_bs),
+            wms_width = values(wms_width),
+            wms_width_bs = values(wms_width_bs),
+            cat1_name = values(cat1_name),
+            cat2_name = values(cat2_name),
+            cat3_name = values(cat3_name),
+            platform_sku_info_json = values(platform_sku_info_json),
+            brazil_tax_info_json = values(brazil_tax_info_json),
+            source_payload_json = values(source_payload_json),
+            source_payload_hash = values(source_payload_hash),
             status = values(status),
             search_text = values(search_text),
             sync_batch_id = values(sync_batch_id),
@@ -403,17 +553,73 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
     <insert id="batchUpsertSkuSyncItems">
         insert into upstream_system_sku_candidate(
-            connection_code, master_sku, master_product_name, status, search_text,
+            connection_code, master_sku, master_product_name,
+            product_alias_name, approve_status, product_type, product_description, image_url,
+            main_code, other_code, fnsku, country_of_origin_name, currency_code, customhouse_code,
+            dangerous_cargo, declare_name_cn, declare_name_en, declare_price,
+            product_height, product_height_bs, product_length, product_length_bs,
+            product_weight, product_weight_bs, product_width, product_width_bs,
+            wms_height, wms_height_bs, wms_length, wms_length_bs,
+            wms_weight, wms_weight_bs, wms_width, wms_width_bs,
+            cat1_name, cat2_name, cat3_name, platform_sku_info_json, brazil_tax_info_json,
+            source_payload_json, source_payload_hash, status, search_text,
             sync_batch_id, first_seen_time, last_seen_time, update_time
         ) values
         <foreach collection="items" item="item" separator=",">
             (
-                #{item.connectionCode}, #{item.masterSku}, #{item.masterProductName}, #{item.status}, #{item.searchText},
+                #{item.connectionCode}, #{item.masterSku}, #{item.masterProductName},
+                #{item.productAliasName}, #{item.approveStatus}, #{item.productType}, #{item.productDescription}, #{item.imageUrl},
+                #{item.mainCode}, #{item.otherCode}, #{item.fnsku}, #{item.countryOfOriginName}, #{item.currencyCode}, #{item.customhouseCode},
+                #{item.dangerousCargo}, #{item.declareNameCn}, #{item.declareNameEn}, #{item.declarePrice},
+                #{item.height}, #{item.heightBs}, #{item.length}, #{item.lengthBs},
+                #{item.weight}, #{item.weightBs}, #{item.width}, #{item.widthBs},
+                #{item.wmsHeight}, #{item.wmsHeightBs}, #{item.wmsLength}, #{item.wmsLengthBs},
+                #{item.wmsWeight}, #{item.wmsWeightBs}, #{item.wmsWidth}, #{item.wmsWidthBs},
+                #{item.cat1Name}, #{item.cat2Name}, #{item.cat3Name}, #{item.platformSkuInfoJson}, #{item.brazilTaxInfoJson},
+                #{item.sourcePayloadJson}, #{item.sourcePayloadHash}, #{item.status}, #{item.searchText},
                 #{item.syncBatchId}, sysdate(), sysdate(), sysdate()
             )
         </foreach>
         on duplicate key update
             master_product_name = values(master_product_name),
+            product_alias_name = values(product_alias_name),
+            approve_status = values(approve_status),
+            product_type = values(product_type),
+            product_description = values(product_description),
+            image_url = values(image_url),
+            main_code = values(main_code),
+            other_code = values(other_code),
+            fnsku = values(fnsku),
+            country_of_origin_name = values(country_of_origin_name),
+            currency_code = values(currency_code),
+            customhouse_code = values(customhouse_code),
+            dangerous_cargo = values(dangerous_cargo),
+            declare_name_cn = values(declare_name_cn),
+            declare_name_en = values(declare_name_en),
+            declare_price = values(declare_price),
+            product_height = values(product_height),
+            product_height_bs = values(product_height_bs),
+            product_length = values(product_length),
+            product_length_bs = values(product_length_bs),
+            product_weight = values(product_weight),
+            product_weight_bs = values(product_weight_bs),
+            product_width = values(product_width),
+            product_width_bs = values(product_width_bs),
+            wms_height = values(wms_height),
+            wms_height_bs = values(wms_height_bs),
+            wms_length = values(wms_length),
+            wms_length_bs = values(wms_length_bs),
+            wms_weight = values(wms_weight),
+            wms_weight_bs = values(wms_weight_bs),
+            wms_width = values(wms_width),
+            wms_width_bs = values(wms_width_bs),
+            cat1_name = values(cat1_name),
+            cat2_name = values(cat2_name),
+            cat3_name = values(cat3_name),
+            platform_sku_info_json = values(platform_sku_info_json),
+            brazil_tax_info_json = values(brazil_tax_info_json),
+            source_payload_json = values(source_payload_json),
+            source_payload_hash = values(source_payload_hash),
             status = values(status),
             search_text = values(search_text),
             sync_batch_id = values(sync_batch_id),
@@ -477,6 +683,137 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                     )
                 </otherwise>
             </choose>
+        </if>
+        order by c.update_time desc, c.master_sku asc
+    </select>
+
+    <select id="selectSourceProductList" parameterType="SourceProductQuery" resultMap="SourceProductResult">
+        select c.connection_code,
+               conn.system_kind,
+               conn.master_warehouse_name,
+               c.master_sku,
+               c.master_product_name,
+               c.product_alias_name,
+               c.approve_status,
+               c.product_type,
+               c.product_description,
+               c.image_url,
+               c.main_code,
+               c.other_code,
+               c.fnsku,
+               c.country_of_origin_name,
+               c.currency_code,
+               c.customhouse_code,
+               c.dangerous_cargo,
+               c.declare_name_cn,
+               c.declare_name_en,
+               c.declare_price,
+               c.product_height,
+               c.product_height_bs,
+               c.product_length,
+               c.product_length_bs,
+               c.product_weight,
+               c.product_weight_bs,
+               c.product_width,
+               c.product_width_bs,
+               c.wms_height,
+               c.wms_height_bs,
+               c.wms_length,
+               c.wms_length_bs,
+               c.wms_weight,
+               c.wms_weight_bs,
+               c.wms_width,
+               c.wms_width_bs,
+               c.cat1_name,
+               c.cat2_name,
+               c.cat3_name,
+               c.platform_sku_info_json,
+               c.brazil_tax_info_json,
+               c.source_payload_hash,
+               c.status,
+               c.search_text,
+               c.sync_batch_id,
+               c.first_seen_time,
+               c.last_seen_time,
+               c.update_time,
+               case when p.sku_pairing_id is null then 'UNASSIGNED' else 'PAIRED' end as pairing_status,
+               p.sku_pairing_id,
+               p.system_sku,
+               p.system_sku_name,
+               p.customer_name
+        from upstream_system_sku_candidate c
+        inner join upstream_system_connection conn
+                on conn.connection_code = c.connection_code
+        left join upstream_system_sku_pairing p
+               on p.connection_code = c.connection_code
+              and p.master_sku = c.master_sku
+        where 1 = 1
+        <if test="connectionCode != null and connectionCode != ''">
+            and c.connection_code = #{connectionCode}
+        </if>
+        <if test="systemKind != null and systemKind != ''">
+            and (
+                conn.system_kind = #{systemKind}
+                <if test="systemKind == 'lingxing-wms'">
+                    or conn.system_kind = 'LINGXING_WMS'
+                </if>
+            )
+        </if>
+        <if test="masterWarehouseName != null and masterWarehouseName != ''">
+            and conn.master_warehouse_name like concat('%', #{masterWarehouseName}, '%')
+        </if>
+        <if test="masterSku != null and masterSku != ''">
+            and c.master_sku like concat('%', #{masterSku}, '%')
+        </if>
+        <if test="productName != null and productName != ''">
+            and (
+                c.master_product_name like concat('%', #{productName}, '%')
+                or c.product_alias_name like concat('%', #{productName}, '%')
+                or c.product_description like concat('%', #{productName}, '%')
+            )
+        </if>
+        <if test="identifyCodeKeyword != null and identifyCodeKeyword != ''">
+            and (
+                c.main_code like concat('%', #{identifyCodeKeyword}, '%')
+                or c.other_code like concat('%', #{identifyCodeKeyword}, '%')
+                or c.fnsku like concat('%', #{identifyCodeKeyword}, '%')
+            )
+        </if>
+        <if test="categoryKeyword != null and categoryKeyword != ''">
+            and (
+                c.cat1_name like concat('%', #{categoryKeyword}, '%')
+                or c.cat2_name like concat('%', #{categoryKeyword}, '%')
+                or c.cat3_name like concat('%', #{categoryKeyword}, '%')
+            )
+        </if>
+        <if test="approveStatus != null and approveStatus != ''">
+            and c.approve_status = #{approveStatus}
+        </if>
+        <if test="dangerousCargo != null">
+            and c.dangerous_cargo = #{dangerousCargo}
+        </if>
+        <if test="status != null and status != ''">
+            and c.status = #{status}
+        </if>
+        <if test="pairingStatus != null and pairingStatus != ''">
+            <choose>
+                <when test="pairingStatus == 'PAIRED'">
+                    and p.sku_pairing_id is not null
+                </when>
+                <when test="pairingStatus == 'UNASSIGNED'">
+                    and p.sku_pairing_id is null
+                </when>
+            </choose>
+        </if>
+        <if test="keyword != null and keyword != ''">
+            and (
+                c.search_text like concat('%', #{keyword}, '%')
+                or c.connection_code like concat('%', #{keyword}, '%')
+                or conn.master_warehouse_name like concat('%', #{keyword}, '%')
+                or p.system_sku like concat('%', #{keyword}, '%')
+                or p.system_sku_name like concat('%', #{keyword}, '%')
+                or p.customer_name like concat('%', #{keyword}, '%')
+            )
         </if>
         order by c.update_time desc, c.master_sku asc
     </select>

@@ -42,15 +42,25 @@ public interface IBuyerService
 
     public int resetBuyerOwnerPassword(Long buyerId);
 
+    public List<PortalSessionProfile> selectBuyerSessionList(Long buyerId);
+
+    public List<PortalSessionProfile> selectBuyerAccountSessionList(Long buyerId, Long buyerAccountId);
+
     public int forceLogoutBuyerSessions(Long buyerId);
 
     public int forceLogoutBuyerAccountSessions(Long buyerId, Long buyerAccountId);
 
     public PortalDirectLoginResult createBuyerDirectLogin(Long buyerId, String reason);
 
+    public PortalDirectLoginResult createBuyerAccountDirectLogin(Long buyerId, Long buyerAccountId, String reason);
+
     public List<PortalLoginLog> selectBuyerLoginLogList(PortalLoginLog log);
 
     public List<PortalOperLog> selectBuyerOperLogList(PortalOperLog log);
+
+    public List<PortalLoginLog> selectBuyerOwnLoginLogList(PortalLoginSession session, PortalLoginLog log);
+
+    public List<PortalOperLog> selectBuyerOwnOperLogList(PortalLoginSession session, PortalOperLog log);
 
     public List<PortalSessionProfile> selectBuyerOwnSessionList(PortalLoginSession session);
 

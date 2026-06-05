@@ -45,15 +45,10 @@ const DirectLoginPage: React.FC = () => {
 
       try {
         const response = await PORTAL_SERVICE[terminal].directLogin(directLoginToken);
-        if (response.code !== 200 || !response.data?.token || response.data.terminal !== terminal) {
-          clearPortalLogin(terminal);
-          if (response.data?.terminal === 'seller' || response.data?.terminal === 'buyer') {
-            clearPortalLogin(response.data.terminal);
-          }
+        if (response.code !== 200 || !persistPortalLogin(response.data, terminal)) {
           setState({ status: 'error', message: response.msg || '免密登录端类型不匹配' });
           return;
         }
-        persistPortalLogin(response.data);
         if (mounted) {
           setState({ status: 'success' });
           history.replace(PORTAL_META[terminal].homePath);
@@ -76,7 +71,7 @@ const DirectLoginPage: React.FC = () => {
   if (state.status === 'loading') {
     return (
       <div style={pageStyle}>
-        <Spin tip={terminal ? `正在进入${PORTAL_META[terminal].label}` : '正在进入'} />
+        <Spin description={terminal ? `正在进入${PORTAL_META[terminal].label}` : '正在进入'} />
       </div>
     );
   }

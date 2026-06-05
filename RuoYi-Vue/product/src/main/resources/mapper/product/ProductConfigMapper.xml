@@ -11,6 +11,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="categoryCode"   column="category_code"    />
         <result property="categoryName"   column="category_name"    />
         <result property="categoryLevel"  column="category_level"   />
+        <result property="fullPath"       column="full_path"        />
         <result property="publishEnabled" column="publish_enabled"  />
         <result property="sortOrder"      column="sort_order"       />
         <result property="schemaVersion"  column="schema_version"   />
@@ -109,6 +110,12 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                c.category_code,
                c.category_name,
                c.category_level,
+               (
+                   select group_concat(p.category_name order by find_in_set(p.category_id, concat(c.ancestors, ',', c.category_id)) separator ' / ')
+                   from product_category p
+                   where p.del_flag = '0'
+                     and find_in_set(p.category_id, concat(c.ancestors, ',', c.category_id))
+               ) as full_path,
                case when ifnull(child.children_count, 0) > 0 then 'N' else 'Y' end as publish_enabled,
                c.sort_order,
                c.schema_version,
@@ -133,7 +140,20 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <include refid="categorySelect"/>
         where c.del_flag = '0'
         <if test="keyword != null and keyword != ''">
-            and (c.category_code like concat('%', #{keyword}, '%') or c.category_name like concat('%', #{keyword}, '%'))
+            and (
+                c.category_code like concat('%', #{keyword}, '%')
+                or c.category_name like concat('%', #{keyword}, '%')
+                or exists (
+                    select 1
+                    from product_category p
+                    where p.del_flag = '0'
+                      and find_in_set(p.category_id, c.ancestors)
+                      and (
+                          p.category_code like concat('%', #{keyword}, '%')
+                          or p.category_name like concat('%', #{keyword}, '%')
+                      )
+                )
+            )
         </if>
         <if test="categoryCode != null and categoryCode != ''">
             and c.category_code like concat('%', #{categoryCode}, '%')
@@ -144,8 +164,14 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <if test="parentId != null">
             and c.parent_id = #{parentId}
         </if>
+        <if test="categoryLevel != null">
+            and c.category_level = #{categoryLevel}
+        </if>
         <if test="status != null and status != ''">
             and c.status = #{status}
+        </if>
+        <if test="leafOnly != null and leafOnly">
+            and ifnull(child.children_count, 0) = 0
         </if>
         <if test="publishEnabled != null and publishEnabled != ''">
             <choose>
@@ -280,11 +306,23 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         order by create_time desc, attribute_id desc
     </select>
 
-    <select id="selectEnabledAttributeList" resultMap="AttributeResult">
+    <select id="selectEnabledAttributeList" parameterType="ProductAttribute" resultMap="AttributeResult">
         select *
         from product_attribute
         where del_flag = '0'
           and status = '0'
+        <if test="keyword != null and keyword != ''">
+            and (attribute_code like concat('%', #{keyword}, '%') or attribute_name like concat('%', #{keyword}, '%'))
+        </if>
+        <if test="attributeCode != null and attributeCode != ''">
+            and attribute_code like concat('%', #{attributeCode}, '%')
+        </if>
+        <if test="attributeName != null and attributeName != ''">
+            and attribute_name like concat('%', #{attributeName}, '%')
+        </if>
+        <if test="attributeType != null and attributeType != ''">
+            and attribute_type = #{attributeType}
+        </if>
         order by attribute_name asc, attribute_id asc
     </select>
 

@@ -78,6 +78,8 @@ export default function UpstreamSystemPage() {
     fetchConnections();
   }, [fetchConnections]);
 
+  const selectedCode = selectedConnection?.connectionCode || '';
+
   const reloadTabs = () => {
     warehouseActionRef.current?.reload();
     logisticsActionRef.current?.reload();
@@ -86,11 +88,12 @@ export default function UpstreamSystemPage() {
   };
 
   const reloadCurrent = async (preferredCode?: string) => {
-    await fetchConnections(preferredCode || selectedConnection?.connectionCode);
-    reloadTabs();
+    const targetCode = preferredCode || selectedCode;
+    await fetchConnections(targetCode);
+    if (!targetCode || targetCode === selectedCode) {
+      reloadTabs();
+    }
   };
-
-  const selectedCode = selectedConnection?.connectionCode || '';
 
   const handleAuthorize = async (
     record: API.Integration.UpstreamConnection,
@@ -181,6 +184,7 @@ export default function UpstreamSystemPage() {
               onToggleStatus={() => handleToggleStatus(selectedConnection)}
             />
             <SyncTabs
+              key={selectedCode}
               access={access}
               logActionRef={logActionRef}
               logisticsActionRef={logisticsActionRef}

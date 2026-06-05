@@ -45,7 +45,13 @@ export function filterSelectOption(input: string, option?: SelectSearchOption) {
 }
 
 export function filterTreeSelectNode(input: string, node?: SelectSearchOption) {
-  return filterSelectOption(input, node);
+  const keyword = input.trim().toLowerCase();
+  if (!keyword) {
+    return true;
+  }
+  return normalizeSearchText((node as SelectSearchOption | undefined)?.title)
+    .toLowerCase()
+    .includes(keyword);
 }
 
 export const SEARCHABLE_SELECT_PROPS: SelectProps = {
@@ -56,6 +62,6 @@ export const SEARCHABLE_SELECT_PROPS: SelectProps = {
 
 export const SEARCHABLE_TREE_SELECT_PROPS: TreeSelectProps = {
   showSearch: true,
-  treeNodeFilterProp: 'label',
+  treeNodeFilterProp: 'title',
   filterTreeNode: filterTreeSelectNode as TreeSelectProps['filterTreeNode'],
 };
