@@ -3,15 +3,14 @@ import {
   type ProColumns,
   ProTable,
 } from '@ant-design/pro-components';
-import { Space, Tag, Typography } from 'antd';
+import { Tag, Typography } from 'antd';
+import { useState } from 'react';
 import {
-  inventoryScopeSearchOptions,
   inventoryScopeText,
   pairingStatusText,
   skuPairingStatusSearchOptions,
   skuSyncItemStatusSearchOptions,
   syncItemStatusText,
-  systemKindText,
 } from '@/services/integration/constants';
 import { getSourceWarehouseStockList } from '@/services/integration/sourceWarehouseStock';
 import {
@@ -23,6 +22,19 @@ import {
 import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 
 const SOURCE_WAREHOUSE_STOCK_SEARCH_FIELD_COUNT = 7;
+
+const inventoryScopeTabs = [
+  { key: 'COMPREHENSIVE', label: inventoryScopeText.COMPREHENSIVE || '综合库存' },
+  { key: 'PRODUCT', label: inventoryScopeText.PRODUCT || '产品库存' },
+  { key: 'RETURN', label: inventoryScopeText.RETURN || '退货库存' },
+  { key: 'BOX', label: inventoryScopeText.BOX || '箱库存' },
+];
+
+const inventoryAttributeOptions = [
+  { label: '全部库存属性', value: '' },
+  { label: '正品', value: '0' },
+  { label: '次品', value: '1' },
+];
 
 function cleanParams(params: Record<string, any>) {
   return Object.fromEntries(
@@ -55,19 +67,24 @@ function pairingTag(value?: string) {
   return <Tag color={value === 'PAIRED' ? 'blue' : 'default'}>{text}</Tag>;
 }
 
-function sourceSystemText(record: API.Integration.SourceWarehouseStockItem) {
-  return record.systemKindLabel || systemKindText[record.systemKind || ''] || record.systemKind || '-';
-}
-
-function inventoryScopeLabel(value?: string) {
-  return inventoryScopeText[value || ''] || value || '-';
+function inventoryAttributeText(value?: string | number | null) {
+  const normalized = value === undefined || value === null ? '' : String(value);
+  if (normalized === '0') {
+    return '正品';
+  }
+  if (normalized === '1') {
+    return '次品';
+  }
+  return displayText(value);
 }
 
 export default function SourceWarehouseStockPage() {
+  const [inventoryScope, setInventoryScope] = useState('COMPREHENSIVE');
+
   const columns: ProColumns<API.Integration.SourceWarehouseStockItem>[] = [
     {
-      title: '来源系统编号',
-      dataIndex: 'connectionCode',
+      title: '来源主仓',
+      dataIndex: 'masterWarehouseKeyword',
       hideInTable: true,
     },
     {
@@ -82,176 +99,222 @@ export default function SourceWarehouseStockPage() {
     },
     {
       title: '同步状态',
+      key: 'statusSearch',
       dataIndex: 'status',
       valueType: 'select',
       fieldProps: {
         ...SEARCHABLE_SELECT_PROPS,
         options: skuSyncItemStatusSearchOptions,
       },
-      width: 110,
-      render: (_, record) => statusTag(record.status),
+      hideInTable: true,
     },
     {
       title: '仓库配对',
+      key: 'warehousePairingStatusSearch',
       dataIndex: 'warehousePairingStatus',
       valueType: 'select',
       fieldProps: {
         ...SEARCHABLE_SELECT_PROPS,
         options: skuPairingStatusSearchOptions,
       },
-      width: 110,
-      render: (_, record) => pairingTag(record.warehousePairingStatus),
+      hideInTable: true,
     },
     {
       title: 'SKU配对',
+      key: 'skuPairingStatusSearch',
       dataIndex: 'skuPairingStatus',
       valueType: 'select',
       fieldProps: {
         ...SEARCHABLE_SELECT_PROPS,
         options: skuPairingStatusSearchOptions,
       },
-      width: 110,
-      render: (_, record) => pairingTag(record.skuPairingStatus),
-    },
-    {
-      title: '库存口径',
-      dataIndex: 'inventoryScope',
-      valueType: 'select',
-      fieldProps: {
-        ...SEARCHABLE_SELECT_PROPS,
-        options: inventoryScopeSearchOptions,
-      },
-      width: 110,
-      renderText: (value) => inventoryScopeLabel(value),
+      hideInTable: true,
     },
     {
       title: '库存属性',
+      key: 'inventoryAttributeSearch',
       dataIndex: 'inventoryAttribute',
-      width: 120,
-      renderText: (value) => displayText(value),
+      valueType: 'select',
+      fieldProps: {
+        ...SEARCHABLE_SELECT_PROPS,
+        options: inventoryAttributeOptions,
+      },
+      hideInTable: true,
     },
     {
-      title: '来源系统',
-      key: 'sourceSystem',
-      dataIndex: 'sourceSystem',
-      width: 180,
+      title: '来源主仓',
+      dataIndex: 'masterWarehouseName',
+      width: 110,
       search: false,
-      render: (_, record) => (
-        <Space orientation="vertical" size={0}>
-          <Tag color="blue">{sourceSystemText(record)}</Tag>
-          <Typography.Text ellipsis={{ tooltip: record.masterWarehouseName }}>
-            {displayText(record.masterWarehouseName)}
-          </Typography.Text>
-          <Typography.Text type="secondary">{record.connectionCode}</Typography.Text>
-        </Space>
-      ),
+      renderText: (value) => displayText(value),
     },
     {
       title: '来源仓库',
       key: 'sourceWarehouse',
-      dataIndex: 'sourceWarehouse',
-      width: 210,
+      dataIndex: 'upstreamWarehouseCode',
+      width: 190,
       search: false,
       render: (_, record) => (
-        <Space orientation="vertical" size={0}>
+        <>
           <Typography.Text copyable={!!record.upstreamWarehouseCode}>
             {displayText(record.upstreamWarehouseCode)}
           </Typography.Text>
+          <br />
           <Typography.Text type="secondary" ellipsis={{ tooltip: record.upstreamWarehouseName }}>
             {displayText(record.upstreamWarehouseName)}
           </Typography.Text>
-        </Space>
+        </>
       ),
     },
     {
       title: '来源SKU',
-      key: 'sourceSku',
       dataIndex: 'masterSku',
-      width: 240,
+      width: 150,
       search: false,
       render: (_, record) => (
-        <Space orientation="vertical" size={0}>
-          <Typography.Text copyable={!!record.masterSku}>{displayText(record.masterSku)}</Typography.Text>
-          <Typography.Text type="secondary" ellipsis={{ tooltip: record.masterProductName }}>
-            {displayText(record.masterProductName)}
-          </Typography.Text>
-        </Space>
+        <Typography.Text copyable={!!record.masterSku}>{displayText(record.masterSku)}</Typography.Text>
       ),
     },
     {
-      title: '库存数量',
-      key: 'quantity',
+      title: '商品名称',
+      dataIndex: 'masterProductName',
+      width: 220,
+      search: false,
+      ellipsis: true,
+      renderText: (value) => displayText(value),
+    },
+    {
+      title: '库存属性',
+      key: 'inventoryAttributeDisplay',
+      dataIndex: 'inventoryAttribute',
+      width: 90,
+      search: false,
+      renderText: (value) => inventoryAttributeText(value),
+    },
+    {
+      title: '总库存',
       dataIndex: 'totalQuantity',
-      width: 230,
+      width: 100,
+      align: 'right',
       search: false,
-      render: (_, record) => (
-        <Space orientation="vertical" size={0}>
-          <Typography.Text>总库存 {displayQuantity(record.totalQuantity)}</Typography.Text>
-          <Typography.Text type="secondary">
-            可用 {displayQuantity(record.availableQuantity)} / 锁定 {displayQuantity(record.lockedQuantity)}
-          </Typography.Text>
-          <Typography.Text type="secondary">
-            在途 {displayQuantity(record.inTransitQuantity)} / 箱内 {displayQuantity(record.boxedQuantity)}
-          </Typography.Text>
-        </Space>
-      ),
+      renderText: (value) => displayQuantity(value),
     },
     {
-      title: '批次 / 库位',
-      key: 'batchLocation',
-      dataIndex: 'batchNo',
-      width: 170,
+      title: '可用库存',
+      dataIndex: 'availableQuantity',
+      width: 100,
+      align: 'right',
       search: false,
-      render: (_, record) => (
-        <Space orientation="vertical" size={0}>
-          <Typography.Text>批次 {displayText(record.batchNo)}</Typography.Text>
-          <Typography.Text type="secondary">库位 {displayText(record.locationCode)}</Typography.Text>
-        </Space>
-      ),
+      renderText: (value) => displayQuantity(value),
+    },
+    {
+      title: '锁定库存',
+      dataIndex: 'lockedQuantity',
+      width: 100,
+      align: 'right',
+      search: false,
+      renderText: (value) => displayQuantity(value),
+    },
+    {
+      title: '在途库存',
+      dataIndex: 'inTransitQuantity',
+      width: 100,
+      align: 'right',
+      search: false,
+      renderText: (value) => displayQuantity(value),
+    },
+    {
+      title: '箱内库存',
+      dataIndex: 'boxedQuantity',
+      width: 100,
+      align: 'right',
+      search: false,
+      renderText: (value) => displayQuantity(value),
+    },
+    {
+      title: '批次',
+      dataIndex: 'batchNo',
+      width: 120,
+      search: false,
+      renderText: (value) => displayText(value),
+    },
+    {
+      title: '库位',
+      dataIndex: 'locationCode',
+      width: 120,
+      search: false,
+      renderText: (value) => displayText(value),
     },
     {
       title: '系统仓库',
       key: 'systemWarehouse',
       dataIndex: 'systemWarehouseCode',
-      width: 190,
+      width: 180,
       search: false,
       render: (_, record) => (
-        <Space orientation="vertical" size={0}>
+        <>
           <Typography.Text>{displayText(record.systemWarehouseCode)}</Typography.Text>
+          <br />
           <Typography.Text type="secondary" ellipsis={{ tooltip: record.systemWarehouseName }}>
             {displayText(record.systemWarehouseName)}
           </Typography.Text>
-        </Space>
+        </>
       ),
     },
     {
       title: '商城SKU',
-      key: 'systemSku',
       dataIndex: 'systemSku',
-      width: 220,
+      width: 150,
       search: false,
       render: (_, record) => (
-        <Space orientation="vertical" size={0}>
-          <Typography.Text copyable={!!record.systemSku}>{displayText(record.systemSku)}</Typography.Text>
-          <Typography.Text type="secondary" ellipsis={{ tooltip: record.systemSkuName }}>
-            {displayText(record.systemSkuName)}
-          </Typography.Text>
-          <Typography.Text type="secondary">{displayText(record.customerName)}</Typography.Text>
-        </Space>
+        <Typography.Text copyable={!!record.systemSku}>{displayText(record.systemSku)}</Typography.Text>
       ),
     },
     {
-      title: '同步时间',
-      key: 'syncTime',
-      dataIndex: 'lastSeenTime',
-      width: 190,
+      title: '客户',
+      dataIndex: 'customerName',
+      width: 150,
       search: false,
-      render: (_, record) => (
-        <Space orientation="vertical" size={0}>
-          <Typography.Text>{displayText(record.lastSeenTime)}</Typography.Text>
-          <Typography.Text type="secondary">更新 {displayText(record.updateTime)}</Typography.Text>
-        </Space>
-      ),
+      ellipsis: true,
+      renderText: (value) => displayText(value),
+    },
+    {
+      title: '仓库配对',
+      key: 'warehousePairingStatusDisplay',
+      dataIndex: 'warehousePairingStatus',
+      width: 100,
+      search: false,
+      render: (_, record) => pairingTag(record.warehousePairingStatus),
+    },
+    {
+      title: 'SKU配对',
+      key: 'skuPairingStatusDisplay',
+      dataIndex: 'skuPairingStatus',
+      width: 100,
+      search: false,
+      render: (_, record) => pairingTag(record.skuPairingStatus),
+    },
+    {
+      title: '同步状态',
+      key: 'statusDisplay',
+      dataIndex: 'status',
+      width: 100,
+      search: false,
+      render: (_, record) => statusTag(record.status),
+    },
+    {
+      title: '同步时间',
+      dataIndex: 'lastSeenTime',
+      width: 170,
+      search: false,
+      renderText: (value) => displayText(value),
+    },
+    {
+      title: '更新时间',
+      dataIndex: 'updateTime',
+      width: 170,
+      search: false,
+      renderText: (value) => displayText(value),
     },
   ];
 
@@ -273,6 +336,7 @@ export default function SourceWarehouseStockPage() {
         }
         columns={columns}
         columnsState={getProTableColumnsState('source-warehouse-stock-columns')}
+        params={{ inventoryScope }}
         search={getPersistedProTableSearch(
           { labelWidth: 96, fieldCount: SOURCE_WAREHOUSE_STOCK_SEARCH_FIELD_COUNT },
           'source-warehouse-stock',
@@ -294,7 +358,15 @@ export default function SourceWarehouseStockPage() {
         }}
         pagination={getProTablePagination(20)}
         options={{ density: true, reload: true, setting: true }}
-        scroll={getProTableScroll(1950)}
+        scroll={getProTableScroll(2550)}
+        toolbar={{
+          menu: {
+            type: 'tab',
+            activeKey: inventoryScope,
+            items: inventoryScopeTabs,
+            onChange: (key) => setInventoryScope(String(key)),
+          },
+        }}
         toolBarRender={() => []}
       />
     </PageContainer>

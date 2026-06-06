@@ -1,6 +1,26 @@
 -- 商城商品 SPU 发货仓库绑定表
 -- 仓库主数据复用 warehouse；本表只保存商品当前允许发货的仓库快照，不承载库存数量。
 
+set names utf8mb4;
+
+set @confirm_product_spu_warehouse_binding := coalesce(@confirm_product_spu_warehouse_binding, '');
+
+delimiter //
+
+drop procedure if exists assert_product_spu_warehouse_binding_confirmed//
+create procedure assert_product_spu_warehouse_binding_confirmed()
+begin
+  if coalesce(@confirm_product_spu_warehouse_binding, '')
+      <> 'APPLY_PRODUCT_SPU_WAREHOUSE_BINDING' then
+    signal sqlstate '45000' set message_text = 'set @confirm_product_spu_warehouse_binding = APPLY_PRODUCT_SPU_WAREHOUSE_BINDING before running this migration';
+  end if;
+end//
+
+delimiter ;
+
+call assert_product_spu_warehouse_binding_confirmed();
+drop procedure if exists assert_product_spu_warehouse_binding_confirmed;
+
 create table if not exists product_spu_warehouse (
     id bigint not null auto_increment comment '主键',
     spu_id bigint not null comment '商品SPU ID',

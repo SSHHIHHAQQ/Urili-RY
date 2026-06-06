@@ -176,12 +176,19 @@ public class PortalDirectLoginSupportTest
                 PortalDirectLoginSupport.SELLER_WEB_URL_CONFIG_KEY, "http://fallback/seller/direct-login");
         String cacheKey = cacheKey(result.getToken());
         redisCache.values.remove(cacheKey);
+        PortalDirectLoginToken[] auditedPayload = new PortalDirectLoginToken[1];
+        ServiceException[] auditedException = new ServiceException[1];
 
         ServiceException exception = assertThrows(ServiceException.class,
                 () -> support.consumeToken("seller", result.getToken(), token -> {
+                }, (payload, failure) -> {
+                    auditedPayload[0] = payload;
+                    auditedException[0] = failure;
                 }));
 
         assertEquals("免密登录 token 不存在或已过期", exception.getMessage());
+        assertEquals(exception, auditedException[0]);
+        assertTicketContext(result.getTicketId(), auditedPayload[0]);
         assertEquals(0, ticketMapper.usedCalls);
         assertEquals(1, ticketMapper.expiredCalls);
         assertEquals(result.getTicketId(), ticketMapper.expiredTicketId);
@@ -288,10 +295,19 @@ public class PortalDirectLoginSupportTest
         PortalDirectLoginResult result = support.createToken("seller", 7L, "SAAA010001",
                 activeAccount(44L, "seller-owner"), "Support inspection",
                 PortalDirectLoginSupport.SELLER_WEB_URL_CONFIG_KEY, "http://fallback/seller/direct-login");
+        PortalDirectLoginToken[] auditedPayload = new PortalDirectLoginToken[1];
+        ServiceException[] auditedException = new ServiceException[1];
 
-        assertThrows(ServiceException.class, () -> support.consumeToken("buyer", result.getToken(), token -> {
-        }));
+        ServiceException exception = assertThrows(ServiceException.class,
+                () -> support.consumeToken("buyer", result.getToken(), token -> {
+                }, (payload, failure) -> {
+                    auditedPayload[0] = payload;
+                    auditedException[0] = failure;
+                }));
 
+        assertEquals("免密登录票据端类型不匹配", exception.getMessage());
+        assertEquals(exception, auditedException[0]);
+        assertTicketContext(result.getTicketId(), auditedPayload[0]);
         assertEquals(0, ticketMapper.usedCalls);
         assertEquals(0, ticketMapper.expiredCalls);
         assertFalse(redisCache.deletedKeys.contains(cacheKey(result.getToken())));
@@ -522,6 +538,20 @@ public class PortalDirectLoginSupportTest
         {
             assertNotEquals("token", field.getName());
         }
+    }
+
+    private static void assertTicketContext(Long ticketId, PortalDirectLoginToken token)
+    {
+        assertNotNull(token);
+        assertEquals(ticketId, token.getTicketId());
+        assertEquals("seller", token.getPortalType());
+        assertEquals(Long.valueOf(7L), token.getPartnerId());
+        assertEquals("SAAA010001", token.getPartnerNo());
+        assertEquals(Long.valueOf(44L), token.getAccountId());
+        assertEquals("seller-owner", token.getUsername());
+        assertEquals(Long.valueOf(9L), token.getActingAdminId());
+        assertEquals("admin", token.getActingAdminName());
+        assertEquals("Support inspection", token.getDirectLoginReason());
     }
 
     private static class TestPortalAccount extends PortalAccount

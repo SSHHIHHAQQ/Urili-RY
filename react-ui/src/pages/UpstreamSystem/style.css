@@ -1,18 +1,22 @@
-.upstream-sync-tabs .ant-tabs {
+.upstream-sync-tabs > .ant-tabs {
   display: flex;
   flex: 1;
   min-height: 0;
   flex-direction: column;
 }
 
-.upstream-sync-tabs .ant-tabs-nav {
+.upstream-sync-tabs > .ant-tabs > .ant-tabs-nav {
   flex: none;
   margin-bottom: 12px;
 }
 
-.upstream-sync-tabs .ant-tabs-content-holder,
-.upstream-sync-tabs .ant-tabs-content,
-.upstream-sync-tabs .ant-tabs-tabpane {
+.upstream-sync-tabs > .ant-tabs > .ant-tabs-content-holder,
+.upstream-sync-tabs > .ant-tabs > .ant-tabs-content-holder > .ant-tabs-content,
+.upstream-sync-tabs
+  > .ant-tabs
+  > .ant-tabs-content-holder
+  > .ant-tabs-content
+  > .ant-tabs-tabpane {
   display: flex;
   flex: 1;
   min-height: 0;
@@ -20,6 +24,25 @@
   flex-direction: column;
 }
 
-.upstream-sync-tabs .ant-tabs-tabpane-hidden {
+.upstream-sync-tabs
+  > .ant-tabs
+  > .ant-tabs-content-holder
+  > .ant-tabs-content
+  > .ant-tabs-tabpane-hidden {
   display: none;
+}
+
+.ant-pro-page-container
+  .ant-pro-page-container-children-container
+  .upstream-inventory-scope-tabs
+  .ant-tabs-nav {
+  margin-bottom: 0;
+}
+
+.ant-pro-page-container
+  .ant-pro-page-container-children-container
+  .upstream-inventory-scope-tabs
+  .ant-tabs-content-holder {
+  display: none;
+  flex: none;
 }

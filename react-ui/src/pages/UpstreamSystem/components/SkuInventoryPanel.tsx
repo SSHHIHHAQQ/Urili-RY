@@ -4,7 +4,7 @@ import {
   type ProColumns,
   ProTable,
 } from '@ant-design/pro-components';
-import { Button, Input, Select, Space, Typography } from 'antd';
+import { Button, Input, Select, Space, Tabs, Typography } from 'antd';
 import { type MutableRefObject, useEffect, useState } from 'react';
 import {
   getInventorySyncState,
@@ -18,7 +18,7 @@ import {
 } from '@/utils/proTableSearch';
 import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 import {
-  inventoryScopeOptions,
+  inventoryScopeText,
   skuPairingStatusOptions,
   skuSyncItemStatusOptions,
 } from '../constants';
@@ -45,6 +45,20 @@ const displayQuantity = (value?: number | null) => {
   return new Intl.NumberFormat('zh-CN').format(Number(value));
 };
 
+const inventoryScopeTabKeys = ['COMPREHENSIVE', 'PRODUCT', 'BOX', 'RETURN'];
+
+const inventoryScopeTabs = inventoryScopeTabKeys.map((key) => ({
+  key,
+  label: inventoryScopeText[key] || '未知口径',
+}));
+
+const inventoryScopeLabel = (value?: string | null) => {
+  if (!value) {
+    return '-';
+  }
+  return inventoryScopeText[value] || '未知口径';
+};
+
 export default function SkuInventoryPanel({
   access,
   actionRef,
@@ -59,7 +73,7 @@ export default function SkuInventoryPanel({
   const [syncStatus, setSyncStatus] = useState('');
   const [warehousePairingStatus, setWarehousePairingStatus] = useState('');
   const [skuPairingStatus, setSkuPairingStatus] = useState('');
-  const [inventoryScope, setInventoryScope] = useState('');
+  const [inventoryScope, setInventoryScope] = useState('COMPREHENSIVE');
 
   const loadSyncState = async () => {
     if (!selectedCode) {
@@ -140,7 +154,7 @@ export default function SkuInventoryPanel({
         </Space>
       ),
     },
-    { title: '库存口径', dataIndex: 'inventoryScope', width: 120, renderText: (value) => displayText(value) },
+    { title: '库存口径', dataIndex: 'inventoryScope', width: 120, renderText: (value) => inventoryScopeLabel(value) },
     { title: '库存属性', dataIndex: 'inventoryAttribute', width: 120, renderText: (value) => displayText(value) },
     {
       title: '批次 / 库位',
@@ -212,6 +226,12 @@ export default function SkuInventoryPanel({
           同步库存
         </Button>
       </div>
+      <Tabs
+        activeKey={inventoryScope}
+        className={`${styles.inventoryScopeTabs} upstream-inventory-scope-tabs`}
+        items={inventoryScopeTabs}
+        onChange={setInventoryScope}
+      />
       <div className={styles.skuFilters}>
         <Input.Search
           allowClear
@@ -237,7 +257,6 @@ export default function SkuInventoryPanel({
           }}
           onSearch={(value) => setWarehouseKeyword(value.trim())}
         />
-        <Select {...SEARCHABLE_SELECT_PROPS} style={{ width: 150 }} options={inventoryScopeOptions} value={inventoryScope} onChange={setInventoryScope} />
         <Select {...SEARCHABLE_SELECT_PROPS} style={{ width: 150 }} options={skuPairingStatusOptions} value={warehousePairingStatus} onChange={setWarehousePairingStatus} />
         <Select {...SEARCHABLE_SELECT_PROPS} style={{ width: 150 }} options={skuPairingStatusOptions} value={skuPairingStatus} onChange={setSkuPairingStatus} />
         <Select {...SEARCHABLE_SELECT_PROPS} style={{ width: 150 }} options={skuSyncItemStatusOptions} value={syncStatus} onChange={setSyncStatus} />

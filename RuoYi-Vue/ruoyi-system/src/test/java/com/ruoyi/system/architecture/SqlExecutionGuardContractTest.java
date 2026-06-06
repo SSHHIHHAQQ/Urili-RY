@@ -15,7 +15,15 @@ import org.junit.Test;
 public class SqlExecutionGuardContractTest
 {
     private static final Pattern HIGH_IMPACT_STATEMENT = Pattern.compile(
-            "(?m)^\\s*(?:insert\\s+into|update\\s+|delete\\s+|alter\\s+table|create\\s+table)\\b");
+            "(?im)^\\s*(?:insert\\s+into|update\\s+|delete\\s+|alter\\s+table|create\\s+table)\\b");
+
+    private static final Pattern HIGH_IMPACT_SQL_HINT = Pattern.compile(
+            "(?i)\\b(?:insert\\s+into|update\\s+|delete\\s+from|alter\\s+table|create\\s+table)\\b");
+
+    private static final Pattern RECENT_SQL_FILE = Pattern.compile("2026060[67].*\\.sql");
+
+    private static final Pattern CONFIRM_CALL = Pattern.compile(
+            "(?i)call\\s+assert_[a-z0-9_]+_confirmed\\s*\\(\\s*\\)\\s*;");
 
     @Test
     public void highImpactSqlScriptsMustRequireExplicitConfirmToken() throws IOException
@@ -74,12 +82,24 @@ public class SqlExecutionGuardContractTest
         assertGuard(backendRoot, "sql/20260606_source_warehouse_stock_menu_rename.sql",
                 "@confirm_source_warehouse_stock_menu_rename",
                 "APPLY_SOURCE_WAREHOUSE_STOCK_MENU_RENAME", violations);
+        assertGuard(backendRoot, "sql/20260606_product_spu_warehouse_binding.sql",
+                "@confirm_product_spu_warehouse_binding",
+                "APPLY_PRODUCT_SPU_WAREHOUSE_BINDING", violations);
         assertGuard(backendRoot, "sql/20260606_upstream_inventory_dimension_sync.sql",
                 "@confirm_upstream_inventory_dimension_sync",
                 "APPLY_UPSTREAM_INVENTORY_DIMENSION_SYNC", violations);
+        assertGuard(backendRoot, "sql/20260606_upstream_sync_staging_diff.sql",
+                "@confirm_upstream_sync_staging_diff",
+                "APPLY_UPSTREAM_SYNC_STAGING_DIFF", violations);
+        assertGuard(backendRoot, "sql/20260607_source_product_read_model.sql",
+                "@confirm_source_product_read_model",
+                "APPLY_SOURCE_PRODUCT_READ_MODEL", violations);
         assertGuard(backendRoot, "sql/20260607_terminal_login_log_direct_login_audit.sql",
                 "@confirm_terminal_login_log_direct_login_audit",
                 "APPLY_TERMINAL_LOGIN_LOG_DIRECT_LOGIN_AUDIT", violations);
+        assertGuard(backendRoot, "sql/20260607_upstream_task_component_split.sql",
+                "@confirm_upstream_task_component_split",
+                "APPLY_UPSTREAM_TASK_COMPONENT_SPLIT", violations);
         assertGuard(backendRoot, "sql/seller_buyer_management_seed.sql",
                 "@confirm_seller_buyer_management_seed",
                 "APPLY_SELLER_BUYER_MANAGEMENT_SEED", violations);
@@ -93,6 +113,34 @@ public class SqlExecutionGuardContractTest
         if (!violations.isEmpty())
         {
             fail("high impact SQL scripts must fail closed without explicit confirmation:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    @Test
+    public void recentHighImpactSqlScriptsMustBeAutoDiscoveredAndGuarded() throws IOException
+    {
+        Path sqlDir = findWorkspaceRoot().resolve("RuoYi-Vue/sql");
+        List<String> violations = new ArrayList<>();
+
+        try (java.util.stream.Stream<Path> sqlFiles = Files.list(sqlDir))
+        {
+            for (Path sqlFile : sqlFiles
+                    .filter(path -> RECENT_SQL_FILE.matcher(path.getFileName().toString()).matches())
+                    .sorted()
+                    .toList())
+            {
+                String source = Files.readString(sqlFile, StandardCharsets.UTF_8);
+                if (containsHighImpactSql(source))
+                {
+                    assertAutoDiscoveredGuard(sqlFile, source, violations);
+                }
+            }
+        }
+
+        if (!violations.isEmpty())
+        {
+            fail("recent high impact SQL scripts must be auto-discovered and fail closed:\n"
                     + String.join("\n", violations));
         }
     }
@@ -279,6 +327,44 @@ public class SqlExecutionGuardContractTest
         {
             violations.add(fileName + " must contain: " + expected);
         }
+    }
+
+    private boolean containsHighImpactSql(String source)
+    {
+        return HIGH_IMPACT_SQL_HINT.matcher(stripLineComments(source)).find();
+    }
+
+    private String stripLineComments(String source)
+    {
+        StringBuilder builder = new StringBuilder(source.length());
+        for (String line : source.split("\\R", -1))
+        {
+            int commentStart = line.indexOf("--");
+            builder.append(commentStart >= 0 ? line.substring(0, commentStart) : line).append('\n');
+        }
+        return builder.toString();
+    }
+
+    private void assertAutoDiscoveredGuard(Path sqlFile, String source, List<String> violations)
+    {
+        String fileName = sqlFile.getFileName().toString();
+        if (!source.contains("set @confirm_"))
+        {
+            violations.add(fileName + " must set a @confirm_* token");
+        }
+        if (!source.contains("@confirm_"))
+        {
+            violations.add(fileName + " must declare a @confirm_* variable");
+        }
+        if (!source.contains("signal sqlstate '45000'"))
+        {
+            violations.add(fileName + " must signal when confirmation is missing");
+        }
+        if (!CONFIRM_CALL.matcher(source).find())
+        {
+            violations.add(fileName + " must call assert_*_confirmed() before DDL/DML");
+        }
+        assertConfirmationCallBeforeDml(sqlFile, source, violations);
     }
 
     private void assertAccountLockMenuGuard(Path sqlFile, int menuId, String perms, String signatureMessage,

@@ -117,7 +117,7 @@ source_sku_group_key
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| source_dimension_group_key | varchar(128) | 是 | 主键，稳定尺寸组 key |
+| source_dimension_group_key | varchar(160) | 是 | 主键，稳定尺寸组 key |
 | source_sku_group_key | varchar(96) | 是 | 所属来源 SKU 组 |
 | repository_scope | varchar(32) | 是 | 仓库范围 |
 | master_sku | varchar(128) | 是 | 来源 SKU |
@@ -180,7 +180,7 @@ source_sku_group_key
 | --- | --- | --- | --- |
 | id | bigint | 是 | 主键 |
 | source_sku_group_key | varchar(96) | 是 | 来源 SKU 组 |
-| source_dimension_group_key | varchar(128) | 是 | 所属尺寸组 |
+| source_dimension_group_key | varchar(160) | 是 | 所属尺寸组 |
 | repository_scope | varchar(32) | 是 | 仓库范围 |
 | connection_code | varchar(64) | 是 | 来源连接编号 |
 | master_warehouse_name | varchar(128) | 是 | 来源仓库名 |

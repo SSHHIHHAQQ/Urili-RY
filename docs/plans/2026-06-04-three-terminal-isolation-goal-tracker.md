@@ -6059,3 +6059,148 @@ P2 记录：
 残留 P2：
 - 管理端登录日志 UI 后续如需展示 direct-login 审计字段，优先放在详情展开区，不新增宽表列。
 - 强制踢出原因/执行人和 session 设备字段仍需后续 DDL 与写入链路增强。
+
+## 2026-06-07 P0/P1 快速推进：管理端授权收窄与免密退出审计检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为参考方向，按当前快速推进模式只处理 P0/P1：编译、guard、接口、权限、串端、service/字段缺失。不做浏览器运行态验收、截图、DOM 检测或 UI 细调。
+
+子 Agent 执行情况：
+- 本轮收口上一批 6 个 `gpt-5.4` 只读子 Agent 结果并全部关闭。
+- 当前 AGENTS 已写明：后续需要使用子 Agent 时优先使用 GPT-5.3 Codex；不可用、额度限制或上下文失败时降级 `gpt-5.4`，并在检查点记录实际模型和结论处理。
+
+已完成：
+- 采纳 P1：`20260606_admin_partner_role_menu_grant.sql` 首段授权不再按 `seller:admin:%` / `buyer:admin:%` 全局通配，只授经过签名确认的 `2010/2011/2012` 管理端菜单树入口。
+- `AdminDirectLoginPermissionContractTest` 新增授权范围契约，防止后续回退成裸前缀通配授权。
+- 采纳 P1：seller/buyer direct-login session 主动退出时，退出登录日志复用 `PortalTokenSupport.buildDirectLoginLog(..., session)`，保留 `ticketId`、acting admin 和 reason。
+- `SellerServiceImplTest` / `BuyerServiceImplTest` 新增 direct-login 退出日志审计字段保留用例。
+- 已更新复用台账：`docs/architecture/reuse-ledger.md`。
+- 新增记录：`docs/plans/2026-06-07-three-terminal-p0p1-sql-grant-logout-audit-record.md`。
+
+验证结果：
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system -Dtest=AdminDirectLoginPermissionContractTest test`：通过，`1` 个测试通过。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system -Dtest=SqlExecutionGuardContractTest test`：通过，`6` 个测试通过。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl seller -am "-Dtest=SellerServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`46` 个测试通过。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl buyer -am "-Dtest=BuyerServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`46` 个测试通过。
+- 配置敏感值扫描：通过；`application.yml` / `application-druid.yml` 中敏感键未发现非环境变量明文值，`UnsafeSensitiveConfigCount=0`。
+- `git diff --check`：通过；仅有 LF/CRLF 工作区换行提示，无 whitespace 错误。
+- `codegraph sync .`：通过；结果为 `Already up to date`。
+
+边界说明：
+- 本轮未执行远程 MySQL DDL/DML，未读取或写入 Redis。
+- 本轮未启动或重启后端。
+- 本轮未做浏览器、截图、DOM 或 UI 细调验收。
+- source-product / integration 旁支脏改不属于本轮三端账号权限 P0/P1 修复范围，未纳入处理。
+
+残留 P1：
+- 强制踢出和密码重置踢出仍只保留汇总日志，尚未做到逐 session direct-login 审计闭环。
+- ticket 完全无法解析的免密失败路径仍缺少 ticket 级失败上下文。
+- 新增高影响 SQL 自动发现和 `verify-three-terminal` 后端模块覆盖边界仍需后续验证治理切片收口。
+
+## 2026-06-07 P0/P1 快速推进：强制踢出逐 Session 审计检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为参考方向，按当前快速推进模式只处理 P0/P1：编译、guard、接口、权限、串端、service/字段缺失。不做浏览器运行态验收、截图、DOM 检测或 UI 细调。
+
+子 Agent 执行情况：
+- 本切片未新增子 Agent：改动范围集中在 seller/buyer 强制踢出链路，主 Agent 本地实现和验证更直接。
+- 后续横向扫描类任务继续按 AGENTS：优先 GPT-5.3 Codex，不可用、额度限制或上下文失败时降级 `gpt-5.4`。
+
+已完成：
+- 采纳 P1：强制踢出、密码重置后的踢出、锁定/停用触发的踢出不再只写一条汇总登录日志。
+- `SellerMapper` / `SellerMapper.xml` 新增 `selectOnlineSellerSessionList(...)`，强制踢出前读取完整在线 seller session，并投影 direct-login 审计字段。
+- `SellerServiceImpl` 按每个在线 session 写踢出日志；direct-login session 复用 `PortalTokenSupport.buildDirectLoginLog(..., session)` 保留 `ticketId`、acting admin 和 reason。
+- `BuyerMapper` / `BuyerMapper.xml` / `BuyerServiceImpl` 按卖家模板机械复制。
+- `SellerServiceImplTest` / `BuyerServiceImplTest` 将密码重置强制踢出测试升级为一条普通 session、一条 direct-login session，断言写两条日志并保留 direct-login 审计字段。
+- `PortalLoginSessionConsistencyContractTest` 新增静态契约，固定强制踢出读取在线 session 列表和 direct-login 字段投影。
+- 已更新复用台账：`docs/architecture/reuse-ledger.md`。
+- 新增记录：`docs/plans/2026-06-07-three-terminal-p0p1-force-logout-session-audit-record.md`。
+
+验证结果：
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl seller -am "-Dtest=SellerServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`46` 个测试通过。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl buyer -am "-Dtest=BuyerServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`46` 个测试通过。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system -Dtest=PortalLoginSessionConsistencyContractTest test`：第一次因契约断言把 XML 中 `>=` 写成 `&gt;=` 失败；修正后通过，`2` 个测试通过。
+- `git diff --check`：通过；仅有 LF/CRLF 工作区换行提示，无 whitespace 错误。
+- `codegraph sync .`：通过；结果为 `Synced 10 changed files`，`Modified: 10 - 794 nodes in 1.1s`。
+
+边界说明：
+- 本轮未执行远程 MySQL DDL/DML，未读取或写入 Redis。
+- 本轮未启动或重启后端。
+- 本轮未做浏览器、截图、DOM 或 UI 细调验收。
+- source-product / integration 旁支脏改不属于本轮三端账号权限 P0/P1 修复范围，未纳入处理。
+
+残留 P1：
+- ticket 完全无法解析的免密失败路径仍缺少 ticket 级失败上下文。
+- 新增高影响 SQL 自动发现和 `verify-three-terminal` 后端模块覆盖边界仍需后续验证治理切片收口。
+
+## 2026-06-07 P0/P1 快速推进：免密失败上下文审计检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为参考方向，按当前快速推进模式只处理 P0/P1：编译、guard、接口、权限、串端、service/字段缺失。不做浏览器运行态验收、截图、DOM 检测或 UI 细调。
+
+子 Agent 执行情况：
+- 按用户最新要求优先尝试 GPT-5.3 Codex；平台提示额度限制后关闭失败 Agent，并降级 `gpt-5.4`。
+- 本轮有效使用 6 个 `gpt-5.4` 只读子 Agent，并已全部关闭。
+- 已采纳 P1：免密失败上下文审计丢失、目标账号缺失时 accountId 丢失、跨端 ticket 失败时主体/账号列可能被污染。
+- 未采纳为当前切片但已记录 P1：SQL guard 自动发现、管理端静态路由兜底、`portal_direct_login` Redis key 端前缀、部门/角色运行时隔离契约测试。
+
+已完成：
+- `PortalDirectLoginSupport` 在 DB ticket 已存在但 Redis payload 丢失、过期、端类型不匹配、票据/目标不匹配时，从 ticket 恢复 `PortalDirectLoginToken` 审计上下文并调用 failure auditor。
+- `SellerServiceImpl` / `BuyerServiceImpl` 的 direct-login 失败日志兜底收窄到真正无 ticket 上下文场景，避免普通失败日志和 direct-login 失败日志重复落库。
+- seller/buyer direct-login 失败日志在当前端 token 且 account 实体缺失时，回退使用 token 中的 `accountId`。
+- seller/buyer direct-login 失败日志在外部端 ticket 场景下只写 direct-login 审计字段，不把对方端 `subjectId/accountId` 写进当前端日志表。
+- `PortalDirectLoginSupportTest`、`SellerServiceImplTest`、`BuyerServiceImplTest` 补齐对应断言。
+- 已更新复用台账：`docs/architecture/reuse-ledger.md`。
+- 新增记录：`docs/plans/2026-06-07-three-terminal-p0p1-direct-login-failure-context-record.md`。
+
+验证结果：
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system -Dtest=PortalDirectLoginSupportTest test`：通过，`13` 个测试通过。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl seller -am "-Dtest=SellerServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`48` 个测试通过。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl buyer -am "-Dtest=BuyerServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`48` 个测试通过。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system -Dtest=PortalDirectLoginAuthContractTest test`：通过，`4` 个测试通过。
+- `cd E:\Urili-Ruoyi; git diff --check`：通过；仅有 LF/CRLF 工作区换行提示，无 whitespace 错误。
+- `codegraph sync .`：通过；结果为 `Already up to date`。
+
+边界说明：
+- 本轮未执行远程 MySQL DDL/DML，未读取或写入 Redis。
+- 本轮未启动或重启后端。
+- 本轮未做浏览器、截图、DOM 或 UI 细调验收。
+- source-product / integration 旁支脏改不属于本轮三端账号权限 P0/P1 修复范围，未纳入处理。
+
+残留 P1：
+- 高影响 SQL guard 仍是手工枚举，缺少自动发现 20260606/20260607 高影响 SQL 的覆盖。
+- 管理端卖家/买家页缺静态路由兜底，直达 `/seller`、`/buyer` 或刷新存在 404 风险。
+- `portal_direct_login:<tokenHash>` Redis key 仍未在 key 层编码 `seller/buyer` 端类型。
+- 部门树跨主体写入/删除、角色菜单 `checkedKeys` 主体隔离、owner 角色禁停用/禁删除仍需补运行时隔离契约测试。
+
+## 2026-06-07 P0/P1 快速推进：高影响 SQL 自动 Guard 检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为参考方向，按当前快速推进模式只处理 P0/P1：编译、guard、接口、权限、串端、service/字段缺失。不做浏览器运行态验收、截图、DOM 检测或 UI 细调。
+
+子 Agent 执行情况：
+- 本轮未新增子 Agent：SQL guard 自动发现问题边界已由上一轮只读 Agent 指明，主 Agent 本地实现和验证更直接。
+- 后续横向扫描类任务继续按当前目标：使用 `gpt-5.4` 子 Agent。
+
+已完成：
+- 采纳 P1：`SqlExecutionGuardContractTest` 不再只依赖手工枚举，新增自动扫描 `20260606*.sql` / `20260607*.sql` 中高影响 SQL 的测试。
+- 自动扫描命中 `insert/update/delete/alter table/create table` 时，要求脚本具备 `set @confirm_*`、`signal sqlstate '45000'`、`call assert_*_confirmed();`，并检查确认调用早于首条 DDL/DML。
+- `20260606_product_spu_warehouse_binding.sql` 补 `@confirm_product_spu_warehouse_binding` guard。
+- `20260607_source_product_read_model.sql` 补 `@confirm_source_product_read_model` guard。
+- `20260607_upstream_task_component_split.sql` 补 `@confirm_upstream_task_component_split` guard。
+- `20260606_upstream_sync_staging_diff.sql` 纳入显式 `assertGuard(...)`。
+- 已更新复用台账：`docs/architecture/reuse-ledger.md`。
+- 新增记录：`docs/plans/2026-06-07-three-terminal-p0p1-sql-auto-guard-record.md`。
+
+验证结果：
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system -Dtest=SqlExecutionGuardContractTest test`：通过，`7` 个测试通过。
+- 高影响 SQL guard 扫描结果：20260606/20260607 命中的高影响脚本均具备 `@confirm_`、`signal sqlstate '45000'` 和 `call assert_*_confirmed();`。
+- `git diff --check`：通过；仅有 LF/CRLF 工作区换行提示，无 whitespace 错误。
+- `codegraph sync .`：通过；首次结果为 `Synced 1 changed files`，`Modified: 1 - 34 nodes in 691ms`；回填记录后最终复跑结果为 `Already up to date`。
+
+边界说明：
+- 本轮未执行远程 MySQL DDL/DML，未读取或写入 Redis。
+- 本轮未启动或重启后端。
+- 本轮未做浏览器、截图、DOM 或 UI 细调验收。
+- source-product / integration Java 和前端旁支脏改不属于本轮三端账号权限 P0/P1 修复范围，未纳入处理。
+
+残留 P1：
+- 管理端卖家/买家页缺静态路由兜底，直达 `/seller`、`/buyer` 或刷新存在 404 风险。
+- `portal_direct_login:<tokenHash>` Redis key 仍未在 key 层编码 `seller/buyer` 端类型。
+- 部门树跨主体写入/删除、角色菜单 `checkedKeys` 主体隔离、owner 角色禁停用/禁删除仍需补运行时隔离契约测试。

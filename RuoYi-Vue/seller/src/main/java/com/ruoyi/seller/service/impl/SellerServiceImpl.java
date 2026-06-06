@@ -611,6 +611,11 @@ public class SellerServiceImpl implements ISellerService
 
     private void recordSellerDirectLoginTokenFailure(PortalDirectLoginToken token, ServiceException e)
     {
+        if (!StringUtils.equals("seller", token.getPortalType()))
+        {
+            recordSellerDirectLoginFailure(token, null, null, token.getUsername(), e.getMessage());
+            return;
+        }
         SellerAccount account = selectSellerDirectLoginAccount(token);
         recordSellerDirectLoginFailure(token, token.getPartnerId(), account, token.getUsername(), e.getMessage());
     }
@@ -618,8 +623,9 @@ public class SellerServiceImpl implements ISellerService
     private boolean isDirectLoginTokenFailureWithoutAccountContext(ServiceException e)
     {
         String message = e.getMessage();
-        return message != null && message.startsWith("免密登录")
-            && !StringUtils.equals(message, "免密登录目标账号不存在");
+        return StringUtils.equals(message, "免密登录 token 不能为空")
+            || StringUtils.equals(message, "免密登录票据不存在")
+            || StringUtils.equals(message, "免密登录 token 校验器不能为空");
     }
 
     @Override
@@ -628,8 +634,12 @@ public class SellerServiceImpl implements ISellerService
     {
         assertSellerSessionAccount(session);
         int rows = sellerMapper.logoutSellerSession(session.getSubjectId(), session.getAccountId(), session.getTokenId());
-        sellerMapper.insertSellerLoginLog(portalTokenSupport.buildLoginLog(
-            session.getSubjectId(), session.getAccountId(), session.getUserName(), Constants.SUCCESS, "退出成功"));
+        PortalLoginLog log = Boolean.TRUE.equals(session.getDirectLogin())
+            ? portalTokenSupport.buildDirectLoginLog(session.getSubjectId(), session.getAccountId(),
+                session.getUserName(), Constants.SUCCESS, "退出成功", session)
+            : portalTokenSupport.buildLoginLog(session.getSubjectId(), session.getAccountId(),
+                session.getUserName(), Constants.SUCCESS, "退出成功");
+        sellerMapper.insertSellerLoginLog(log);
         portalTokenSupport.deleteLoginToken(session);
         return rows;
     }
@@ -785,12 +795,14 @@ public class SellerServiceImpl implements ISellerService
 
     private int forceLogoutSellerSessionScope(Long sellerId, Long sellerAccountId, String reason)
     {
-        List<String> tokenIds = sellerMapper.selectOnlineSellerSessionTokenIds(sellerId, sellerAccountId);
+        List<PortalLoginSession> sessions = sellerMapper.selectOnlineSellerSessionList(sellerId, sellerAccountId);
         int rows = sellerMapper.forceLogoutSellerSessions(sellerId, sellerAccountId);
         if (rows > 0)
         {
-            recordSellerForceLogoutAudit(sellerId, sellerAccountId, reason);
+            recordSellerForceLogoutAudit(sellerId, sellerAccountId, reason, sessions);
         }
+        List<String> tokenIds = sessions == null ? List.of()
+            : sessions.stream().map(PortalLoginSession::getTokenId).filter(StringUtils::isNotEmpty).toList();
         portalTokenSupport.deleteLoginTokens("seller", tokenIds);
         return rows;
     }
@@ -803,12 +815,31 @@ public class SellerServiceImpl implements ISellerService
         }
     }
 
-    private void recordSellerForceLogoutAudit(Long sellerId, Long sellerAccountId, String reason)
+    private void recordSellerForceLogoutAudit(Long sellerId, Long sellerAccountId, String reason,
+            List<PortalLoginSession> sessions)
     {
+        if (sessions != null && !sessions.isEmpty())
+        {
+            for (PortalLoginSession session : sessions)
+            {
+                recordSellerForceLogoutSessionAudit(session, reason);
+            }
+            return;
+        }
         SellerAccount account = sellerAccountId == null ? null : sellerMapper.selectSellerAccountById(sellerAccountId);
         String userName = account == null ? null : account.getUserName();
         sellerMapper.insertSellerLoginLog(portalTokenSupport.buildLoginLog(
             sellerId, sellerAccountId, userName, Constants.SUCCESS, reason));
+    }
+
+    private void recordSellerForceLogoutSessionAudit(PortalLoginSession session, String reason)
+    {
+        PortalLoginLog log = Boolean.TRUE.equals(session.getDirectLogin())
+            ? portalTokenSupport.buildDirectLoginLog(session.getSubjectId(), session.getAccountId(),
+                session.getUserName(), Constants.SUCCESS, reason, session)
+            : portalTokenSupport.buildLoginLog(session.getSubjectId(), session.getAccountId(),
+                session.getUserName(), Constants.SUCCESS, reason);
+        sellerMapper.insertSellerLoginLog(log);
     }
 
     private SellerAccount selectSellerAccountByPayload(SellerAccount account)
@@ -924,7 +955,9 @@ public class SellerServiceImpl implements ISellerService
     private void recordSellerDirectLoginFailure(PortalDirectLoginToken token, Long sellerId, SellerAccount account,
             String username, String message)
     {
-        Long accountId = account == null ? null : account.getSellerAccountId();
+        Long accountId = account == null
+            ? (StringUtils.equals("seller", token.getPortalType()) ? token.getAccountId() : null)
+            : account.getSellerAccountId();
         PortalLoginLog log = portalTokenSupport.buildDirectLoginLog(sellerId, accountId, username, Constants.FAIL,
             message, token);
         sellerMapper.insertSellerLoginLog(log);

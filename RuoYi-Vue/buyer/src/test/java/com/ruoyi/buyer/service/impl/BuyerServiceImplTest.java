@@ -181,8 +181,8 @@ public class BuyerServiceImplTest
         Buyer buyer = buyer(11L, "BAA010001", PartnerSupport.STATUS_NORMAL);
         BuyerAccount account = account(22L, 11L, "buyer-staff", PartnerSupport.STATUS_NORMAL);
         RecordingBuyerMapper mapper = recordingMapper(buyer, account);
-        mapper.onlineTokenIds.add("token-a");
-        mapper.onlineTokenIds.add("token-b");
+        mapper.onlineSessions.add(onlineSession(11L, 22L, "buyer-staff", "token-a", false));
+        mapper.onlineSessions.add(onlineSession(11L, 22L, "buyer-staff", "token-b", true));
         RecordingPortalTokenSupport tokenSupport = new RecordingPortalTokenSupport();
         BuyerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper().proxy(),
             tokenSupport);
@@ -201,8 +201,11 @@ public class BuyerServiceImplTest
         assertEquals(Long.valueOf(11L), mapper.insertedLoginLog.getSubjectId());
         assertEquals(Long.valueOf(22L), mapper.insertedLoginLog.getAccountId());
         assertEquals("buyer-staff", mapper.insertedLoginLog.getUserName());
+        assertEquals(2, mapper.insertedLoginLogs.size());
+        assertEquals(Boolean.FALSE, mapper.insertedLoginLogs.get(0).getDirectLogin());
+        assertDirectLoginAudit(mapper.insertedLoginLogs.get(1));
         assertEquals("buyer", tokenSupport.deletedTerminal);
-        assertEquals(mapper.onlineTokenIds, tokenSupport.deletedTokenIds);
+        assertEquals(List.of("token-a", "token-b"), tokenSupport.deletedTokenIds);
     }
 
     @Test
@@ -852,6 +855,70 @@ public class BuyerServiceImplTest
     }
 
     @Test
+    public void directLoginBuyerWritesDirectLoginFailureLogWhenTicketContextIsAvailable()
+    {
+        Buyer buyer = buyer(11L, "BAA010001", PartnerSupport.STATUS_NORMAL);
+        BuyerAccount account = account(22L, 11L, "buyer-staff", PartnerSupport.STATUS_NORMAL);
+        RecordingBuyerMapper mapper = recordingMapper(buyer, account);
+        RecordingDirectLoginSupport directLoginSupport = new RecordingDirectLoginSupport();
+        directLoginSupport.tokenToConsume = directLoginToken("buyer", 11L, "BAA010001", 22L, "buyer-staff");
+        directLoginSupport.consumeException = new ServiceException("免密登录 token 不存在或已过期");
+        RecordingPortalTokenSupport tokenSupport = new RecordingPortalTokenSupport();
+        BuyerServiceImpl service = service(mapper.proxy(), directLoginSupport, deptMapper().proxy(), tokenSupport);
+
+        try
+        {
+            service.directLoginBuyer("expired-token");
+        }
+        catch (ServiceException e)
+        {
+            assertEquals("免密登录 token 不存在或已过期", e.getMessage());
+            assertEquals(1, directLoginSupport.consumeCount);
+            assertEquals(0, tokenSupport.createLoginCount);
+            assertEquals(null, mapper.insertedSession);
+            assertEquals(Constants.FAIL, mapper.insertedLoginLog.getStatus());
+            assertEquals(Long.valueOf(11L), mapper.insertedLoginLog.getSubjectId());
+            assertEquals(Long.valueOf(22L), mapper.insertedLoginLog.getAccountId());
+            assertEquals("buyer-staff", mapper.insertedLoginLog.getUserName());
+            assertDirectLoginAudit(mapper.insertedLoginLog);
+            return;
+        }
+        throw new AssertionError("Expected ServiceException");
+    }
+
+    @Test
+    public void directLoginBuyerDoesNotWriteForeignTicketIdsIntoSubjectColumns()
+    {
+        Buyer buyer = buyer(11L, "BAA010001", PartnerSupport.STATUS_NORMAL);
+        BuyerAccount account = account(22L, 11L, "buyer-staff", PartnerSupport.STATUS_NORMAL);
+        RecordingBuyerMapper mapper = recordingMapper(buyer, account);
+        RecordingDirectLoginSupport directLoginSupport = new RecordingDirectLoginSupport();
+        directLoginSupport.tokenToConsume = directLoginToken("seller", 11L, "SAA010001", 22L, "seller-staff");
+        directLoginSupport.consumeException = new ServiceException("免密登录票据端类型不匹配");
+        RecordingPortalTokenSupport tokenSupport = new RecordingPortalTokenSupport();
+        BuyerServiceImpl service = service(mapper.proxy(), directLoginSupport, deptMapper().proxy(), tokenSupport);
+
+        try
+        {
+            service.directLoginBuyer("foreign-token");
+        }
+        catch (ServiceException e)
+        {
+            assertEquals("免密登录票据端类型不匹配", e.getMessage());
+            assertEquals(1, directLoginSupport.consumeCount);
+            assertEquals(0, tokenSupport.createLoginCount);
+            assertEquals(null, mapper.insertedSession);
+            assertEquals(Constants.FAIL, mapper.insertedLoginLog.getStatus());
+            assertEquals(null, mapper.insertedLoginLog.getSubjectId());
+            assertEquals(null, mapper.insertedLoginLog.getAccountId());
+            assertEquals("seller-staff", mapper.insertedLoginLog.getUserName());
+            assertDirectLoginAudit(mapper.insertedLoginLog);
+            return;
+        }
+        throw new AssertionError("Expected ServiceException");
+    }
+
+    @Test
     public void directLoginBuyerRejectsDisabledBuyerAfterTicketIssued()
     {
         Buyer buyer = buyer(11L, "BAA010001", "1");
@@ -960,7 +1027,7 @@ public class BuyerServiceImplTest
             assertEquals(null, mapper.insertedSession);
             assertEquals(Constants.FAIL, mapper.insertedLoginLog.getStatus());
             assertEquals(Long.valueOf(11L), mapper.insertedLoginLog.getSubjectId());
-            assertEquals(null, mapper.insertedLoginLog.getAccountId());
+            assertEquals(Long.valueOf(22L), mapper.insertedLoginLog.getAccountId());
             assertDirectLoginAudit(mapper.insertedLoginLog);
             return;
         }
@@ -989,7 +1056,7 @@ public class BuyerServiceImplTest
             assertEquals(null, mapper.insertedSession);
             assertEquals(Constants.FAIL, mapper.insertedLoginLog.getStatus());
             assertEquals(Long.valueOf(11L), mapper.insertedLoginLog.getSubjectId());
-            assertEquals(null, mapper.insertedLoginLog.getAccountId());
+            assertEquals(Long.valueOf(22L), mapper.insertedLoginLog.getAccountId());
             assertDirectLoginAudit(mapper.insertedLoginLog);
             return;
         }
@@ -1148,6 +1215,38 @@ public class BuyerServiceImplTest
     }
 
     @Test
+    public void logoutBuyerPreservesDirectLoginAuditFromSession()
+    {
+        Buyer buyer = buyer(11L, "BAA010001", PartnerSupport.STATUS_NORMAL);
+        BuyerAccount account = account(22L, 11L, "buyer-staff", PartnerSupport.STATUS_NORMAL);
+        RecordingBuyerMapper mapper = recordingMapper(buyer, account);
+        RecordingPortalTokenSupport tokenSupport = new RecordingPortalTokenSupport();
+        BuyerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper().proxy(),
+            tokenSupport);
+        PortalLoginSession session = session(11L, 22L);
+        session.setUserName("buyer-staff");
+        session.setDirectLogin(Boolean.TRUE);
+        session.setDirectLoginTicketId(100L);
+        session.setActingAdminId(1L);
+        session.setActingAdminName("admin");
+        session.setDirectLoginReason("support check");
+
+        int rows = service.logoutBuyer(session);
+
+        assertEquals(1, rows);
+        assertEquals(1, mapper.logoutSessionCallCount);
+        assertEquals(Long.valueOf(11L), mapper.logoutBuyerId);
+        assertEquals(Long.valueOf(22L), mapper.logoutAccountId);
+        assertEquals("buyer_test_token", mapper.logoutTokenId);
+        assertEquals(Constants.SUCCESS, mapper.insertedLoginLog.getStatus());
+        assertEquals("退出成功", mapper.insertedLoginLog.getMsg());
+        assertEquals("buyer-staff", mapper.insertedLoginLog.getUserName());
+        assertDirectLoginAudit(mapper.insertedLoginLog);
+        assertEquals(1, tokenSupport.deleteLoginTokenCallCount);
+        assertSame(session, tokenSupport.deletedSession);
+    }
+
+    @Test
     public void updateBuyerOwnPasswordRejectsMissingTokenBeforeMapper()
     {
         Buyer buyer = buyer(11L, "BAA010001", PartnerSupport.STATUS_NORMAL);
@@ -1269,6 +1368,23 @@ public class BuyerServiceImplTest
         return session;
     }
 
+    private PortalLoginSession onlineSession(Long buyerId, Long accountId, String username, String tokenId,
+            boolean directLogin)
+    {
+        PortalLoginSession session = session(buyerId, accountId);
+        session.setUserName(username);
+        session.setTokenId(tokenId);
+        session.setDirectLogin(directLogin);
+        if (directLogin)
+        {
+            session.setDirectLoginTicketId(100L);
+            session.setActingAdminId(1L);
+            session.setActingAdminName("admin");
+            session.setDirectLoginReason("support check");
+        }
+        return session;
+    }
+
     private PortalDirectLoginToken directLoginToken(String terminal, Long buyerId, String buyerNo, Long accountId,
             String username)
     {
@@ -1344,6 +1460,8 @@ public class BuyerServiceImplTest
 
         private final List<String> onlineTokenIds = new ArrayList<>();
 
+        private final List<PortalLoginSession> onlineSessions = new ArrayList<>();
+
         private Long forceLogoutBuyerId;
 
         private Long forceLogoutAccountId;
@@ -1375,6 +1493,8 @@ public class BuyerServiceImplTest
         private String loginInfoIp;
 
         private PortalLoginLog insertedLoginLog;
+
+        private final List<PortalLoginLog> insertedLoginLogs = new ArrayList<>();
 
         private PortalLoginSession insertedSession;
 
@@ -1474,12 +1594,16 @@ public class BuyerServiceImplTest
             {
                 return onlineTokenIds;
             }
+            if ("selectOnlineBuyerSessionList".equals(methodName))
+            {
+                return selectOnlineSessions((Long) args[0], (Long) args[1]);
+            }
             if ("forceLogoutBuyerSessions".equals(methodName))
             {
                 forceLogoutCallCount++;
                 forceLogoutBuyerId = (Long) args[0];
                 forceLogoutAccountId = (Long) args[1];
-                return onlineTokenIds.size();
+                return selectOnlineSessions(forceLogoutBuyerId, forceLogoutAccountId).size();
             }
             if ("logoutBuyerSession".equals(methodName))
             {
@@ -1499,6 +1623,7 @@ public class BuyerServiceImplTest
             if ("insertBuyerLoginLog".equals(methodName))
             {
                 insertedLoginLog = (PortalLoginLog) args[0];
+                insertedLoginLogs.add(insertedLoginLog);
                 return 1;
             }
             if ("insertBuyerSession".equals(methodName))
@@ -1535,6 +1660,28 @@ public class BuyerServiceImplTest
                 return proxy == args[0];
             }
             return defaultValue(method.getReturnType());
+        }
+
+        private List<PortalLoginSession> selectOnlineSessions(Long buyerId, Long buyerAccountId)
+        {
+            if (!onlineSessions.isEmpty())
+            {
+                return onlineSessions;
+            }
+            List<PortalLoginSession> sessions = new ArrayList<>();
+            BuyerAccount account = buyerAccountId == null ? null : accountById.get(buyerAccountId);
+            for (String tokenId : onlineTokenIds)
+            {
+                PortalLoginSession session = new PortalLoginSession();
+                session.setTerminal("buyer");
+                session.setSubjectId(buyerId);
+                session.setAccountId(buyerAccountId);
+                session.setTokenId(tokenId);
+                session.setUserName(account == null ? null : account.getUserName());
+                session.setDirectLogin(Boolean.FALSE);
+                sessions.add(session);
+            }
+            return sessions;
         }
     }
 
@@ -1711,6 +1858,10 @@ public class BuyerServiceImplTest
             consumedTokenValue = token;
             if (consumeException != null)
             {
+                if (failureAuditor != null && tokenToConsume != null)
+                {
+                    failureAuditor.accept(tokenToConsume, consumeException);
+                }
                 throw consumeException;
             }
             if (validator != null)

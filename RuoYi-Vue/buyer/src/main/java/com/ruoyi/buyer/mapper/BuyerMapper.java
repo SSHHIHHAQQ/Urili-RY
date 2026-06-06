@@ -64,6 +64,9 @@ public interface BuyerMapper
     public List<PortalSessionProfile> selectBuyerSessionProfileList(@Param("buyerId") Long buyerId,
             @Param("buyerAccountId") Long buyerAccountId);
 
+    public List<PortalLoginSession> selectOnlineBuyerSessionList(@Param("buyerId") Long buyerId,
+            @Param("buyerAccountId") Long buyerAccountId);
+
     public List<String> selectOnlineBuyerSessionTokenIds(@Param("buyerId") Long buyerId,
             @Param("buyerAccountId") Long buyerAccountId);
 

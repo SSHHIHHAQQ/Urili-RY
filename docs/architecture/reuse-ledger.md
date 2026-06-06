@@ -838,7 +838,8 @@
   - 标准 ProTable 分页器，统一开启每页条数切换，并避免使用受控 `pageSize` 导致切换无效。
   - 标准 ProTable 滚动配置，统一传入 `scroll.y` 让 Ant Design 生成 fixed-header 结构，避免表头跟随数据行一起滚动。
   - 标准 ProTable 列设置持久化，使用 localStorage 记住用户调整过的列显示状态。
-  - 字段数量已知的页面可以在 `getPersistedProTableSearch({ fieldCount })` 中声明查询字段数，由全局工具选择避开整行刚好占满的响应式断点，防止查询/重置/展开动作区被单独挤到下一行。
+  - 页面级 ProTable 查询动作区由 `react-ui/src/global.css` 统一作为搜索行中的弹性动作列：空间足够时与筛选字段同一行靠右，空间不足时自然换到下一行靠右。
+  - 字段数量已知的页面仍可在 `getPersistedProTableSearch({ fieldCount })` 中声明查询字段数来微调字段列数，但该配置不再承担防止动作区悬浮/压表格的职责。
   - 当前先服务 `react-ui` 管理端；后续拆出 `seller-ui` / `buyer-ui` 后，卖家端和买家端列表页继续复用同一套筛选预设。
 - 复用规则：
   - 后续新增 ProTable 页面时，使用 `getPersistedProTableSearch(...)`，不要直接写散落的 `search={{ ... }}`。
@@ -848,9 +849,9 @@
   - 页面级 ProTable 如果开启 `options.setting` 或 `options.density`，不要使用 `toolBarRender={false}` 关闭 toolbar；无自定义按钮时使用 `toolBarRender={() => []}` 或省略自定义按钮，让 ProTable 自带设置入口正常渲染。
   - 三端前端列表页筛选区默认采用 Ant Design Pro 原生 `vertical` 查询布局，也就是字段名在上、输入框在下，避免标签和输入框横向挤压。
   - 三端前端筛选区必须按内容区宽度响应式降列：宽屏优先一行 5 个筛选字段并给查询动作预留位置，中屏默认 4 个字段，小屏降为 2 个字段；宁可换行，不允许把输入框压缩成不可用的小块。
-  - 当前默认收起态显示 5 个筛选字段，避免 6 个字段刚好占满一行后，查询/重置/展开按钮被挤到第二行并贴近表格。
-  - 当前 `lg` 断点按 4 列展示，避免 9 个展开筛选字段刚好占满 `3 x 3` 后，查询/重置/收起按钮被单独挤到第 4 行右侧。
-  - 查询字段数固定且容易刚好填满某个断点的页面，例如 8 个字段的第三方仓库，必须传入 `fieldCount`，不要在页面私有 CSS 里移动查询按钮。
+  - 当前默认收起态显示 5 个筛选字段；`.ant-pro-query-filter-actions` 的父级 `ant-col` 必须占用剩余空间、靠右、底部对齐输入框，不能强制占满整行导致少字段页面也多出一行按钮。
+  - `fieldCount` 只作为字段列数优化，不作为布局兜底；不要因为某个页面出现动作区错位就继续手工改字段数量常量。
+  - 不允许在页面私有 CSS 中移动 `.ant-pro-query-filter-actions`；动作区位置只能通过全局页面级 ProTable 样式统一维护。
   - 日期范围、金额区间、余额区间、库存区间等长控件默认占 2 个筛选格；普通输入框也要保留最小可用宽度。
   - 弹窗内小表格、纯明细表、无查询条件表格等确有理由的场景可显式 `search={false}`，但不要另起一套页面内筛选布局。
   - 同一业务指标的最小/最大查询条件统一做成一个区间字段，例如余额、金额、库存数量；优先使用 Ant Design 原生组合控件和默认输入框样式，不自定义特殊容器，不使用假的禁用输入框，前端提交时再拆成后端需要的最小/最大参数。
@@ -1306,9 +1307,11 @@
 
 - 位置：
   - `RuoYi-Vue/integration/src/main/java/com/ruoyi/integration/controller/AdminSourceProductController.java`
+  - `RuoYi-Vue/integration/src/main/java/com/ruoyi/integration/service/impl/SourceProductReadModelService.java`
   - `RuoYi-Vue/integration/src/main/java/com/ruoyi/integration/domain/SourceProductItem.java`
   - `RuoYi-Vue/integration/src/main/java/com/ruoyi/integration/domain/query/SourceProductQuery.java`
   - `RuoYi-Vue/integration/src/main/resources/mapper/integration/UpstreamSystemMapper.xml`
+  - `RuoYi-Vue/sql/20260607_source_product_read_model.sql`
   - `react-ui/src/pages/Product/SourceProductLibrary/index.tsx`
   - `react-ui/src/pages/Product/SourceProductLibrary/SourceProductDetailDrawer.tsx`
   - `react-ui/src/services/integration/sourceProduct.ts`
@@ -1318,8 +1321,11 @@
   - 管理端「商品管理 / 来源商品库」首版只读列表。
   - 集中展示 `upstream_system_sku_candidate` 中各来源系统同步回来的 SKU 基础资料、识别码、分类、尺寸重量、申报信息、同步状态和配对结果。
   - 详情抽屉展示来源快照摘要，不向前端暴露原始 `source_payload_json`。
+  - 列表和详情读取 `source_product_group` / `source_product_dimension_group` / `source_product_warehouse_detail` 读模型；`upstream_system_sku_candidate` 仍是上游快照明细源。
 - 复用规则：
   - 来源商品库是上游 SKU 同步清单的聚合展示，不是商城商品事实源；不要为了页面再建一张重复来源商品表。
+  - 来源商品库、商品列表来源绑定、快捷创建商品和外部按来源 SKU 查仓库能力必须复用 `sourceSkuGroupKey` 和来源商品读模型，不要在各自模块重新拼 `connection_code + master_sku` 聚合规则。
+  - 读模型由 SKU 基础资料同步、WMS 尺寸同步、SKU 配对变更、来源连接仓库名变更后重建；前端列表请求不得回退到实时大聚合 SQL。
   - 首版接口复用 `product:list:list` 权限；新增导出、批量创建草稿、同步库存等动作前，必须单独补按钮权限和审计日志。
   - SKU 配对仍由「上游系统管理」维护，来源商品库只展示配对结果，不在页面内复制配对规则。
   - integration 相关来源系统、同步状态和配对状态选项复用 `react-ui/src/services/integration/constants.ts`，不要在上游系统页和来源商品库页分别维护。
@@ -1338,7 +1344,7 @@
   - `react-ui/src/services/integration/constants.ts`
 - 当前用途：
   - 上游系统管理内的「SKU库存同步清单」读取 `upstream_system_sku_inventory_snapshot`，作为来源仓库库存源头。
-  - `UpstreamSystemTask.syncInventory()` 通过若依 Quartz 每 10 分钟同步已启用领星主仓库存，调用领星 `/integratedInventory/pageOpen`。
+  - `UpstreamInventorySyncTask.sync()` 通过若依 Quartz 每 10 分钟同步已启用领星主仓库存，调用领星 `/integratedInventory/pageOpen`。
   - `business_menu_seed.sql` 中独立「来源仓库库存」菜单仍可后续承接跨模块库存查询，不等同于上游系统 Tab 内的源头快照。
 - 复用规则：
   - 来源仓库库存快照只代表上游返回的库存口径，不直接覆盖平台可售库存、订单占用库存或财务库存。
@@ -1395,17 +1401,26 @@
   - 后续领星相关同步能力继续从该适配器扩展，不要在 Service、Controller 或 Mapper XML 中散落签名和 HTTP 调用逻辑。
   - 如果新增订单、库存、费用等领域能力，适配器只返回外部响应，业务事实落库必须经过对应业务模块。
 
-### UpstreamSystemTask
+### 上游系统定时同步任务
 
 - 位置：`RuoYi-Vue/integration/src/main/java/com/ruoyi/integration/task/UpstreamSystemTask.java`
+  - `RuoYi-Vue/integration/src/main/java/com/ruoyi/integration/task/UpstreamWarehouseSyncTask.java`
+  - `RuoYi-Vue/integration/src/main/java/com/ruoyi/integration/task/UpstreamLogisticsChannelSyncTask.java`
+  - `RuoYi-Vue/integration/src/main/java/com/ruoyi/integration/task/UpstreamSkuInfoSyncTask.java`
+  - `RuoYi-Vue/integration/src/main/java/com/ruoyi/integration/task/UpstreamSkuDimensionSyncTask.java`
+  - `RuoYi-Vue/integration/src/main/java/com/ruoyi/integration/task/UpstreamInventorySyncTask.java`
+  - `RuoYi-Vue/integration/src/main/java/com/ruoyi/integration/task/UpstreamScheduledSyncExecutor.java`
 - 当前用途：
-  - 作为若依 Quartz 的上游系统定时任务入口。
-  - `syncWarehouses` / `syncLogisticsChannels` / `syncSkuInfo` 分别在每日 23:20、23:30、23:40 同步低频基础资料。
-  - `syncSkuDimensions` 每日 23:59 限速同步 SKU 仓库尺寸重量。
-  - `syncInventory` 每 10 分钟同步上游 SKU 库存快照。
+  - 每个上游同步 job 使用独立 `@Component` 作为若依 Quartz 调用入口，避免所有任务挤在 `upstreamSystemTask` 一个 Bean 下。
+  - `UpstreamWarehouseSyncTask.sync` / `UpstreamLogisticsChannelSyncTask.sync` / `UpstreamSkuInfoSyncTask.sync` 分别在每日 23:20、23:30、23:40 同步低频基础资料。
+  - `UpstreamSkuDimensionSyncTask.sync` 每日 23:59 限速同步 SKU 仓库尺寸重量。
+  - `UpstreamInventorySyncTask.sync` 每 10 分钟同步上游 SKU 库存快照。
+  - `UpstreamScheduledSyncExecutor` 只承载公共调度边界：筛选启用的领星主仓、串行执行、汇总成功失败和抛出受控异常。
+  - `UpstreamSystemTask` 只保留历史方法名兼容转发，新的 `sys_job.invoke_target` 不再指向它。
   - 复用 `IUpstreamSystemService` 分项同步方法，不新增第二套领星签名、请求日志或落库逻辑。
 - 复用规则：
-  - 后续上游系统定时任务优先挂到该 task 或同模块 task，不要在前端、Controller 或独立线程里轮询外部系统。
+  - 后续新增上游同步任务时，新建独立 task 组件，并复用 `UpstreamScheduledSyncExecutor`；不要继续把新方法塞回 `UpstreamSystemTask`。
+  - 不要在前端、Controller 或独立线程里轮询外部系统。
   - 定时任务登记使用若依 `sys_job`，让“系统监控 / 定时任务”统一启停、手动执行和查看日志。
 
 ### 上游系统 React 页面组件
@@ -1463,7 +1478,7 @@
   - 第三方仓归属卖家校验必须通过 seller 模块或稳定 facade，不要直接信任前端传入的 seller 展示字段。
   - 地址组件继续复用 `WarehouseFields` 的国家/美国州城市联动口径，不要在官方仓和第三方仓页面分别维护两套逻辑。
   - 美国完整城市数据来自 U.S. Census Gazetteer Places seed，后续更新必须记录来源 URL、数据年份和导入脚本。
-### 来源仓库库存占位最新约束（2026-06-06）
+### 来源仓库库存占位历史约束（2026-06-06）
 
 - 位置：
   - `RuoYi-Vue/integration/src/main/java/com/ruoyi/integration/controller/AdminSourceWarehouseStockController.java`
@@ -1472,13 +1487,13 @@
   - `RuoYi-Vue/sql/20260606_upstream_inventory_dimension_sync.sql`
   - `react-ui/src/pages/UpstreamSystem/components/SkuInventoryPanel.tsx`
   - `react-ui/src/services/integration/sourceWarehouseStock.ts`
-- 当前用途：
-  - 来源仓库库存当前只保留方向占位，不开放真实 HTTP Controller、不发真实库存请求、不启用库存 job、不建库存快照表；上游系统库存 Tab 仅为静态占位。
-  - `UpstreamSystemTask.syncInventory()` 保留旧 Quartz 方法名但立即抛出禁用错误，防止历史 job 命中后继续落库。
-  - `20260606_upstream_inventory_dimension_sync.sql` 只做库存权限 cleanup/disable 和旧 job 禁用；库存权限字符串出现在该脚本中仅用于清理，不代表开放能力。
+- 历史用途：
+  - 该条记录的是 2026-06-06 库存能力未开放时的回滚约束，已经被 2026-06-07 的真实库存同步实现取代。
+  - 当前库存同步入口以 `UpstreamInventorySyncTask.sync()` 和 `upstream_system_sku_inventory_snapshot` 为准。
+  - `20260606_upstream_inventory_dimension_sync.sql` 保留为历史 cleanup/disable 脚本记录，不代表当前库存能力仍是静态占位。
 - 复用规则：
-  - 恢复来源仓库库存前，必须先确认 schema、同步落库方案、权限点、审计日志和数据边界。
-  - 不允许只恢复前端 tab、Controller、service 请求函数或 Quartz job。
+  - 继续扩展来源仓库库存前，必须先确认 schema、同步落库方案、权限点、审计日志和数据边界。
+  - 不允许只扩展前端 tab、Controller、service 请求函数或 Quartz job，必须保持事实源和权限同步。
   - 库存相关状态、口径、配对状态选项如需恢复，优先复用 `react-ui/src/services/integration/constants.ts`，不要在页面内复制映射。
 ## 三端 P0/P1 验证入口与 SQL Guard 模板
 
@@ -1563,6 +1578,16 @@
 - 位置：
   - `RuoYi-Vue/ruoyi-system/src/main/java/com/ruoyi/system/service/support/PortalDirectLoginSupport.java`
   - `RuoYi-Vue/ruoyi-system/src/test/java/com/ruoyi/system/service/support/PortalDirectLoginSupportTest.java`
+  - `RuoYi-Vue/ruoyi-system/src/main/java/com/ruoyi/system/service/support/PortalTokenSupport.java`
+  - `RuoYi-Vue/seller/src/main/java/com/ruoyi/seller/service/impl/SellerServiceImpl.java`
+  - `RuoYi-Vue/buyer/src/main/java/com/ruoyi/buyer/service/impl/BuyerServiceImpl.java`
+  - `RuoYi-Vue/seller/src/main/java/com/ruoyi/seller/mapper/SellerMapper.java`
+  - `RuoYi-Vue/buyer/src/main/java/com/ruoyi/buyer/mapper/BuyerMapper.java`
+  - `RuoYi-Vue/seller/src/main/resources/mapper/seller/SellerMapper.xml`
+  - `RuoYi-Vue/buyer/src/main/resources/mapper/buyer/BuyerMapper.xml`
+  - `RuoYi-Vue/seller/src/test/java/com/ruoyi/seller/service/impl/SellerServiceImplTest.java`
+  - `RuoYi-Vue/buyer/src/test/java/com/ruoyi/buyer/service/impl/BuyerServiceImplTest.java`
+  - `RuoYi-Vue/ruoyi-system/src/test/java/com/ruoyi/system/architecture/PortalLoginSessionConsistencyContractTest.java`
   - `RuoYi-Vue/seller/src/main/resources/mapper/seller/SellerPortalPermissionMapper.xml`
   - `RuoYi-Vue/buyer/src/main/resources/mapper/buyer/BuyerPortalPermissionMapper.xml`
   - `react-ui/src/components/PartnerManagement/PartnerAccountModal.tsx`
@@ -1571,16 +1596,26 @@
   - `react-ui/scripts/verify-three-terminal.mjs`
   - `RuoYi-Vue/sql/top_menu_seed.sql`
   - `RuoYi-Vue/sql/seller_buyer_management_seed.sql`
+  - `RuoYi-Vue/sql/20260606_admin_partner_role_menu_grant.sql`
+  - `RuoYi-Vue/ruoyi-system/src/test/java/com/ruoyi/system/architecture/AdminDirectLoginPermissionContractTest.java`
   - `RuoYi-Vue/ruoyi-system/src/test/java/com/ruoyi/system/architecture/SqlExecutionGuardContractTest.java`
 - 当前用途：
   - 免密 token 一次性模板：拿到 DB ticket 和 Redis payload 后，首次提交无论业务校验成功还是失败，都必须删除 Redis payload，并将 DB ticket 收口为 `USED` 或 `EXPIRED`。
+  - 免密失败上下文模板：DB ticket 已经查到但 Redis payload 丢失、过期、端类型不匹配、票据/目标不匹配时，`PortalDirectLoginSupport` 必须先从 DB ticket 恢复 `PortalDirectLoginToken` 审计上下文，再调用 seller/buyer failure auditor；只有空 token、ticket 不存在、校验器为空这类确实无 ticket 的场景才写普通失败日志。
+  - 免密退出日志模板：端内 session 若带 `directLogin=true`，主动退出日志必须用 `PortalTokenSupport.buildDirectLoginLog(..., session)` 保留 `ticketId`、acting admin 和 reason；普通登录仍写 `directLogin=false`。
+  - 强制踢出逐 session 审计模板：seller/buyer 强制踢出前必须先读取在线 `PortalLoginSession` 列表，按每个 session 写登录日志，再按同一批 tokenId 删除 Redis token；direct-login session 必须保留 `ticketId`、acting admin 和 reason。
   - 角色绑定模板：seller/buyer 账号角色回显和绑定合法性校验都必须过滤停用角色，不能让停用角色静默挂到账户上等待后续重新启用。
   - 管理端弹窗权限模板：弹窗按钮可见性必须覆盖实际会调用的查询接口权限；例如角色编辑必须有 `role:edit + role:query + menu:query`，账号部门树必须有 `dept:query` 才请求。
+  - 管理端授权脚本模板：`sys_role_menu` 首段授权只能授经过签名确认的菜单树入口，子按钮授权必须从已授页面向下扩展，不能对裸 `seller:admin:%` / `buyer:admin:%` 做全局通配授权。
   - SQL seed 模板：会写 `sys_menu`、`sys_config`、端内角色菜单或管理端授权的 seed 必须 fail-closed；已有配置需要收敛时，使用先 `update` 再缺失 `insert` 的可回放模式。
+  - 高影响 SQL 自动发现模板：`SqlExecutionGuardContractTest` 必须自动扫描 `20260606*.sql` / `20260607*.sql` 中含 `insert/update/delete/alter table/create table` 的脚本；发现高影响脚本时，必须要求 `@confirm_*`、`signal sqlstate '45000'` 和 `call assert_*_confirmed();`，不能只靠手工枚举。
   - 三端验证清单模板：`verify-three-terminal.mjs` 必须覆盖实际列出的后端测试模块；新增前端 `tests/*.test.*` 未纳入清单时直接失败。
 - 复用规则：
   - 后续新增 direct-login 失败分支时，不允许保留同一个 token 可在 30 分钟窗口内失败重放。
+  - 后续新增 direct-login 失败日志时，若已有 ticket 或 payload 上下文，必须写 `buildDirectLoginLog(...)` 并保留 `ticketId`、acting admin、reason 和目标账号；若 ticket 端类型不是当前端，当前端日志只能写 direct-login 审计字段，不能把对方端的 `subjectId/accountId` 写入当前端日志表。
+  - 后续新增端内退出、踢出或 session 收口日志时，必须优先从 `PortalLoginSession` 复制 direct-login 审计字段；批量踢出不能只保留一条无法定位具体 session 的汇总日志。
   - 后续新增账号角色绑定能力时，必须同时考虑 role `del_flag` 和 `status`，并补 seller/buyer 对称测试。
   - 后续新增同构管理端弹窗时，先列出按钮触发后会调用的 service，再按 service 对应查询/写入权限闭合，不只看按钮本身的写权限。
-  - 后续新增高影响 seed 时，同步加入 `SqlExecutionGuardContractTest`；已有 config 需要修正时不能只写 `where not exists`。
+  - 后续新增管理端授权 SQL 时，不允许用权限前缀全局授权；必须先确认菜单 ID、父子关系、`menu_type` 和 `perms` 签名，再授受控树。
+  - 后续新增高影响 seed 时，同步加入 `SqlExecutionGuardContractTest`；自动扫描发现的新高影响 SQL 也必须自带 fail-closed guard，已有 config 需要修正时不能只写 `where not exists`。
   - 后续新增 Jest 或 Java 三端测试时，必须同时更新验证清单；清单不收录应当让验证失败，而不是静默跳过。

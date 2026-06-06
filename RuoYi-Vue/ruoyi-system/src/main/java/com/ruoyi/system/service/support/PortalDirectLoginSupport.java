@@ -127,11 +127,11 @@ public class PortalDirectLoginSupport
         }
         String tokenHash = hashToken(token);
         String cacheKey = cacheKey(tokenHash);
-        PortalDirectLoginTicket ticket = loadUsableTicket(portalType, tokenHash, now, cacheKey);
+        PortalDirectLoginTicket ticket = loadUsableTicket(portalType, tokenHash, now, cacheKey, failureAuditor);
         PortalDirectLoginToken payload = null;
         try
         {
-            payload = loadUsablePayload(portalType, cacheKey, ticket, now);
+            payload = loadUsablePayload(portalType, cacheKey, ticket, now, failureAuditor);
             assertClientIpNotBlocked();
             validator.accept(payload);
             markTicketUsedOrThrow(ticket, now, cacheKey);
@@ -177,7 +177,8 @@ public class PortalDirectLoginSupport
         }
     }
 
-    private PortalDirectLoginTicket loadUsableTicket(String portalType, String tokenHash, Date now, String cacheKey)
+    private PortalDirectLoginTicket loadUsableTicket(String portalType, String tokenHash, Date now, String cacheKey,
+            BiConsumer<PortalDirectLoginToken, ServiceException> failureAuditor)
     {
         PortalDirectLoginTicket ticket = ticketMapper.selectPortalDirectLoginTicketByTokenHash(tokenHash);
         if (ticket == null)
@@ -186,46 +187,47 @@ public class PortalDirectLoginSupport
         }
         if (!StringUtils.equals(portalType, ticket.getTerminal()))
         {
-            throw new ServiceException("免密登录票据端类型不匹配");
+            throw directLoginFailure(ticket, "免密登录票据端类型不匹配", failureAuditor);
         }
         if (!STATUS_ISSUED.equals(ticket.getStatus()) || ticket.getUsedTime() != null)
         {
-            throw new ServiceException("免密登录票据已使用");
+            throw directLoginFailure(ticket, "免密登录票据已使用", failureAuditor);
         }
         if (ticket.getExpireTime() == null || ticket.getExpireTime().before(now))
         {
             ticketMapper.markPortalDirectLoginTicketExpired(ticket.getTicketId(), SYSTEM_OPERATOR);
             redisCache.deleteObject(cacheKey);
-            throw new ServiceException("免密登录票据已过期");
+            throw directLoginFailure(ticket, "免密登录票据已过期", failureAuditor);
         }
         return ticket;
     }
 
     private PortalDirectLoginToken loadUsablePayload(String portalType, String cacheKey,
-            PortalDirectLoginTicket ticket, Date now)
+            PortalDirectLoginTicket ticket, Date now,
+            BiConsumer<PortalDirectLoginToken, ServiceException> failureAuditor)
     {
         PortalDirectLoginToken payload = redisCache.getCacheObject(cacheKey);
         if (payload == null)
         {
             ticketMapper.markPortalDirectLoginTicketExpired(ticket.getTicketId(), SYSTEM_OPERATOR);
             redisCache.deleteObject(cacheKey);
-            throw new ServiceException("免密登录 token 不存在或已过期");
+            throw directLoginFailure(ticket, "免密登录 token 不存在或已过期", failureAuditor);
         }
         if (!StringUtils.equals(portalType, payload.getPortalType()))
         {
             redisCache.deleteObject(cacheKey);
-            throw new ServiceException("免密登录 token 端类型不匹配");
+            throw directLoginFailure(ticket, "免密登录 token 端类型不匹配", failureAuditor);
         }
         if (payload.getExpireTime() == null || payload.getExpireTime().before(now))
         {
             ticketMapper.markPortalDirectLoginTicketExpired(ticket.getTicketId(), SYSTEM_OPERATOR);
             redisCache.deleteObject(cacheKey);
-            throw new ServiceException("免密登录 token 已过期");
+            throw directLoginFailure(ticket, "免密登录 token 已过期", failureAuditor);
         }
         if (!ticket.getTicketId().equals(payload.getTicketId()))
         {
             redisCache.deleteObject(cacheKey);
-            throw new ServiceException("免密登录票据不匹配");
+            throw directLoginFailure(ticket, "免密登录票据不匹配", failureAuditor);
         }
         if (!Objects.equals(ticket.getTargetSubjectId(), payload.getPartnerId())
                 || !StringUtils.equals(ticket.getTargetSubjectNo(), payload.getPartnerNo())
@@ -233,9 +235,35 @@ public class PortalDirectLoginSupport
                 || !StringUtils.equals(ticket.getTargetUserName(), payload.getUsername()))
         {
             redisCache.deleteObject(cacheKey);
-            throw new ServiceException("免密登录目标不匹配");
+            throw directLoginFailure(ticket, "免密登录目标不匹配", failureAuditor);
         }
         return payload;
+    }
+
+    private ServiceException directLoginFailure(PortalDirectLoginTicket ticket, String message,
+            BiConsumer<PortalDirectLoginToken, ServiceException> failureAuditor)
+    {
+        ServiceException exception = new ServiceException(message);
+        auditFailedDirectLogin(buildTokenContext(ticket), exception, failureAuditor);
+        return exception;
+    }
+
+    private PortalDirectLoginToken buildTokenContext(PortalDirectLoginTicket ticket)
+    {
+        PortalDirectLoginToken token = new PortalDirectLoginToken();
+        token.setTicketId(ticket.getTicketId());
+        token.setPortalType(ticket.getTerminal());
+        token.setPartnerId(ticket.getTargetSubjectId());
+        token.setPartnerNo(ticket.getTargetSubjectNo());
+        token.setAccountId(ticket.getTargetAccountId());
+        token.setUsername(ticket.getTargetUserName());
+        token.setActingAdminId(ticket.getActingAdminId());
+        token.setActingAdminName(ticket.getActingAdminName());
+        token.setDirectLoginReason(ticket.getReason());
+        token.setCreateBy(ticket.getCreateBy());
+        token.setCreateTime(ticket.getCreateTime());
+        token.setExpireTime(ticket.getExpireTime());
+        return token;
     }
 
     private void assertClientIpNotBlocked()

@@ -1448,6 +1448,7 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
         normalized.setSkuPairingStatus(trimOptional(normalized.getSkuPairingStatus()));
         normalized.setInventoryScope(trimOptional(normalized.getInventoryScope()));
         normalized.setInventoryAttribute(trimOptional(normalized.getInventoryAttribute()));
+        normalized.setMasterWarehouseKeyword(trimOptional(normalized.getMasterWarehouseKeyword()));
         normalized.setWarehouseKeyword(trimOptional(normalized.getWarehouseKeyword()));
         return normalized;
     }

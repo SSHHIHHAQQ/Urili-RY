@@ -271,6 +271,11 @@
   gap: 8px 14px;
 }
 
+.inventoryScopeTabs {
+  flex: none;
+  margin-bottom: 8px;
+}
+
 .skuFilters {
   display: flex;
   flex: none;

@@ -611,6 +611,11 @@ public class BuyerServiceImpl implements IBuyerService
 
     private void recordBuyerDirectLoginTokenFailure(PortalDirectLoginToken token, ServiceException e)
     {
+        if (!StringUtils.equals("buyer", token.getPortalType()))
+        {
+            recordBuyerDirectLoginFailure(token, null, null, token.getUsername(), e.getMessage());
+            return;
+        }
         BuyerAccount account = selectBuyerDirectLoginAccount(token);
         recordBuyerDirectLoginFailure(token, token.getPartnerId(), account, token.getUsername(), e.getMessage());
     }
@@ -618,8 +623,9 @@ public class BuyerServiceImpl implements IBuyerService
     private boolean isDirectLoginTokenFailureWithoutAccountContext(ServiceException e)
     {
         String message = e.getMessage();
-        return message != null && message.startsWith("免密登录")
-            && !StringUtils.equals(message, "免密登录目标账号不存在");
+        return StringUtils.equals(message, "免密登录 token 不能为空")
+            || StringUtils.equals(message, "免密登录票据不存在")
+            || StringUtils.equals(message, "免密登录 token 校验器不能为空");
     }
 
     @Override
@@ -628,8 +634,12 @@ public class BuyerServiceImpl implements IBuyerService
     {
         assertBuyerSessionAccount(session);
         int rows = buyerMapper.logoutBuyerSession(session.getSubjectId(), session.getAccountId(), session.getTokenId());
-        buyerMapper.insertBuyerLoginLog(portalTokenSupport.buildLoginLog(
-            session.getSubjectId(), session.getAccountId(), session.getUserName(), Constants.SUCCESS, "退出成功"));
+        PortalLoginLog log = Boolean.TRUE.equals(session.getDirectLogin())
+            ? portalTokenSupport.buildDirectLoginLog(session.getSubjectId(), session.getAccountId(),
+                session.getUserName(), Constants.SUCCESS, "退出成功", session)
+            : portalTokenSupport.buildLoginLog(session.getSubjectId(), session.getAccountId(),
+                session.getUserName(), Constants.SUCCESS, "退出成功");
+        buyerMapper.insertBuyerLoginLog(log);
         portalTokenSupport.deleteLoginToken(session);
         return rows;
     }
@@ -785,12 +795,14 @@ public class BuyerServiceImpl implements IBuyerService
 
     private int forceLogoutBuyerSessionScope(Long buyerId, Long buyerAccountId, String reason)
     {
-        List<String> tokenIds = buyerMapper.selectOnlineBuyerSessionTokenIds(buyerId, buyerAccountId);
+        List<PortalLoginSession> sessions = buyerMapper.selectOnlineBuyerSessionList(buyerId, buyerAccountId);
         int rows = buyerMapper.forceLogoutBuyerSessions(buyerId, buyerAccountId);
         if (rows > 0)
         {
-            recordBuyerForceLogoutAudit(buyerId, buyerAccountId, reason);
+            recordBuyerForceLogoutAudit(buyerId, buyerAccountId, reason, sessions);
         }
+        List<String> tokenIds = sessions == null ? List.of()
+            : sessions.stream().map(PortalLoginSession::getTokenId).filter(StringUtils::isNotEmpty).toList();
         portalTokenSupport.deleteLoginTokens("buyer", tokenIds);
         return rows;
     }
@@ -803,12 +815,31 @@ public class BuyerServiceImpl implements IBuyerService
         }
     }
 
-    private void recordBuyerForceLogoutAudit(Long buyerId, Long buyerAccountId, String reason)
+    private void recordBuyerForceLogoutAudit(Long buyerId, Long buyerAccountId, String reason,
+            List<PortalLoginSession> sessions)
     {
+        if (sessions != null && !sessions.isEmpty())
+        {
+            for (PortalLoginSession session : sessions)
+            {
+                recordBuyerForceLogoutSessionAudit(session, reason);
+            }
+            return;
+        }
         BuyerAccount account = buyerAccountId == null ? null : buyerMapper.selectBuyerAccountById(buyerAccountId);
         String userName = account == null ? null : account.getUserName();
         buyerMapper.insertBuyerLoginLog(portalTokenSupport.buildLoginLog(
             buyerId, buyerAccountId, userName, Constants.SUCCESS, reason));
+    }
+
+    private void recordBuyerForceLogoutSessionAudit(PortalLoginSession session, String reason)
+    {
+        PortalLoginLog log = Boolean.TRUE.equals(session.getDirectLogin())
+            ? portalTokenSupport.buildDirectLoginLog(session.getSubjectId(), session.getAccountId(),
+                session.getUserName(), Constants.SUCCESS, reason, session)
+            : portalTokenSupport.buildLoginLog(session.getSubjectId(), session.getAccountId(),
+                session.getUserName(), Constants.SUCCESS, reason);
+        buyerMapper.insertBuyerLoginLog(log);
     }
 
     private BuyerAccount selectBuyerAccountByPayload(BuyerAccount account)
@@ -924,7 +955,9 @@ public class BuyerServiceImpl implements IBuyerService
     private void recordBuyerDirectLoginFailure(PortalDirectLoginToken token, Long buyerId, BuyerAccount account,
             String username, String message)
     {
-        Long accountId = account == null ? null : account.getBuyerAccountId();
+        Long accountId = account == null
+            ? (StringUtils.equals("buyer", token.getPortalType()) ? token.getAccountId() : null)
+            : account.getBuyerAccountId();
         PortalLoginLog log = portalTokenSupport.buildDirectLoginLog(buyerId, accountId, username, Constants.FAIL,
             message, token);
         buyerMapper.insertBuyerLoginLog(log);

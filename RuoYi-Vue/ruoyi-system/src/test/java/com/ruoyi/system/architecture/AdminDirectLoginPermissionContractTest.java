@@ -132,6 +132,7 @@ public class AdminDirectLoginPermissionContractTest
         assertContains(grantSql, "set @confirm_admin_partner_role_menu_grant", grantSeed, violations);
         assertContains(grantSql, "call assert_admin_partner_role_menu_grant_confirmed();", grantSeed, violations);
         assertContains(grantSql, "call assert_admin_partner_menu_signature();", grantSeed, violations);
+        assertAdminPartnerGrantsStayInsideSignedMenuTree(grantSeed, grantSql, violations);
         assertAdminButtonGrantsStayAdminOnly(grantSeed, grantSql, violations);
 
         Path cleanupSeed = backendRoot.resolve("sql/20260606_admin_partner_non_admin_button_grant_cleanup.sql");
@@ -157,6 +158,24 @@ public class AdminDirectLoginPermissionContractTest
         {
             violations.add(sqlFile.getFileName()
                     + " must not inherit child button grants for every role with page access");
+        }
+    }
+
+    private void assertAdminPartnerGrantsStayInsideSignedMenuTree(Path sqlFile, String sql, List<String> violations)
+    {
+        assertContains(sql, "join sys_menu m on m.menu_id in (2010, 2011, 2012)", sqlFile, violations);
+        String initialGrant = extractSqlBetween(sql, "insert into sys_role_menu (role_id, menu_id)",
+                "insert into sys_role_menu (role_id, menu_id)", 2);
+        if (initialGrant.isEmpty())
+        {
+            violations.add(sqlFile.getFileName() + " must keep a dedicated admin page grant statement");
+            return;
+        }
+        if (initialGrant.contains("m.perms like 'seller:admin:%'")
+                || initialGrant.contains("m.perms like 'buyer:admin:%'"))
+        {
+            violations.add(sqlFile.getFileName()
+                    + " must not grant every seller/buyer admin permission by prefix; grant the signed menu tree first");
         }
     }
 
@@ -338,6 +357,28 @@ public class AdminDirectLoginPermissionContractTest
             }
         }
         return "";
+    }
+
+    private String extractSqlBetween(String sql, String startNeedle, String endNeedle, int endOccurrence)
+    {
+        int start = sql.indexOf(startNeedle);
+        if (start < 0)
+        {
+            return "";
+        }
+
+        int end = -1;
+        int fromIndex = start + startNeedle.length();
+        for (int i = 1; i < endOccurrence; i++)
+        {
+            end = sql.indexOf(endNeedle, fromIndex);
+            if (end < 0)
+            {
+                return sql.substring(start);
+            }
+            fromIndex = end + endNeedle.length();
+        }
+        return sql.substring(start, end);
     }
 
     private Path findWorkspaceRoot()

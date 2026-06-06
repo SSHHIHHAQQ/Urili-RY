@@ -64,6 +64,9 @@ public interface SellerMapper
     public List<PortalSessionProfile> selectSellerSessionProfileList(@Param("sellerId") Long sellerId,
             @Param("sellerAccountId") Long sellerAccountId);
 
+    public List<PortalLoginSession> selectOnlineSellerSessionList(@Param("sellerId") Long sellerId,
+            @Param("sellerAccountId") Long sellerAccountId);
+
     public List<String> selectOnlineSellerSessionTokenIds(@Param("sellerId") Long sellerId,
             @Param("sellerAccountId") Long sellerAccountId);
 

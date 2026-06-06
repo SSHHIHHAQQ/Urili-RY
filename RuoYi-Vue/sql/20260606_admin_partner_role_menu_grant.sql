@@ -52,11 +52,7 @@ call assert_admin_partner_menu_signature();
 insert into sys_role_menu (role_id, menu_id)
 select r.role_id, m.menu_id
 from sys_role r
-join sys_menu m on (
-    m.menu_id in (2010, 2011, 2012)
-    or m.perms like 'seller:admin:%'
-    or m.perms like 'buyer:admin:%'
-)
+join sys_menu m on m.menu_id in (2010, 2011, 2012)
 where r.role_key = 'admin'
   and r.del_flag = '0'
   and not exists (

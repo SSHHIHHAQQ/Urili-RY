@@ -12,6 +12,7 @@ public class SourceWarehouseStockQuery
     private String skuPairingStatus;
     private String inventoryScope;
     private String inventoryAttribute;
+    private String masterWarehouseKeyword;
     private String warehouseKeyword;
 
     public String getConnectionCode() { return connectionCode; }
@@ -28,6 +29,8 @@ public class SourceWarehouseStockQuery
     public void setInventoryScope(String inventoryScope) { this.inventoryScope = inventoryScope; }
     public String getInventoryAttribute() { return inventoryAttribute; }
     public void setInventoryAttribute(String inventoryAttribute) { this.inventoryAttribute = inventoryAttribute; }
+    public String getMasterWarehouseKeyword() { return masterWarehouseKeyword; }
+    public void setMasterWarehouseKeyword(String masterWarehouseKeyword) { this.masterWarehouseKeyword = masterWarehouseKeyword; }
     public String getWarehouseKeyword() { return warehouseKeyword; }
     public void setWarehouseKeyword(String warehouseKeyword) { this.warehouseKeyword = warehouseKeyword; }
 }

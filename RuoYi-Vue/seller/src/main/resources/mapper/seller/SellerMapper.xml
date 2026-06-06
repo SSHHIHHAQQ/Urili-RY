@@ -500,6 +500,31 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         </if>
     </select>
 
+    <select id="selectOnlineSellerSessionList" resultType="PortalLoginSession">
+        select token_id as tokenId,
+               'seller' as terminal,
+               seller_id as subjectId,
+               seller_account_id as accountId,
+               user_name as userName,
+               login_ip as loginIp,
+               login_time as loginTime,
+               expire_time as expireTime,
+               status,
+               direct_login as directLogin,
+               direct_login_ticket_id as directLoginTicketId,
+               acting_admin_id as actingAdminId,
+               acting_admin_name as actingAdminName,
+               direct_login_reason as directLoginReason
+        from seller_session
+        where seller_id = #{sellerId}
+          and status = '0'
+          and logout_time is null
+          and expire_time >= sysdate()
+        <if test="sellerAccountId != null">
+          and seller_account_id = #{sellerAccountId}
+        </if>
+    </select>
+
     <select id="countOnlineSellerSession" resultType="int">
         select count(1)
         from seller_session

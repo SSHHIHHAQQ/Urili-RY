@@ -181,8 +181,8 @@ public class SellerServiceImplTest
         Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
         SellerAccount account = account(22L, 11L, "seller-staff", PartnerSupport.STATUS_NORMAL);
         RecordingSellerMapper mapper = recordingMapper(seller, account);
-        mapper.onlineTokenIds.add("token-a");
-        mapper.onlineTokenIds.add("token-b");
+        mapper.onlineSessions.add(onlineSession(11L, 22L, "seller-staff", "token-a", false));
+        mapper.onlineSessions.add(onlineSession(11L, 22L, "seller-staff", "token-b", true));
         RecordingPortalTokenSupport tokenSupport = new RecordingPortalTokenSupport();
         SellerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper().proxy(),
             tokenSupport);
@@ -201,8 +201,11 @@ public class SellerServiceImplTest
         assertEquals(Long.valueOf(11L), mapper.insertedLoginLog.getSubjectId());
         assertEquals(Long.valueOf(22L), mapper.insertedLoginLog.getAccountId());
         assertEquals("seller-staff", mapper.insertedLoginLog.getUserName());
+        assertEquals(2, mapper.insertedLoginLogs.size());
+        assertEquals(Boolean.FALSE, mapper.insertedLoginLogs.get(0).getDirectLogin());
+        assertDirectLoginAudit(mapper.insertedLoginLogs.get(1));
         assertEquals("seller", tokenSupport.deletedTerminal);
-        assertEquals(mapper.onlineTokenIds, tokenSupport.deletedTokenIds);
+        assertEquals(List.of("token-a", "token-b"), tokenSupport.deletedTokenIds);
     }
 
     @Test
@@ -852,6 +855,70 @@ public class SellerServiceImplTest
     }
 
     @Test
+    public void directLoginSellerWritesDirectLoginFailureLogWhenTicketContextIsAvailable()
+    {
+        Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
+        SellerAccount account = account(22L, 11L, "seller-staff", PartnerSupport.STATUS_NORMAL);
+        RecordingSellerMapper mapper = recordingMapper(seller, account);
+        RecordingDirectLoginSupport directLoginSupport = new RecordingDirectLoginSupport();
+        directLoginSupport.tokenToConsume = directLoginToken("seller", 11L, "SAA010001", 22L, "seller-staff");
+        directLoginSupport.consumeException = new ServiceException("免密登录 token 不存在或已过期");
+        RecordingPortalTokenSupport tokenSupport = new RecordingPortalTokenSupport();
+        SellerServiceImpl service = service(mapper.proxy(), directLoginSupport, deptMapper().proxy(), tokenSupport);
+
+        try
+        {
+            service.directLoginSeller("expired-token");
+        }
+        catch (ServiceException e)
+        {
+            assertEquals("免密登录 token 不存在或已过期", e.getMessage());
+            assertEquals(1, directLoginSupport.consumeCount);
+            assertEquals(0, tokenSupport.createLoginCount);
+            assertEquals(null, mapper.insertedSession);
+            assertEquals(Constants.FAIL, mapper.insertedLoginLog.getStatus());
+            assertEquals(Long.valueOf(11L), mapper.insertedLoginLog.getSubjectId());
+            assertEquals(Long.valueOf(22L), mapper.insertedLoginLog.getAccountId());
+            assertEquals("seller-staff", mapper.insertedLoginLog.getUserName());
+            assertDirectLoginAudit(mapper.insertedLoginLog);
+            return;
+        }
+        throw new AssertionError("Expected ServiceException");
+    }
+
+    @Test
+    public void directLoginSellerDoesNotWriteForeignTicketIdsIntoSubjectColumns()
+    {
+        Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
+        SellerAccount account = account(22L, 11L, "seller-staff", PartnerSupport.STATUS_NORMAL);
+        RecordingSellerMapper mapper = recordingMapper(seller, account);
+        RecordingDirectLoginSupport directLoginSupport = new RecordingDirectLoginSupport();
+        directLoginSupport.tokenToConsume = directLoginToken("buyer", 11L, "BAA010001", 22L, "buyer-staff");
+        directLoginSupport.consumeException = new ServiceException("免密登录票据端类型不匹配");
+        RecordingPortalTokenSupport tokenSupport = new RecordingPortalTokenSupport();
+        SellerServiceImpl service = service(mapper.proxy(), directLoginSupport, deptMapper().proxy(), tokenSupport);
+
+        try
+        {
+            service.directLoginSeller("foreign-token");
+        }
+        catch (ServiceException e)
+        {
+            assertEquals("免密登录票据端类型不匹配", e.getMessage());
+            assertEquals(1, directLoginSupport.consumeCount);
+            assertEquals(0, tokenSupport.createLoginCount);
+            assertEquals(null, mapper.insertedSession);
+            assertEquals(Constants.FAIL, mapper.insertedLoginLog.getStatus());
+            assertEquals(null, mapper.insertedLoginLog.getSubjectId());
+            assertEquals(null, mapper.insertedLoginLog.getAccountId());
+            assertEquals("buyer-staff", mapper.insertedLoginLog.getUserName());
+            assertDirectLoginAudit(mapper.insertedLoginLog);
+            return;
+        }
+        throw new AssertionError("Expected ServiceException");
+    }
+
+    @Test
     public void directLoginSellerRejectsDisabledSellerAfterTicketIssued()
     {
         Seller seller = seller(11L, "SAA010001", "1");
@@ -960,7 +1027,7 @@ public class SellerServiceImplTest
             assertEquals(null, mapper.insertedSession);
             assertEquals(Constants.FAIL, mapper.insertedLoginLog.getStatus());
             assertEquals(Long.valueOf(11L), mapper.insertedLoginLog.getSubjectId());
-            assertEquals(null, mapper.insertedLoginLog.getAccountId());
+            assertEquals(Long.valueOf(22L), mapper.insertedLoginLog.getAccountId());
             assertDirectLoginAudit(mapper.insertedLoginLog);
             return;
         }
@@ -989,7 +1056,7 @@ public class SellerServiceImplTest
             assertEquals(null, mapper.insertedSession);
             assertEquals(Constants.FAIL, mapper.insertedLoginLog.getStatus());
             assertEquals(Long.valueOf(11L), mapper.insertedLoginLog.getSubjectId());
-            assertEquals(null, mapper.insertedLoginLog.getAccountId());
+            assertEquals(Long.valueOf(22L), mapper.insertedLoginLog.getAccountId());
             assertDirectLoginAudit(mapper.insertedLoginLog);
             return;
         }
@@ -1148,6 +1215,38 @@ public class SellerServiceImplTest
     }
 
     @Test
+    public void logoutSellerPreservesDirectLoginAuditFromSession()
+    {
+        Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
+        SellerAccount account = account(22L, 11L, "seller-staff", PartnerSupport.STATUS_NORMAL);
+        RecordingSellerMapper mapper = recordingMapper(seller, account);
+        RecordingPortalTokenSupport tokenSupport = new RecordingPortalTokenSupport();
+        SellerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper().proxy(),
+            tokenSupport);
+        PortalLoginSession session = session(11L, 22L);
+        session.setUserName("seller-staff");
+        session.setDirectLogin(Boolean.TRUE);
+        session.setDirectLoginTicketId(100L);
+        session.setActingAdminId(1L);
+        session.setActingAdminName("admin");
+        session.setDirectLoginReason("support check");
+
+        int rows = service.logoutSeller(session);
+
+        assertEquals(1, rows);
+        assertEquals(1, mapper.logoutSessionCallCount);
+        assertEquals(Long.valueOf(11L), mapper.logoutSellerId);
+        assertEquals(Long.valueOf(22L), mapper.logoutAccountId);
+        assertEquals("seller_test_token", mapper.logoutTokenId);
+        assertEquals(Constants.SUCCESS, mapper.insertedLoginLog.getStatus());
+        assertEquals("退出成功", mapper.insertedLoginLog.getMsg());
+        assertEquals("seller-staff", mapper.insertedLoginLog.getUserName());
+        assertDirectLoginAudit(mapper.insertedLoginLog);
+        assertEquals(1, tokenSupport.deleteLoginTokenCallCount);
+        assertSame(session, tokenSupport.deletedSession);
+    }
+
+    @Test
     public void updateSellerOwnPasswordRejectsMissingTokenBeforeMapper()
     {
         Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
@@ -1269,6 +1368,23 @@ public class SellerServiceImplTest
         return session;
     }
 
+    private PortalLoginSession onlineSession(Long sellerId, Long accountId, String username, String tokenId,
+            boolean directLogin)
+    {
+        PortalLoginSession session = session(sellerId, accountId);
+        session.setUserName(username);
+        session.setTokenId(tokenId);
+        session.setDirectLogin(directLogin);
+        if (directLogin)
+        {
+            session.setDirectLoginTicketId(100L);
+            session.setActingAdminId(1L);
+            session.setActingAdminName("admin");
+            session.setDirectLoginReason("support check");
+        }
+        return session;
+    }
+
     private PortalDirectLoginToken directLoginToken(String terminal, Long sellerId, String sellerNo, Long accountId,
             String username)
     {
@@ -1354,6 +1470,8 @@ public class SellerServiceImplTest
 
         private final List<String> onlineTokenIds = new ArrayList<>();
 
+        private final List<PortalLoginSession> onlineSessions = new ArrayList<>();
+
         private Long forceLogoutSellerId;
 
         private Long forceLogoutAccountId;
@@ -1375,6 +1493,8 @@ public class SellerServiceImplTest
         private String loginInfoIp;
 
         private PortalLoginLog insertedLoginLog;
+
+        private final List<PortalLoginLog> insertedLoginLogs = new ArrayList<>();
 
         private PortalLoginSession insertedSession;
 
@@ -1475,12 +1595,16 @@ public class SellerServiceImplTest
             {
                 return onlineTokenIds;
             }
+            if ("selectOnlineSellerSessionList".equals(methodName))
+            {
+                return selectOnlineSessions((Long) args[0], (Long) args[1]);
+            }
             if ("forceLogoutSellerSessions".equals(methodName))
             {
                 forceLogoutCallCount++;
                 forceLogoutSellerId = (Long) args[0];
                 forceLogoutAccountId = (Long) args[1];
-                return onlineTokenIds.size();
+                return selectOnlineSessions(forceLogoutSellerId, forceLogoutAccountId).size();
             }
             if ("logoutSellerSession".equals(methodName))
             {
@@ -1500,6 +1624,7 @@ public class SellerServiceImplTest
             if ("insertSellerLoginLog".equals(methodName))
             {
                 insertedLoginLog = (PortalLoginLog) args[0];
+                insertedLoginLogs.add(insertedLoginLog);
                 return 1;
             }
             if ("insertSellerSession".equals(methodName))
@@ -1536,6 +1661,28 @@ public class SellerServiceImplTest
                 return proxy == args[0];
             }
             return defaultValue(method.getReturnType());
+        }
+
+        private List<PortalLoginSession> selectOnlineSessions(Long sellerId, Long sellerAccountId)
+        {
+            if (!onlineSessions.isEmpty())
+            {
+                return onlineSessions;
+            }
+            List<PortalLoginSession> sessions = new ArrayList<>();
+            SellerAccount account = sellerAccountId == null ? null : accountById.get(sellerAccountId);
+            for (String tokenId : onlineTokenIds)
+            {
+                PortalLoginSession session = new PortalLoginSession();
+                session.setTerminal("seller");
+                session.setSubjectId(sellerId);
+                session.setAccountId(sellerAccountId);
+                session.setTokenId(tokenId);
+                session.setUserName(account == null ? null : account.getUserName());
+                session.setDirectLogin(Boolean.FALSE);
+                sessions.add(session);
+            }
+            return sessions;
         }
     }
 
@@ -1712,6 +1859,10 @@ public class SellerServiceImplTest
             consumedTokenValue = token;
             if (consumeException != null)
             {
+                if (failureAuditor != null && tokenToConsume != null)
+                {
+                    failureAuditor.accept(tokenToConsume, consumeException);
+                }
                 throw consumeException;
             }
             if (validator != null)
