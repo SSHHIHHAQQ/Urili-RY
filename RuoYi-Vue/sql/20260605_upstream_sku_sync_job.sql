@@ -5,6 +5,26 @@
 -- 3. Do not trigger missed executions immediately, to avoid external API bursts.
 -- 4. Disallow concurrent execution. The service also guards per connection.
 
+set names utf8mb4;
+
+set @confirm_upstream_sku_sync_job := coalesce(@confirm_upstream_sku_sync_job, '');
+
+delimiter //
+
+drop procedure if exists assert_upstream_sku_sync_job_confirmed//
+create procedure assert_upstream_sku_sync_job_confirmed()
+begin
+  if coalesce(@confirm_upstream_sku_sync_job, '')
+      <> 'APPLY_UPSTREAM_SKU_SYNC_JOB' then
+    signal sqlstate '45000' set message_text = 'set @confirm_upstream_sku_sync_job = APPLY_UPSTREAM_SKU_SYNC_JOB before running this migration';
+  end if;
+end//
+
+delimiter ;
+
+call assert_upstream_sku_sync_job_confirmed();
+drop procedure if exists assert_upstream_sku_sync_job_confirmed;
+
 SET @job_id := (
     SELECT job_id
     FROM sys_job

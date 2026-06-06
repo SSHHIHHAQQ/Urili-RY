@@ -69,6 +69,7 @@ public class PortalAnonymousEndpointContractTest
                 if (handler.annotations.contains("@Anonymous"))
                 {
                     assertAnonymousEndpointContract(path, terminal, handler, violations);
+                    assertSelfAuditEndpointPermission(path, terminal, handler, violations);
                 }
             }
         }
@@ -125,6 +126,33 @@ public class PortalAnonymousEndpointContractTest
             {
                 violations.add(prefix + " portal endpoint must not accept client identity scope parameter " + paramName);
             }
+        }
+    }
+
+    private void assertSelfAuditEndpointPermission(Path path, String terminal, HandlerMethod handler,
+            List<String> violations)
+    {
+        if (!path.getFileName().toString().equals(capitalize(terminal) + "PortalController.java"))
+        {
+            return;
+        }
+        String expectedPermission = null;
+        if ("accountLoginLogs".equals(handler.name))
+        {
+            expectedPermission = terminal + ":account:loginLog:list";
+        }
+        else if ("accountOperLogs".equals(handler.name))
+        {
+            expectedPermission = terminal + ":account:operLog:list";
+        }
+        else if ("accountSessions".equals(handler.name))
+        {
+            expectedPermission = terminal + ":account:session:list";
+        }
+        if (expectedPermission != null && !handler.annotations.contains("hasPermi = \"" + expectedPermission + "\""))
+        {
+            violations.add(relative(path) + "#" + handler.name
+                    + " must require terminal self-audit permission " + expectedPermission);
         }
     }
 
@@ -250,6 +278,11 @@ public class PortalAnonymousEndpointContractTest
     private boolean containsWord(String source, String word)
     {
         return source.matches("(?s).*\\b" + word + "\\b.*");
+    }
+
+    private String capitalize(String value)
+    {
+        return value.substring(0, 1).toUpperCase() + value.substring(1);
     }
 
     private String relative(Path path)

@@ -99,6 +99,8 @@ public class PortalDirectLoginSupportTest
 
         String cacheKey = cacheKey(result.getToken());
         assertEquals(cacheKey, redisCache.lastSetKey);
+        assertTrue(redisCache.lastSetKey.startsWith("portal_direct_login:seller:"));
+        assertFalse(redisCache.values.containsKey(legacyCacheKey(result.getToken())));
         assertFalse(redisCache.lastSetKey.contains(result.getToken()));
         assertEquals(Integer.valueOf(PortalDirectLoginSupport.EXPIRE_MINUTES), redisCache.lastTimeout);
         assertEquals(TimeUnit.MINUTES, redisCache.lastTimeUnit);
@@ -166,6 +168,29 @@ public class PortalDirectLoginSupportTest
         assertThrows(ServiceException.class, () -> support.consumeToken("seller", result.getToken(), token -> {
         }));
         assertEquals(1, ticketMapper.usedCalls);
+    }
+
+    @Test
+    public void consumeTokenShouldReadLegacyRedisPayloadAndDeleteBothKeyShapes()
+    {
+        PortalDirectLoginResult result = support.createToken("seller", 7L, "SAAA010001",
+                activeAccount(44L, "seller-owner"), "Support inspection",
+                PortalDirectLoginSupport.SELLER_WEB_URL_CONFIG_KEY, "http://fallback/seller/direct-login");
+        String cacheKey = cacheKey(result.getToken());
+        String legacyCacheKey = legacyCacheKey(result.getToken());
+        PortalDirectLoginToken legacyPayload = redisCache.getCacheObject(cacheKey);
+        redisCache.values.remove(cacheKey);
+        redisCache.values.put(legacyCacheKey, legacyPayload);
+
+        PortalDirectLoginToken payload = support.consumeToken("seller", result.getToken(), token -> {
+        });
+
+        assertEquals(result.getTicketId(), payload.getTicketId());
+        assertEquals(1, ticketMapper.usedCalls);
+        assertTrue(redisCache.deletedKeys.contains(cacheKey));
+        assertTrue(redisCache.deletedKeys.contains(legacyCacheKey));
+        assertNull(redisCache.getCacheObject(cacheKey));
+        assertNull(redisCache.getCacheObject(legacyCacheKey));
     }
 
     @Test
@@ -528,6 +553,16 @@ public class PortalDirectLoginSupportTest
     }
 
     private static String cacheKey(String token)
+    {
+        return cacheKey("seller", token);
+    }
+
+    private static String cacheKey(String portalType, String token)
+    {
+        return "portal_direct_login:" + portalType + ":" + hash(token);
+    }
+
+    private static String legacyCacheKey(String token)
     {
         return "portal_direct_login:" + hash(token);
     }

@@ -4,6 +4,24 @@
 
 set names utf8mb4;
 
+set @confirm_product_config_change_log := coalesce(@confirm_product_config_change_log, '');
+
+delimiter //
+
+drop procedure if exists assert_product_config_change_log_confirmed//
+create procedure assert_product_config_change_log_confirmed()
+begin
+  if coalesce(@confirm_product_config_change_log, '')
+      <> 'APPLY_PRODUCT_CONFIG_CHANGE_LOG' then
+    signal sqlstate '45000' set message_text = 'set @confirm_product_config_change_log = APPLY_PRODUCT_CONFIG_CHANGE_LOG before running this migration';
+  end if;
+end//
+
+delimiter ;
+
+call assert_product_config_change_log_confirmed();
+drop procedure if exists assert_product_config_change_log_confirmed;
+
 create table if not exists product_config_change_log (
   log_id          bigint(20)    not null auto_increment comment '修改记录ID',
   biz_type        varchar(32)   not null                comment '业务类型：CATEGORY/ATTRIBUTE/ATTRIBUTE_OPTION/CATEGORY_ATTRIBUTE_RULE',

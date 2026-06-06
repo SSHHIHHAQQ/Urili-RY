@@ -46,6 +46,14 @@ export default [
     component: './Portal/Home',
   },
   {
+    path: '/seller',
+    component: './Seller',
+  },
+  {
+    path: '/buyer',
+    component: './Buyer',
+  },
+  {
     path: '/product/distribution/create',
     component: './Product/Distribution/EditPage',
   },

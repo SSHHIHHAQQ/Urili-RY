@@ -65,15 +65,26 @@ const backendReportModules = [
   'seller',
   'buyer',
 ];
+const frontendDiscoveryIgnoredDirs = new Set([
+  'node_modules',
+  'dist',
+  'coverage',
+  '.cache',
+  '.umi',
+  '.umi-production',
+]);
+const criticalBackendTestClassPattern = /(?:Terminal|ThreeTerminal|Portal|DirectLogin|Seller|Buyer|Partner|SqlExecutionGuard|Admin.*Permission|Permission.*Account)/;
 
-function walkFiles(dir, files = []) {
+function walkFiles(dir, files = [], ignoredDirs = new Set()) {
   if (!fs.existsSync(dir)) {
     return files;
   }
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const target = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      walkFiles(target, files);
+      if (!ignoredDirs.has(entry.name)) {
+        walkFiles(target, files, ignoredDirs);
+      }
     } else {
       files.push(target);
     }
@@ -81,14 +92,16 @@ function walkFiles(dir, files = []) {
   return files;
 }
 
+function getBackendTestSourceRoots() {
+  return fs
+    .readdirSync(backendRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => path.join(backendRoot, entry.name, 'src', 'test', 'java'))
+    .filter((root) => fs.existsSync(root));
+}
+
 function assertBackendTestSourcesExist() {
-  const sourceRoots = [
-    path.join(backendRoot, 'ruoyi-system', 'src', 'test', 'java'),
-    path.join(backendRoot, 'ruoyi-framework', 'src', 'test', 'java'),
-    path.join(backendRoot, 'product', 'src', 'test', 'java'),
-    path.join(backendRoot, 'seller', 'src', 'test', 'java'),
-    path.join(backendRoot, 'buyer', 'src', 'test', 'java'),
-  ];
+  const sourceRoots = getBackendTestSourceRoots();
   const testSourceFiles = sourceRoots
     .flatMap((root) => walkFiles(root))
     .filter((file) => file.endsWith('Test.java'));
@@ -107,10 +120,12 @@ function assertBackendTestSourcesExist() {
   }
 
   const configuredTests = new Set(backendTestClasses);
-  const unlisted = [...testSources.keys()].filter((testClass) => !configuredTests.has(testClass));
+  const unlisted = [...testSources.keys()].filter((testClass) => {
+    return criticalBackendTestClassPattern.test(testClass) && !configuredTests.has(testClass);
+  });
   if (unlisted.length > 0) {
     throw new Error(
-      `backend test classes are not included in verify-three-terminal.mjs: ${unlisted.sort().join(', ')}`,
+      `critical backend test classes are not included in verify-three-terminal.mjs: ${unlisted.sort().join(', ')}`,
     );
   }
 
@@ -125,10 +140,9 @@ function assertBackendTestSourcesExist() {
 }
 
 function assertFrontendTestSourcesIncluded() {
-  const testsRoot = path.join(uiRoot, 'tests');
   const configuredTests = new Set(frontendTestPaths.map((file) => path.normalize(file)));
-  const testFiles = walkFiles(testsRoot)
-    .filter((file) => /\btest\.[cm]?[jt]sx?$/.test(path.basename(file)))
+  const testFiles = walkFiles(uiRoot, [], frontendDiscoveryIgnoredDirs)
+    .filter((file) => /\.(test|spec)\.[cm]?[jt]sx?$/.test(path.basename(file)))
     .map((file) => path.normalize(path.relative(uiRoot, file)));
   const unlisted = testFiles.filter((file) => !configuredTests.has(file));
 

@@ -113,6 +113,9 @@ public class TerminalSeedPermissionContractTest
     private void assertTerminalPortalPermissions(Path seed, String sql, String terminal, List<String> violations)
     {
         assertContains(sql, terminal + ":account:list", seed, violations);
+        assertContains(sql, terminal + ":account:loginLog:list", seed, violations);
+        assertContains(sql, terminal + ":account:operLog:list", seed, violations);
+        assertContains(sql, terminal + ":account:session:list", seed, violations);
         assertContains(sql, terminal + ":dept:list", seed, violations);
         assertContains(sql, terminal + ":role:list", seed, violations);
         assertContains(sql, terminal + ":product:category:list", seed, violations);

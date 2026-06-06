@@ -4,6 +4,24 @@
 
 set names utf8mb4;
 
+set @confirm_mall_product_editor_ui_sample_data := coalesce(@confirm_mall_product_editor_ui_sample_data, '');
+
+delimiter //
+
+drop procedure if exists assert_mall_product_editor_ui_sample_data_confirmed//
+create procedure assert_mall_product_editor_ui_sample_data_confirmed()
+begin
+  if coalesce(@confirm_mall_product_editor_ui_sample_data, '')
+      <> 'APPLY_MALL_PRODUCT_EDITOR_UI_SAMPLE_DATA' then
+    signal sqlstate '45000' set message_text = 'set @confirm_mall_product_editor_ui_sample_data = APPLY_MALL_PRODUCT_EDITOR_UI_SAMPLE_DATA before running this migration';
+  end if;
+end//
+
+delimiter ;
+
+call assert_mall_product_editor_ui_sample_data_confirmed();
+drop procedure if exists assert_mall_product_editor_ui_sample_data_confirmed;
+
 alter table product_spu
   add column product_name_en varchar(255) not null default '' comment '商品英文标题' after product_name;
 

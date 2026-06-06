@@ -28,6 +28,8 @@ public class Seller extends PartnerProfile
 
     private String sellerLevel;
 
+    private String companyName;
+
     public Long getSellerId()
     {
         return sellerId;
@@ -110,7 +112,12 @@ public class Seller extends PartnerProfile
 
     public String getCompanyName()
     {
-        return StringUtils.defaultIfBlank(sellerName, sellerShortName);
+        return StringUtils.defaultIfBlank(companyName, StringUtils.defaultIfBlank(sellerName, sellerShortName));
+    }
+
+    public void setCompanyName(String companyName)
+    {
+        this.companyName = companyName;
     }
 
     @Override

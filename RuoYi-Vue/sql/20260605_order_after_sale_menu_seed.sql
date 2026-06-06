@@ -4,6 +4,24 @@
 
 set names utf8mb4;
 
+set @confirm_order_after_sale_menu_seed := coalesce(@confirm_order_after_sale_menu_seed, '');
+
+delimiter //
+
+drop procedure if exists assert_order_after_sale_menu_seed_confirmed//
+create procedure assert_order_after_sale_menu_seed_confirmed()
+begin
+  if coalesce(@confirm_order_after_sale_menu_seed, '')
+      <> 'APPLY_ORDER_AFTER_SALE_MENU_SEED' then
+    signal sqlstate '45000' set message_text = 'set @confirm_order_after_sale_menu_seed = APPLY_ORDER_AFTER_SALE_MENU_SEED before running this migration';
+  end if;
+end//
+
+delimiter ;
+
+call assert_order_after_sale_menu_seed_confirmed();
+drop procedure if exists assert_order_after_sale_menu_seed_confirmed;
+
 insert into sys_menu
     (menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
      is_frame, is_cache, menu_type, visible, status, perms, icon, create_by,

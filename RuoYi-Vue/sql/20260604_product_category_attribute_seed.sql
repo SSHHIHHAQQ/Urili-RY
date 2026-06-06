@@ -4,6 +4,24 @@
 
 set names utf8mb4;
 
+set @confirm_product_category_attribute_seed := coalesce(@confirm_product_category_attribute_seed, '');
+
+delimiter //
+
+drop procedure if exists assert_product_category_attribute_seed_confirmed//
+create procedure assert_product_category_attribute_seed_confirmed()
+begin
+  if coalesce(@confirm_product_category_attribute_seed, '')
+      <> 'APPLY_PRODUCT_CATEGORY_ATTRIBUTE_SEED' then
+    signal sqlstate '45000' set message_text = 'set @confirm_product_category_attribute_seed = APPLY_PRODUCT_CATEGORY_ATTRIBUTE_SEED before running this migration';
+  end if;
+end//
+
+delimiter ;
+
+call assert_product_category_attribute_seed_confirmed();
+drop procedure if exists assert_product_category_attribute_seed_confirmed;
+
 create table if not exists product_category (
   category_id      bigint(20)    not null auto_increment comment '商品分类ID',
   parent_id        bigint(20)    not null default 0       comment '父分类ID',

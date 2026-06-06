@@ -289,6 +289,13 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
     }
 
     @Override
+    public UpstreamSyncResult syncScheduled(String connectionCode, String syncType)
+    {
+        return syncSingleType(connectionCode, normalizeSingleSyncType(syncType),
+            UpstreamSystemConstants.SYNC_MODE_SCHEDULED);
+    }
+
+    @Override
     public UpstreamSyncResult syncWarehousesOnly(String connectionCode)
     {
         return syncSingleType(connectionCode, UpstreamSystemConstants.SYNC_TYPE_WAREHOUSE,
@@ -723,6 +730,8 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
                 mode, rateLimitMs);
             recordLegacySuccessState(connectionCode, syncType, syncBatchId, startedTime, finishedTime, item.getCount());
             updateSyncBatch(syncBatchId, UpstreamSystemConstants.SYNC_STATUS_FRESH, item, finishedTime, "");
+            insertSyncExecutionLog(connectionCode, syncType, mode, syncBatchId, startedTime, finishedTime,
+                "SUCCESS", item, "");
             return item;
         }
         catch (RuntimeException ex)
@@ -737,6 +746,8 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
             failed.setStatus(UpstreamSystemConstants.SYNC_STATUS_FAILED);
             failed.setErrorMessage(message);
             updateSyncBatch(syncBatchId, UpstreamSystemConstants.SYNC_STATUS_FAILED, failed, finishedTime, message);
+            insertSyncExecutionLog(connectionCode, syncType, mode, syncBatchId, startedTime, finishedTime,
+                "FAILURE", failed, message);
             throw toServiceException(ex);
         }
     }
@@ -1021,6 +1032,19 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
         return result;
     }
 
+    private String normalizeSingleSyncType(String syncType)
+    {
+        String normalized = StringUtils.trimToEmpty(syncType).toUpperCase();
+        List<String> allowed = Arrays.asList(UpstreamSystemConstants.SYNC_TYPE_WAREHOUSE,
+            UpstreamSystemConstants.SYNC_TYPE_LOGISTICS_CHANNEL, UpstreamSystemConstants.SYNC_TYPE_SKU,
+            UpstreamSystemConstants.SYNC_TYPE_SKU_DIMENSION, UpstreamSystemConstants.SYNC_TYPE_INVENTORY);
+        if (!allowed.contains(normalized))
+        {
+            throw new ServiceException("不支持的同步类型：" + syncType);
+        }
+        return normalized;
+    }
+
     private List<String> normalizeSelectedSkuList(List<String> skuList)
     {
         if (skuList == null || skuList.isEmpty())
@@ -1274,6 +1298,80 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
         batch.setFinishedTime(finishedTime);
         batch.setErrorMessage(errorMessage);
         upstreamSystemMapper.updateSyncBatch(batch);
+    }
+
+    private void insertSyncExecutionLog(String connectionCode, String syncType, String mode, String syncBatchId,
+        Date startedTime, Date finishedTime, String status, UpstreamSyncItemResult item, String errorMessage)
+    {
+        UpstreamRequestLog log = new UpstreamRequestLog();
+        log.setConnectionCode(connectionCode);
+        log.setTraceId(syncBatchId);
+        log.setOperation(syncExecutionOperation(syncType));
+        log.setEndpoint("upstream-sync://" + StringUtils.defaultString(mode).toLowerCase() + "/" + syncType);
+        log.setRequestTime(startedTime);
+        log.setResponseTime(finishedTime);
+        log.setDurationMs(Math.max(0L, finishedTime.getTime() - startedTime.getTime()));
+        log.setRequestPayloadRedacted(JSON.toJSONString(syncExecutionRequestPayload(syncBatchId, syncType, mode)));
+        log.setResponsePayloadRedacted(JSON.toJSONString(syncExecutionResponsePayload(status, item, errorMessage)));
+        log.setExternalErrorCode("SUCCESS".equals(status) ? "" : syncType + "_SYNC_FAILED");
+        log.setExternalErrorMessage(StringUtils.left(StringUtils.defaultString(errorMessage), 500));
+        log.setStatus(status);
+        upstreamSystemMapper.insertRequestLog(log);
+    }
+
+    private Map<String, Object> syncExecutionRequestPayload(String syncBatchId, String syncType, String mode)
+    {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("syncBatchId", syncBatchId);
+        payload.put("syncType", syncType);
+        payload.put("mode", mode);
+        return payload;
+    }
+
+    private Map<String, Object> syncExecutionResponsePayload(String status, UpstreamSyncItemResult item,
+        String errorMessage)
+    {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("status", status);
+        if (item != null)
+        {
+            payload.put("pulledCount", item.getPulledCount());
+            payload.put("insertedCount", item.getInsertedCount());
+            payload.put("changedCount", item.getChangedCount());
+            payload.put("unchangedCount", item.getUnchangedCount());
+            payload.put("disabledCount", item.getDisabledCount());
+            payload.put("count", item.getCount());
+        }
+        if (StringUtils.isNotBlank(errorMessage))
+        {
+            payload.put("errorMessage", StringUtils.left(errorMessage, 500));
+        }
+        return payload;
+    }
+
+    private String syncExecutionOperation(String syncType)
+    {
+        if (UpstreamSystemConstants.SYNC_TYPE_WAREHOUSE.equals(syncType))
+        {
+            return UpstreamSystemConstants.OP_TASK_WAREHOUSE_SYNC;
+        }
+        if (UpstreamSystemConstants.SYNC_TYPE_LOGISTICS_CHANNEL.equals(syncType))
+        {
+            return UpstreamSystemConstants.OP_TASK_LOGISTICS_CHANNEL_SYNC;
+        }
+        if (UpstreamSystemConstants.SYNC_TYPE_SKU.equals(syncType))
+        {
+            return UpstreamSystemConstants.OP_TASK_SKU_SYNC;
+        }
+        if (UpstreamSystemConstants.SYNC_TYPE_SKU_DIMENSION.equals(syncType))
+        {
+            return UpstreamSystemConstants.OP_TASK_SKU_DIMENSION_SYNC;
+        }
+        if (UpstreamSystemConstants.SYNC_TYPE_INVENTORY.equals(syncType))
+        {
+            return UpstreamSystemConstants.OP_TASK_INVENTORY_SYNC;
+        }
+        return syncType + "_SYNC_TASK";
     }
 
     private Date nextSyncTime(String syncType)

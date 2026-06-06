@@ -52,6 +52,8 @@ public interface IUpstreamSystemService
 
     UpstreamSyncResult syncSelected(String connectionCode, UpstreamSyncRequest request);
 
+    UpstreamSyncResult syncScheduled(String connectionCode, String syncType);
+
     UpstreamSyncResult syncWarehousesOnly(String connectionCode);
 
     UpstreamSyncResult syncLogisticsChannelsOnly(String connectionCode);

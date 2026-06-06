@@ -2,6 +2,26 @@
 -- Scope: add Lingxing product snapshot fields used by the admin source product library.
 -- Run after upstream_system_management_seed.sql has created upstream_system_sku_candidate.
 
+set names utf8mb4;
+
+set @confirm_source_product_library_sku_candidate_fields := coalesce(@confirm_source_product_library_sku_candidate_fields, '');
+
+delimiter //
+
+drop procedure if exists assert_source_product_library_sku_candidate_fields_confirmed//
+create procedure assert_source_product_library_sku_candidate_fields_confirmed()
+begin
+  if coalesce(@confirm_source_product_library_sku_candidate_fields, '')
+      <> 'APPLY_SOURCE_PRODUCT_LIBRARY_SKU_CANDIDATE_FIELDS' then
+    signal sqlstate '45000' set message_text = 'set @confirm_source_product_library_sku_candidate_fields = APPLY_SOURCE_PRODUCT_LIBRARY_SKU_CANDIDATE_FIELDS before running this migration';
+  end if;
+end//
+
+delimiter ;
+
+call assert_source_product_library_sku_candidate_fields_confirmed();
+drop procedure if exists assert_source_product_library_sku_candidate_fields_confirmed;
+
 alter table upstream_system_sku_candidate
   add column product_alias_name varchar(255) default '' comment '领星产品别名' after master_product_name,
   add column approve_status varchar(32) default '' comment '领星产品审核状态' after product_alias_name,

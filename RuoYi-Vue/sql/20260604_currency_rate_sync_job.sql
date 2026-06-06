@@ -5,6 +5,26 @@
 -- 3. 未找到基准时间之后的数据时，每 15 分钟重试一次，最多重试 4 次。
 -- 4. 多次重试仍失败时不更新币种汇率，继续保留上次成功汇率；次日重新开始。
 
+set names utf8mb4;
+
+set @confirm_currency_rate_sync_job := coalesce(@confirm_currency_rate_sync_job, '');
+
+delimiter //
+
+drop procedure if exists assert_currency_rate_sync_job_confirmed//
+create procedure assert_currency_rate_sync_job_confirmed()
+begin
+  if coalesce(@confirm_currency_rate_sync_job, '')
+      <> 'APPLY_CURRENCY_RATE_SYNC_JOB' then
+    signal sqlstate '45000' set message_text = 'set @confirm_currency_rate_sync_job = APPLY_CURRENCY_RATE_SYNC_JOB before running this migration';
+  end if;
+end//
+
+delimiter ;
+
+call assert_currency_rate_sync_job_confirmed();
+drop procedure if exists assert_currency_rate_sync_job_confirmed;
+
 SET @job_id := (
     SELECT job_id
     FROM sys_job

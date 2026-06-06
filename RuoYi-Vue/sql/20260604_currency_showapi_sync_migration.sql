@@ -4,6 +4,24 @@
 
 set names utf8mb4;
 
+set @confirm_currency_showapi_sync_migration := coalesce(@confirm_currency_showapi_sync_migration, '');
+
+delimiter //
+
+drop procedure if exists assert_currency_showapi_sync_migration_confirmed//
+create procedure assert_currency_showapi_sync_migration_confirmed()
+begin
+  if coalesce(@confirm_currency_showapi_sync_migration, '')
+      <> 'APPLY_CURRENCY_SHOWAPI_SYNC_MIGRATION' then
+    signal sqlstate '45000' set message_text = 'set @confirm_currency_showapi_sync_migration = APPLY_CURRENCY_SHOWAPI_SYNC_MIGRATION before running this migration';
+  end if;
+end//
+
+delimiter ;
+
+call assert_currency_showapi_sync_migration_confirmed();
+drop procedure if exists assert_currency_showapi_sync_migration_confirmed;
+
 alter table finance_currency_sync_config
   add column rate_anchor_time time not null default '09:30:00' comment '汇率基准时间'
   after cron_expression;

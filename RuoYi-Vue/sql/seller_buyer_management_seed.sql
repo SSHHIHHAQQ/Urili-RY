@@ -1013,6 +1013,9 @@ select seed.menu_name, 0, seed.order_num, '', null, '', '',
        sysdate(), '', null, seed.remark
 from (
     select '账号列表' as menu_name, 30 as order_num, 'seller:account:list' as perms, '卖家端账号只读列表权限' as remark
+    union all select '登录日志', 31, 'seller:account:loginLog:list', '卖家端本人登录日志只读权限'
+    union all select '操作日志', 32, 'seller:account:operLog:list', '卖家端本人操作日志只读权限'
+    union all select '会话列表', 33, 'seller:account:session:list', '卖家端本人会话只读权限'
     union all select '部门列表', 40, 'seller:dept:list', '卖家端部门只读列表权限'
     union all select '角色列表', 41, 'seller:role:list', '卖家端角色只读列表权限'
     union all select 'Product Category List', 50, 'seller:product:category:list', 'Seller portal product category list permission'
@@ -1033,6 +1036,9 @@ select seed.menu_name, 0, seed.order_num, '', null, '', '',
        sysdate(), '', null, seed.remark
 from (
     select '账号列表' as menu_name, 30 as order_num, 'buyer:account:list' as perms, '买家端账号只读列表权限' as remark
+    union all select '登录日志', 31, 'buyer:account:loginLog:list', '买家端本人登录日志只读权限'
+    union all select '操作日志', 32, 'buyer:account:operLog:list', '买家端本人操作日志只读权限'
+    union all select '会话列表', 33, 'buyer:account:session:list', '买家端本人会话只读权限'
     union all select '部门列表', 40, 'buyer:dept:list', '买家端部门只读列表权限'
     union all select '角色列表', 41, 'buyer:role:list', '买家端角色只读列表权限'
     union all select 'Product Category List', 50, 'buyer:product:category:list', 'Buyer portal product category list permission'
@@ -1077,6 +1083,9 @@ select r.seller_role_id, m.seller_menu_id
 from seller_role r
 join seller_menu m on m.perms in (
     'seller:account:list',
+    'seller:account:loginLog:list',
+    'seller:account:operLog:list',
+    'seller:account:session:list',
     'seller:dept:list',
     'seller:role:list',
     'seller:product:category:list',
@@ -1099,6 +1108,9 @@ select r.buyer_role_id, m.buyer_menu_id
 from buyer_role r
 join buyer_menu m on m.perms in (
     'buyer:account:list',
+    'buyer:account:loginLog:list',
+    'buyer:account:operLog:list',
+    'buyer:account:session:list',
     'buyer:dept:list',
     'buyer:role:list',
     'buyer:product:category:list',

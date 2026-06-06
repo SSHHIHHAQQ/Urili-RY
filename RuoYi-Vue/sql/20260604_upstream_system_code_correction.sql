@@ -4,6 +4,24 @@
 
 set names utf8mb4;
 
+set @confirm_upstream_system_code_correction := coalesce(@confirm_upstream_system_code_correction, '');
+
+delimiter //
+
+drop procedure if exists assert_upstream_system_code_correction_confirmed//
+create procedure assert_upstream_system_code_correction_confirmed()
+begin
+  if coalesce(@confirm_upstream_system_code_correction, '')
+      <> 'APPLY_UPSTREAM_SYSTEM_CODE_CORRECTION' then
+    signal sqlstate '45000' set message_text = 'set @confirm_upstream_system_code_correction = APPLY_UPSTREAM_SYSTEM_CODE_CORRECTION before running this migration';
+  end if;
+end//
+
+delimiter ;
+
+call assert_upstream_system_code_correction_confirmed();
+drop procedure if exists assert_upstream_system_code_correction_confirmed;
+
 update upstream_system_connection
 set system_kind = 'lingxing-wms'
 where system_kind = 'LINGXING_WMS';

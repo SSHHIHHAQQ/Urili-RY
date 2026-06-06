@@ -6204,3 +6204,110 @@ P2 记录：
 - 管理端卖家/买家页缺静态路由兜底，直达 `/seller`、`/buyer` 或刷新存在 404 风险。
 - `portal_direct_login:<tokenHash>` Redis key 仍未在 key 层编码 `seller/buyer` 端类型。
 - 部门树跨主体写入/删除、角色菜单 `checkedKeys` 主体隔离、owner 角色禁停用/禁删除仍需补运行时隔离契约测试。
+
+## 2026-06-07 P0/P1 快速推进：免密 Redis Key 端隔离检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为参考方向，按当前快速推进模式只处理 P0/P1：编译、guard、接口、权限、串端、service/字段缺失。不做浏览器运行态验收、截图、DOM 检测或 UI 细调。
+
+子 Agent 执行情况：
+- 按用户最新要求优先尝试 `gpt-5.3-codex-spark` 作为 GPT-5.3 Codex 映射；平台返回额度限制，已关闭失败 Agent。
+- 已降级启动 6 个 `gpt-5.4` 只读扫描 Agent，用于并行检查剩余 P0/P1 风险；本地当前切片不等待它们作为阻塞条件。
+
+已完成：
+- 采纳 P1：`portal_direct_login:<tokenHash>` Redis key 未在 key 层编码 `seller/buyer` 端类型。
+- `PortalDirectLoginSupport` 创建免密 payload 时改为写入 `portal_direct_login:{terminal}:{tokenHash}`，与 seller/buyer 端隔离方向一致。
+- `consumeToken(...)` 读取时优先查端前缀 key，并兼容 30 分钟窗口内旧 `portal_direct_login:{tokenHash}` key，避免已签发旧 token 立即失效。
+- 票据成功消费、业务校验失败后消费、payload 缺失、payload 过期、票据/目标不匹配等收口路径同时删除新旧两种 Redis key。
+- `PortalDirectLoginSupportTest` 补齐端前缀 key 写入断言和旧 key 兼容消费断言。
+- 已更新复用台账：`docs/architecture/reuse-ledger.md`。
+- 新增记录：`docs/plans/2026-06-07-three-terminal-p0p1-direct-login-redis-key-record.md`。
+
+验证结果：
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system -Dtest=PortalDirectLoginSupportTest test`：通过，`14` 个测试通过。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system -Dtest=PortalDirectLoginAuthContractTest test`：通过，`4` 个测试通过。
+- `cd E:\Urili-Ruoyi; git diff --check`：通过；仅有 LF/CRLF 工作区换行提示，无 whitespace 错误。
+- `codegraph sync .`：通过；首次结果为 `Synced 1 changed files`，`Modified: 1 - 101 nodes in 954ms`；回填记录后最终复跑结果为 `Already up to date`。
+
+边界说明：
+- 本轮未执行远程 MySQL DDL/DML，未读取或写入 Redis。
+- 本轮未启动或重启后端。
+- 本轮未做浏览器、截图、DOM 或 UI 细调验收。
+- `RuoYi-Vue/ruoyi-admin/src/main/resources/application.yml` 为本轮开始前已存在的本地脏改，本轮未处理。
+
+残留 P1：
+- 管理端卖家/买家页缺静态路由兜底，直达 `/seller`、`/buyer` 或刷新存在 404 风险。
+- 部门树跨主体写入/删除、角色菜单 `checkedKeys` 主体隔离、owner 角色禁停用/禁删除仍需补运行时隔离契约测试。
+
+## 2026-06-07 P0/P1 快速推进：全量 SQL Guard、路由兜底与查询绑定检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为参考方向，按当前快速推进模式只处理 P0/P1：编译、guard、接口、权限、串端、service/字段缺失。不做浏览器运行态验收、截图、DOM 检测或 UI 细调。
+
+子 Agent 执行情况：
+- 本轮 6 个 `gpt-5.4` 只读子 Agent 已全部返回并关闭。
+- 已采纳：全量 SQL guard 日期范围漏扫、管理端 seller/buyer 静态路由兜底、`companyName` 查询绑定断链。
+- 暂不采纳为代码改动：seller/buyer 端内菜单表按主体拆分。当前实现是“端级菜单目录 + 主体内角色授权”，涉及表结构和产品边界，不能在未确认前改成主体级菜单目录。
+- 记录为残留 P1：portal 自助日志/会话是否需要端内细粒度权限、余额筛选为占位口径、DDL 可重放性、管理端菜单 seed slot/signature guard、verify 脚本模块发现下沉。
+
+已完成：
+- `SqlExecutionGuardContractTest` 自动发现范围从 `20260606*.sql` / `20260607*.sql` 扩为全部 `202606*.sql` 高影响脚本。
+- 为 13 个 2026-06-04/05 高影响旧脚本补 `@confirm_*`、确认过程、`signal sqlstate '45000'` 和首个高影响 DDL/DML 前确认调用。
+- `react-ui/config/routes.ts` 和 `react-ui/config/routes.js` 补 `/seller`、`/buyer` 静态路由兜底，管理端卖家/买家页不再只依赖远端菜单注入。
+- `Seller` / `Buyer` domain 增加 `companyName` 查询绑定字段和 setter，保留响应展示时由全称/简称回退生成 `companyName` 的语义。
+- 已更新复用台账：`docs/architecture/reuse-ledger.md`。
+- 新增记录：`docs/plans/2026-06-07-three-terminal-p0p1-full-sql-guard-route-binding-record.md`。
+
+验证结果：
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system -Dtest=SqlExecutionGuardContractTest test`：通过，`7` 个测试通过。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl seller,buyer -am -DskipTests compile`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:partner-management`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run tsc`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run verify:three-terminal`：通过；前端 `3` 个 suite / `9` 个测试通过，后端契约 ruoyi-system `99`、ruoyi-framework `15`、product `1`、seller `72`、buyer `73` 个测试通过。
+- `cd E:\Urili-Ruoyi; git diff --check`：通过；仅有 LF/CRLF 工作区换行提示，无 whitespace 错误。
+- `codegraph sync .`：通过；首次结果为 `Synced 6 changed files`，`Modified: 6 - 130 nodes in 1.2s`；回填记录后最终复跑结果为 `Already up to date`。
+
+边界说明：
+- 本轮未执行远程 MySQL DDL/DML，未读取或写入 Redis。
+- 本轮未启动或重启后端。
+- 本轮未做浏览器、截图、DOM 或 UI 细调验收。
+- `RuoYi-Vue/ruoyi-admin/src/main/resources/application.yml`、`react-ui/src/global.css`、`react-ui/src/utils/proTableSearch.ts` 为本轮开始前已存在的本地脏改或旁支改动，本轮未处理。
+
+残留 P1：
+- 旧 DDL 脚本已补 fail-closed guard，但部分脚本仍不是完全可重放 DDL，后续需要按脚本单独收口。
+- `sys_menu` 旧 seed 的 slot/signature guard 仍需逐步补齐，避免菜单 ID 被占用时盲改或静默跳过。
+- portal 自助登录日志、操作日志和会话接口目前只校验 terminal，是否加端内细粒度权限需要确认后补 seed 和 controller 契约。
+- 余额/充值仍是占位口径，不能作为真实财务语义；真正余额应进入 finance 读模型或聚合口径。
+- `verify-three-terminal.mjs` 仍存在模块/测试清单硬编码边界，后续应补自动发现或 manifest。
+
+## 2026-06-07 P0/P1 快速推进：三端验证入口自动发现收口检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为参考方向，按当前快速推进模式只处理 P0/P1：编译、guard、接口、权限、串端、service/字段缺失。不做浏览器运行态验收、截图、DOM 检测或 UI 细调。
+
+子 Agent 执行情况：
+- 本轮未新增子 Agent；该切片来自上一轮 `gpt-5.4` 子 Agent 的只读 P1 结论，主 Agent 本地实现和验证。
+
+已完成：
+- 采纳 P1：`verify-three-terminal.mjs` 只扫描固定后端模块和 `react-ui/tests`，关键测试换模块或换目录后可能静默漏跑。
+- 后端测试发现改为扫描所有后端模块的 `src/test/java`；只有三端、Portal、权限、DirectLogin、seller/buyer、SQL Guard 等关键测试类必须进入 `backendTestClasses`，避免把 finance 普通测试硬塞进三端快速入口。
+- 前端测试发现改为扫描整个 `react-ui` 项目内的 `*.test.*` / `*.spec.*`，并排除 `node_modules`、`dist`、`coverage`、`.umi` 等目录；新增测试未列入 `frontendTestPaths` 时直接失败。
+- 后端重复测试类名检查也覆盖所有后端模块，避免不同模块出现同名测试导致 surefire 报告判断歧义。
+- 已更新复用台账：`docs/architecture/reuse-ledger.md`。
+- 新增记录：`docs/plans/2026-06-07-three-terminal-p0p1-verify-discovery-record.md`。
+
+验证结果：
+- `cd E:\Urili-Ruoyi\react-ui; node --check scripts\verify-three-terminal.mjs`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run verify:three-terminal`：通过；前端 `3` 个 suite / `9` 个测试通过，后端契约 ruoyi-system `99`、ruoyi-framework `15`、product `1`、seller `72`、buyer `73` 个测试通过。
+- `cd E:\Urili-Ruoyi; git diff --check`：通过；仅有 LF/CRLF 工作区换行提示，无 whitespace 错误。
+- `codegraph sync .`：通过；首次结果为 `Synced 1 changed files`，`Modified: 1 - 23 nodes in 1.0s`。
+- 收尾复跑 `codegraph sync .`：通过；结果为 `Synced 1 changed files`，`Modified: 1 - 41 nodes in 1.2s`，同步本检查点记录变更。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl integration -am -DskipTests compile`：复跑通过；用于确认当前工作区中上游同步 task 相关既有差异不阻塞编译。
+
+边界说明：
+- 本轮未执行远程 MySQL DDL/DML，未读取或写入 Redis。
+- 本轮未启动或重启后端。
+- 本轮未做浏览器、截图、DOM 或 UI 细调验收。
+
+残留 P1：
+- 旧 DDL 脚本已补 fail-closed guard，但部分脚本仍不是完全可重放 DDL，后续需要按脚本单独收口。
+- `sys_menu` 旧 seed 的 slot/signature guard 仍需逐步补齐，避免菜单 ID 被占用时盲改或静默跳过。
+- portal 自助登录日志、操作日志和会话接口目前只校验 terminal，是否加端内细粒度权限需要确认后补 seed 和 controller 契约。
+- 余额/充值仍是占位口径，不能作为真实财务语义；真正余额应进入 finance 读模型或聚合口径。

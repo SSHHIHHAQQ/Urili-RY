@@ -4,6 +4,24 @@
 
 set names utf8mb4;
 
+set @confirm_mall_product_sku_dimension_fields := coalesce(@confirm_mall_product_sku_dimension_fields, '');
+
+delimiter //
+
+drop procedure if exists assert_mall_product_sku_dimension_fields_confirmed//
+create procedure assert_mall_product_sku_dimension_fields_confirmed()
+begin
+  if coalesce(@confirm_mall_product_sku_dimension_fields, '')
+      <> 'APPLY_MALL_PRODUCT_SKU_DIMENSION_FIELDS' then
+    signal sqlstate '45000' set message_text = 'set @confirm_mall_product_sku_dimension_fields = APPLY_MALL_PRODUCT_SKU_DIMENSION_FIELDS before running this migration';
+  end if;
+end//
+
+delimiter ;
+
+call assert_mall_product_sku_dimension_fields_confirmed();
+drop procedure if exists assert_mall_product_sku_dimension_fields_confirmed;
+
 alter table product_sku
   add column length_value varchar(128) default '' comment '长度，含单位文本' after size,
   add column width_value varchar(128) default '' comment '宽度，含单位文本' after length_value,

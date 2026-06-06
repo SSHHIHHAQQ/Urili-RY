@@ -74,4 +74,9 @@ export const requestOperationText: Record<string, string> = {
   SKU_DIMENSION_FULL_SYNC: 'SKU仓库尺寸重量',
   SKU_DIMENSION_SELECTED_SYNC: '指定SKU仓库尺寸重量',
   INVENTORY_SYNC: 'SKU库存同步',
+  TASK_WAREHOUSE_SYNC: '仓库同步任务',
+  TASK_LOGISTICS_CHANNEL_SYNC: '物流渠道同步任务',
+  TASK_SKU_SYNC: 'SKU信息同步任务',
+  TASK_SKU_DIMENSION_SYNC: 'SKU仓库尺寸重量同步任务',
+  TASK_INVENTORY_SYNC: 'SKU库存同步任务',
 };

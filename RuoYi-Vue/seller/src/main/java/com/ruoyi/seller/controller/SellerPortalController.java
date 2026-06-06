@@ -164,7 +164,7 @@ public class SellerPortalController extends BaseController
 
     @GetMapping("/account/login-logs")
     @Anonymous
-    @PortalPreAuthorize(terminal = "seller")
+    @PortalPreAuthorize(terminal = "seller", hasPermi = "seller:account:loginLog:list")
     @PortalLog(terminal = "seller", title = "卖家端登录日志", businessType = BusinessType.OTHER, isSaveResponseData = false)
     public TableDataInfo accountLoginLogs(PortalLoginLog log)
     {
@@ -175,7 +175,7 @@ public class SellerPortalController extends BaseController
 
     @GetMapping("/account/oper-logs")
     @Anonymous
-    @PortalPreAuthorize(terminal = "seller")
+    @PortalPreAuthorize(terminal = "seller", hasPermi = "seller:account:operLog:list")
     @PortalLog(terminal = "seller", title = "卖家端操作日志", businessType = BusinessType.OTHER, isSaveResponseData = false)
     public TableDataInfo accountOperLogs(PortalOperLog log)
     {
@@ -186,7 +186,7 @@ public class SellerPortalController extends BaseController
 
     @GetMapping("/account/sessions")
     @Anonymous
-    @PortalPreAuthorize(terminal = "seller")
+    @PortalPreAuthorize(terminal = "seller", hasPermi = "seller:account:session:list")
     @PortalLog(terminal = "seller", title = "卖家端会话列表", businessType = BusinessType.OTHER, isSaveResponseData = false)
     public TableDataInfo accountSessions()
     {

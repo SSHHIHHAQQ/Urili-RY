@@ -1,6 +1,26 @@
 -- 商城商品销售状态、管控状态、销售价与操作日志迁移脚本
 -- 确认来源：docs/plans/2026-06-05-product-distribution-status-price-log-schema-design.md
 
+set names utf8mb4;
+
+set @confirm_product_distribution_status_price_log := coalesce(@confirm_product_distribution_status_price_log, '');
+
+delimiter //
+
+drop procedure if exists assert_product_distribution_status_price_log_confirmed//
+create procedure assert_product_distribution_status_price_log_confirmed()
+begin
+  if coalesce(@confirm_product_distribution_status_price_log, '')
+      <> 'APPLY_PRODUCT_DISTRIBUTION_STATUS_PRICE_LOG' then
+    signal sqlstate '45000' set message_text = 'set @confirm_product_distribution_status_price_log = APPLY_PRODUCT_DISTRIBUTION_STATUS_PRICE_LOG before running this migration';
+  end if;
+end//
+
+delimiter ;
+
+call assert_product_distribution_status_price_log_confirmed();
+drop procedure if exists assert_product_distribution_status_price_log_confirmed;
+
 alter table product_spu
     add column control_status varchar(32) not null default 'NORMAL' comment 'SPU管控状态：NORMAL正常，DISABLED停用' after spu_status,
     add column control_reason varchar(500) null comment '最近一次停用原因' after control_status,

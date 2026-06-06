@@ -135,13 +135,13 @@
 .ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-table-search .ant-form-horizontal .ant-form-item-control-input-content > .ant-select,
 .ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-table-search .ant-form-horizontal .ant-form-item-control-input-content > .ant-picker,
 .ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-table-search .ant-form-horizontal .ant-form-item-control-input-content > .ant-space-compact {
-  min-width: 160px;
+  min-width: min(160px, 100%);
   width: 100%;
 }
 
 .ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-table-search .ant-form-horizontal .ant-form-item-control-input-content > .ant-picker.ant-picker-range,
 .ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-table-search .ant-form-horizontal .ant-form-item-control-input-content > .ant-space-compact {
-  min-width: 240px;
+  min-width: min(240px, 100%);
 }
 
 .ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-table-search .ant-pro-query-filter-actions {

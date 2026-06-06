@@ -604,14 +604,14 @@
   - 管理端为卖家端、买家端生成免密登录 token。
   - 卖家端、买家端登录入口消费免密登录 token。
   - 明文一次性 token 只返回给管理端用于生成短时登录链接；审计票据写入 `portal_direct_login_ticket`，只保存 `token_hash`，不保存明文 token。
-  - Redis payload 默认有效期 30 分钟，key 使用 `portal_direct_login:{token_hash}`，payload 不保存明文 token 字段。
+  - Redis payload 默认有效期 30 分钟，key 使用 `portal_direct_login:{terminal}:{token_hash}`；消费时兼容 30 分钟窗口内旧 `portal_direct_login:{token_hash}` key，并在成功、失败收口和过期清理时同时删除新旧两种 key；payload 不保存明文 token 字段。
   - 端地址优先读取若依参数配置 `portal.seller.web.url`、`portal.buyer.web.url`，未配置时使用本地验证占位地址。
 - 复用规则：
   - 只复用在卖家端、买家端这类门户入口的免密登录场景。
   - 只负责生成和消费一次性 token；目标端消费后仍由 seller/buyer service 创建端 session，不绕过目标端账号、角色、菜单和权限模型。
   - 目标端消费免密 token 时，必须在票据标记 `USED` 和删除 Redis payload 之前完成当前主体/端账号状态校验；主体停用、账号停用、账号锁定、目标账号不存在或目标账号已改绑到其他主体时，不得消耗票据。seller/buyer service 通过 `consumeToken(..., validator)` 注入当前状态校验，`PortalDirectLoginSupportTest` 固定 validator 失败时不 mark used、不删 Redis。
   - 后续三端拆分后，卖家端/买家端应各自保留 token 消费入口，并读取自己的端账号、角色、菜单和权限体系。
-  - `PortalDirectLoginSupportTest` 已守住 token hash 入库、Redis hash key、Redis payload 不含 token 字段、30 分钟 TTL、一次性消费、跨端拒绝、过期标记和代入原因必填；后续改动免密链路时必须同步跑该测试。
+  - `PortalDirectLoginSupportTest` 已守住 token hash 入库、Redis 端前缀 hash key、旧 Redis key 30 分钟兼容消费、Redis payload 不含 token 字段、30 分钟 TTL、一次性消费、跨端拒绝、过期标记和代入原因必填；后续改动免密链路时必须同步跑该测试。
 
 ### PortalDirectLoginTicketMapper
 
@@ -848,9 +848,10 @@
   - 后续需要列设置持久化时，使用 `columnsState={getProTableColumnsState('稳定页面标识-columns')}`，并给纯 `render` 列、操作列补稳定 `key`。
   - 页面级 ProTable 如果开启 `options.setting` 或 `options.density`，不要使用 `toolBarRender={false}` 关闭 toolbar；无自定义按钮时使用 `toolBarRender={() => []}` 或省略自定义按钮，让 ProTable 自带设置入口正常渲染。
   - 三端前端列表页筛选区默认采用 Ant Design Pro 原生 `vertical` 查询布局，也就是字段名在上、输入框在下，避免标签和输入框横向挤压。
-  - 三端前端筛选区必须按内容区宽度响应式降列：宽屏优先一行 5 个筛选字段并给查询动作预留位置，中屏默认 4 个字段，小屏降为 2 个字段；宁可换行，不允许把输入框压缩成不可用的小块。
+  - 三端前端筛选区必须按内容区宽度响应式降列：默认宽屏优先一行 5 个筛选字段并给查询动作预留位置，已知字段数的页面可通过 `fieldCount` 在 `xl/xxl` 断点优化为 8 列；中屏默认 4 个字段，小屏降为 2 个字段；宁可换行，不允许把输入框压缩成不可用的小块。
   - 当前默认收起态显示 5 个筛选字段；`.ant-pro-query-filter-actions` 的父级 `ant-col` 必须占用剩余空间、靠右、底部对齐输入框，不能强制占满整行导致少字段页面也多出一行按钮。
-  - `fieldCount` 只作为字段列数优化，不作为布局兜底；不要因为某个页面出现动作区错位就继续手工改字段数量常量。
+  - `fieldCount` 只作为字段列数优化，不作为布局兜底；固定 7 字段页面在缩放后的 2K 视口下应优先让 7 个字段占满首行、动作区自然落到搜索卡片右下角，不要让字段和动作按钮挤在同一小列里。
+  - 查询控件的最小宽度只能在当前栅格宽度内生效，不能用硬 `min-width` 撑破 Ant Design 栅格；否则 1K 或浏览器缩放后的 2K 会把动作区挤到表格上方。
   - 不允许在页面私有 CSS 中移动 `.ant-pro-query-filter-actions`；动作区位置只能通过全局页面级 ProTable 样式统一维护。
   - 日期范围、金额区间、余额区间、库存区间等长控件默认占 2 个筛选格；普通输入框也要保留最小可用宽度。
   - 弹窗内小表格、纯明细表、无查询条件表格等确有理由的场景可显式 `search={false}`，但不要另起一套页面内筛选布局。
@@ -1418,8 +1419,10 @@
   - `UpstreamScheduledSyncExecutor` 只承载公共调度边界：筛选启用的领星主仓、串行执行、汇总成功失败和抛出受控异常。
   - `UpstreamSystemTask` 只保留历史方法名兼容转发，新的 `sys_job.invoke_target` 不再指向它。
   - 复用 `IUpstreamSystemService` 分项同步方法，不新增第二套领星签名、请求日志或落库逻辑。
+  - 定时任务入口统一调用 `IUpstreamSystemService.syncScheduled(...)`，同步状态和批次记录 `SCHEDULED`，并向 `upstream_system_request_log` 写入一条同步任务摘要日志。
 - 复用规则：
   - 后续新增上游同步任务时，新建独立 task 组件，并复用 `UpstreamScheduledSyncExecutor`；不要继续把新方法塞回 `UpstreamSystemTask`。
+  - 新增同步任务时必须通过 `syncScheduled(...)` 或同等的 service 调度入口写同步摘要日志，不要只写应用日志。
   - 不要在前端、Controller 或独立线程里轮询外部系统。
   - 定时任务登记使用若依 `sys_job`，让“系统监控 / 定时任务”统一启停、手动执行和查看日志。
 
@@ -1506,13 +1509,13 @@
   - `docs/plans/2026-06-06-three-terminal-p0p1-sql-guard-jest-final-record.md`
 - 当前用途：
   - 固定三端验证入口：公开测试入口必须先跑 `verify:three-terminal`，再跑前端 Jest。
-  - 固定后端三端测试清单：新增测试类必须被 `verify-three-terminal.mjs` 收录，且必须产出 surefire report。
+  - 固定后端三端测试清单：`verify-three-terminal.mjs` 会扫描所有后端模块测试源码；新增三端、Portal、权限、DirectLogin、seller/buyer、SQL Guard 等关键测试类必须被清单收录，且必须产出 surefire report。
   - 固定高影响 SQL 默认拒绝执行：会改远端结构、菜单、权限、任务或端内账号控制面的脚本，必须设置显式 `@confirm_*` 令牌后才能运行。
   - 固定 portal 前端请求边界：seller/buyer 请求必须使用对应端 token，并过滤 `sellerId`、`buyerId`、`subjectId`、`accountId`、`sellerAccountId`、`buyerAccountId`、`terminal` 等前端可控范围参数。
   - 固定 direct-login 消息边界：一次性 token 只允许发送给匹配 popup、origin 和 terminal 的 ready 消息。
 - 复用规则：
-  - 后续新增三端合约测试时，必须同步加入 `backendTestClasses`；如果未加入，`verify-three-terminal.mjs` 应失败。
-  - 后续新增高影响 SQL 脚本时，必须补 `set @confirm_*`、确认过程、`signal sqlstate '45000'` 和执行前 `call assert_*_confirmed();`，并在 `SqlExecutionGuardContractTest` 中登记。
+  - 后续新增三端合约测试时，必须同步加入 `backendTestClasses`；如果关键测试类未加入，`verify-three-terminal.mjs` 应失败。finance 等非三端普通测试不强制纳入该快速验证入口。
+  - 后续新增高影响 SQL 脚本时，必须补 `set @confirm_*`、确认过程、`signal sqlstate '45000'` 和执行前 `call assert_*_confirmed();`；`SqlExecutionGuardContractTest` 会自动发现 `202606*.sql` 高影响脚本，不能只靠手工登记。
   - `test:coverage`、`test:update`、`jest` 等入口不得绕过三端验证；需要只跑前端单测时使用显式 `npm run test:unit -- ...`。
   - portal 页面或 service 不得自行拼接端 token、端内 API URL 或主体范围参数；继续通过 `services/portal/session.ts` 统一发起请求。
 
@@ -1608,8 +1611,8 @@
   - 管理端弹窗权限模板：弹窗按钮可见性必须覆盖实际会调用的查询接口权限；例如角色编辑必须有 `role:edit + role:query + menu:query`，账号部门树必须有 `dept:query` 才请求。
   - 管理端授权脚本模板：`sys_role_menu` 首段授权只能授经过签名确认的菜单树入口，子按钮授权必须从已授页面向下扩展，不能对裸 `seller:admin:%` / `buyer:admin:%` 做全局通配授权。
   - SQL seed 模板：会写 `sys_menu`、`sys_config`、端内角色菜单或管理端授权的 seed 必须 fail-closed；已有配置需要收敛时，使用先 `update` 再缺失 `insert` 的可回放模式。
-  - 高影响 SQL 自动发现模板：`SqlExecutionGuardContractTest` 必须自动扫描 `20260606*.sql` / `20260607*.sql` 中含 `insert/update/delete/alter table/create table` 的脚本；发现高影响脚本时，必须要求 `@confirm_*`、`signal sqlstate '45000'` 和 `call assert_*_confirmed();`，不能只靠手工枚举。
-  - 三端验证清单模板：`verify-three-terminal.mjs` 必须覆盖实际列出的后端测试模块；新增前端 `tests/*.test.*` 未纳入清单时直接失败。
+  - 高影响 SQL 自动发现模板：`SqlExecutionGuardContractTest` 必须自动扫描 `202606*.sql` 中含 `insert/update/delete/alter table/create table` 的脚本；发现高影响脚本时，必须要求 `@confirm_*`、`signal sqlstate '45000'` 和 `call assert_*_confirmed();`，不能只靠手工枚举或按日期白名单漏扫。
+  - 三端验证清单模板：`verify-three-terminal.mjs` 必须覆盖实际列出的后端测试模块；新增关键后端测试即使落在当前未执行模块也必须被发现并失败；新增前端项目内 `*.test.*` / `*.spec.*` 未纳入清单时直接失败。
 - 复用规则：
   - 后续新增 direct-login 失败分支时，不允许保留同一个 token 可在 30 分钟窗口内失败重放。
   - 后续新增 direct-login 失败日志时，若已有 ticket 或 payload 上下文，必须写 `buildDirectLoginLog(...)` 并保留 `ticketId`、acting admin、reason 和目标账号；若 ticket 端类型不是当前端，当前端日志只能写 direct-login 审计字段，不能把对方端的 `subjectId/accountId` 写入当前端日志表。
@@ -1617,5 +1620,5 @@
   - 后续新增账号角色绑定能力时，必须同时考虑 role `del_flag` 和 `status`，并补 seller/buyer 对称测试。
   - 后续新增同构管理端弹窗时，先列出按钮触发后会调用的 service，再按 service 对应查询/写入权限闭合，不只看按钮本身的写权限。
   - 后续新增管理端授权 SQL 时，不允许用权限前缀全局授权；必须先确认菜单 ID、父子关系、`menu_type` 和 `perms` 签名，再授受控树。
-  - 后续新增高影响 seed 时，同步加入 `SqlExecutionGuardContractTest`；自动扫描发现的新高影响 SQL 也必须自带 fail-closed guard，已有 config 需要修正时不能只写 `where not exists`。
-  - 后续新增 Jest 或 Java 三端测试时，必须同时更新验证清单；清单不收录应当让验证失败，而不是静默跳过。
+  - 后续新增高影响 seed 时，自动扫描发现的新高影响 SQL 必须自带 fail-closed guard，已有 config 需要修正时不能只写 `where not exists`；DDL 可重放性和菜单 slot/signature guard 仍按相邻 SQL 契约逐步收紧。
+  - 后续新增 Jest 或 Java 三端关键测试时，必须同时更新验证清单；清单不收录应当让验证失败，而不是静默跳过。

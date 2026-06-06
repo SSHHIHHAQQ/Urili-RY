@@ -67,6 +67,16 @@ public final class UpstreamSystemConstants
 
     public static final String OP_INVENTORY_SYNC = "INVENTORY_SYNC";
 
+    public static final String OP_TASK_WAREHOUSE_SYNC = "TASK_WAREHOUSE_SYNC";
+
+    public static final String OP_TASK_LOGISTICS_CHANNEL_SYNC = "TASK_LOGISTICS_CHANNEL_SYNC";
+
+    public static final String OP_TASK_SKU_SYNC = "TASK_SKU_SYNC";
+
+    public static final String OP_TASK_SKU_DIMENSION_SYNC = "TASK_SKU_DIMENSION_SYNC";
+
+    public static final String OP_TASK_INVENTORY_SYNC = "TASK_INVENTORY_SYNC";
+
     public static final String DEFAULT_CAPABILITIES =
         "[\"WAREHOUSE_SYNC\",\"LOGISTICS_CHANNEL_SYNC\",\"SKU_SYNC\",\"SKU_DIMENSION_SYNC\",\"INVENTORY_SYNC\"]";
 

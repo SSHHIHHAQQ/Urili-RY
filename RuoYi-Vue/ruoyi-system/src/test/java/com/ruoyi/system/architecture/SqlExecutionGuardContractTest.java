@@ -20,7 +20,7 @@ public class SqlExecutionGuardContractTest
     private static final Pattern HIGH_IMPACT_SQL_HINT = Pattern.compile(
             "(?i)\\b(?:insert\\s+into|update\\s+|delete\\s+from|alter\\s+table|create\\s+table)\\b");
 
-    private static final Pattern RECENT_SQL_FILE = Pattern.compile("2026060[67].*\\.sql");
+    private static final Pattern DATED_JUNE_2026_SQL_FILE = Pattern.compile("202606\\d{2}.*\\.sql");
 
     private static final Pattern CONFIRM_CALL = Pattern.compile(
             "(?i)call\\s+assert_[a-z0-9_]+_confirmed\\s*\\(\\s*\\)\\s*;");
@@ -97,6 +97,9 @@ public class SqlExecutionGuardContractTest
         assertGuard(backendRoot, "sql/20260607_terminal_login_log_direct_login_audit.sql",
                 "@confirm_terminal_login_log_direct_login_audit",
                 "APPLY_TERMINAL_LOGIN_LOG_DIRECT_LOGIN_AUDIT", violations);
+        assertGuard(backendRoot, "sql/20260607_portal_self_audit_permission_seed.sql",
+                "@confirm_portal_self_audit_permission_seed",
+                "APPLY_PORTAL_SELF_AUDIT_PERMISSION_SEED", violations);
         assertGuard(backendRoot, "sql/20260607_upstream_task_component_split.sql",
                 "@confirm_upstream_task_component_split",
                 "APPLY_UPSTREAM_TASK_COMPONENT_SPLIT", violations);
@@ -118,7 +121,7 @@ public class SqlExecutionGuardContractTest
     }
 
     @Test
-    public void recentHighImpactSqlScriptsMustBeAutoDiscoveredAndGuarded() throws IOException
+    public void datedHighImpactSqlScriptsMustBeAutoDiscoveredAndGuarded() throws IOException
     {
         Path sqlDir = findWorkspaceRoot().resolve("RuoYi-Vue/sql");
         List<String> violations = new ArrayList<>();
@@ -126,7 +129,7 @@ public class SqlExecutionGuardContractTest
         try (java.util.stream.Stream<Path> sqlFiles = Files.list(sqlDir))
         {
             for (Path sqlFile : sqlFiles
-                    .filter(path -> RECENT_SQL_FILE.matcher(path.getFileName().toString()).matches())
+                    .filter(path -> DATED_JUNE_2026_SQL_FILE.matcher(path.getFileName().toString()).matches())
                     .sorted()
                     .toList())
             {
@@ -140,7 +143,7 @@ public class SqlExecutionGuardContractTest
 
         if (!violations.isEmpty())
         {
-            fail("recent high impact SQL scripts must be auto-discovered and fail closed:\n"
+            fail("dated high impact SQL scripts must be auto-discovered and fail closed:\n"
                     + String.join("\n", violations));
         }
     }

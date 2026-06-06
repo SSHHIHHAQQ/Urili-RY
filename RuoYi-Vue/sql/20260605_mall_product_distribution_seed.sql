@@ -5,6 +5,24 @@
 
 set names utf8mb4;
 
+set @confirm_mall_product_distribution_seed := coalesce(@confirm_mall_product_distribution_seed, '');
+
+delimiter //
+
+drop procedure if exists assert_mall_product_distribution_seed_confirmed//
+create procedure assert_mall_product_distribution_seed_confirmed()
+begin
+  if coalesce(@confirm_mall_product_distribution_seed, '')
+      <> 'APPLY_MALL_PRODUCT_DISTRIBUTION_SEED' then
+    signal sqlstate '45000' set message_text = 'set @confirm_mall_product_distribution_seed = APPLY_MALL_PRODUCT_DISTRIBUTION_SEED before running this migration';
+  end if;
+end//
+
+delimiter ;
+
+call assert_mall_product_distribution_seed_confirmed();
+drop procedure if exists assert_mall_product_distribution_seed_confirmed;
+
 create table if not exists product_spu (
   spu_id           bigint(20)    not null auto_increment comment 'SPU主键',
   system_spu_code  varchar(64)   not null                comment '系统SPU编码',
