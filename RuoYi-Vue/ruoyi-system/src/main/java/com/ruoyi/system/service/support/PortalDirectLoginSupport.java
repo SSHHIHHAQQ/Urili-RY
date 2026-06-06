@@ -6,6 +6,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Date;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -39,6 +40,8 @@ public class PortalDirectLoginSupport
     private static final String STATUS_ISSUED = "ISSUED";
 
     private static final String SYSTEM_OPERATOR = "system";
+
+    private static final String LOGIN_BLACK_IP_CONFIG_KEY = "sys.login.blackIPList";
 
     @Autowired
     private RedisCache redisCache;
@@ -107,11 +110,16 @@ public class PortalDirectLoginSupport
 
     public PortalDirectLoginToken consumeToken(String portalType, String token, Consumer<PortalDirectLoginToken> validator)
     {
+        return consumeToken(portalType, token, validator, null);
+    }
+
+    public PortalDirectLoginToken consumeToken(String portalType, String token, Consumer<PortalDirectLoginToken> validator,
+            BiConsumer<PortalDirectLoginToken, ServiceException> failureAuditor)
+    {
         if (StringUtils.isBlank(token))
         {
             throw new ServiceException("免密登录 token 不能为空");
         }
-
         Date now = new Date();
         if (validator == null)
         {
@@ -120,17 +128,21 @@ public class PortalDirectLoginSupport
         String tokenHash = hashToken(token);
         String cacheKey = cacheKey(tokenHash);
         PortalDirectLoginTicket ticket = loadUsableTicket(portalType, tokenHash, now, cacheKey);
-        PortalDirectLoginToken payload = loadUsablePayload(portalType, cacheKey, ticket, now);
-        validator.accept(payload);
-
-        if (ticketMapper.markPortalDirectLoginTicketUsed(ticket.getTicketId(), now, IpUtils.getIpAddr(), SYSTEM_OPERATOR) <= 0)
+        PortalDirectLoginToken payload = null;
+        try
         {
-            redisCache.deleteObject(cacheKey);
-            throw new ServiceException("免密登录票据已使用");
+            payload = loadUsablePayload(portalType, cacheKey, ticket, now);
+            assertClientIpNotBlocked();
+            validator.accept(payload);
+            markTicketUsedOrThrow(ticket, now, cacheKey);
+            return payload;
         }
-
-        redisCache.deleteObject(cacheKey);
-        return payload;
+        catch (ServiceException e)
+        {
+            markTicketUsedAfterFailedAttempt(ticket, now, cacheKey);
+            auditFailedDirectLogin(payload, e, failureAuditor);
+            throw e;
+        }
     }
 
     private void assertActingAdmin(Long actingAdminId, String actingAdminName)
@@ -195,6 +207,8 @@ public class PortalDirectLoginSupport
         PortalDirectLoginToken payload = redisCache.getCacheObject(cacheKey);
         if (payload == null)
         {
+            ticketMapper.markPortalDirectLoginTicketExpired(ticket.getTicketId(), SYSTEM_OPERATOR);
+            redisCache.deleteObject(cacheKey);
             throw new ServiceException("免密登录 token 不存在或已过期");
         }
         if (!StringUtils.equals(portalType, payload.getPortalType()))
@@ -222,6 +236,40 @@ public class PortalDirectLoginSupport
             throw new ServiceException("免密登录目标不匹配");
         }
         return payload;
+    }
+
+    private void assertClientIpNotBlocked()
+    {
+        String blackList = configService.selectConfigByKey(LOGIN_BLACK_IP_CONFIG_KEY);
+        if (IpUtils.isMatchedIp(blackList, IpUtils.getIpAddr()))
+        {
+            throw new ServiceException("登录IP已被列入黑名单");
+        }
+    }
+
+    private void markTicketUsedOrThrow(PortalDirectLoginTicket ticket, Date now, String cacheKey)
+    {
+        if (ticketMapper.markPortalDirectLoginTicketUsed(ticket.getTicketId(), now, IpUtils.getIpAddr(), SYSTEM_OPERATOR) <= 0)
+        {
+            redisCache.deleteObject(cacheKey);
+            throw new ServiceException("免密登录票据已使用");
+        }
+        redisCache.deleteObject(cacheKey);
+    }
+
+    private void markTicketUsedAfterFailedAttempt(PortalDirectLoginTicket ticket, Date now, String cacheKey)
+    {
+        ticketMapper.markPortalDirectLoginTicketUsed(ticket.getTicketId(), now, IpUtils.getIpAddr(), SYSTEM_OPERATOR);
+        redisCache.deleteObject(cacheKey);
+    }
+
+    private void auditFailedDirectLogin(PortalDirectLoginToken payload, ServiceException e,
+            BiConsumer<PortalDirectLoginToken, ServiceException> failureAuditor)
+    {
+        if (payload != null && failureAuditor != null)
+        {
+            failureAuditor.accept(payload, e);
+        }
     }
 
     private void assertAccountCanLogin(PortalAccount account)

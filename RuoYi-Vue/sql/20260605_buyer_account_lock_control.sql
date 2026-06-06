@@ -57,6 +57,54 @@ begin
   end if;
 end//
 
+drop procedure if exists assert_sys_menu_slot//
+create procedure assert_sys_menu_slot(
+  in p_menu_id bigint,
+  in p_path varchar(200),
+  in p_component varchar(255),
+  in p_route_name varchar(50),
+  in p_perms varchar(100),
+  in p_message varchar(128)
+)
+begin
+  if exists (
+    select 1
+    from sys_menu
+    where menu_id = p_menu_id
+      and (
+        coalesce(path, '') <> coalesce(p_path, '')
+        or coalesce(component, '') <> coalesce(p_component, '')
+        or coalesce(route_name, '') <> coalesce(p_route_name, '')
+        or coalesce(perms, '') <> coalesce(p_perms, '')
+      )
+  ) then
+    signal sqlstate '45000' set message_text = p_message;
+  end if;
+end//
+
+drop procedure if exists assert_sys_menu_signature_available//
+create procedure assert_sys_menu_signature_available(
+  in p_menu_id bigint,
+  in p_path varchar(200),
+  in p_component varchar(255),
+  in p_route_name varchar(50),
+  in p_perms varchar(100),
+  in p_message varchar(128)
+)
+begin
+  if exists (
+    select 1
+    from sys_menu
+    where menu_id <> p_menu_id
+      and coalesce(path, '') = coalesce(p_path, '')
+      and coalesce(component, '') = coalesce(p_component, '')
+      and coalesce(route_name, '') = coalesce(p_route_name, '')
+      and coalesce(perms, '') = coalesce(p_perms, '')
+  ) then
+    signal sqlstate '45000' set message_text = p_message;
+  end if;
+end//
+
 delimiter ;
 
 call add_column_if_missing(
@@ -108,6 +156,9 @@ where not exists (
       and d.dict_value = seed.dict_value
 );
 
+call assert_sys_menu_slot(2323, '#', '', '', 'buyer:admin:account:lock', 'sys_menu 2323 is occupied by another menu');
+call assert_sys_menu_signature_available(2323, '#', '', '', 'buyer:admin:account:lock', 'buyer account lock menu signature is already used by another menu');
+
 insert into sys_menu
     (menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
      is_frame, is_cache, menu_type, visible, status, perms, icon, create_by,
@@ -137,3 +188,5 @@ on duplicate key update
 
 drop procedure if exists add_column_if_missing;
 drop procedure if exists add_index_if_missing;
+drop procedure if exists assert_sys_menu_slot;
+drop procedure if exists assert_sys_menu_signature_available;

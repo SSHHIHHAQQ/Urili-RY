@@ -169,7 +169,48 @@ public class PortalDirectLoginSupportTest
     }
 
     @Test
-    public void consumeTokenShouldValidateBeforeMarkingTicketUsedOrDeletingRedisPayload()
+    public void consumeTokenShouldExpireTicketWhenRedisPayloadIsMissing()
+    {
+        PortalDirectLoginResult result = support.createToken("seller", 7L, "SAAA010001",
+                activeAccount(44L, "seller-owner"), "Support inspection",
+                PortalDirectLoginSupport.SELLER_WEB_URL_CONFIG_KEY, "http://fallback/seller/direct-login");
+        String cacheKey = cacheKey(result.getToken());
+        redisCache.values.remove(cacheKey);
+
+        ServiceException exception = assertThrows(ServiceException.class,
+                () -> support.consumeToken("seller", result.getToken(), token -> {
+                }));
+
+        assertEquals("免密登录 token 不存在或已过期", exception.getMessage());
+        assertEquals(0, ticketMapper.usedCalls);
+        assertEquals(1, ticketMapper.expiredCalls);
+        assertEquals(result.getTicketId(), ticketMapper.expiredTicketId);
+        assertEquals("system", ticketMapper.expiredUpdateBy);
+        assertTrue(redisCache.deletedKeys.contains(cacheKey));
+    }
+
+    @Test
+    public void consumeTokenShouldConsumeTicketWhenBlacklistedIpAttemptsLogin()
+    {
+        inject(support, "configService", configService(SELLER_WEB_URL, "203.0.113.10"));
+        PortalDirectLoginResult result = support.createToken("seller", 7L, "SAAA010001",
+                activeAccount(44L, "seller-owner"), "Support inspection",
+                PortalDirectLoginSupport.SELLER_WEB_URL_CONFIG_KEY, "http://fallback/seller/direct-login");
+
+        ServiceException exception = assertThrows(ServiceException.class,
+                () -> support.consumeToken("seller", result.getToken(), token -> {
+                }));
+
+        assertEquals("登录IP已被列入黑名单", exception.getMessage());
+        assertEquals(1, ticketMapper.usedCalls);
+        assertEquals(result.getTicketId(), ticketMapper.usedTicketId);
+        assertEquals(0, ticketMapper.expiredCalls);
+        assertTrue(redisCache.deletedKeys.contains(cacheKey(result.getToken())));
+        assertNull(redisCache.getCacheObject(cacheKey(result.getToken())));
+    }
+
+    @Test
+    public void consumeTokenShouldConsumeTicketWhenValidatorRejectsLogin()
     {
         PortalDirectLoginResult result = support.createToken("seller", 7L, "SAAA010001",
                 activeAccount(44L, "seller-owner"), "Support inspection",
@@ -179,10 +220,15 @@ public class PortalDirectLoginSupportTest
             throw new ServiceException("seller disabled");
         }));
 
-        assertEquals(0, ticketMapper.usedCalls);
+        assertEquals(1, ticketMapper.usedCalls);
+        assertEquals(result.getTicketId(), ticketMapper.usedTicketId);
         assertEquals(0, ticketMapper.expiredCalls);
-        assertFalse(redisCache.deletedKeys.contains(cacheKey(result.getToken())));
-        assertNotNull(redisCache.getCacheObject(cacheKey(result.getToken())));
+        assertTrue(redisCache.deletedKeys.contains(cacheKey(result.getToken())));
+        assertNull(redisCache.getCacheObject(cacheKey(result.getToken())));
+
+        assertThrows(ServiceException.class, () -> support.consumeToken("seller", result.getToken(), payload -> {
+        }));
+        assertEquals(1, ticketMapper.usedCalls);
     }
 
     @Test
@@ -200,7 +246,8 @@ public class PortalDirectLoginSupportTest
                 }));
 
         assertEquals("免密登录目标不匹配", exception.getMessage());
-        assertEquals(0, ticketMapper.usedCalls);
+        assertEquals(1, ticketMapper.usedCalls);
+        assertEquals(result.getTicketId(), ticketMapper.usedTicketId);
         assertEquals(0, ticketMapper.expiredCalls);
         assertTrue(redisCache.deletedKeys.contains(cacheKey));
         assertNull(redisCache.getCacheObject(cacheKey));
@@ -334,10 +381,19 @@ public class PortalDirectLoginSupportTest
 
     private static ISysConfigService configService(String portalWebUrl)
     {
+        return configService(portalWebUrl, "");
+    }
+
+    private static ISysConfigService configService(String portalWebUrl, String blackIpList)
+    {
         return (ISysConfigService) Proxy.newProxyInstance(ISysConfigService.class.getClassLoader(),
                 new Class<?>[] { ISysConfigService.class }, (proxy, method, args) -> {
                     if ("selectConfigByKey".equals(method.getName()))
                     {
+                        if ("sys.login.blackIPList".equals(args[0]))
+                        {
+                            return blackIpList;
+                        }
                         return portalWebUrl;
                     }
                     if (boolean.class.equals(method.getReturnType()))

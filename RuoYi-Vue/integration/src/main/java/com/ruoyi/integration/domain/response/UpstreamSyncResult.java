@@ -1,5 +1,8 @@
 package com.ruoyi.integration.domain.response;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * 上游同步结果。
  */
@@ -11,6 +14,7 @@ public class UpstreamSyncResult
     private int skuDimensionCount;
     private int warehouseStockCount;
     private String syncBatchId;
+    private List<UpstreamSyncItemResult> items = new ArrayList<>();
 
     public int getWarehouseCount() { return warehouseCount; }
     public void setWarehouseCount(int warehouseCount) { this.warehouseCount = warehouseCount; }
@@ -24,4 +28,6 @@ public class UpstreamSyncResult
     public void setWarehouseStockCount(int warehouseStockCount) { this.warehouseStockCount = warehouseStockCount; }
     public String getSyncBatchId() { return syncBatchId; }
     public void setSyncBatchId(String syncBatchId) { this.syncBatchId = syncBatchId; }
+    public List<UpstreamSyncItemResult> getItems() { return items; }
+    public void setItems(List<UpstreamSyncItemResult> items) { this.items = items; }
 }

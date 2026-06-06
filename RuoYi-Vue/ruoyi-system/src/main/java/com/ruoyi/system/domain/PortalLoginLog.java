@@ -31,6 +31,16 @@ public class PortalLoginLog extends BaseEntity
 
     private String msg;
 
+    private Boolean directLogin;
+
+    private Long directLoginTicketId;
+
+    private Long actingAdminId;
+
+    private String actingAdminName;
+
+    private String directLoginReason;
+
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private Date loginTime;
 
@@ -132,6 +142,56 @@ public class PortalLoginLog extends BaseEntity
     public void setMsg(String msg)
     {
         this.msg = msg;
+    }
+
+    public Boolean getDirectLogin()
+    {
+        return directLogin;
+    }
+
+    public void setDirectLogin(Boolean directLogin)
+    {
+        this.directLogin = directLogin;
+    }
+
+    public Long getDirectLoginTicketId()
+    {
+        return directLoginTicketId;
+    }
+
+    public void setDirectLoginTicketId(Long directLoginTicketId)
+    {
+        this.directLoginTicketId = directLoginTicketId;
+    }
+
+    public Long getActingAdminId()
+    {
+        return actingAdminId;
+    }
+
+    public void setActingAdminId(Long actingAdminId)
+    {
+        this.actingAdminId = actingAdminId;
+    }
+
+    public String getActingAdminName()
+    {
+        return actingAdminName;
+    }
+
+    public void setActingAdminName(String actingAdminName)
+    {
+        this.actingAdminName = actingAdminName;
+    }
+
+    public String getDirectLoginReason()
+    {
+        return directLoginReason;
+    }
+
+    public void setDirectLoginReason(String directLoginReason)
+    {
+        this.directLoginReason = directLoginReason;
     }
 
     public Date getLoginTime()

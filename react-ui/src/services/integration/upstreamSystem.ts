@@ -50,9 +50,13 @@ export async function authorizeUpstreamConnection(connectionCode: string) {
   });
 }
 
-export async function syncUpstreamConnection(connectionCode: string) {
+export async function syncUpstreamConnection(
+  connectionCode: string,
+  data?: API.Integration.SyncRequest,
+) {
   return request<API.Result & { data: API.Integration.SyncResult }>(`${baseUrl}/${connectionCode}/sync`, {
     method: 'POST',
+    data,
   });
 }
 
@@ -67,6 +71,19 @@ export async function syncUpstreamSkuDimensions(connectionCode: string) {
     `${baseUrl}/${connectionCode}/sku-dimensions/sync`,
     {
       method: 'POST',
+    },
+  );
+}
+
+export async function syncUpstreamSkuDimensionsSelected(
+  connectionCode: string,
+  skuList: string[],
+) {
+  return request<API.Result & { data: API.Integration.SyncResult }>(
+    `${baseUrl}/${connectionCode}/sku-dimensions/sync-selected`,
+    {
+      method: 'POST',
+      data: { skuList },
     },
   );
 }
@@ -93,6 +110,15 @@ export async function getUpstreamInventoryList(connectionCode: string, params?: 
 export async function getInventorySyncState(connectionCode: string) {
   return request<API.Result & { data: API.Integration.InventorySyncState }>(
     `${baseUrl}/${connectionCode}/inventory-sync-state`,
+    {
+      method: 'GET',
+    },
+  );
+}
+
+export async function getUpstreamSyncStates(connectionCode: string) {
+  return request<API.Result & { data: API.Integration.SyncState[] }>(
+    `${baseUrl}/${connectionCode}/sync-states`,
     {
       method: 'GET',
     },

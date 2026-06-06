@@ -17,6 +17,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -25,6 +29,7 @@ import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import org.apache.commons.lang3.StringUtils;
 import com.ruoyi.integration.support.UpstreamMaskUtils;
+import com.ruoyi.integration.support.UpstreamSystemConstants;
 
 /**
  * 领星 WMS OpenAPI 客户端。
@@ -38,6 +43,24 @@ public class LingxingOpenApiClient
     private static final int DEFAULT_MAX_RETRIES = 2;
 
     private static final int DEFAULT_RETRY_DELAY_MS = 250;
+
+    private static final ExecutorService HTTP_EXECUTOR = Executors.newFixedThreadPool(8, new ThreadFactory()
+    {
+        private final AtomicInteger sequence = new AtomicInteger(1);
+
+        @Override
+        public Thread newThread(Runnable runnable)
+        {
+            Thread thread = new Thread(runnable, "lingxing-http-" + sequence.getAndIncrement());
+            thread.setDaemon(true);
+            return thread;
+        }
+    });
+
+    private static final HttpClient SHARED_HTTP_CLIENT = HttpClient.newBuilder()
+        .connectTimeout(Duration.ofMillis(DEFAULT_TIMEOUT_MS))
+        .executor(HTTP_EXECUTOR)
+        .build();
 
     private final LingxingCredentials credentials;
 
@@ -57,12 +80,12 @@ public class LingxingOpenApiClient
         this.credentials = credentials;
         this.requestLogger = requestLogger;
         this.baseUrl = StringUtils.defaultIfBlank(baseUrl, DEFAULT_BASE_URL).replaceAll("/$", "");
-        this.httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofMillis(DEFAULT_TIMEOUT_MS)).build();
+        this.httpClient = SHARED_HTTP_CLIENT;
     }
 
     public List<Object> listWorkOrderTypes(String traceId)
     {
-        Object data = post("/workOrder/types", Collections.emptyMap(), "AUTH_CHECK", traceId);
+        Object data = post("/workOrder/types", Collections.emptyMap(), UpstreamSystemConstants.OP_AUTH_CHECK, traceId);
         if (!(data instanceof JSONArray array))
         {
             throw new LingxingClientException("LINGXING_RESPONSE_ERROR", "领星工单类型响应不是数组", false);
@@ -72,7 +95,7 @@ public class LingxingOpenApiClient
 
     public List<LingxingWarehouse> listWarehouses(String traceId)
     {
-        Object data = post("/warehouse/options", Collections.emptyMap(), "WAREHOUSE_SYNC", traceId);
+        Object data = post("/warehouse/options", Collections.emptyMap(), UpstreamSystemConstants.OP_WAREHOUSE_SYNC, traceId);
         if (!(data instanceof JSONArray array))
         {
             throw new LingxingClientException("LINGXING_RESPONSE_ERROR", "领星仓库响应不是数组", false);
@@ -90,6 +113,9 @@ public class LingxingOpenApiClient
                     warehouse.setWarehouseCode(code.trim());
                     warehouse.setWarehouseName(name.trim());
                     warehouse.setCountryCode(StringUtils.defaultString(object.getString("countryCode")).trim());
+                    String sourcePayload = JSON.toJSONString(object);
+                    warehouse.setSourcePayloadJson(sourcePayload);
+                    warehouse.setSourcePayloadHash(sha256Hex(sourcePayload));
                     warehouses.add(warehouse);
                 }
             }
@@ -101,7 +127,7 @@ public class LingxingOpenApiClient
     {
         Map<String, Object> dataRequest = new LinkedHashMap<>();
         dataRequest.put("whCode", warehouseCode);
-        Object data = post("/logistics/channel/list", dataRequest, "LOGISTICS_CHANNEL_SYNC", traceId);
+        Object data = post("/logistics/channel/list", dataRequest, UpstreamSystemConstants.OP_LOGISTICS_CHANNEL_SYNC, traceId);
         if (!(data instanceof JSONArray array))
         {
             throw new LingxingClientException("LINGXING_RESPONSE_ERROR", "领星物流渠道响应不是数组", false);
@@ -119,6 +145,9 @@ public class LingxingOpenApiClient
                     channel.setWarehouseCode(warehouseCode);
                     channel.setChannelCode(code.trim());
                     channel.setChannelName(name.trim());
+                    String sourcePayload = JSON.toJSONString(object);
+                    channel.setSourcePayloadJson(sourcePayload);
+                    channel.setSourcePayloadHash(sha256Hex(sourcePayload));
                     channels.add(channel);
                 }
             }
@@ -133,10 +162,15 @@ public class LingxingOpenApiClient
         Map<String, Object> dataRequest = new LinkedHashMap<>();
         dataRequest.put("page", safeCurrent);
         dataRequest.put("pageSize", safeSize);
-        return listProductSkuPage(dataRequest, safeCurrent, safeSize, "SKU_SYNC", traceId);
+        return listProductSkuPage(dataRequest, safeCurrent, safeSize, UpstreamSystemConstants.OP_SKU_SYNC, traceId);
     }
 
     public LingxingProductPage listProductSkuPageBySkuList(List<String> skuList, String traceId)
+    {
+        return listProductSkuPageBySkuList(skuList, UpstreamSystemConstants.OP_SKU_DIMENSION_SYNC, traceId);
+    }
+
+    public LingxingProductPage listProductSkuPageBySkuList(List<String> skuList, String operation, String traceId)
     {
         List<String> safeSkuList = skuList == null ? Collections.emptyList() : skuList.stream()
             .map(StringUtils::trimToEmpty)
@@ -157,7 +191,8 @@ public class LingxingOpenApiClient
         dataRequest.put("page", 1);
         dataRequest.put("pageSize", safeSkuList.size());
         dataRequest.put("skuList", safeSkuList);
-        return listProductSkuPage(dataRequest, 1, safeSkuList.size(), "SKU_DIMENSION_SYNC", traceId);
+        return listProductSkuPage(dataRequest, 1, safeSkuList.size(),
+            StringUtils.defaultIfBlank(operation, UpstreamSystemConstants.OP_SKU_DIMENSION_SYNC), traceId);
     }
 
     public LingxingInventoryProductPage listInventoryProductPage(int current, int size, String traceId)
@@ -179,7 +214,7 @@ public class LingxingOpenApiClient
             dataRequest.put("startTime", startTime);
             dataRequest.put("endTime", endTime);
         }
-        Object data = post("/integratedInventory/pageOpen", dataRequest, "INVENTORY_SYNC", traceId);
+        Object data = post("/integratedInventory/pageOpen", dataRequest, UpstreamSystemConstants.OP_INVENTORY_SYNC, traceId);
         if (!(data instanceof JSONObject object))
         {
             throw new LingxingClientException("LINGXING_RESPONSE_ERROR", "领星库存响应不是对象", false);

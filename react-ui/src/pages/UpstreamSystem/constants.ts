@@ -3,9 +3,11 @@ export {
   pairingStatusText,
   inventoryScopeSearchOptions as inventoryScopeOptions,
   inventoryScopeText,
+  requestOperationText,
   skuPairingStatusSearchOptions as skuPairingStatusOptions,
   skuSyncItemStatusSearchOptions as skuSyncItemStatusOptions,
   syncItemStatusText,
+  syncTypeText,
   systemKindOptions,
   systemKindText,
 } from '@/services/integration/constants';

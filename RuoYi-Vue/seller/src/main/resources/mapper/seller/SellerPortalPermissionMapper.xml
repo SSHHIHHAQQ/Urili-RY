@@ -254,6 +254,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
           and a.seller_account_id = #{accountId}
           and r.seller_id = #{sellerId}
           and r.del_flag = '0'
+          and r.status = '0'
         order by r.role_sort, r.seller_role_id
     </select>
 
@@ -313,6 +314,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         from seller_role
         where seller_id = #{sellerId}
           and del_flag = '0'
+          and status = '0'
           and seller_role_id in
         <foreach collection="roleIds" item="roleId" open="(" separator="," close=")">
             #{roleId}

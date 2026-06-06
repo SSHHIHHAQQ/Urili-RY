@@ -34,76 +34,126 @@ public class AdminAccountPermissionUiContractTest
     private void assertTerminalPageConfig(Path workspaceRoot, String pageName, String terminal, List<String> violations)
             throws IOException
     {
-        Path page = workspaceRoot.resolve("react-ui/src/pages/" + pageName + "/index.tsx");
-        String source = Files.readString(page, StandardCharsets.UTF_8);
-        assertContains(source, "accountPermissions: {", page, violations);
-        assertContains(source, "list: '" + terminal + ":admin:account:list'", page, violations);
-        assertContains(source, "add: '" + terminal + ":admin:account:add'", page, violations);
-        assertContains(source, "edit: '" + terminal + ":admin:account:edit'", page, violations);
-        assertContains(source, "resetPwd: '" + terminal + ":admin:account:resetPwd'", page, violations);
-        assertContains(source, "lock: '" + terminal + ":admin:account:lock'", page, violations);
-        assertContains(source, "roleQuery: '" + terminal + ":admin:account:role:query'", page, violations);
-        assertContains(source, "roleEdit: '" + terminal + ":admin:account:role:edit'", page, violations);
-        assertContains(source, "listSubjectSessions: getAdmin" + pageName + "Sessions", page, violations);
-        assertContains(source, "listAccountSessions: getAdmin" + pageName + "AccountSessions", page, violations);
-        assertContains(source, "forceLogoutSubject: forceLogoutAdmin" + pageName + "Sessions", page, violations);
-        assertContains(source, "forceLogoutAccount: forceLogoutAdmin" + pageName + "AccountSessions", page,
-                violations);
-        assertContains(source, "directLogin: createAdmin" + pageName + "DirectLogin", page, violations);
-        assertContains(source, "directLoginAccount: createAdmin" + pageName + "AccountDirectLogin", page,
-                violations);
-        assertContains(source, "listLoginLogs: getAdmin" + pageName + "LoginLogs", page, violations);
-        assertContains(source, "listOperLogs: getAdmin" + pageName + "OperLogs", page, violations);
-        assertContains(source, "listDirectLoginTickets: getAdmin" + pageName + "DirectLoginTickets", page,
-                violations);
+        Path[] pages = new Path[] {
+                workspaceRoot.resolve("react-ui/src/pages/" + pageName + "/index.tsx"),
+                workspaceRoot.resolve("react-ui/src/pages/" + pageName + "/index.js")
+        };
+        for (Path page : pages)
+        {
+            String source = readRequired(page, violations);
+            if (source.isEmpty())
+            {
+                continue;
+            }
+            assertContains(source, "accountPermissions: {", page, violations);
+            assertContains(source, "list: '" + terminal + ":admin:account:list'", page, violations);
+            assertContains(source, "add: '" + terminal + ":admin:account:add'", page, violations);
+            assertContains(source, "edit: '" + terminal + ":admin:account:edit'", page, violations);
+            assertContains(source, "resetPwd: '" + terminal + ":admin:account:resetPwd'", page, violations);
+            assertContains(source, "lock: '" + terminal + ":admin:account:lock'", page, violations);
+            assertContains(source, "roleQuery: '" + terminal + ":admin:account:role:query'", page, violations);
+            assertContains(source, "roleEdit: '" + terminal + ":admin:account:role:edit'", page, violations);
+            assertContains(source, "listSubjectSessions: getAdmin" + pageName + "Sessions", page, violations);
+            assertContains(source, "listAccountSessions: getAdmin" + pageName + "AccountSessions", page, violations);
+            assertContains(source, "forceLogoutSubject: forceLogoutAdmin" + pageName + "Sessions", page, violations);
+            assertContains(source, "forceLogoutAccount: forceLogoutAdmin" + pageName + "AccountSessions", page,
+                    violations);
+            assertContains(source, "directLogin: createAdmin" + pageName + "DirectLogin", page, violations);
+            assertContains(source, "directLoginAccount: createAdmin" + pageName + "AccountDirectLogin", page,
+                    violations);
+            assertContains(source, "listLoginLogs: getAdmin" + pageName + "LoginLogs", page, violations);
+            assertContains(source, "listOperLogs: getAdmin" + pageName + "OperLogs", page, violations);
+            assertContains(source, "listDirectLoginTickets: getAdmin" + pageName + "DirectLoginTickets", page,
+                    violations);
+        }
     }
 
     private void assertPartnerManagementPageGates(Path workspaceRoot, List<String> violations) throws IOException
     {
-        Path page = workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerManagementPage.tsx");
-        String source = Files.readString(page, StandardCharsets.UTF_8);
-        assertContains(source, "const accountPermissions = config.accountPermissions ??", page, violations);
-        assertContains(source, "hidden={!access.hasPerms(accountPermissions.list)}", page, violations);
-        assertContains(source, "PartnerSessionModal", page, violations);
-        assertContains(source, "config.services.listSubjectSessions", page, violations);
-        assertContains(source, "config.services.forceLogoutSubject", page, violations);
-        assertContains(source, "access.hasPerms(`${permPrefix}:forceLogout`)", page, violations);
-        assertContains(source, "access.hasPerms(`${permPrefix}:directLogin`)", page, violations);
-        assertContains(source, "access.hasPerms(`${permPrefix}:dept:list`)", page, violations);
-        assertContains(source, "access.hasPerms(`${permPrefix}:role:list`)", page, violations);
-        assertContains(source, "hidden={!access.hasPerms(`${permPrefix}:menu:list`)}", page, violations);
-        assertContains(source, "const hasAuditPermission = access.hasPerms(`${permPrefix}:loginLog:list`)", page,
-                violations);
-        assertContains(source, "|| access.hasPerms(`${permPrefix}:operLog:list`)", page, violations);
-        assertContains(source, "|| access.hasPerms(`${permPrefix}:ticket:list`)", page, violations);
+        Path[] pages = new Path[] {
+                workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerManagementPage.tsx"),
+                workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerManagementPage.js")
+        };
+        for (Path page : pages)
+        {
+            String source = readRequired(page, violations);
+            if (source.isEmpty())
+            {
+                continue;
+            }
+            assertContains(source, "const accountPermissions = config.accountPermissions ??", page, violations);
+            assertContains(source, "access.hasPerms(accountPermissions.list)", page, violations);
+            assertContains(source, "PartnerSessionModal", page, violations);
+            assertContains(source, "config.services.listSubjectSessions", page, violations);
+            assertContains(source, "config.services.forceLogoutSubject", page, violations);
+            assertContains(source, "access.hasPerms(`${permPrefix}:forceLogout`)", page, violations);
+            assertContains(source, "access.hasPerms(`${permPrefix}:directLogin`)", page, violations);
+            assertContains(source, "access.hasPerms(`${permPrefix}:dept:list`)", page, violations);
+            assertContains(source, "access.hasPerms(`${permPrefix}:role:list`)", page, violations);
+            assertContains(source, "access.hasPerms(`${permPrefix}:menu:list`)", page, violations);
+            assertContains(source, "const hasAuditPermission = access.hasPerms(`${permPrefix}:loginLog:list`)", page,
+                    violations);
+            assertContains(source, "|| access.hasPerms(`${permPrefix}:operLog:list`)", page, violations);
+            assertContains(source, "|| access.hasPerms(`${permPrefix}:ticket:list`)", page, violations);
+        }
     }
 
     private void assertPartnerAccountModalGates(Path workspaceRoot, List<String> violations) throws IOException
     {
-        Path modal = workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerAccountModal.tsx");
-        String source = Files.readString(modal, StandardCharsets.UTF_8);
-        assertContains(source, "const accountPermissions = config.accountPermissions ??", modal, violations);
-        assertContains(source, "access.hasPerms(accountPermissions.roleQuery)", modal, violations);
-        assertContains(source, "access.hasPerms(accountPermissions.roleEdit)", modal, violations);
-        assertContains(source, "access.hasPerms(accountPermissions.resetPwd)", modal, violations);
-        assertContains(source, "access.hasPerms(accountPermissions.lock", modal, violations);
-        assertContains(source, "hidden={!access.hasPerms(accountPermissions.edit)}", modal, violations);
-        assertContains(source, "hidden={!access.hasPerms(accountPermissions.add)}", modal, violations);
-        assertContains(source, "PartnerSessionModal", modal, violations);
-        assertContains(source, "config.services.listAccountSessions", modal, violations);
-        assertContains(source, "config.services.forceLogoutAccount", modal, violations);
-        assertContains(source, "access.hasPerms(`${permPrefix}:forceLogout`)", modal, violations);
-        assertContains(source, "access.hasPerms(`${permPrefix}:directLogin`) && config.services.directLoginAccount",
-                modal, violations);
+        Path[] modals = new Path[] {
+                workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerAccountModal.tsx"),
+                workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerAccountModal.js")
+        };
+        for (Path modal : modals)
+        {
+            String source = readRequired(modal, violations);
+            if (source.isEmpty())
+            {
+                continue;
+            }
+            assertContains(source, "const accountPermissions = config.accountPermissions ??", modal, violations);
+            assertContains(source, "access.hasPerms(accountPermissions.roleQuery)", modal, violations);
+            assertContains(source, "access.hasPerms(accountPermissions.roleEdit)", modal, violations);
+            assertContains(source, "access.hasPerms(accountPermissions.resetPwd)", modal, violations);
+            assertContains(source, "access.hasPerms(accountPermissions.lock", modal, violations);
+            assertContains(source, "access.hasPerms(accountPermissions.edit)", modal, violations);
+            assertContains(source, "access.hasPerms(accountPermissions.add)", modal, violations);
+            assertContains(source, "PartnerSessionModal", modal, violations);
+            assertContains(source, "config.services.listAccountSessions", modal, violations);
+            assertContains(source, "config.services.forceLogoutAccount", modal, violations);
+            assertContains(source, "access.hasPerms(`${permPrefix}:forceLogout`)", modal, violations);
+            assertContains(source, "access.hasPerms(`${permPrefix}:directLogin`) && config.services.directLoginAccount",
+                    modal, violations);
+        }
     }
 
     private void assertPartnerAuditModalGates(Path workspaceRoot, List<String> violations) throws IOException
     {
-        Path modal = workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerAuditModal.tsx");
-        String source = Files.readString(modal, StandardCharsets.UTF_8);
-        assertContains(source, "access.hasPerms(`${permPrefix}:loginLog:list`)", modal, violations);
-        assertContains(source, "access.hasPerms(`${permPrefix}:operLog:list`)", modal, violations);
-        assertContains(source, "access.hasPerms(`${permPrefix}:ticket:list`)", modal, violations);
+        Path[] modals = new Path[] {
+                workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerAuditModal.tsx"),
+                workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerAuditModal.js")
+        };
+        for (Path modal : modals)
+        {
+            String source = readRequired(modal, violations);
+            if (source.isEmpty())
+            {
+                continue;
+            }
+            assertContains(source, "access.hasPerms(`${permPrefix}:loginLog:list`)", modal, violations);
+            assertContains(source, "access.hasPerms(`${permPrefix}:operLog:list`)", modal, violations);
+            assertContains(source, "access.hasPerms(`${permPrefix}:ticket:list`)", modal, violations);
+        }
+    }
+
+    private String readRequired(Path path, List<String> violations) throws IOException
+    {
+        if (!Files.exists(path))
+        {
+            violations.add(path.getFileName() + " must exist");
+            return "";
+        }
+        return Files.readString(path, StandardCharsets.UTF_8);
     }
 
     private void assertContains(String source, String expected, Path path, List<String> violations)

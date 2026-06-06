@@ -37,6 +37,12 @@ public class PortalLogAspectContractTest
         {
             violations.add("PortalLogAspect must explicitly gate anonymous auth audit by annotation flag");
         }
+        if (!source.contains("resolveSessionFromLoginResult(controllerLog.terminal(), jsonResult)")
+                || !source.contains("AjaxResult.DATA_TAG")
+                || !source.contains("portalTokenSupport.getSession(expectedTerminal, loginResult.getToken())"))
+        {
+            violations.add("PortalLogAspect must resolve successful portal auth responses back to their stored sessions");
+        }
         if (!source.contains("directLoginAudit{ticketId=")
                 || !source.contains("session.getActingAdminId()")
                 || !source.contains("session.getDirectLoginReason()"))

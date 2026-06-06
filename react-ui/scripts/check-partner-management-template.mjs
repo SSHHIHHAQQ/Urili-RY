@@ -322,6 +322,12 @@ function assertIncludes(source, relativePath, expected, message) {
   }
 }
 
+function assertIncludesAny(source, relativePath, expectedValues, message) {
+  if (!expectedValues.some((expected) => source.includes(expected))) {
+    violations.push(`${relativePath} ${message}`);
+  }
+}
+
 function assertNotIncludes(source, relativePath, forbidden, message) {
   if (source.includes(forbidden)) {
     violations.push(`${relativePath} ${message}`);
@@ -650,6 +656,26 @@ function checkPartnerTypes() {
       'DirectLoginResult must expose direct-login token for postMessage delivery',
     );
   }
+
+  const sessionProfileBlock = extractInterfaceBlock(source, 'PortalSessionProfile');
+  if (!sessionProfileBlock) {
+    violations.push(`${relativePath} must define PortalSessionProfile`);
+  } else {
+    for (const expected of [
+      'directLogin?: boolean',
+      'directLoginTicketId?: number',
+      'actingAdminId?: number',
+      'actingAdminName?: string',
+      'directLoginReason?: string',
+    ]) {
+      assertIncludes(
+        sessionProfileBlock,
+        relativePath,
+        expected,
+        `PortalSessionProfile must expose admin session audit field ${expected}`,
+      );
+    }
+  }
 }
 
 function checkPartnerReadTypes() {
@@ -720,6 +746,18 @@ function checkAccountModalFailSoft(source, relativePath) {
     relativePath,
     'const loadDeptTree = async () =>',
     'must load dept tree in an isolated fail-soft path',
+  );
+  assertIncludes(
+    source,
+    relativePath,
+    'const canQueryDept = access.hasPerms(`${permPrefix}:dept:query`)',
+    'must derive dept tree query permission before loading account dept tree',
+  );
+  assertIncludes(
+    source,
+    relativePath,
+    'if (!partnerId || !canQueryDept)',
+    'must not request account dept tree without dept query permission',
   );
   assertIncludes(
     source,
@@ -808,11 +846,13 @@ function checkDeptModalSource(source, relativePath) {
     'const permPrefix = `${config.moduleKey}:admin`',
     'config.services.listDepts(partnerId)',
     'config.services.getDeptTree(partnerId)',
+    'canQueryDeptTree ? config.services.getDeptTree(partnerId) : Promise.resolve(undefined)',
     'config.services.updateDept(partnerId, payload)',
     'config.services.addDept(partnerId, payload)',
     'config.services.removeDept(partnerId, dept.deptId',
-    'access.hasPerms(`${permPrefix}:dept:add`)',
-    'access.hasPerms(`${permPrefix}:dept:edit`)',
+    'const canQueryDeptTree = access.hasPerms(`${permPrefix}:dept:query`)',
+    'const canAddDept = access.hasPerms(`${permPrefix}:dept:add`) && canQueryDeptTree',
+    'const canEditDept = access.hasPerms(`${permPrefix}:dept:edit`) && canQueryDeptTree',
     'access.hasPerms(`${permPrefix}:dept:remove`)',
   ]) {
     assertIncludes(
@@ -822,6 +862,10 @@ function checkDeptModalSource(source, relativePath) {
       `must keep department modal terminal-scoped behavior for ${expected}`,
     );
   }
+  assertIncludesAny(source, relativePath, ['hidden={!canAddDept}', 'hidden: !canAddDept'],
+    'must gate department add by canAddDept');
+  assertIncludesAny(source, relativePath, ['hidden={!canEditDept}', 'hidden: !canEditDept'],
+    'must gate department edit by canEditDept');
   assertNoPattern(
     source,
     relativePath,
@@ -844,8 +888,11 @@ function checkRoleModalSource(source, relativePath) {
     'config.services.addRole(partnerId, payload)',
     'config.services.changeRoleStatus(partnerId',
     'config.services.removeRoles(partnerId, [role.roleId',
-    'access.hasPerms(`${permPrefix}:role:add`)',
-    'access.hasPerms(`${permPrefix}:role:edit`)',
+    'const canQueryRole = access.hasPerms(`${permPrefix}:role:query`)',
+    'const canQueryMenu = access.hasPerms(`${permPrefix}:menu:query`)',
+    'const canAddRole = access.hasPerms(`${permPrefix}:role:add`) && canQueryMenu',
+    'const canChangeRoleStatus = access.hasPerms(`${permPrefix}:role:edit`)',
+    'const canEditRoleForm = canChangeRoleStatus && canQueryRole && canQueryMenu',
     'access.hasPerms(`${permPrefix}:role:remove`)',
   ]) {
     assertIncludes(
@@ -855,6 +902,10 @@ function checkRoleModalSource(source, relativePath) {
       `must keep role modal terminal-scoped behavior for ${expected}`,
     );
   }
+  assertIncludesAny(source, relativePath, ['hidden={!canAddRole}', 'hidden: !canAddRole'],
+    'must gate role add by canAddRole');
+  assertIncludesAny(source, relativePath, ['hidden={!canEditRoleForm}', 'hidden: !canEditRoleForm'],
+    'must gate role edit form by canEditRoleForm');
   assertNoPattern(
     source,
     relativePath,
@@ -883,6 +934,7 @@ function checkPageTemplateSource(source, relativePath, requireTypeExport) {
     'openPortalDirectLoginWindow',
     'config.services.directLogin',
     'config.services.forceLogoutSubject',
+    'const canEditPartner = access.hasPerms(`${permPrefix}:edit`) && access.hasPerms(`${permPrefix}:query`)',
   ];
   if (requireTypeExport) {
     expectedItems.unshift('export type PartnerModuleConfig');
@@ -908,6 +960,8 @@ function checkPageTemplateSource(source, relativePath, requireTypeExport) {
     'fieldCount: config.searchFieldCount',
     'must pass configured fieldCount into getPersistedProTableSearch',
   );
+  assertIncludesAny(source, relativePath, ['hidden={!canEditPartner}', 'hidden: !canEditPartner'],
+    'must gate partner edit by canEditPartner');
   for (const expected of [
     'list: `${permPrefix}:account:list`',
     'add: `${permPrefix}:account:add`',
@@ -932,9 +986,14 @@ function checkSessionModalSource(source, relativePath) {
   for (const expected of [
     'config.services.listAccountSessions?.(partnerId, accountId, { pageNum, pageSize })',
     'config.services.listSubjectSessions?.(partnerId, { pageNum, pageSize })',
+    'record.tokenId ||',
     'record.terminal || config.moduleKey',
     'record.subjectId || 0',
     'record.accountId || 0',
+    'renderDirectLoginAudit',
+    'record.directLogin',
+    'record.actingAdminName',
+    'record.directLoginReason',
   ]) {
     assertIncludes(
       source,
@@ -966,6 +1025,8 @@ function checkMenuModalSource(source, relativePath) {
     'forbiddenPathRoots',
     'forbiddenComponentRoots',
     'normalized.startsWith(`${moduleKey}:admin:`)',
+    'const canEditMenu = access.hasPerms(`${permPrefix}:menu:edit`) && access.hasPerms(`${permPrefix}:menu:query`)',
+    'hidden={!canEditMenu}',
   ]) {
     assertIncludes(
       source,

@@ -18,6 +18,10 @@ public class UpstreamWarehouseSyncItem
 
     private String status;
 
+    private String sourcePayloadJson;
+
+    private String sourcePayloadHash;
+
     private String syncBatchId;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
@@ -39,6 +43,10 @@ public class UpstreamWarehouseSyncItem
     public void setCountryCode(String countryCode) { this.countryCode = countryCode; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+    public String getSourcePayloadJson() { return sourcePayloadJson; }
+    public void setSourcePayloadJson(String sourcePayloadJson) { this.sourcePayloadJson = sourcePayloadJson; }
+    public String getSourcePayloadHash() { return sourcePayloadHash; }
+    public void setSourcePayloadHash(String sourcePayloadHash) { this.sourcePayloadHash = sourcePayloadHash; }
     public String getSyncBatchId() { return syncBatchId; }
     public void setSyncBatchId(String syncBatchId) { this.syncBatchId = syncBatchId; }
     public Date getFirstSeenTime() { return firstSeenTime; }

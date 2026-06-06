@@ -1147,8 +1147,10 @@
   - `portal/session.ts` 的登录、免密登录和端内请求必须显式设置 `isToken: false`，避免全局请求拦截器注入管理端 token。
   - `/api/seller/**`、`/api/buyer/**` 的非 admin portal 请求发生 401 时，只能调用 `clearTerminalSessionToken('seller'|'buyer')`；`/api/seller/admin/**`、`/api/buyer/admin/**` 仍属于管理端后台接口，继续按 admin session 过期处理。
   - `persistPortalLogin(result, expectedTerminal)` 必须校验后端返回 `terminal` 与当前 URL 端类型一致；不一致时清理相关端内 token 并返回失败，不能把 seller token 写入 buyer key，也不能写入管理端 `access_token`。
+  - 管理端免密登录响应 `DirectLoginResult` 只能对前端序列化 `token`、`ticketId`、`loginUrl`、`expireMinutes`、`expireTime`；目标账号内部字段如 `accountId`、`username` 只能供后端内部测试和链路使用，不得进入 JSON 响应。
   - `src/pages/Portal/**` 和 `src/services/portal/**` 禁止调用管理端 `getAccessToken`、`setSessionToken`、`clearSessionToken`，也不得出现裸 `access_token` / `portal_login_token`；新增端内前端能力后必须运行 `npm run guard:portal-token`。
   - `src/pages/Portal/**` 不得直接调用 `request(...)` 或硬编码 `/api/seller`、`/api/buyer`；页面必须通过 `PORTAL_SERVICE` 或 `@/services/portal/session` 统一出口调用端内接口。
+  - 只要 `react-ui/src` 下仍存在 `.tsx` 和同名 `.js` sidecar，`scripts/check-portal-token-isolation.mjs` 必须同时检查 TS/TSX 与 JS 文件；不能只固定源码文件。
   - 受保护 portal 请求不得把 `sellerId`、`buyerId`、`subjectId`、`accountId`、`sellerAccountId`、`buyerAccountId` 作为 query/body/request params 发送；`terminal` 只允许作为前端本地端类型选择、URL 判断、`persistPortalLogin(..., expectedTerminal)` 和 `getTerminalAccessToken(terminal)` 的本地参数。
   - `portal/session.ts` 的日志、会话和 seller 商品列表查询必须使用 `sanitizePortalQueryParams(params)` 清洗参数；分页、日志安全筛选和商品 `categoryId` 这类业务参数可以保留，但端内数据范围必须由端 token 和后端 `PortalSessionContext` 推导。
   - `PORTAL_SCOPE_PARAM_KEYS` 必须包含 `terminal`；`terminal` 只允许作为前端本地端类型参数，不允许作为 portal query 参数传给后端决定数据范围。
@@ -1180,6 +1182,7 @@
   - 管理端按买家主体查看 buyer 端 session 列表：`GET /buyer/admin/buyers/{buyerId}/sessions/list`。
   - 管理端按买家账号查看 buyer 端 session 列表：`GET /buyer/admin/buyers/{buyerId}/accounts/{accountId}/sessions/list`。
   - 响应继续复用 `PortalSessionProfile`，`tokenId` 只供后端内部使用，不输出给前端。
+  - 管理端会话列表允许返回免密审计字段：`directLogin`、`directLoginTicketId`、`actingAdminId`、`actingAdminName`、`directLoginReason`；这些字段只用于管理端识别免密代入来源，不代表端内账号权限。
   - `PartnerSessionModal` 已作为 seller/buyer 管理端主体/账号会话列表 UI 模板。
 - 复用规则：
   - 管理端会话列表接口只读，不承担踢出动作；强制踢出继续使用现有 DELETE 接口。
@@ -1187,8 +1190,10 @@
   - 管理端会话列表使用管理端若依权限，seller 复用 `seller:admin:forceLogout`，buyer 复用 `buyer:admin:forceLogout`，不要改成端内 `@PortalPreAuthorize`。
   - RuoYi `startPage()` 只作用于 Service 内第一条查询；列表 Service 方法不要先做会消耗分页的前置校验查询，数据范围必须写进最终 session 列表 SQL。
   - 管理端列表查询可以按主体 ID 或账号 ID 收窄范围，但仍不得输出 JWT、Redis key、密码、`directLoginToken` 或 session `tokenId`。
-  - 管理端会话弹窗只展示状态、登录账号、登录 IP、登录时间、过期时间、退出时间；不得展示 `tokenId`、JWT、Redis key、Authorization header 或原始 token。
+  - 管理端会话弹窗只展示状态、免密代入标识、acting admin、登录账号、登录 IP、登录时间、过期时间、退出时间；不得展示 `tokenId`、JWT、Redis key、Authorization header 或原始 token。
+  - `PartnerSessionModal` 的免密代入标识必须复用原状态列承载，避免为了审计字段额外拉宽表格；后续 seller/buyer 同构页面继续复制该模板。
   - `SellerAdminPermissionContractTest` / `BuyerAdminPermissionContractTest` / `AdminAccountPermissionUiContractTest` / `PermissionServiceAccountPermissionTest` 已共同守住会话与强制踢出权限契约：controller 会话列表和强踢方法必须使用 `*:admin:forceLogout`，前端主体行和账号行必须通过 `access.hasPerms(\`${permPrefix}:forceLogout\`)` 控制“会话 / 强制踢出”，账号权限或主体编辑权限不得误授权强踢。
+  - `AdminAccountPermissionUiContractTest`、`AdminDirectLoginPermissionContractTest` 和 `scripts/check-partner-management-template.mjs` 必须同时覆盖 `.tsx` 与 `.js` sidecar；新增管理端共享模板能力时，两类文件都要保持权限和 service 配置一致。
   - 旧目标追踪中“管理端前端 session 列表 UI 尚未接入 / buyer UI 仍未复制”的表述已过期；当前会话列表 UI 以 `PartnerSessionModal`、Seller/Buyer 配置和本台账为准。
   - 当前 `react-ui/` 仍是管理端验证入口；该基础层只为后续物理拆分降低重复改造，不代表现在立即复制 `seller-ui` / `buyer-ui`。
 
@@ -1279,11 +1284,14 @@
 - 位置：`RuoYi-Vue/integration`
 - 当前用途：
   - 管理领星主仓接入、授权状态、启停状态和真实同步。
-  - 维护仓库、物流渠道、SKU 同步清单和配对关系。
-  - 记录外部请求日志和 SKU 配对审计事件。
+  - 维护仓库、物流渠道、SKU 信息、SKU 仓库尺寸重量、SKU 库存同步清单和配对关系。
+  - 记录外部请求日志、分项同步状态、同步批次统计和 SKU 配对审计事件。
 - 复用规则：
   - 后续 WMS、ERP、物流、支付等外部系统接入优先按独立适配器接入，不要让适配器直接写商品、库存、订单、履约或财务事实表。
   - 上游同步清单只承载外部系统快照和可配对对象，不作为正式业务事实源。
+  - 仓库、物流渠道、SKU 基础信息、SKU 仓库尺寸重量这类全量同步必须先写 staging 表，再通过 `source_payload_hash` / `wms_payload_hash` 做数据库差异合并；hash 未变化时不得更新主表业务字段或 `update_time`。
+  - 上游全量快照中消失的数据标记为 `DISABLED`，不要直接删除；配对关系不自动删除。
+  - SKU 库存是 10 分钟增量快照，只作为上游库存源头，不直接写平台可售库存。
   - 外部请求日志只追加，敏感字段必须脱敏。
 
 ### 来源商品库只读视图
@@ -1309,7 +1317,7 @@
   - integration 相关来源系统、同步状态和配对状态选项复用 `react-ui/src/services/integration/constants.ts`，不要在上游系统页和来源商品库页分别维护。
   - 领星 `dangerousCargo` 保存来源 code；展示时 `1` 表示「普货」，`2-8` 才表示电池、液体、粉末、带磁等特殊属性。
 
-### 来源仓库库存占位
+### 来源仓库库存快照
 
 - 位置：
   - `RuoYi-Vue/integration/src/main/java/com/ruoyi/integration/controller/AdminSourceWarehouseStockController.java`
@@ -1321,13 +1329,12 @@
   - `react-ui/src/types/integration/upstream-system.d.ts`
   - `react-ui/src/services/integration/constants.ts`
 - 当前用途：
-  - 当前仅作为来源仓库库存方向的占位记录，不开放真实 HTTP Controller、真实库存请求、前端路由或 Quartz 任务入口；上游系统库存 Tab 仅保留静态占位。
-  - `AdminSourceWarehouseStockController` 只保留不可路由占位类；`sourceWarehouseStock.ts` 只返回空占位结果。
-  - `UpstreamSystemTask.syncInventory()` 保留原 Quartz 方法名但立即抛出禁用错误；`20260606_upstream_inventory_dimension_sync.sql` 只做库存权限清理和旧 job 禁用，不建库存表、不启库存 job。
-  - `business_menu_seed.sql` 中「来源仓库库存」指向 `Common/PlannedPage/index`，不是实际库存列表页面。
+  - 上游系统管理内的「SKU库存同步清单」读取 `upstream_system_sku_inventory_snapshot`，作为来源仓库库存源头。
+  - `UpstreamSystemTask.syncInventory()` 通过若依 Quartz 每 10 分钟同步已启用领星主仓库存，调用领星 `/integratedInventory/pageOpen`。
+  - `business_menu_seed.sql` 中独立「来源仓库库存」菜单仍可后续承接跨模块库存查询，不等同于上游系统 Tab 内的源头快照。
 - 复用规则：
-  - 恢复来源仓库库存同步、快照落库、只读列表、导出、详情或批量操作前，必须先确认 schema、同步落库方案、权限点、审计日志和数据边界。
-  - 不允许只恢复前端入口或 Controller；后端表结构、同步任务、菜单权限和验证脚本必须一起按确认方案落地。
+  - 来源仓库库存快照只代表上游返回的库存口径，不直接覆盖平台可售库存、订单占用库存或财务库存。
+  - 恢复独立「来源仓库库存」菜单、导出、详情或批量操作前，必须复用该快照源，并补齐权限点、审计日志和数据边界。
   - integration 相关来源系统、同步状态、配对状态和库存口径选项复用 `react-ui/src/services/integration/constants.ts`，不要在页面内复制状态映射。
 
 ### SecretCipherSupport
@@ -1374,7 +1381,7 @@
 
 - 位置：`RuoYi-Vue/integration/src/main/java/com/ruoyi/integration/lingxing/LingxingOpenApiClient.java`
 - 当前用途：
-  - 统一处理领星 OpenAPI 签名、超时、授权校验、仓库/物流渠道/SKU 拉取。
+  - 统一处理领星 OpenAPI 签名、超时、授权校验、仓库/物流渠道/SKU、SKU 仓库尺寸重量和 SKU 库存拉取。
   - 通过 `LingxingRequestLogger` 写入脱敏请求日志。
 - 复用规则：
   - 后续领星相关同步能力继续从该适配器扩展，不要在 Service、Controller 或 Mapper XML 中散落签名和 HTTP 调用逻辑。
@@ -1385,8 +1392,10 @@
 - 位置：`RuoYi-Vue/integration/src/main/java/com/ruoyi/integration/task/UpstreamSystemTask.java`
 - 当前用途：
   - 作为若依 Quartz 的上游系统定时任务入口。
-  - `upstreamSystemTask.syncSkus` 每 10 分钟同步已启用领星主仓的 SKU 清单。
-  - 复用 `IUpstreamSystemService.syncSkusOnly`，不新增第二套领星签名、请求日志或 SKU 落库逻辑。
+  - `syncWarehouses` / `syncLogisticsChannels` / `syncSkuInfo` 分别在每日 23:20、23:30、23:40 同步低频基础资料。
+  - `syncSkuDimensions` 每日 23:59 限速同步 SKU 仓库尺寸重量。
+  - `syncInventory` 每 10 分钟同步上游 SKU 库存快照。
+  - 复用 `IUpstreamSystemService` 分项同步方法，不新增第二套领星签名、请求日志或落库逻辑。
 - 复用规则：
   - 后续上游系统定时任务优先挂到该 task 或同模块 task，不要在前端、Controller 或独立线程里轮询外部系统。
   - 定时任务登记使用若依 `sys_job`，让“系统监控 / 定时任务”统一启停、手动执行和查看日志。
@@ -1398,6 +1407,8 @@
   - `react-ui/src/pages/UpstreamSystem/components/ConnectionSidebar.tsx`
   - `react-ui/src/pages/UpstreamSystem/components/ConnectionSummary.tsx`
   - `react-ui/src/pages/UpstreamSystem/components/PairingModal.tsx`
+  - `react-ui/src/pages/UpstreamSystem/components/SkuDimensionPanel.tsx`
+  - `react-ui/src/pages/UpstreamSystem/components/SkuInventoryPanel.tsx`
   - `react-ui/src/pages/UpstreamSystem/components/SkuSyncPanel.tsx`
   - `react-ui/src/pages/UpstreamSystem/components/SyncTabs.tsx`
   - `react-ui/src/pages/UpstreamSystem/style.module.css`
@@ -1406,8 +1417,8 @@
   - `react-ui/src/types/integration/upstream-system.d.ts`
 - 当前用途：
   - 管理端“上游系统管理”菜单页面。
-  - 主仓接入新增/编辑/授权、真实同步、仓库/物流渠道/SKU 配对和请求日志查看。
-  - 左侧主仓工作台、主仓排序、SKU-only 同步和 SKU 同步状态查看。
+  - 主仓接入新增/编辑/授权、分项同步、仓库/物流渠道/SKU 配对、SKU 仓库尺寸重量、SKU 库存和请求日志查看。
+  - 左侧主仓工作台、主仓排序、顶部同步内容选择、指定 SKU 快速获取尺寸重量和分项同步状态查看。
 - 复用规则：
   - 后续新增外部系统管理页面时，优先复用 modal、类型和 service 分层方式。
   - 左侧主仓列表 + 右侧详情/页签的数据工作台布局，样式集中在 `style.module.css` / `style.css`，不要在页面和组件里继续散写大段撑满高度 inline style。
@@ -1481,3 +1492,87 @@
   - 后续新增高影响 SQL 脚本时，必须补 `set @confirm_*`、确认过程、`signal sqlstate '45000'` 和执行前 `call assert_*_confirmed();`，并在 `SqlExecutionGuardContractTest` 中登记。
   - `test:coverage`、`test:update`、`jest` 等入口不得绕过三端验证；需要只跑前端单测时使用显式 `npm run test:unit -- ...`。
   - portal 页面或 service 不得自行拼接端 token、端内 API URL 或主体范围参数；继续通过 `services/portal/session.ts` 统一发起请求。
+
+## Portal 登录会话一致性与 SQL Seed Guard 模板
+
+- 位置：
+  - `RuoYi-Vue/ruoyi-system/src/main/java/com/ruoyi/system/service/support/PortalTokenSupport.java`
+  - `RuoYi-Vue/ruoyi-framework/src/main/java/com/ruoyi/framework/aspectj/PortalLogAspect.java`
+  - `RuoYi-Vue/seller/src/main/java/com/ruoyi/seller/service/impl/SellerServiceImpl.java`
+  - `RuoYi-Vue/buyer/src/main/java/com/ruoyi/buyer/service/impl/BuyerServiceImpl.java`
+  - `RuoYi-Vue/ruoyi-system/src/test/java/com/ruoyi/system/architecture/PortalLoginSessionConsistencyContractTest.java`
+  - `RuoYi-Vue/ruoyi-system/src/test/java/com/ruoyi/system/architecture/SqlExecutionGuardContractTest.java`
+  - `react-ui/scripts/check-partner-management-template.mjs`
+  - `react-ui/src/components/PartnerManagement/PartnerSessionModal.tsx`
+  - `react-ui/src/components/PartnerManagement/PartnerSessionModal.js`
+- 当前用途：
+  - 端内登录 token/session 一致性模板：登录 token 先写 Redis 后，DB 登录日志和会话表记录失败时必须删除刚签发的 Redis token。
+  - 登录失败日志保留模板：普通业务失败使用 `ServiceException`，端内登录事务必须配置 `noRollbackFor = ServiceException.class`，避免失败日志被回滚。
+  - 登录/免密登录操作日志模板：`PortalLogAspect` 可从成功返回的 `PortalLoginResult.token` 回查同端 session，补齐账号、主体和 direct-login acting admin 审计。
+  - 高影响 SQL seed 模板：写 `sys_menu` 前必须先做 slot/signature guard；动态 DDL 前必须先做 baseline 表/字段 guard。
+  - JS sidecar guard 模板：管理端模板检查必须同时覆盖 `.tsx` 和 `.js` 副本，避免构建实际使用文件绕过契约。
+- 复用规则：
+  - 后续 seller/buyer 同构登录、免密登录或刷新 token 逻辑，必须复用 `PortalTokenSupport`，不得自行生成 JWT 或自行写 Redis key。
+  - 任何端内登录成功链路新增 DB 记录步骤时，都必须保持“DB 记录失败 -> 删除已签发 Redis token -> 抛出异常”的补偿语义。
+  - 任何端内匿名允许的认证接口，如果成功响应中携带 `PortalLoginResult`，操作日志应回查同端 session，不应长期记为 `anonymous`。
+  - 新增管理端菜单 seed、按钮 seed、端内账号控制 SQL 或动态 DDL SQL 时，必须同步补 `SqlExecutionGuardContractTest`。
+  - 同构 UI 文件如果存在 `.tsx` / `.js` sidecar，guard 必须同时检查两份文件。
+
+## 三端角色树、登录与会话守卫模板
+
+- 位置：
+  - `react-ui/src/components/PartnerManagement/PartnerManagementPage.tsx`
+  - `react-ui/src/components/PartnerManagement/PartnerDeptModal.tsx`
+  - `react-ui/src/components/PartnerManagement/PartnerRoleModal.tsx`
+  - `react-ui/src/components/PartnerManagement/PartnerMenuModal.tsx`
+  - `react-ui/src/components/PartnerManagement/PartnerSessionModal.tsx`
+  - `react-ui/scripts/check-partner-management-template.mjs`
+  - `RuoYi-Vue/ruoyi-system/src/main/java/com/ruoyi/system/service/support/PortalDeptSupport.java`
+  - `RuoYi-Vue/ruoyi-system/src/main/java/com/ruoyi/system/service/support/PortalDirectLoginSupport.java`
+  - `RuoYi-Vue/seller/src/main/java/com/ruoyi/seller/service/impl/SellerPortalPermissionServiceImpl.java`
+  - `RuoYi-Vue/buyer/src/main/java/com/ruoyi/buyer/service/impl/BuyerPortalPermissionServiceImpl.java`
+  - `RuoYi-Vue/seller/src/main/resources/mapper/seller/SellerMapper.xml`
+  - `RuoYi-Vue/buyer/src/main/resources/mapper/buyer/BuyerMapper.xml`
+  - `RuoYi-Vue/product/src/main/java/com/ruoyi/product/service/impl/ProductPortalSchemaServiceImpl.java`
+- 当前用途：
+  - 管理端 PartnerManagement 权限闭环：打开编辑弹窗前必须同时具备写权限和详情查询权限；树形选择或菜单树依赖查询权限，不允许只有新增/编辑权限时隐式调用查询接口。
+  - seller/buyer owner 角色保护：owner 角色不可修改、停用或删除；owner 账号不能清空角色，也不能移除启用状态的 owner 角色绑定。
+  - seller/buyer 菜单树保护：新增/更新菜单时校验父级存在，更新时禁止把菜单移动到自己的子孙节点。
+  - seller/buyer 部门树保护：统一通过 `PortalDeptSupport.assertDeptParentNotDescendant` 防止部门父级形成循环。
+  - seller/buyer 登录前置检查：普通密码登录先检查用户名、密码和 `sys.login.blackIPList`；不在该模板里隐式恢复验证码开关。
+  - direct-login 票据消费模板：消费前检查黑名单；DB 票据存在但 Redis payload 丢失时，将 DB 票据置为 `EXPIRED` 后再抛出异常。
+  - seller/buyer 会话状态模板：未登出但 `expire_time` 已过期的在线会话，在列表 SQL 中派生为状态 `2`，前端展示“已过期”。
+  - product portal schema 模板：缺少分类等上游输入时返回受控 `ServiceException`，不让空指针穿透到接口层。
+- 复用规则：
+  - 后续新增端内角色、菜单、部门管理能力时，必须先复用当前 owner 保护、父级存在校验和父子循环检测，不要在 seller/buyer 内各自散写不同规则。
+  - 后续扩展管理端同构弹窗时，按钮可见性必须覆盖“操作权限 + 被调用接口权限”，并同步加入 `check-partner-management-template.mjs`。
+  - 后续接入 seller/buyer 验证码前必须单独确认，不允许因为密码登录前置检查而恢复管理端验证码开关。
+  - 后续 direct-login 票据异常场景必须保留可审计状态收口，不允许 DB 票据和 Redis payload 不一致后继续保持可疑可用状态。
+  - 后续新增 session 列表字段时，优先在 mapper SQL 和统一前端 modal 中补齐，不要新增平行会话列表实现。
+
+## 三端免密一次性、角色绑定和验证清单模板
+
+- 位置：
+  - `RuoYi-Vue/ruoyi-system/src/main/java/com/ruoyi/system/service/support/PortalDirectLoginSupport.java`
+  - `RuoYi-Vue/ruoyi-system/src/test/java/com/ruoyi/system/service/support/PortalDirectLoginSupportTest.java`
+  - `RuoYi-Vue/seller/src/main/resources/mapper/seller/SellerPortalPermissionMapper.xml`
+  - `RuoYi-Vue/buyer/src/main/resources/mapper/buyer/BuyerPortalPermissionMapper.xml`
+  - `react-ui/src/components/PartnerManagement/PartnerAccountModal.tsx`
+  - `react-ui/src/components/PartnerManagement/PartnerRoleModal.tsx`
+  - `react-ui/scripts/check-partner-management-template.mjs`
+  - `react-ui/scripts/verify-three-terminal.mjs`
+  - `RuoYi-Vue/sql/top_menu_seed.sql`
+  - `RuoYi-Vue/sql/seller_buyer_management_seed.sql`
+  - `RuoYi-Vue/ruoyi-system/src/test/java/com/ruoyi/system/architecture/SqlExecutionGuardContractTest.java`
+- 当前用途：
+  - 免密 token 一次性模板：拿到 DB ticket 和 Redis payload 后，首次提交无论业务校验成功还是失败，都必须删除 Redis payload，并将 DB ticket 收口为 `USED` 或 `EXPIRED`。
+  - 角色绑定模板：seller/buyer 账号角色回显和绑定合法性校验都必须过滤停用角色，不能让停用角色静默挂到账户上等待后续重新启用。
+  - 管理端弹窗权限模板：弹窗按钮可见性必须覆盖实际会调用的查询接口权限；例如角色编辑必须有 `role:edit + role:query + menu:query`，账号部门树必须有 `dept:query` 才请求。
+  - SQL seed 模板：会写 `sys_menu`、`sys_config`、端内角色菜单或管理端授权的 seed 必须 fail-closed；已有配置需要收敛时，使用先 `update` 再缺失 `insert` 的可回放模式。
+  - 三端验证清单模板：`verify-three-terminal.mjs` 必须覆盖实际列出的后端测试模块；新增前端 `tests/*.test.*` 未纳入清单时直接失败。
+- 复用规则：
+  - 后续新增 direct-login 失败分支时，不允许保留同一个 token 可在 30 分钟窗口内失败重放。
+  - 后续新增账号角色绑定能力时，必须同时考虑 role `del_flag` 和 `status`，并补 seller/buyer 对称测试。
+  - 后续新增同构管理端弹窗时，先列出按钮触发后会调用的 service，再按 service 对应查询/写入权限闭合，不只看按钮本身的写权限。
+  - 后续新增高影响 seed 时，同步加入 `SqlExecutionGuardContractTest`；已有 config 需要修正时不能只写 `where not exists`。
+  - 后续新增 Jest 或 Java 三端测试时，必须同时更新验证清单；清单不收录应当让验证失败，而不是静默跳过。

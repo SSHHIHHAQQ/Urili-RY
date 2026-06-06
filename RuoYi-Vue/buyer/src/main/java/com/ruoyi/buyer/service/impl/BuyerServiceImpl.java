@@ -8,10 +8,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.ruoyi.common.constant.Constants;
+import com.ruoyi.common.constant.UserConstants;
 import com.ruoyi.common.core.domain.model.LoginBody;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.common.utils.StringUtils;
+import com.ruoyi.common.utils.ip.IpUtils;
 import com.ruoyi.buyer.domain.Buyer;
 import com.ruoyi.buyer.domain.BuyerAccount;
 import com.ruoyi.buyer.mapper.BuyerMapper;
@@ -29,6 +31,7 @@ import com.ruoyi.system.domain.PortalOperLog;
 import com.ruoyi.system.domain.PortalPasswordChangeRequest;
 import com.ruoyi.system.domain.PortalSessionProfile;
 import com.ruoyi.system.mapper.PortalDirectLoginTicketMapper;
+import com.ruoyi.system.service.ISysConfigService;
 import com.ruoyi.system.service.support.PartnerSupport;
 import com.ruoyi.system.service.support.PortalDirectLoginSupport;
 import com.ruoyi.system.service.support.PortalTokenSupport;
@@ -40,6 +43,8 @@ import com.ruoyi.system.service.support.PortalTokenSupport;
 public class BuyerServiceImpl implements IBuyerService
 {
     private static final String BUYER_NO_PREFIX = "B";
+
+    private static final String LOGIN_BLACK_IP_CONFIG_KEY = "sys.login.blackIPList";
 
     @Autowired
     private BuyerMapper buyerMapper;
@@ -55,6 +60,9 @@ public class BuyerServiceImpl implements IBuyerService
 
     @Autowired
     private PortalTokenSupport portalTokenSupport;
+
+    @Autowired
+    private ISysConfigService configService;
 
     @Override
     public List<Buyer> selectBuyerList(Buyer buyer)
@@ -473,6 +481,7 @@ public class BuyerServiceImpl implements IBuyerService
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class, noRollbackFor = ServiceException.class)
     public PortalLoginResult loginBuyer(LoginBody loginBody)
     {
         String username = loginBody == null ? null : StringUtils.trimToEmpty(loginBody.getUsername());
@@ -482,6 +491,7 @@ public class BuyerServiceImpl implements IBuyerService
             recordBuyerLoginFailure(null, null, username, "账号或密码不能为空");
             throw new ServiceException("账号或密码不能为空");
         }
+        assertBuyerLoginPreCheck(username, password);
 
         BuyerAccount account = buyerMapper.selectBuyerAccountByUserName(username);
         if (account == null || StringUtils.isBlank(account.getPassword())
@@ -494,11 +504,51 @@ public class BuyerServiceImpl implements IBuyerService
         Buyer buyer = buyerMapper.selectBuyerById(account.getBuyerId());
         assertBuyerCanLogin(buyer, account, username);
         PortalLoginIssue issue = portalTokenSupport.createLogin("buyer", buyer.getBuyerId(), buyer.getBuyerNo(), account);
-        recordBuyerLoginSuccess(account, issue, "登录成功");
+        try
+        {
+            recordBuyerLoginSuccess(account, issue, "登录成功");
+        }
+        catch (RuntimeException e)
+        {
+            portalTokenSupport.deleteLoginToken(issue.getSession());
+            throw e;
+        }
         return issue.getResult();
     }
 
+    private void assertBuyerLoginPreCheck(String username, String password)
+    {
+        if (password.length() < UserConstants.PASSWORD_MIN_LENGTH
+                || password.length() > UserConstants.PASSWORD_MAX_LENGTH
+                || username.length() < UserConstants.USERNAME_MIN_LENGTH
+                || username.length() > UserConstants.USERNAME_MAX_LENGTH)
+        {
+            recordBuyerLoginFailure(null, null, username, "账号或密码格式不正确");
+            throw new ServiceException("账号或密码错误");
+        }
+        String blackList = configService == null ? null : configService.selectConfigByKey(LOGIN_BLACK_IP_CONFIG_KEY);
+        String clientIp = resolveClientIp();
+        if (clientIp != null && IpUtils.isMatchedIp(blackList, clientIp))
+        {
+            recordBuyerLoginFailure(null, null, username, "登录IP已被列入黑名单");
+            throw new ServiceException("登录IP已被列入黑名单");
+        }
+    }
+
+    private String resolveClientIp()
+    {
+        try
+        {
+            return IpUtils.getIpAddr();
+        }
+        catch (RuntimeException e)
+        {
+            return null;
+        }
+    }
+
     @Override
+    @Transactional(rollbackFor = Exception.class, noRollbackFor = ServiceException.class)
     public PortalLoginResult directLoginBuyer(String directLoginToken)
     {
         PortalDirectLoginToken token = consumeBuyerDirectLoginToken(directLoginToken);
@@ -506,14 +556,22 @@ public class BuyerServiceImpl implements IBuyerService
         BuyerAccount account = buyerMapper.selectBuyerAccountById(token.getAccountId());
         if (account == null || !token.getPartnerId().equals(account.getBuyerId()))
         {
-            recordBuyerLoginFailure(token.getPartnerId(), null, token.getUsername(), "免密登录目标账号不存在");
+            recordBuyerDirectLoginFailure(token, token.getPartnerId(), null, token.getUsername(), "免密登录目标账号不存在");
             throw new ServiceException("免密登录目标账号不存在");
         }
 
-        assertBuyerCanLogin(buyer, account, token.getUsername());
+        assertBuyerCanLoginForDirectLogin(buyer, account, token);
         PortalLoginIssue issue = portalTokenSupport.createLogin("buyer", buyer.getBuyerId(), buyer.getBuyerNo(),
             account, token);
-        recordBuyerLoginSuccess(account, issue, buildDirectLoginSuccessMessage(token));
+        try
+        {
+            recordBuyerLoginSuccess(account, issue, buildDirectLoginSuccessMessage(token));
+        }
+        catch (RuntimeException e)
+        {
+            portalTokenSupport.deleteLoginToken(issue.getSession());
+            throw e;
+        }
         return issue.getResult();
     }
 
@@ -522,7 +580,7 @@ public class BuyerServiceImpl implements IBuyerService
         try
         {
             return directLoginSupport.consumeToken("buyer", directLoginToken,
-                this::assertBuyerDirectLoginTokenCanLogin);
+                this::assertBuyerDirectLoginTokenCanLogin, this::recordBuyerDirectLoginTokenFailure);
         }
         catch (ServiceException e)
         {
@@ -537,13 +595,24 @@ public class BuyerServiceImpl implements IBuyerService
     private void assertBuyerDirectLoginTokenCanLogin(PortalDirectLoginToken token)
     {
         Buyer buyer = buyerMapper.selectBuyerById(token.getPartnerId());
-        BuyerAccount account = buyerMapper.selectBuyerAccountById(token.getAccountId());
-        if (account == null || !token.getPartnerId().equals(account.getBuyerId()))
+        BuyerAccount account = selectBuyerDirectLoginAccount(token);
+        if (account == null)
         {
-            recordBuyerLoginFailure(token.getPartnerId(), null, token.getUsername(), "免密登录目标账号不存在");
             throw new ServiceException("免密登录目标账号不存在");
         }
-        assertBuyerCanLogin(buyer, account, token.getUsername());
+        validateBuyerCanLogin(buyer, account, token.getUsername());
+    }
+
+    private BuyerAccount selectBuyerDirectLoginAccount(PortalDirectLoginToken token)
+    {
+        BuyerAccount account = buyerMapper.selectBuyerAccountById(token.getAccountId());
+        return account != null && token.getPartnerId().equals(account.getBuyerId()) ? account : null;
+    }
+
+    private void recordBuyerDirectLoginTokenFailure(PortalDirectLoginToken token, ServiceException e)
+    {
+        BuyerAccount account = selectBuyerDirectLoginAccount(token);
+        recordBuyerDirectLoginFailure(token, token.getPartnerId(), account, token.getUsername(), e.getMessage());
     }
 
     private boolean isDirectLoginTokenFailureWithoutAccountContext(ServiceException e)
@@ -754,24 +823,49 @@ public class BuyerServiceImpl implements IBuyerService
 
     private void assertBuyerCanLogin(Buyer buyer, BuyerAccount account, String username)
     {
+        try
+        {
+            validateBuyerCanLogin(buyer, account, username);
+        }
+        catch (ServiceException e)
+        {
+            recordBuyerLoginFailure(buyer == null ? (account == null ? null : account.getBuyerId()) : buyer.getBuyerId(),
+                account, username, e.getMessage());
+            throw e;
+        }
+    }
+
+    private void assertBuyerCanLoginForDirectLogin(Buyer buyer, BuyerAccount account, PortalDirectLoginToken token)
+    {
+        try
+        {
+            validateBuyerCanLogin(buyer, account, token.getUsername());
+        }
+        catch (ServiceException e)
+        {
+            recordBuyerDirectLoginFailure(token,
+                buyer == null ? (account == null ? token.getPartnerId() : account.getBuyerId()) : buyer.getBuyerId(),
+                account, token.getUsername(), e.getMessage());
+            throw e;
+        }
+    }
+
+    private void validateBuyerCanLogin(Buyer buyer, BuyerAccount account, String username)
+    {
         if (buyer == null)
         {
-            recordBuyerLoginFailure(account == null ? null : account.getBuyerId(), account, username, "买家主体不存在");
             throw new ServiceException("买家主体不存在");
         }
         if (!PartnerSupport.STATUS_NORMAL.equals(buyer.getStatus()))
         {
-            recordBuyerLoginFailure(buyer.getBuyerId(), account, username, "买家已停用");
             throw new ServiceException("买家已停用");
         }
         if (account == null || !PartnerSupport.STATUS_NORMAL.equals(account.getStatus()))
         {
-            recordBuyerLoginFailure(buyer.getBuyerId(), account, username, "买家账号已停用");
             throw new ServiceException("买家账号已停用");
         }
         if (PartnerSupport.isAccountLocked(account.getLockStatus()))
         {
-            recordBuyerLoginFailure(buyer.getBuyerId(), account, username, "买家账号已锁定");
             throw new ServiceException("买家账号已锁定");
         }
     }
@@ -820,6 +914,15 @@ public class BuyerServiceImpl implements IBuyerService
         Long accountId = account == null ? null : account.getBuyerAccountId();
         Long subjectId = buyerId != null ? buyerId : (account == null ? null : account.getBuyerId());
         PortalLoginLog log = portalTokenSupport.buildLoginLog(subjectId, accountId, username, Constants.FAIL, message);
+        buyerMapper.insertBuyerLoginLog(log);
+    }
+
+    private void recordBuyerDirectLoginFailure(PortalDirectLoginToken token, Long buyerId, BuyerAccount account,
+            String username, String message)
+    {
+        Long accountId = account == null ? null : account.getBuyerAccountId();
+        PortalLoginLog log = portalTokenSupport.buildDirectLoginLog(buyerId, accountId, username, Constants.FAIL,
+            message, token);
         buyerMapper.insertBuyerLoginLog(log);
     }
 

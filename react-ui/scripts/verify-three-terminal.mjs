@@ -21,6 +21,7 @@ const backendTestClasses = [
   'PortalDirectLoginTicketSqlContractTest',
   'StandalonePartnerSeedMenuContractTest',
   'SqlExecutionGuardContractTest',
+  'PortalLoginSessionConsistencyContractTest',
   'PortalLoginResultTest',
   'PortalDirectLoginResultTest',
   'PortalDirectLoginTicketTest',
@@ -31,6 +32,7 @@ const backendTestClasses = [
   'PortalSessionContextTest',
   'PortalDirectLoginSupportTest',
   'PartnerSupportTest',
+  'PortalDeptSupportTest',
   'PortalPermissionCheckerTest',
   'PortalPermissionSupportTest',
   'PortalPreAuthorizeAspectTest',
@@ -38,6 +40,7 @@ const backendTestClasses = [
   'LogAspectSensitiveFieldFilterTest',
   'TokenServiceTerminalIsolationTest',
   'PermissionServiceAccountPermissionTest',
+  'ProductPortalSchemaServiceImplTest',
   'SellerServiceImplTest',
   'SellerPortalPermissionServiceImplTest',
   'SellerPortalPermissionServiceImplMenuTreeTest',
@@ -50,9 +53,15 @@ const backendTestClasses = [
   'BuyerPortalProductServiceImplTest',
 ];
 const backendTests = backendTestClasses.join(',');
+const frontendTestPaths = [
+  'tests/terminal-session-token.test.ts',
+  'tests/portal-session-request.test.ts',
+  'tests/portal-direct-login-message.test.ts',
+];
 const backendReportModules = [
   'ruoyi-system',
   'ruoyi-framework',
+  'product',
   'seller',
   'buyer',
 ];
@@ -76,6 +85,7 @@ function assertBackendTestSourcesExist() {
   const sourceRoots = [
     path.join(backendRoot, 'ruoyi-system', 'src', 'test', 'java'),
     path.join(backendRoot, 'ruoyi-framework', 'src', 'test', 'java'),
+    path.join(backendRoot, 'product', 'src', 'test', 'java'),
     path.join(backendRoot, 'seller', 'src', 'test', 'java'),
     path.join(backendRoot, 'buyer', 'src', 'test', 'java'),
   ];
@@ -114,6 +124,21 @@ function assertBackendTestSourcesExist() {
   }
 }
 
+function assertFrontendTestSourcesIncluded() {
+  const testsRoot = path.join(uiRoot, 'tests');
+  const configuredTests = new Set(frontendTestPaths.map((file) => path.normalize(file)));
+  const testFiles = walkFiles(testsRoot)
+    .filter((file) => /\btest\.[cm]?[jt]sx?$/.test(path.basename(file)))
+    .map((file) => path.normalize(path.relative(uiRoot, file)));
+  const unlisted = testFiles.filter((file) => !configuredTests.has(file));
+
+  if (unlisted.length > 0) {
+    throw new Error(
+      `frontend test files are not included in verify-three-terminal.mjs: ${unlisted.sort().join(', ')}`,
+    );
+  }
+}
+
 function clearBackendTestReports() {
   for (const moduleName of backendReportModules) {
     const reportDir = path.join(backendRoot, moduleName, 'target', 'surefire-reports');
@@ -125,6 +150,7 @@ function assertBackendTestReportsExist() {
   const reportDirs = [
     path.join(backendRoot, 'ruoyi-system', 'target', 'surefire-reports'),
     path.join(backendRoot, 'ruoyi-framework', 'target', 'surefire-reports'),
+    path.join(backendRoot, 'product', 'target', 'surefire-reports'),
     path.join(backendRoot, 'seller', 'target', 'surefire-reports'),
     path.join(backendRoot, 'buyer', 'target', 'surefire-reports'),
   ];
@@ -175,15 +201,14 @@ const steps = [
   {
     label: 'portal session unit tests',
     cwd: uiRoot,
+    before: assertFrontendTestSourcesIncluded,
     command: 'npm',
     args: [
       'run',
       'test:unit',
       '--',
       '--runTestsByPath',
-      'tests/terminal-session-token.test.ts',
-      'tests/portal-session-request.test.ts',
-      'tests/portal-direct-login-message.test.ts',
+      ...frontendTestPaths,
       '--runInBand',
     ],
   },
@@ -198,7 +223,7 @@ const steps = [
     command: 'mvn',
     args: [
       '-pl',
-      'ruoyi-system,ruoyi-framework,seller,buyer',
+      'ruoyi-system,ruoyi-framework,product,seller,buyer',
       '-am',
       `-Dtest=${backendTests}`,
       // Kept for reactor dependency modules; report checks above/below prevent silent class skips.

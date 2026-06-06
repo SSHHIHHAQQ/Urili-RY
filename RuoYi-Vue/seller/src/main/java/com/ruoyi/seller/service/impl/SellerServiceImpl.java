@@ -8,10 +8,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.ruoyi.common.constant.Constants;
+import com.ruoyi.common.constant.UserConstants;
 import com.ruoyi.common.core.domain.model.LoginBody;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.common.utils.StringUtils;
+import com.ruoyi.common.utils.ip.IpUtils;
 import com.ruoyi.seller.domain.Seller;
 import com.ruoyi.seller.domain.SellerAccount;
 import com.ruoyi.seller.mapper.SellerMapper;
@@ -29,6 +31,7 @@ import com.ruoyi.system.domain.PortalOperLog;
 import com.ruoyi.system.domain.PortalPasswordChangeRequest;
 import com.ruoyi.system.domain.PortalSessionProfile;
 import com.ruoyi.system.mapper.PortalDirectLoginTicketMapper;
+import com.ruoyi.system.service.ISysConfigService;
 import com.ruoyi.system.service.support.PortalDirectLoginSupport;
 import com.ruoyi.system.service.support.PortalTokenSupport;
 import com.ruoyi.system.service.support.PartnerSupport;
@@ -40,6 +43,8 @@ import com.ruoyi.system.service.support.PartnerSupport;
 public class SellerServiceImpl implements ISellerService
 {
     private static final String SELLER_NO_PREFIX = "S";
+
+    private static final String LOGIN_BLACK_IP_CONFIG_KEY = "sys.login.blackIPList";
 
     @Autowired
     private SellerMapper sellerMapper;
@@ -55,6 +60,9 @@ public class SellerServiceImpl implements ISellerService
 
     @Autowired
     private PortalTokenSupport portalTokenSupport;
+
+    @Autowired
+    private ISysConfigService configService;
 
     @Override
     public List<Seller> selectSellerList(Seller seller)
@@ -473,6 +481,7 @@ public class SellerServiceImpl implements ISellerService
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class, noRollbackFor = ServiceException.class)
     public PortalLoginResult loginSeller(LoginBody loginBody)
     {
         String username = loginBody == null ? null : StringUtils.trimToEmpty(loginBody.getUsername());
@@ -482,6 +491,7 @@ public class SellerServiceImpl implements ISellerService
             recordSellerLoginFailure(null, null, username, "账号或密码不能为空");
             throw new ServiceException("账号或密码不能为空");
         }
+        assertSellerLoginPreCheck(username, password);
 
         SellerAccount account = sellerMapper.selectSellerAccountByUserName(username);
         if (account == null || StringUtils.isBlank(account.getPassword())
@@ -494,11 +504,51 @@ public class SellerServiceImpl implements ISellerService
         Seller seller = sellerMapper.selectSellerById(account.getSellerId());
         assertSellerCanLogin(seller, account, username);
         PortalLoginIssue issue = portalTokenSupport.createLogin("seller", seller.getSellerId(), seller.getSellerNo(), account);
-        recordSellerLoginSuccess(account, issue, "登录成功");
+        try
+        {
+            recordSellerLoginSuccess(account, issue, "登录成功");
+        }
+        catch (RuntimeException e)
+        {
+            portalTokenSupport.deleteLoginToken(issue.getSession());
+            throw e;
+        }
         return issue.getResult();
     }
 
+    private void assertSellerLoginPreCheck(String username, String password)
+    {
+        if (password.length() < UserConstants.PASSWORD_MIN_LENGTH
+                || password.length() > UserConstants.PASSWORD_MAX_LENGTH
+                || username.length() < UserConstants.USERNAME_MIN_LENGTH
+                || username.length() > UserConstants.USERNAME_MAX_LENGTH)
+        {
+            recordSellerLoginFailure(null, null, username, "账号或密码格式不正确");
+            throw new ServiceException("账号或密码错误");
+        }
+        String blackList = configService == null ? null : configService.selectConfigByKey(LOGIN_BLACK_IP_CONFIG_KEY);
+        String clientIp = resolveClientIp();
+        if (clientIp != null && IpUtils.isMatchedIp(blackList, clientIp))
+        {
+            recordSellerLoginFailure(null, null, username, "登录IP已被列入黑名单");
+            throw new ServiceException("登录IP已被列入黑名单");
+        }
+    }
+
+    private String resolveClientIp()
+    {
+        try
+        {
+            return IpUtils.getIpAddr();
+        }
+        catch (RuntimeException e)
+        {
+            return null;
+        }
+    }
+
     @Override
+    @Transactional(rollbackFor = Exception.class, noRollbackFor = ServiceException.class)
     public PortalLoginResult directLoginSeller(String directLoginToken)
     {
         PortalDirectLoginToken token = consumeSellerDirectLoginToken(directLoginToken);
@@ -506,14 +556,22 @@ public class SellerServiceImpl implements ISellerService
         SellerAccount account = sellerMapper.selectSellerAccountById(token.getAccountId());
         if (account == null || !token.getPartnerId().equals(account.getSellerId()))
         {
-            recordSellerLoginFailure(token.getPartnerId(), null, token.getUsername(), "免密登录目标账号不存在");
+            recordSellerDirectLoginFailure(token, token.getPartnerId(), null, token.getUsername(), "免密登录目标账号不存在");
             throw new ServiceException("免密登录目标账号不存在");
         }
 
-        assertSellerCanLogin(seller, account, token.getUsername());
+        assertSellerCanLoginForDirectLogin(seller, account, token);
         PortalLoginIssue issue = portalTokenSupport.createLogin("seller", seller.getSellerId(), seller.getSellerNo(),
             account, token);
-        recordSellerLoginSuccess(account, issue, buildDirectLoginSuccessMessage(token));
+        try
+        {
+            recordSellerLoginSuccess(account, issue, buildDirectLoginSuccessMessage(token));
+        }
+        catch (RuntimeException e)
+        {
+            portalTokenSupport.deleteLoginToken(issue.getSession());
+            throw e;
+        }
         return issue.getResult();
     }
 
@@ -522,7 +580,7 @@ public class SellerServiceImpl implements ISellerService
         try
         {
             return directLoginSupport.consumeToken("seller", directLoginToken,
-                this::assertSellerDirectLoginTokenCanLogin);
+                this::assertSellerDirectLoginTokenCanLogin, this::recordSellerDirectLoginTokenFailure);
         }
         catch (ServiceException e)
         {
@@ -537,13 +595,24 @@ public class SellerServiceImpl implements ISellerService
     private void assertSellerDirectLoginTokenCanLogin(PortalDirectLoginToken token)
     {
         Seller seller = sellerMapper.selectSellerById(token.getPartnerId());
-        SellerAccount account = sellerMapper.selectSellerAccountById(token.getAccountId());
-        if (account == null || !token.getPartnerId().equals(account.getSellerId()))
+        SellerAccount account = selectSellerDirectLoginAccount(token);
+        if (account == null)
         {
-            recordSellerLoginFailure(token.getPartnerId(), null, token.getUsername(), "免密登录目标账号不存在");
             throw new ServiceException("免密登录目标账号不存在");
         }
-        assertSellerCanLogin(seller, account, token.getUsername());
+        validateSellerCanLogin(seller, account, token.getUsername());
+    }
+
+    private SellerAccount selectSellerDirectLoginAccount(PortalDirectLoginToken token)
+    {
+        SellerAccount account = sellerMapper.selectSellerAccountById(token.getAccountId());
+        return account != null && token.getPartnerId().equals(account.getSellerId()) ? account : null;
+    }
+
+    private void recordSellerDirectLoginTokenFailure(PortalDirectLoginToken token, ServiceException e)
+    {
+        SellerAccount account = selectSellerDirectLoginAccount(token);
+        recordSellerDirectLoginFailure(token, token.getPartnerId(), account, token.getUsername(), e.getMessage());
     }
 
     private boolean isDirectLoginTokenFailureWithoutAccountContext(ServiceException e)
@@ -754,24 +823,49 @@ public class SellerServiceImpl implements ISellerService
 
     private void assertSellerCanLogin(Seller seller, SellerAccount account, String username)
     {
+        try
+        {
+            validateSellerCanLogin(seller, account, username);
+        }
+        catch (ServiceException e)
+        {
+            recordSellerLoginFailure(seller == null ? (account == null ? null : account.getSellerId()) : seller.getSellerId(),
+                account, username, e.getMessage());
+            throw e;
+        }
+    }
+
+    private void assertSellerCanLoginForDirectLogin(Seller seller, SellerAccount account, PortalDirectLoginToken token)
+    {
+        try
+        {
+            validateSellerCanLogin(seller, account, token.getUsername());
+        }
+        catch (ServiceException e)
+        {
+            recordSellerDirectLoginFailure(token,
+                seller == null ? (account == null ? token.getPartnerId() : account.getSellerId()) : seller.getSellerId(),
+                account, token.getUsername(), e.getMessage());
+            throw e;
+        }
+    }
+
+    private void validateSellerCanLogin(Seller seller, SellerAccount account, String username)
+    {
         if (seller == null)
         {
-            recordSellerLoginFailure(account == null ? null : account.getSellerId(), account, username, "卖家主体不存在");
             throw new ServiceException("卖家主体不存在");
         }
         if (!PartnerSupport.STATUS_NORMAL.equals(seller.getStatus()))
         {
-            recordSellerLoginFailure(seller.getSellerId(), account, username, "卖家已停用");
             throw new ServiceException("卖家已停用");
         }
         if (account == null || !PartnerSupport.STATUS_NORMAL.equals(account.getStatus()))
         {
-            recordSellerLoginFailure(seller.getSellerId(), account, username, "卖家账号已停用");
             throw new ServiceException("卖家账号已停用");
         }
         if (PartnerSupport.isAccountLocked(account.getLockStatus()))
         {
-            recordSellerLoginFailure(seller.getSellerId(), account, username, "卖家账号已锁定");
             throw new ServiceException("卖家账号已锁定");
         }
     }
@@ -820,6 +914,15 @@ public class SellerServiceImpl implements ISellerService
         Long accountId = account == null ? null : account.getSellerAccountId();
         Long subjectId = sellerId != null ? sellerId : (account == null ? null : account.getSellerId());
         PortalLoginLog log = portalTokenSupport.buildLoginLog(subjectId, accountId, username, Constants.FAIL, message);
+        sellerMapper.insertSellerLoginLog(log);
+    }
+
+    private void recordSellerDirectLoginFailure(PortalDirectLoginToken token, Long sellerId, SellerAccount account,
+            String username, String message)
+    {
+        Long accountId = account == null ? null : account.getSellerAccountId();
+        PortalLoginLog log = portalTokenSupport.buildDirectLoginLog(sellerId, accountId, username, Constants.FAIL,
+            message, token);
         sellerMapper.insertSellerLoginLog(log);
     }
 

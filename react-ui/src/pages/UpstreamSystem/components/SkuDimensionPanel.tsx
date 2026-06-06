@@ -4,12 +4,13 @@ import {
   type ProColumns,
   ProTable,
 } from '@ant-design/pro-components';
-import { Button, Input, Select, Typography } from 'antd';
-import { type MutableRefObject, useEffect, useState } from 'react';
+import { Button, Input, Modal, Select, Space, Typography } from 'antd';
+import { type Key, type MutableRefObject, useEffect, useState } from 'react';
 import {
   getSkuSyncList,
-  getSkuSyncState,
+  getUpstreamSyncStates,
   syncUpstreamSkuDimensions,
+  syncUpstreamSkuDimensionsSelected,
 } from '@/services/integration/upstreamSystem';
 import { message } from '@/utils/feedback';
 import {
@@ -61,13 +62,35 @@ const dimensionText = (
 const weightText = (weight?: number) =>
   hasDimensionValue(weight) ? `${weight} kg` : '-';
 
+const dimensionResultText = (data?: API.Integration.SyncResult) => {
+  const item = data?.items?.find((result) => result.syncType === 'SKU_DIMENSION');
+  if (!item) {
+    return `${data?.skuDimensionCount || 0}`;
+  }
+  return `拉取${item.pulledCount || 0}，新增${item.insertedCount || 0}，变更${item.changedCount || 0}，未变${item.unchangedCount || 0}`;
+};
+
+const parseSkuText = (value: string) =>
+  Array.from(
+    new Set(
+      value
+        .split(/[\s,，;；]+/)
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  );
+
 export default function SkuDimensionPanel({
   access,
   actionRef,
   selectedCode,
 }: SkuDimensionPanelProps) {
   const [syncing, setSyncing] = useState(false);
-  const [syncState, setSyncState] = useState<API.Integration.SkuSyncState>();
+  const [selectedSyncing, setSelectedSyncing] = useState(false);
+  const [syncState, setSyncState] = useState<API.Integration.SyncState>();
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
+  const [selectedSkuText, setSelectedSkuText] = useState('');
+  const [selectedModalOpen, setSelectedModalOpen] = useState(false);
   const [searchField, setSearchField] = useState('all');
   const [searchInput, setSearchInput] = useState('');
   const [keyword, setKeyword] = useState('');
@@ -80,9 +103,9 @@ export default function SkuDimensionPanel({
       setSyncState(undefined);
       return;
     }
-    const resp = await getSkuSyncState(selectedCode);
+    const resp = await getUpstreamSyncStates(selectedCode);
     if (resp.code === 200) {
-      setSyncState(resp.data);
+      setSyncState((resp.data || []).find((item) => item.syncType === 'SKU_DIMENSION'));
     }
   };
 
@@ -97,7 +120,40 @@ export default function SkuDimensionPanel({
     hide();
     setSyncing(false);
     if (resp.code === 200) {
-      message.success(`仓库尺寸重量同步完成：${resp.data?.skuDimensionCount || 0}`);
+      message.success(`仓库尺寸重量同步完成：${dimensionResultText(resp.data)}`);
+      await loadSyncState();
+      actionRef.current?.reload();
+    } else {
+      message.error(resp.msg);
+      await loadSyncState();
+    }
+  };
+
+  const openSelectedSyncModal = () => {
+    setSelectedSkuText(selectedRowKeys.map(String).join('\n'));
+    setSelectedModalOpen(true);
+  };
+
+  const triggerSelectedDimensionSync = async () => {
+    const skuList = parseSkuText(selectedSkuText);
+    if (skuList.length === 0) {
+      message.warning('请输入SKU');
+      return;
+    }
+    if (skuList.length > 100) {
+      message.warning('指定SKU一次最多100个');
+      return;
+    }
+    setSelectedSyncing(true);
+    const hide = message.loading('正在获取指定SKU尺寸重量');
+    const resp = await syncUpstreamSkuDimensionsSelected(selectedCode, skuList);
+    hide();
+    setSelectedSyncing(false);
+    if (resp.code === 200) {
+      message.success(`指定SKU尺寸重量获取完成：${dimensionResultText(resp.data)}`);
+      setSelectedModalOpen(false);
+      setSelectedSkuText('');
+      setSelectedRowKeys([]);
       await loadSyncState();
       actionRef.current?.reload();
     } else {
@@ -181,15 +237,25 @@ export default function SkuDimensionPanel({
             下次同步 {syncState?.nextSyncTime || '-'}
           </Typography.Text>
         </div>
-        <Button
-          type="primary"
-          icon={<SyncOutlined />}
-          loading={syncing}
-          hidden={!access.hasPerms('integration:upstream:dimensionSync')}
-          onClick={triggerDimensionSync}
-        >
-          同步尺寸重量
-        </Button>
+        <Space>
+          <Button
+            icon={<SearchOutlined />}
+            loading={selectedSyncing}
+            hidden={!access.hasPerms('integration:upstream:dimensionSync')}
+            onClick={openSelectedSyncModal}
+          >
+            指定SKU获取
+          </Button>
+          <Button
+            type="primary"
+            icon={<SyncOutlined />}
+            loading={syncing}
+            hidden={!access.hasPerms('integration:upstream:dimensionSync')}
+            onClick={triggerDimensionSync}
+          >
+            同步尺寸重量
+          </Button>
+        </Space>
       </div>
       <div className={styles.skuFilters}>
         <Select
@@ -265,11 +331,30 @@ export default function SkuDimensionPanel({
           };
         }}
         pagination={getProTablePagination(10)}
+        rowSelection={{
+          selectedRowKeys,
+          onChange: (keys) => setSelectedRowKeys(keys),
+        }}
         search={false}
         options={false}
         scroll={getProTableScroll(1500)}
         toolBarRender={false}
       />
+      <Modal
+        title="指定SKU获取仓库尺寸重量"
+        open={selectedModalOpen}
+        confirmLoading={selectedSyncing}
+        okText="开始获取"
+        onCancel={() => setSelectedModalOpen(false)}
+        onOk={triggerSelectedDimensionSync}
+      >
+        <Input.TextArea
+          rows={7}
+          value={selectedSkuText}
+          placeholder="每行一个SKU，最多100个"
+          onChange={(event) => setSelectedSkuText(event.target.value)}
+        />
+      </Modal>
     </div>
   );
 }

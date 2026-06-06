@@ -23,50 +23,43 @@ public class UpstreamSystemTask
     @Autowired
     private IUpstreamSystemService upstreamSystemService;
 
+    public void syncWarehouses()
+    {
+        runForLingxingConnections("warehouse", connectionCode ->
+            upstreamSystemService.syncWarehousesOnly(connectionCode).getWarehouseCount());
+    }
+
+    public void syncLogisticsChannels()
+    {
+        runForLingxingConnections("logistics channel", connectionCode ->
+            upstreamSystemService.syncLogisticsChannelsOnly(connectionCode).getLogisticsChannelCount());
+    }
+
+    public void syncSkuInfo()
+    {
+        runForLingxingConnections("SKU info", connectionCode ->
+            upstreamSystemService.syncSkuInfoOnly(connectionCode).getSkuCount());
+    }
+
+    public void syncSkuDimensions()
+    {
+        runForLingxingConnections("SKU dimension", connectionCode ->
+            upstreamSystemService.syncSkuDimensionsOnly(connectionCode).getSkuDimensionCount());
+    }
+
     public void syncSkus()
     {
-        UpstreamSystemConnection query = new UpstreamSystemConnection();
-        query.setStatus(UpstreamSystemConstants.STATUS_ENABLED);
-        List<UpstreamSystemConnection> connections = upstreamSystemService.selectConnectionList(query);
-
-        int attempted = 0;
-        int success = 0;
-        int skipped = 0;
-        List<String> failures = new ArrayList<>();
-        for (UpstreamSystemConnection connection : connections)
-        {
-            if (!isLingxingWms(connection))
-            {
-                skipped++;
-                continue;
-            }
-            attempted++;
-            String connectionCode = connection.getConnectionCode();
-            try
-            {
-                UpstreamSyncResult result = upstreamSystemService.syncSkusOnly(connectionCode);
-                success++;
-                log.info("Upstream SKU scheduled sync succeeded, connectionCode={}, skuCount={}, skuDimensionCount={}",
-                    connectionCode, result.getSkuCount(), result.getSkuDimensionCount());
-            }
-            catch (RuntimeException ex)
-            {
-                failures.add(connectionCode);
-                log.warn("Upstream SKU scheduled sync failed, connectionCode={}", connectionCode, ex);
-            }
-        }
-
-        log.info("Upstream SKU scheduled sync completed, attempted={}, success={}, skipped={}, failed={}",
-            attempted, success, skipped, failures.size());
-        if (!failures.isEmpty())
-        {
-            throw new ServiceException("Upstream SKU scheduled sync failed for " + failures.size()
-                + " connection(s): " + String.join(",", failures));
-        }
+        syncSkuInfo();
     }
 
     public void syncInventory()
     {
+        runForLingxingConnections("inventory", connectionCode ->
+            upstreamSystemService.syncWarehouseStocksOnly(connectionCode).getWarehouseStockCount());
+    }
+
+    private void runForLingxingConnections(String taskName, SyncInvoker invoker)
+    {
         UpstreamSystemConnection query = new UpstreamSystemConnection();
         query.setStatus(UpstreamSystemConstants.STATUS_ENABLED);
         List<UpstreamSystemConnection> connections = upstreamSystemService.selectConnectionList(query);
@@ -86,23 +79,23 @@ public class UpstreamSystemTask
             String connectionCode = connection.getConnectionCode();
             try
             {
-                UpstreamSyncResult result = upstreamSystemService.syncWarehouseStocksOnly(connectionCode);
+                int count = invoker.sync(connectionCode);
                 success++;
-                log.info("Upstream inventory scheduled sync succeeded, connectionCode={}, warehouseStockCount={}",
-                    connectionCode, result.getWarehouseStockCount());
+                log.info("Upstream {} scheduled sync succeeded, connectionCode={}, count={}",
+                    taskName, connectionCode, count);
             }
             catch (RuntimeException ex)
             {
                 failures.add(connectionCode);
-                log.warn("Upstream inventory scheduled sync failed, connectionCode={}", connectionCode, ex);
+                log.warn("Upstream {} scheduled sync failed, connectionCode={}", taskName, connectionCode, ex);
             }
         }
 
-        log.info("Upstream inventory scheduled sync completed, attempted={}, success={}, skipped={}, failed={}",
-            attempted, success, skipped, failures.size());
+        log.info("Upstream {} scheduled sync completed, attempted={}, success={}, skipped={}, failed={}",
+            taskName, attempted, success, skipped, failures.size());
         if (!failures.isEmpty())
         {
-            throw new ServiceException("Upstream inventory scheduled sync failed for " + failures.size()
+            throw new ServiceException("Upstream " + taskName + " scheduled sync failed for " + failures.size()
                 + " connection(s): " + String.join(",", failures));
         }
     }
@@ -112,5 +105,10 @@ public class UpstreamSystemTask
         String systemKind = connection.getSystemKind();
         return UpstreamSystemConstants.SYSTEM_KIND_LINGXING_WMS.equals(systemKind)
             || UpstreamSystemConstants.SYSTEM_KIND_LINGXING_WMS_LEGACY.equals(systemKind);
+    }
+
+    private interface SyncInvoker
+    {
+        int sync(String connectionCode);
     }
 }

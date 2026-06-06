@@ -308,6 +308,12 @@ values
      sysdate(), '', null, ''),
     (2307, '仓库尺寸重量同步', 2031, 40, '#', '', '', '',
      1, 0, 'F', '0', '0', 'integration:upstream:dimensionSync', '#', 'admin',
+     sysdate(), '', null, ''),
+    (2308, 'SKU库存查看', 2031, 45, '#', '', '', '',
+     1, 0, 'F', '0', '0', 'integration:upstream:inventoryQuery', '#', 'admin',
+     sysdate(), '', null, ''),
+    (2309, 'SKU库存同步', 2031, 50, '#', '', '', '',
+     1, 0, 'F', '0', '0', 'integration:upstream:inventorySync', '#', 'admin',
      sysdate(), '', null, '')
 on duplicate key update
     menu_name = values(menu_name),
@@ -328,4 +334,4 @@ on duplicate key update
     update_time = sysdate(),
     remark = values(remark);
 
--- Upstream inventory schema, permissions, and scheduled job are intentionally omitted until the inventory schema is confirmed.
+-- Inventory schema and scheduled jobs are maintained by follow-up migrations.

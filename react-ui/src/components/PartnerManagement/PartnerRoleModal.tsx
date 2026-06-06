@@ -121,6 +121,11 @@ const PartnerRoleModal: React.FC<PartnerRoleModalProps> = ({
   const partnerName = getValue(partner, config.nameField) || getValue(partner, config.codeField) || '';
   const permPrefix = `${config.moduleKey}:admin`;
   const currentRoleId = currentRole?.roleId;
+  const canQueryRole = access.hasPerms(`${permPrefix}:role:query`);
+  const canQueryMenu = access.hasPerms(`${permPrefix}:menu:query`);
+  const canAddRole = access.hasPerms(`${permPrefix}:role:add`) && canQueryMenu;
+  const canChangeRoleStatus = access.hasPerms(`${permPrefix}:role:edit`);
+  const canEditRoleForm = canChangeRoleStatus && canQueryRole && canQueryMenu;
 
   const loadRoles = async () => {
     if (!partnerId) {
@@ -281,9 +286,9 @@ const PartnerRoleModal: React.FC<PartnerRoleModalProps> = ({
       render: (value, record) => (
         <Tag
           color={value === '0' ? 'success' : 'default'}
-          style={{ cursor: access.hasPerms(`${permPrefix}:role:edit`) ? 'pointer' : 'default' }}
+          style={{ cursor: canChangeRoleStatus ? 'pointer' : 'default' }}
           onClick={() => {
-            if (access.hasPerms(`${permPrefix}:role:edit`)) {
+            if (canChangeRoleStatus) {
               void handleStatusChange(record);
             }
           }}
@@ -307,7 +312,7 @@ const PartnerRoleModal: React.FC<PartnerRoleModalProps> = ({
           <Button
             type="link"
             size="small"
-            hidden={!access.hasPerms(`${permPrefix}:role:edit`)}
+            hidden={!canEditRoleForm}
             onClick={() => void openRoleForm(record)}
           >
             编辑
@@ -349,7 +354,7 @@ const PartnerRoleModal: React.FC<PartnerRoleModalProps> = ({
               type="primary"
               size="small"
               icon={<PlusOutlined />}
-              hidden={!access.hasPerms(`${permPrefix}:role:add`)}
+              hidden={!canAddRole}
               onClick={() => void openRoleForm()}
             >
               新增角色

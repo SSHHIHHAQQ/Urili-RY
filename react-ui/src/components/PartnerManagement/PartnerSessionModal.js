@@ -1,4 +1,4 @@
-import { jsx as _jsx } from "react/jsx-runtime";
+import { Fragment as _Fragment, jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { App, Modal, Table, Tag, Typography } from 'antd';
 const DEFAULT_PAGE_SIZE = 10;
@@ -29,17 +29,36 @@ function renderCompactText(value) {
     const text = displayText(value);
     return _jsx(Typography.Text, { style: compactCellTextStyle, title: text, children: text });
 }
+function isDirectLoginSession(record) {
+    return record.directLogin === true || String(record.directLogin) === '1';
+}
+function renderDirectLoginAudit(record) {
+    if (!isDirectLoginSession(record)) {
+        return null;
+    }
+    const actor = displayText(record.actingAdminName || record.actingAdminId);
+    const reason = displayText(record.directLoginReason);
+    const title = reason === '-' ? `免密代入：${actor}` : `免密代入：${actor} / ${reason}`;
+    return _jsxs(Typography.Text, { type: "secondary", style: compactCellTextStyle, title: title, children: ["\u514D\u5BC6\uFF1A", actor] });
+}
 function renderSessionStatus(record) {
+    let statusTag;
     if (record.current) {
-        return _jsx(Tag, { color: "processing", children: "\u5F53\u524D" });
+        statusTag = _jsx(Tag, { color: "processing", children: "\u5F53\u524D" });
     }
-    if (record.logoutTime || record.status === '1') {
-        return _jsx(Tag, { children: "\u5DF2\u9000\u51FA" });
+    else if (record.logoutTime || record.status === '1') {
+        statusTag = _jsx(Tag, { children: "\u5DF2\u9000\u51FA" });
     }
-    if (record.status === '0') {
-        return _jsx(Tag, { color: "success", children: "\u6709\u6548" });
+    else if (record.status === '2') {
+        statusTag = _jsx(Tag, { color: "default", children: "\u5DF2\u8FC7\u671F" });
     }
-    return _jsx(Tag, { children: displayText(record.status) });
+    else if (record.status === '0') {
+        statusTag = _jsx(Tag, { color: "success", children: "\u6709\u6548" });
+    }
+    else {
+        statusTag = _jsx(Tag, { children: displayText(record.status) });
+    }
+    return _jsxs(_Fragment, { children: [statusTag, renderDirectLoginAudit(record)] });
 }
 const sessionColumns = [
     {
@@ -162,7 +181,7 @@ const PartnerSessionModal = ({ config, open, partner, account, onOpenChange, }) 
             showSizeChanger: true,
         });
     }, [loadSessions, open]);
-    return (_jsx(Modal, { width: 960, title: title, open: open, destroyOnHidden: true, footer: null, onCancel: () => onOpenChange(false), children: _jsx(Table, { rowKey: (record) => [
+    return (_jsx(Modal, { width: 960, title: title, open: open, destroyOnHidden: true, footer: null, onCancel: () => onOpenChange(false), children: _jsx(Table, { rowKey: (record) => record.tokenId || [
                 record.terminal || config.moduleKey,
                 record.subjectId || 0,
                 record.accountId || 0,

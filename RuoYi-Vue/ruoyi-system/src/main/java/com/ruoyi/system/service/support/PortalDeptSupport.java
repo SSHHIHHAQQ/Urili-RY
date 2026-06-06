@@ -51,6 +51,19 @@ public class PortalDeptSupport
         }
     }
 
+    public static void assertDeptParentNotDescendant(PortalDept dept, PortalDept parent)
+    {
+        if (dept == null || parent == null || dept.getDeptId() == null)
+        {
+            return;
+        }
+        String parentBranch = StringUtils.defaultIfBlank(parent.getAncestors(), "0") + "," + parent.getDeptId();
+        if (("," + parentBranch + ",").contains("," + dept.getDeptId() + ","))
+        {
+            throw new ServiceException("上级部门不能选择自己的子部门");
+        }
+    }
+
     public static String buildAncestors(PortalDept parent)
     {
         if (parent == null)

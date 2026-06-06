@@ -10,6 +10,7 @@ import com.ruoyi.integration.domain.UpstreamRequestLog;
 import com.ruoyi.integration.domain.UpstreamSkuPairing;
 import com.ruoyi.integration.domain.UpstreamSkuSyncItem;
 import com.ruoyi.integration.domain.UpstreamSkuSyncState;
+import com.ruoyi.integration.domain.UpstreamSyncState;
 import com.ruoyi.integration.domain.UpstreamSystemConnection;
 import com.ruoyi.integration.domain.UpstreamWarehousePairing;
 import com.ruoyi.integration.domain.UpstreamWarehouseSyncItem;
@@ -17,9 +18,11 @@ import com.ruoyi.integration.domain.query.SourceProductQuery;
 import com.ruoyi.integration.domain.query.SourceWarehouseStockQuery;
 import com.ruoyi.integration.domain.request.LogisticsChannelPairingRequest;
 import com.ruoyi.integration.domain.request.SkuPairingRequest;
+import com.ruoyi.integration.domain.request.SkuDimensionSelectedSyncRequest;
 import com.ruoyi.integration.domain.request.UpstreamConnectionInfoRequest;
 import com.ruoyi.integration.domain.request.UpstreamConnectionRequest;
 import com.ruoyi.integration.domain.request.UpstreamCredentialRequest;
+import com.ruoyi.integration.domain.request.UpstreamSyncRequest;
 import com.ruoyi.integration.domain.request.WarehousePairingRequest;
 import com.ruoyi.integration.domain.response.SourceProductGroupDetail;
 import com.ruoyi.integration.domain.response.UpstreamSyncResult;
@@ -47,9 +50,19 @@ public interface IUpstreamSystemService
 
     UpstreamSyncResult syncAll(String connectionCode);
 
+    UpstreamSyncResult syncSelected(String connectionCode, UpstreamSyncRequest request);
+
+    UpstreamSyncResult syncWarehousesOnly(String connectionCode);
+
+    UpstreamSyncResult syncLogisticsChannelsOnly(String connectionCode);
+
+    UpstreamSyncResult syncSkuInfoOnly(String connectionCode);
+
     UpstreamSyncResult syncSkusOnly(String connectionCode);
 
     UpstreamSyncResult syncSkuDimensionsOnly(String connectionCode);
+
+    UpstreamSyncResult syncSkuDimensionsBySkuList(String connectionCode, SkuDimensionSelectedSyncRequest request);
 
     UpstreamSyncResult syncWarehouseStocksOnly(String connectionCode);
 
@@ -87,6 +100,8 @@ public interface IUpstreamSystemService
     int deleteSkuPairing(Long skuPairingId);
 
     UpstreamSkuSyncState selectSkuSyncState(String connectionCode);
+
+    List<UpstreamSyncState> selectSyncStateList(String connectionCode);
 
     List<UpstreamRequestLog> selectRequestLogList(String connectionCode);
 }

@@ -63,6 +63,22 @@ public class SellerPortalPermissionServiceImplMenuTreeTest
         assertEquals("商品列表", menuTree.get(0).getChildren().get(0).getMenuName());
     }
 
+    @Test
+    public void updateMenuRejectsMovingSellerMenuUnderItsDescendant()
+    {
+        Seller seller = seller(11L);
+        SellerAccount account = account(22L, 11L);
+        RecordingSellerPortalPermissionMapper permissionMapper = new RecordingSellerPortalPermissionMapper()
+                .withMenuIndex(menu(10L, 0L, "商品中心"), menu(11L, 10L, "商品列表"));
+        SellerPortalPermissionServiceImpl service = service(sellerService(seller), recordingSellerMapper(1, account).proxy(),
+                permissionMapper.proxy());
+        PortalMenu payload = menu(10L, 11L, "商品中心");
+
+        assertServiceException(() -> service.updateMenu(payload));
+
+        assertEquals(0, permissionMapper.updateMenuCallCount);
+    }
+
     private SellerPortalPermissionServiceImpl service(ISellerService sellerService, SellerMapper sellerMapper,
             SellerPortalPermissionMapper permissionMapper)
     {
@@ -293,15 +309,28 @@ public class SellerPortalPermissionServiceImplMenuTreeTest
     {
         private List<PortalMenu> menus = Collections.emptyList();
 
+        private final Map<Long, PortalMenu> menuById = new HashMap<>();
+
         private int selectMenuListCallCount;
 
         private Long selectedMenuListSellerId;
 
         private Long selectedMenuListAccountId;
 
+        private int updateMenuCallCount;
+
         private RecordingSellerPortalPermissionMapper withMenus(PortalMenu... menus)
         {
             this.menus = Arrays.asList(menus);
+            return this;
+        }
+
+        private RecordingSellerPortalPermissionMapper withMenuIndex(PortalMenu... menus)
+        {
+            for (PortalMenu menu : menus)
+            {
+                menuById.put(menu.getMenuId(), menu);
+            }
             return this;
         }
 
@@ -315,6 +344,15 @@ public class SellerPortalPermissionServiceImplMenuTreeTest
                     selectedMenuListSellerId = (Long) args[0];
                     selectedMenuListAccountId = (Long) args[1];
                     return menus;
+                }
+                if ("selectSellerMenuById".equals(methodName))
+                {
+                    return menuById.get((Long) args[0]);
+                }
+                if ("updateSellerMenu".equals(methodName))
+                {
+                    updateMenuCallCount++;
+                    return 1;
                 }
                 if ("toString".equals(methodName))
                 {
@@ -334,5 +372,18 @@ public class SellerPortalPermissionServiceImplMenuTreeTest
                 SellerPortalPermissionMapper.class.getClassLoader(),
                 new Class<?>[] { SellerPortalPermissionMapper.class }, handler);
         }
+    }
+
+    private void assertServiceException(ThrowingRunnable runnable)
+    {
+        try
+        {
+            runnable.run();
+        }
+        catch (ServiceException e)
+        {
+            return;
+        }
+        throw new AssertionError("Expected ServiceException");
     }
 }

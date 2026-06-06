@@ -109,6 +109,9 @@ const PartnerDeptModal: React.FC<PartnerDeptModalProps> = ({
   const partnerName = getValue(partner, config.nameField) || getValue(partner, config.codeField) || '';
   const permPrefix = `${config.moduleKey}:admin`;
   const currentDeptId = currentDept?.deptId;
+  const canQueryDeptTree = access.hasPerms(`${permPrefix}:dept:query`);
+  const canAddDept = access.hasPerms(`${permPrefix}:dept:add`) && canQueryDeptTree;
+  const canEditDept = access.hasPerms(`${permPrefix}:dept:edit`) && canQueryDeptTree;
 
   const parentTreeData = [
     {
@@ -128,14 +131,14 @@ const PartnerDeptModal: React.FC<PartnerDeptModalProps> = ({
     try {
       const [listResp, treeResp] = await Promise.all([
         config.services.listDepts(partnerId),
-        config.services.getDeptTree(partnerId),
+        canQueryDeptTree ? config.services.getDeptTree(partnerId) : Promise.resolve(undefined),
       ]);
       if (listResp.code === 200) {
         setDepts((listResp.data || []) as DeptRecord[]);
       } else {
         message.error(listResp.msg || '部门列表加载失败');
       }
-      if (treeResp.code === 200) {
+      if (treeResp?.code === 200) {
         setDeptTree(treeResp.data || []);
       } else {
         setDeptTree([]);
@@ -270,7 +273,7 @@ const PartnerDeptModal: React.FC<PartnerDeptModalProps> = ({
           <Button
             type="link"
             size="small"
-            hidden={!access.hasPerms(`${permPrefix}:dept:edit`)}
+            hidden={!canEditDept}
             onClick={() => openDeptForm(record)}
           >
             编辑
@@ -312,7 +315,7 @@ const PartnerDeptModal: React.FC<PartnerDeptModalProps> = ({
               type="primary"
               size="small"
               icon={<PlusOutlined />}
-              hidden={!access.hasPerms(`${permPrefix}:dept:add`)}
+              hidden={!canAddDept}
               onClick={() => openDeptForm()}
             >
               新增部门

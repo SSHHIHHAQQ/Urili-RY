@@ -138,6 +138,7 @@ const PartnerAccountModal = ({ config, open, partner, onOpenChange, }) => {
     };
     const canAssignAccountRoles = access.hasPerms(accountPermissions.roleQuery)
         && access.hasPerms(accountPermissions.roleEdit);
+    const canQueryDept = access.hasPerms(`${permPrefix}:dept:query`);
     const accountLockEnabled = Boolean(config.services.lockAccount && config.services.unlockAccount);
     const canLockAccount = accountLockEnabled
         && Boolean(accountPermissions.lock)
@@ -148,7 +149,7 @@ const PartnerAccountModal = ({ config, open, partner, onOpenChange, }) => {
         disabled: option.value === 'OWNER' && currentAccount?.accountRole !== 'OWNER',
     })), [accountRoleOptions, currentAccount?.accountRole]);
     const loadDeptTree = async () => {
-        if (!partnerId) {
+        if (!partnerId || !canQueryDept) {
             setDeptTree([]);
             return;
         }
@@ -200,7 +201,7 @@ const PartnerAccountModal = ({ config, open, partner, onOpenChange, }) => {
                     .catch(() => setAccountLockStatusOptions(lockStatusOptions));
             }
         }
-    }, [open, partnerId, config.moduleKey, accountLockEnabled]);
+    }, [open, partnerId, config.moduleKey, accountLockEnabled, canQueryDept]);
     const openAccountForm = (account) => {
         setCurrentAccount(account);
         accountForm.resetFields();

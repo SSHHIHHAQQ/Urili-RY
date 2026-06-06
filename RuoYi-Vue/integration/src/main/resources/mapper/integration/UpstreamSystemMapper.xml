@@ -34,6 +34,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="warehouseName"  column="warehouse_name"  />
         <result property="countryCode"    column="country_code"    />
         <result property="status"         column="status"          />
+        <result property="sourcePayloadJson" column="source_payload_json" />
+        <result property="sourcePayloadHash" column="source_payload_hash" />
         <result property="syncBatchId"    column="sync_batch_id"   />
         <result property="firstSeenTime"  column="first_seen_time" />
         <result property="lastSeenTime"   column="last_seen_time"  />
@@ -46,6 +48,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <id     property="channelCode"    column="channel_code"    />
         <result property="channelName"    column="channel_name"    />
         <result property="status"         column="status"          />
+        <result property="sourcePayloadJson" column="source_payload_json" />
+        <result property="sourcePayloadHash" column="source_payload_hash" />
         <result property="syncBatchId"    column="sync_batch_id"   />
         <result property="firstSeenTime"  column="first_seen_time" />
         <result property="lastSeenTime"   column="last_seen_time"  />
@@ -231,6 +235,26 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="createTime" column="create_time" />
     </resultMap>
 
+    <resultMap type="UpstreamSyncState" id="SyncStateResult">
+        <id     property="stateId" column="state_id" />
+        <result property="connectionCode" column="connection_code" />
+        <result property="syncType" column="sync_type" />
+        <result property="status" column="status" />
+        <result property="syncBatchId" column="sync_batch_id" />
+        <result property="lastStartedTime" column="last_started_time" />
+        <result property="lastFinishedTime" column="last_finished_time" />
+        <result property="lastSuccessTime" column="last_success_time" />
+        <result property="nextSyncTime" column="next_sync_time" />
+        <result property="totalCount" column="total_count" />
+        <result property="successCount" column="success_count" />
+        <result property="failedCount" column="failed_count" />
+        <result property="lastErrorCode" column="last_error_code" />
+        <result property="lastErrorMessage" column="last_error_message" />
+        <result property="lastMode" column="last_mode" />
+        <result property="rateLimitMs" column="rate_limit_ms" />
+        <result property="updateTime" column="update_time" />
+    </resultMap>
+
     <resultMap type="UpstreamSkuSyncState" id="SkuSyncStateResult">
         <id     property="connectionCode" column="connection_code" />
         <result property="status" column="status" />
@@ -403,18 +427,189 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         order by create_time desc, request_log_id desc
     </select>
 
+    <insert id="upsertSyncState" parameterType="UpstreamSyncState" useGeneratedKeys="true" keyProperty="stateId">
+        insert into upstream_system_sync_state(
+            connection_code, sync_type, status, sync_batch_id,
+            last_started_time, last_finished_time, last_success_time, next_sync_time,
+            total_count, success_count, failed_count, last_error_code, last_error_message,
+            last_mode, rate_limit_ms, update_time
+        ) values (
+            #{connectionCode}, #{syncType}, #{status}, #{syncBatchId},
+            #{lastStartedTime}, #{lastFinishedTime}, #{lastSuccessTime}, #{nextSyncTime},
+            #{totalCount}, #{successCount}, #{failedCount}, #{lastErrorCode}, #{lastErrorMessage},
+            #{lastMode}, #{rateLimitMs}, sysdate()
+        )
+        on duplicate key update
+            status = values(status),
+            sync_batch_id = values(sync_batch_id),
+            last_started_time = values(last_started_time),
+            last_finished_time = values(last_finished_time),
+            last_success_time = coalesce(values(last_success_time), last_success_time),
+            next_sync_time = values(next_sync_time),
+            total_count = values(total_count),
+            success_count = values(success_count),
+            failed_count = values(failed_count),
+            last_error_code = values(last_error_code),
+            last_error_message = values(last_error_message),
+            last_mode = values(last_mode),
+            rate_limit_ms = values(rate_limit_ms),
+            update_time = sysdate()
+    </insert>
+
+    <select id="selectSyncState" resultMap="SyncStateResult">
+        select *
+        from upstream_system_sync_state
+        where connection_code = #{connectionCode}
+          and sync_type = #{syncType}
+        limit 1
+    </select>
+
+    <select id="selectSyncStateList" resultMap="SyncStateResult">
+        select *
+        from upstream_system_sync_state
+        where connection_code = #{connectionCode}
+        order by field(sync_type, 'WAREHOUSE', 'LOGISTICS_CHANNEL', 'SKU', 'SKU_DIMENSION', 'INVENTORY'), sync_type
+    </select>
+
+    <insert id="insertSyncBatch" parameterType="UpstreamSyncBatch">
+        insert into upstream_system_sync_batch(
+            sync_batch_id, connection_code, sync_type, mode, status,
+            pulled_count, inserted_count, changed_count, unchanged_count, disabled_count, failed_count,
+            started_time, finished_time, error_message
+        ) values (
+            #{syncBatchId}, #{connectionCode}, #{syncType}, #{mode}, #{status},
+            coalesce(#{pulledCount}, 0), coalesce(#{insertedCount}, 0), coalesce(#{changedCount}, 0),
+            coalesce(#{unchangedCount}, 0), coalesce(#{disabledCount}, 0), coalesce(#{failedCount}, 0),
+            #{startedTime}, #{finishedTime}, #{errorMessage}
+        )
+        on duplicate key update
+            status = values(status),
+            pulled_count = values(pulled_count),
+            inserted_count = values(inserted_count),
+            changed_count = values(changed_count),
+            unchanged_count = values(unchanged_count),
+            disabled_count = values(disabled_count),
+            failed_count = values(failed_count),
+            finished_time = values(finished_time),
+            error_message = values(error_message)
+    </insert>
+
+    <update id="updateSyncBatch" parameterType="UpstreamSyncBatch">
+        update upstream_system_sync_batch
+        set status = #{status},
+            pulled_count = coalesce(#{pulledCount}, 0),
+            inserted_count = coalesce(#{insertedCount}, 0),
+            changed_count = coalesce(#{changedCount}, 0),
+            unchanged_count = coalesce(#{unchangedCount}, 0),
+            disabled_count = coalesce(#{disabledCount}, 0),
+            failed_count = coalesce(#{failedCount}, 0),
+            finished_time = #{finishedTime},
+            error_message = #{errorMessage}
+        where sync_batch_id = #{syncBatchId}
+    </update>
+
+    <insert id="batchInsertWarehouseStage">
+        insert into upstream_system_warehouse_candidate_stage(
+            connection_code, sync_batch_id, warehouse_code, warehouse_name,
+            country_code, source_payload_json, source_payload_hash, create_time
+        ) values
+        <foreach collection="items" item="item" separator=",">
+            (
+                #{item.connectionCode}, #{item.syncBatchId}, #{item.warehouseCode}, #{item.warehouseName},
+                #{item.countryCode}, #{item.sourcePayloadJson}, #{item.sourcePayloadHash}, sysdate()
+            )
+        </foreach>
+        on duplicate key update
+            warehouse_name = values(warehouse_name),
+            country_code = values(country_code),
+            source_payload_json = values(source_payload_json),
+            source_payload_hash = values(source_payload_hash),
+            create_time = sysdate()
+    </insert>
+
+    <insert id="insertNewWarehousesFromStage">
+        insert into upstream_system_warehouse_candidate(
+            connection_code, warehouse_code, warehouse_name, country_code, status,
+            source_payload_json, source_payload_hash, sync_batch_id,
+            first_seen_time, last_seen_time, update_time
+        )
+        select s.connection_code, s.warehouse_code, s.warehouse_name, s.country_code, 'ACTIVE',
+               s.source_payload_json, s.source_payload_hash, s.sync_batch_id,
+               sysdate(), sysdate(), sysdate()
+        from upstream_system_warehouse_candidate_stage s
+        left join upstream_system_warehouse_candidate c
+               on c.connection_code = s.connection_code
+              and c.warehouse_code = s.warehouse_code
+        where s.connection_code = #{connectionCode}
+          and s.sync_batch_id = #{syncBatchId}
+          and c.connection_code is null
+    </insert>
+
+    <update id="updateChangedWarehousesFromStage">
+        update upstream_system_warehouse_candidate c
+        inner join upstream_system_warehouse_candidate_stage s
+                on s.connection_code = c.connection_code
+               and s.warehouse_code = c.warehouse_code
+               and s.sync_batch_id = #{syncBatchId}
+        set c.warehouse_name = s.warehouse_name,
+            c.country_code = s.country_code,
+            c.status = 'ACTIVE',
+            c.source_payload_json = s.source_payload_json,
+            c.source_payload_hash = s.source_payload_hash,
+            c.sync_batch_id = s.sync_batch_id,
+            c.last_seen_time = sysdate(),
+            c.update_time = sysdate()
+        where c.connection_code = #{connectionCode}
+          and coalesce(c.source_payload_hash, '') &lt;&gt; coalesce(s.source_payload_hash, '')
+    </update>
+
+    <update id="touchUnchangedWarehousesFromStage">
+        update upstream_system_warehouse_candidate c
+        inner join upstream_system_warehouse_candidate_stage s
+                on s.connection_code = c.connection_code
+               and s.warehouse_code = c.warehouse_code
+               and s.sync_batch_id = #{syncBatchId}
+        set c.status = 'ACTIVE',
+            c.sync_batch_id = s.sync_batch_id,
+            c.last_seen_time = sysdate()
+        where c.connection_code = #{connectionCode}
+          and coalesce(c.source_payload_hash, '') = coalesce(s.source_payload_hash, '')
+    </update>
+
+    <update id="disableMissingWarehousesFromStage">
+        update upstream_system_warehouse_candidate c
+        left join upstream_system_warehouse_candidate_stage s
+               on s.connection_code = c.connection_code
+              and s.warehouse_code = c.warehouse_code
+              and s.sync_batch_id = #{syncBatchId}
+        set c.status = 'DISABLED',
+            c.update_time = sysdate()
+        where c.connection_code = #{connectionCode}
+          and s.warehouse_code is null
+          and c.status &lt;&gt; 'DISABLED'
+    </update>
+
+    <delete id="cleanupWarehouseStage">
+        delete from upstream_system_warehouse_candidate_stage
+        where connection_code = #{connectionCode}
+          and sync_batch_id &lt;&gt; #{syncBatchId}
+          and create_time &lt; date_sub(sysdate(), interval 7 day)
+    </delete>
+
     <insert id="upsertWarehouseSyncItem" parameterType="UpstreamWarehouseSyncItem">
         insert into upstream_system_warehouse_candidate(
             connection_code, warehouse_code, warehouse_name, country_code, status,
-            sync_batch_id, first_seen_time, last_seen_time, update_time
+            source_payload_json, source_payload_hash, sync_batch_id, first_seen_time, last_seen_time, update_time
         ) values (
             #{connectionCode}, #{warehouseCode}, #{warehouseName}, #{countryCode}, #{status},
-            #{syncBatchId}, sysdate(), sysdate(), sysdate()
+            #{sourcePayloadJson}, #{sourcePayloadHash}, #{syncBatchId}, sysdate(), sysdate(), sysdate()
         )
         on duplicate key update
             warehouse_name = values(warehouse_name),
             country_code = values(country_code),
             status = values(status),
+            source_payload_json = values(source_payload_json),
+            source_payload_hash = values(source_payload_hash),
             sync_batch_id = values(sync_batch_id),
             last_seen_time = sysdate(),
             update_time = sysdate()
@@ -469,17 +664,110 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         delete from upstream_system_warehouse_pairing where warehouse_pairing_id = #{warehousePairingId}
     </delete>
 
+    <insert id="batchInsertLogisticsChannelStage">
+        insert into upstream_system_logistics_channel_candidate_stage(
+            connection_code, sync_batch_id, warehouse_code, channel_code, channel_name,
+            source_payload_json, source_payload_hash, create_time
+        ) values
+        <foreach collection="items" item="item" separator=",">
+            (
+                #{item.connectionCode}, #{item.syncBatchId}, #{item.warehouseCode},
+                #{item.channelCode}, #{item.channelName}, #{item.sourcePayloadJson},
+                #{item.sourcePayloadHash}, sysdate()
+            )
+        </foreach>
+        on duplicate key update
+            channel_name = values(channel_name),
+            source_payload_json = values(source_payload_json),
+            source_payload_hash = values(source_payload_hash),
+            create_time = sysdate()
+    </insert>
+
+    <insert id="insertNewLogisticsChannelsFromStage">
+        insert into upstream_system_logistics_channel_candidate(
+            connection_code, warehouse_code, channel_code, channel_name, status,
+            source_payload_json, source_payload_hash, sync_batch_id,
+            first_seen_time, last_seen_time, update_time
+        )
+        select s.connection_code, s.warehouse_code, s.channel_code, s.channel_name, 'ACTIVE',
+               s.source_payload_json, s.source_payload_hash, s.sync_batch_id,
+               sysdate(), sysdate(), sysdate()
+        from upstream_system_logistics_channel_candidate_stage s
+        left join upstream_system_logistics_channel_candidate c
+               on c.connection_code = s.connection_code
+              and c.warehouse_code = s.warehouse_code
+              and c.channel_code = s.channel_code
+        where s.connection_code = #{connectionCode}
+          and s.sync_batch_id = #{syncBatchId}
+          and c.connection_code is null
+    </insert>
+
+    <update id="updateChangedLogisticsChannelsFromStage">
+        update upstream_system_logistics_channel_candidate c
+        inner join upstream_system_logistics_channel_candidate_stage s
+                on s.connection_code = c.connection_code
+               and s.warehouse_code = c.warehouse_code
+               and s.channel_code = c.channel_code
+               and s.sync_batch_id = #{syncBatchId}
+        set c.channel_name = s.channel_name,
+            c.status = 'ACTIVE',
+            c.source_payload_json = s.source_payload_json,
+            c.source_payload_hash = s.source_payload_hash,
+            c.sync_batch_id = s.sync_batch_id,
+            c.last_seen_time = sysdate(),
+            c.update_time = sysdate()
+        where c.connection_code = #{connectionCode}
+          and coalesce(c.source_payload_hash, '') &lt;&gt; coalesce(s.source_payload_hash, '')
+    </update>
+
+    <update id="touchUnchangedLogisticsChannelsFromStage">
+        update upstream_system_logistics_channel_candidate c
+        inner join upstream_system_logistics_channel_candidate_stage s
+                on s.connection_code = c.connection_code
+               and s.warehouse_code = c.warehouse_code
+               and s.channel_code = c.channel_code
+               and s.sync_batch_id = #{syncBatchId}
+        set c.status = 'ACTIVE',
+            c.sync_batch_id = s.sync_batch_id,
+            c.last_seen_time = sysdate()
+        where c.connection_code = #{connectionCode}
+          and coalesce(c.source_payload_hash, '') = coalesce(s.source_payload_hash, '')
+    </update>
+
+    <update id="disableMissingLogisticsChannelsFromStage">
+        update upstream_system_logistics_channel_candidate c
+        left join upstream_system_logistics_channel_candidate_stage s
+               on s.connection_code = c.connection_code
+              and s.warehouse_code = c.warehouse_code
+              and s.channel_code = c.channel_code
+              and s.sync_batch_id = #{syncBatchId}
+        set c.status = 'DISABLED',
+            c.update_time = sysdate()
+        where c.connection_code = #{connectionCode}
+          and s.channel_code is null
+          and c.status &lt;&gt; 'DISABLED'
+    </update>
+
+    <delete id="cleanupLogisticsChannelStage">
+        delete from upstream_system_logistics_channel_candidate_stage
+        where connection_code = #{connectionCode}
+          and sync_batch_id &lt;&gt; #{syncBatchId}
+          and create_time &lt; date_sub(sysdate(), interval 7 day)
+    </delete>
+
     <insert id="upsertLogisticsChannelSyncItem" parameterType="UpstreamLogisticsChannelSyncItem">
         insert into upstream_system_logistics_channel_candidate(
             connection_code, warehouse_code, channel_code, channel_name, status,
-            sync_batch_id, first_seen_time, last_seen_time, update_time
+            source_payload_json, source_payload_hash, sync_batch_id, first_seen_time, last_seen_time, update_time
         ) values (
             #{connectionCode}, #{warehouseCode}, #{channelCode}, #{channelName}, #{status},
-            #{syncBatchId}, sysdate(), sysdate(), sysdate()
+            #{sourcePayloadJson}, #{sourcePayloadHash}, #{syncBatchId}, sysdate(), sysdate(), sysdate()
         )
         on duplicate key update
             channel_name = values(channel_name),
             status = values(status),
+            source_payload_json = values(source_payload_json),
+            source_payload_hash = values(source_payload_hash),
             sync_batch_id = values(sync_batch_id),
             last_seen_time = sysdate(),
             update_time = sysdate()
@@ -533,6 +821,198 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
     <delete id="deleteLogisticsChannelPairing">
         delete from upstream_system_logistics_channel_pairing where logistics_channel_pairing_id = #{logisticsChannelPairingId}
+    </delete>
+
+    <insert id="batchInsertSkuStage">
+        insert into upstream_system_sku_candidate_stage(
+            connection_code, sync_batch_id, master_sku, master_product_name,
+            product_alias_name, approve_status, product_type, product_description, image_url,
+            main_code, other_code, fnsku, country_of_origin_name, currency_code, customhouse_code,
+            dangerous_cargo, declare_name_cn, declare_name_en, declare_price,
+            product_height, product_height_bs, product_length, product_length_bs,
+            product_weight, product_weight_bs, product_width, product_width_bs,
+            wms_height, wms_height_bs, wms_length, wms_length_bs,
+            wms_weight, wms_weight_bs, wms_width, wms_width_bs,
+            cat1_name, cat2_name, cat3_name, platform_sku_info_json, brazil_tax_info_json,
+            source_payload_json, source_payload_hash, search_text, create_time
+        ) values
+        <foreach collection="items" item="item" separator=",">
+            (
+                #{item.connectionCode}, #{item.syncBatchId}, #{item.masterSku}, #{item.masterProductName},
+                #{item.productAliasName}, #{item.approveStatus}, #{item.productType}, #{item.productDescription}, #{item.imageUrl},
+                #{item.mainCode}, #{item.otherCode}, #{item.fnsku}, #{item.countryOfOriginName}, #{item.currencyCode}, #{item.customhouseCode},
+                #{item.dangerousCargo}, #{item.declareNameCn}, #{item.declareNameEn}, #{item.declarePrice},
+                #{item.height}, #{item.heightBs}, #{item.length}, #{item.lengthBs},
+                #{item.weight}, #{item.weightBs}, #{item.width}, #{item.widthBs},
+                #{item.wmsHeight}, #{item.wmsHeightBs}, #{item.wmsLength}, #{item.wmsLengthBs},
+                #{item.wmsWeight}, #{item.wmsWeightBs}, #{item.wmsWidth}, #{item.wmsWidthBs},
+                #{item.cat1Name}, #{item.cat2Name}, #{item.cat3Name}, #{item.platformSkuInfoJson}, #{item.brazilTaxInfoJson},
+                #{item.sourcePayloadJson}, #{item.sourcePayloadHash}, #{item.searchText}, sysdate()
+            )
+        </foreach>
+        on duplicate key update
+            master_product_name = values(master_product_name),
+            product_alias_name = values(product_alias_name),
+            approve_status = values(approve_status),
+            product_type = values(product_type),
+            product_description = values(product_description),
+            image_url = values(image_url),
+            main_code = values(main_code),
+            other_code = values(other_code),
+            fnsku = values(fnsku),
+            country_of_origin_name = values(country_of_origin_name),
+            currency_code = values(currency_code),
+            customhouse_code = values(customhouse_code),
+            dangerous_cargo = values(dangerous_cargo),
+            declare_name_cn = values(declare_name_cn),
+            declare_name_en = values(declare_name_en),
+            declare_price = values(declare_price),
+            product_height = values(product_height),
+            product_height_bs = values(product_height_bs),
+            product_length = values(product_length),
+            product_length_bs = values(product_length_bs),
+            product_weight = values(product_weight),
+            product_weight_bs = values(product_weight_bs),
+            product_width = values(product_width),
+            product_width_bs = values(product_width_bs),
+            wms_height = values(wms_height),
+            wms_height_bs = values(wms_height_bs),
+            wms_length = values(wms_length),
+            wms_length_bs = values(wms_length_bs),
+            wms_weight = values(wms_weight),
+            wms_weight_bs = values(wms_weight_bs),
+            wms_width = values(wms_width),
+            wms_width_bs = values(wms_width_bs),
+            cat1_name = values(cat1_name),
+            cat2_name = values(cat2_name),
+            cat3_name = values(cat3_name),
+            platform_sku_info_json = values(platform_sku_info_json),
+            brazil_tax_info_json = values(brazil_tax_info_json),
+            source_payload_json = values(source_payload_json),
+            source_payload_hash = values(source_payload_hash),
+            search_text = values(search_text),
+            create_time = sysdate()
+    </insert>
+
+    <insert id="insertNewSkusFromStage">
+        insert into upstream_system_sku_candidate(
+            connection_code, master_sku, master_product_name,
+            product_alias_name, approve_status, product_type, product_description, image_url,
+            main_code, other_code, fnsku, country_of_origin_name, currency_code, customhouse_code,
+            dangerous_cargo, declare_name_cn, declare_name_en, declare_price,
+            product_height, product_height_bs, product_length, product_length_bs,
+            product_weight, product_weight_bs, product_width, product_width_bs,
+            wms_height, wms_height_bs, wms_length, wms_length_bs,
+            wms_weight, wms_weight_bs, wms_width, wms_width_bs,
+            cat1_name, cat2_name, cat3_name, platform_sku_info_json, brazil_tax_info_json,
+            source_payload_json, source_payload_hash, status, search_text,
+            sync_batch_id, first_seen_time, last_seen_time, update_time
+        )
+        select s.connection_code, s.master_sku, s.master_product_name,
+               s.product_alias_name, s.approve_status, s.product_type, s.product_description, s.image_url,
+               s.main_code, s.other_code, s.fnsku, s.country_of_origin_name, s.currency_code, s.customhouse_code,
+               s.dangerous_cargo, s.declare_name_cn, s.declare_name_en, s.declare_price,
+               s.product_height, s.product_height_bs, s.product_length, s.product_length_bs,
+               s.product_weight, s.product_weight_bs, s.product_width, s.product_width_bs,
+               s.wms_height, s.wms_height_bs, s.wms_length, s.wms_length_bs,
+               s.wms_weight, s.wms_weight_bs, s.wms_width, s.wms_width_bs,
+               s.cat1_name, s.cat2_name, s.cat3_name, s.platform_sku_info_json, s.brazil_tax_info_json,
+               s.source_payload_json, s.source_payload_hash, 'ACTIVE', s.search_text,
+               s.sync_batch_id, sysdate(), sysdate(), sysdate()
+        from upstream_system_sku_candidate_stage s
+        left join upstream_system_sku_candidate c
+               on c.connection_code = s.connection_code
+              and c.master_sku = s.master_sku
+        where s.connection_code = #{connectionCode}
+          and s.sync_batch_id = #{syncBatchId}
+          and c.connection_code is null
+    </insert>
+
+    <update id="updateChangedSkusFromStage">
+        update upstream_system_sku_candidate c
+        inner join upstream_system_sku_candidate_stage s
+                on s.connection_code = c.connection_code
+               and s.master_sku = c.master_sku
+               and s.sync_batch_id = #{syncBatchId}
+        set c.master_product_name = s.master_product_name,
+            c.product_alias_name = s.product_alias_name,
+            c.approve_status = s.approve_status,
+            c.product_type = s.product_type,
+            c.product_description = s.product_description,
+            c.image_url = s.image_url,
+            c.main_code = s.main_code,
+            c.other_code = s.other_code,
+            c.fnsku = s.fnsku,
+            c.country_of_origin_name = s.country_of_origin_name,
+            c.currency_code = s.currency_code,
+            c.customhouse_code = s.customhouse_code,
+            c.dangerous_cargo = s.dangerous_cargo,
+            c.declare_name_cn = s.declare_name_cn,
+            c.declare_name_en = s.declare_name_en,
+            c.declare_price = s.declare_price,
+            c.product_height = s.product_height,
+            c.product_height_bs = s.product_height_bs,
+            c.product_length = s.product_length,
+            c.product_length_bs = s.product_length_bs,
+            c.product_weight = s.product_weight,
+            c.product_weight_bs = s.product_weight_bs,
+            c.product_width = s.product_width,
+            c.product_width_bs = s.product_width_bs,
+            c.wms_height = coalesce(s.wms_height, c.wms_height),
+            c.wms_height_bs = coalesce(s.wms_height_bs, c.wms_height_bs),
+            c.wms_length = coalesce(s.wms_length, c.wms_length),
+            c.wms_length_bs = coalesce(s.wms_length_bs, c.wms_length_bs),
+            c.wms_weight = coalesce(s.wms_weight, c.wms_weight),
+            c.wms_weight_bs = coalesce(s.wms_weight_bs, c.wms_weight_bs),
+            c.wms_width = coalesce(s.wms_width, c.wms_width),
+            c.wms_width_bs = coalesce(s.wms_width_bs, c.wms_width_bs),
+            c.cat1_name = s.cat1_name,
+            c.cat2_name = s.cat2_name,
+            c.cat3_name = s.cat3_name,
+            c.platform_sku_info_json = s.platform_sku_info_json,
+            c.brazil_tax_info_json = s.brazil_tax_info_json,
+            c.source_payload_json = s.source_payload_json,
+            c.source_payload_hash = s.source_payload_hash,
+            c.status = 'ACTIVE',
+            c.search_text = s.search_text,
+            c.sync_batch_id = s.sync_batch_id,
+            c.last_seen_time = sysdate(),
+            c.update_time = sysdate()
+        where c.connection_code = #{connectionCode}
+          and coalesce(c.source_payload_hash, '') &lt;&gt; coalesce(s.source_payload_hash, '')
+    </update>
+
+    <update id="touchUnchangedSkusFromStage">
+        update upstream_system_sku_candidate c
+        inner join upstream_system_sku_candidate_stage s
+                on s.connection_code = c.connection_code
+               and s.master_sku = c.master_sku
+               and s.sync_batch_id = #{syncBatchId}
+        set c.status = 'ACTIVE',
+            c.sync_batch_id = s.sync_batch_id,
+            c.last_seen_time = sysdate()
+        where c.connection_code = #{connectionCode}
+          and coalesce(c.source_payload_hash, '') = coalesce(s.source_payload_hash, '')
+    </update>
+
+    <update id="disableMissingSkusFromStage">
+        update upstream_system_sku_candidate c
+        left join upstream_system_sku_candidate_stage s
+               on s.connection_code = c.connection_code
+              and s.master_sku = c.master_sku
+              and s.sync_batch_id = #{syncBatchId}
+        set c.status = 'DISABLED',
+            c.update_time = sysdate()
+        where c.connection_code = #{connectionCode}
+          and s.master_sku is null
+          and c.status &lt;&gt; 'DISABLED'
+    </update>
+
+    <delete id="cleanupSkuStage">
+        delete from upstream_system_sku_candidate_stage
+        where connection_code = #{connectionCode}
+          and sync_batch_id &lt;&gt; #{syncBatchId}
+          and create_time &lt; date_sub(sysdate(), interval 7 day)
     </delete>
 
     <insert id="upsertSkuSyncItem" parameterType="UpstreamSkuSyncItem">
@@ -702,6 +1182,103 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         where connection_code = #{connectionCode}
           and master_sku = #{masterSku}
     </update>
+
+    <insert id="batchInsertSkuDimensionStage">
+        insert into upstream_system_sku_dimension_stage(
+            connection_code, sync_batch_id, master_sku, master_product_name,
+            wms_height, wms_height_bs, wms_length, wms_length_bs,
+            wms_weight, wms_weight_bs, wms_width, wms_width_bs,
+            source_payload_json, source_payload_hash, create_time
+        ) values
+        <foreach collection="items" item="item" separator=",">
+            (
+                #{item.connectionCode}, #{item.syncBatchId}, #{item.masterSku}, #{item.masterProductName},
+                #{item.wmsHeight}, #{item.wmsHeightBs}, #{item.wmsLength}, #{item.wmsLengthBs},
+                #{item.wmsWeight}, #{item.wmsWeightBs}, #{item.wmsWidth}, #{item.wmsWidthBs},
+                #{item.sourcePayloadJson}, #{item.sourcePayloadHash}, sysdate()
+            )
+        </foreach>
+        on duplicate key update
+            master_product_name = values(master_product_name),
+            wms_height = values(wms_height),
+            wms_height_bs = values(wms_height_bs),
+            wms_length = values(wms_length),
+            wms_length_bs = values(wms_length_bs),
+            wms_weight = values(wms_weight),
+            wms_weight_bs = values(wms_weight_bs),
+            wms_width = values(wms_width),
+            wms_width_bs = values(wms_width_bs),
+            source_payload_json = values(source_payload_json),
+            source_payload_hash = values(source_payload_hash),
+            create_time = sysdate()
+    </insert>
+
+    <insert id="insertNewSkusFromDimensionStage">
+        insert into upstream_system_sku_candidate(
+            connection_code, master_sku, master_product_name,
+            wms_height, wms_height_bs, wms_length, wms_length_bs,
+            wms_weight, wms_weight_bs, wms_width, wms_width_bs,
+            wms_payload_json, wms_payload_hash,
+            source_payload_hash, status, search_text,
+            sync_batch_id, first_seen_time, last_seen_time, update_time
+        )
+        select s.connection_code, s.master_sku, coalesce(nullif(s.master_product_name, ''), s.master_sku),
+               s.wms_height, s.wms_height_bs, s.wms_length, s.wms_length_bs,
+               s.wms_weight, s.wms_weight_bs, s.wms_width, s.wms_width_bs,
+               s.source_payload_json, s.source_payload_hash,
+               '', 'ACTIVE', concat_ws(' ', s.master_sku, s.master_product_name),
+               s.sync_batch_id, sysdate(), sysdate(), sysdate()
+        from upstream_system_sku_dimension_stage s
+        left join upstream_system_sku_candidate c
+               on c.connection_code = s.connection_code
+              and c.master_sku = s.master_sku
+        where s.connection_code = #{connectionCode}
+          and s.sync_batch_id = #{syncBatchId}
+          and c.connection_code is null
+    </insert>
+
+    <update id="updateChangedSkuDimensionsFromStage">
+        update upstream_system_sku_candidate c
+        inner join upstream_system_sku_dimension_stage s
+                on s.connection_code = c.connection_code
+               and s.master_sku = c.master_sku
+               and s.sync_batch_id = #{syncBatchId}
+        set c.master_product_name = coalesce(nullif(c.master_product_name, ''), s.master_product_name),
+            c.wms_height = s.wms_height,
+            c.wms_height_bs = s.wms_height_bs,
+            c.wms_length = s.wms_length,
+            c.wms_length_bs = s.wms_length_bs,
+            c.wms_weight = s.wms_weight,
+            c.wms_weight_bs = s.wms_weight_bs,
+            c.wms_width = s.wms_width,
+            c.wms_width_bs = s.wms_width_bs,
+            c.wms_payload_json = s.source_payload_json,
+            c.wms_payload_hash = s.source_payload_hash,
+            c.status = 'ACTIVE',
+            c.last_seen_time = sysdate(),
+            c.update_time = sysdate()
+        where c.connection_code = #{connectionCode}
+          and coalesce(c.wms_payload_hash, '') &lt;&gt; coalesce(s.source_payload_hash, '')
+    </update>
+
+    <update id="touchUnchangedSkuDimensionsFromStage">
+        update upstream_system_sku_candidate c
+        inner join upstream_system_sku_dimension_stage s
+                on s.connection_code = c.connection_code
+               and s.master_sku = c.master_sku
+               and s.sync_batch_id = #{syncBatchId}
+        set c.status = 'ACTIVE',
+            c.last_seen_time = sysdate()
+        where c.connection_code = #{connectionCode}
+          and coalesce(c.wms_payload_hash, '') = coalesce(s.source_payload_hash, '')
+    </update>
+
+    <delete id="cleanupSkuDimensionStage">
+        delete from upstream_system_sku_dimension_stage
+        where connection_code = #{connectionCode}
+          and sync_batch_id &lt;&gt; #{syncBatchId}
+          and create_time &lt; date_sub(sysdate(), interval 7 day)
+    </delete>
 
     <update id="markMissingSkus">
         update upstream_system_sku_candidate

@@ -63,6 +63,22 @@ public class BuyerPortalPermissionServiceImplMenuTreeTest
         assertEquals("商品列表", menuTree.get(0).getChildren().get(0).getMenuName());
     }
 
+    @Test
+    public void updateMenuRejectsMovingBuyerMenuUnderItsDescendant()
+    {
+        Buyer buyer = buyer(11L);
+        BuyerAccount account = account(22L, 11L);
+        RecordingBuyerPortalPermissionMapper permissionMapper = new RecordingBuyerPortalPermissionMapper()
+                .withMenuIndex(menu(10L, 0L, "采购中心"), menu(11L, 10L, "商品列表"));
+        BuyerPortalPermissionServiceImpl service = service(buyerService(buyer), recordingBuyerMapper(1, account).proxy(),
+                permissionMapper.proxy());
+        PortalMenu payload = menu(10L, 11L, "采购中心");
+
+        assertServiceException(() -> service.updateMenu(payload));
+
+        assertEquals(0, permissionMapper.updateMenuCallCount);
+    }
+
     private BuyerPortalPermissionServiceImpl service(IBuyerService buyerService, BuyerMapper buyerMapper,
             BuyerPortalPermissionMapper permissionMapper)
     {
@@ -293,15 +309,28 @@ public class BuyerPortalPermissionServiceImplMenuTreeTest
     {
         private List<PortalMenu> menus = Collections.emptyList();
 
+        private final Map<Long, PortalMenu> menuById = new HashMap<>();
+
         private int selectMenuListCallCount;
 
         private Long selectedMenuListBuyerId;
 
         private Long selectedMenuListAccountId;
 
+        private int updateMenuCallCount;
+
         private RecordingBuyerPortalPermissionMapper withMenus(PortalMenu... menus)
         {
             this.menus = Arrays.asList(menus);
+            return this;
+        }
+
+        private RecordingBuyerPortalPermissionMapper withMenuIndex(PortalMenu... menus)
+        {
+            for (PortalMenu menu : menus)
+            {
+                menuById.put(menu.getMenuId(), menu);
+            }
             return this;
         }
 
@@ -315,6 +344,15 @@ public class BuyerPortalPermissionServiceImplMenuTreeTest
                     selectedMenuListBuyerId = (Long) args[0];
                     selectedMenuListAccountId = (Long) args[1];
                     return menus;
+                }
+                if ("selectBuyerMenuById".equals(methodName))
+                {
+                    return menuById.get((Long) args[0]);
+                }
+                if ("updateBuyerMenu".equals(methodName))
+                {
+                    updateMenuCallCount++;
+                    return 1;
                 }
                 if ("toString".equals(methodName))
                 {
@@ -334,5 +372,18 @@ public class BuyerPortalPermissionServiceImplMenuTreeTest
                 BuyerPortalPermissionMapper.class.getClassLoader(),
                 new Class<?>[] { BuyerPortalPermissionMapper.class }, handler);
         }
+    }
+
+    private void assertServiceException(ThrowingRunnable runnable)
+    {
+        try
+        {
+            runnable.run();
+        }
+        catch (ServiceException e)
+        {
+            return;
+        }
+        throw new AssertionError("Expected ServiceException");
     }
 }

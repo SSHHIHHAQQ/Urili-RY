@@ -3,6 +3,23 @@
 
 set names utf8mb4;
 
+set @confirm_top_menu_seed := coalesce(@confirm_top_menu_seed, '');
+
+delimiter //
+
+drop procedure if exists assert_top_menu_seed_confirmed//
+create procedure assert_top_menu_seed_confirmed()
+begin
+  if coalesce(@confirm_top_menu_seed, '')
+     <> 'APPLY_TOP_MENU_SEED' then
+    signal sqlstate '45000' set message_text = 'set @confirm_top_menu_seed = APPLY_TOP_MENU_SEED before running this seed';
+  end if;
+end//
+
+delimiter ;
+
+call assert_top_menu_seed_confirmed();
+
 insert into sys_menu
     (menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
      is_frame, is_cache, menu_type, visible, status, perms, icon, create_by,
@@ -93,3 +110,5 @@ set visible = '1',
     update_time = sysdate(),
     remark = '已由独立顶级菜单替代，保留历史草案'
 where menu_id = 2000;
+
+drop procedure if exists assert_top_menu_seed_confirmed;

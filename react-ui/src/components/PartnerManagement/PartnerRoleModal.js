@@ -69,6 +69,11 @@ const PartnerRoleModal = ({ config, open, partner, onOpenChange, }) => {
     const partnerName = getValue(partner, config.nameField) || getValue(partner, config.codeField) || '';
     const permPrefix = `${config.moduleKey}:admin`;
     const currentRoleId = currentRole?.roleId;
+    const canQueryRole = access.hasPerms(`${permPrefix}:role:query`);
+    const canQueryMenu = access.hasPerms(`${permPrefix}:menu:query`);
+    const canAddRole = access.hasPerms(`${permPrefix}:role:add`) && canQueryMenu;
+    const canChangeRoleStatus = access.hasPerms(`${permPrefix}:role:edit`);
+    const canEditRoleForm = canChangeRoleStatus && canQueryRole && canQueryMenu;
     const loadRoles = async () => {
         if (!partnerId) {
             setRoles([]);
@@ -222,8 +227,8 @@ const PartnerRoleModal = ({ config, open, partner, onOpenChange, }) => {
             title: '状态',
             dataIndex: 'status',
             width: 96,
-            render: (value, record) => (_jsx(Tag, { color: value === '0' ? 'success' : 'default', style: { cursor: access.hasPerms(`${permPrefix}:role:edit`) ? 'pointer' : 'default' }, onClick: () => {
-                    if (access.hasPerms(`${permPrefix}:role:edit`)) {
+            render: (value, record) => (_jsx(Tag, { color: value === '0' ? 'success' : 'default', style: { cursor: canChangeRoleStatus ? 'pointer' : 'default' }, onClick: () => {
+                    if (canChangeRoleStatus) {
                         void handleStatusChange(record);
                     }
                 }, children: value === '0' ? '正常' : '停用' })),
@@ -238,10 +243,10 @@ const PartnerRoleModal = ({ config, open, partner, onOpenChange, }) => {
             title: '操作',
             dataIndex: 'option',
             width: 120,
-            render: (_, record) => (_jsxs(Flex, { gap: 4, children: [_jsx(Button, { type: "link", size: "small", hidden: !access.hasPerms(`${permPrefix}:role:edit`), onClick: () => void openRoleForm(record), children: "\u7F16\u8F91" }), _jsx(Button, { type: "link", size: "small", danger: true, hidden: !access.hasPerms(`${permPrefix}:role:remove`), onClick: () => handleRemove(record), children: "\u5220\u9664" })] })),
+            render: (_, record) => (_jsxs(Flex, { gap: 4, children: [_jsx(Button, { type: "link", size: "small", hidden: !canEditRoleForm, onClick: () => void openRoleForm(record), children: "\u7F16\u8F91" }), _jsx(Button, { type: "link", size: "small", danger: true, hidden: !access.hasPerms(`${permPrefix}:role:remove`), onClick: () => handleRemove(record), children: "\u5220\u9664" })] })),
         },
     ];
-    return (_jsxs(_Fragment, { children: [_jsx(Modal, { width: 900, title: `${config.label}角色 - ${partnerName || '-'}`, open: open, destroyOnHidden: true, footer: null, onCancel: () => onOpenChange(false), children: _jsx(Table, { rowKey: (record) => String(record.roleId), loading: loading, columns: columns, dataSource: roles, size: "small", pagination: false, tableLayout: "fixed", title: () => (_jsx(Button, { type: "primary", size: "small", icon: _jsx(PlusOutlined, {}), hidden: !access.hasPerms(`${permPrefix}:role:add`), onClick: () => void openRoleForm(), children: "\u65B0\u589E\u89D2\u8272" })) }) }), _jsx(Modal, { width: 680, title: currentRoleId ? '编辑角色' : '新增角色', open: formOpen, destroyOnHidden: true, confirmLoading: saving, onOk: handleSubmit, onCancel: closeRoleForm, children: _jsxs(Form, { form: form, layout: "vertical", children: [_jsx(Form.Item, { label: "\u89D2\u8272\u540D\u79F0", name: "roleName", rules: [{ required: true, message: '请输入角色名称' }], children: _jsx(Input, { placeholder: "\u8BF7\u8F93\u5165" }) }), _jsx(Form.Item, { label: "\u6743\u9650\u5B57\u7B26", name: "roleKey", rules: [{ required: true, message: '请输入权限字符' }], children: _jsx(Input, { placeholder: "\u4F8B\u5982 admin / staff" }) }), _jsx(Form.Item, { label: "\u6392\u5E8F", name: "roleSort", rules: [{ required: true, message: '请输入排序' }], children: _jsx(InputNumber, { min: 0, precision: 0, style: { width: '100%' } }) }), _jsx(Form.Item, { label: "\u72B6\u6001", name: "status", rules: [{ required: true, message: '请选择状态' }], children: _jsx(Select, { ...SEARCHABLE_SELECT_PROPS, options: statusOptions }) }), _jsx(Form.Item, { label: "\u83DC\u5355\u6743\u9650", children: _jsx("div", { style: { maxHeight: 260, overflow: 'auto', border: '1px solid #f0f0f0', padding: 8 }, children: menuTree.length > 0 ? (_jsx(Tree, { checkable: true, checkedKeys: checkedMenuIds, treeData: toTreeData(menuTree), defaultExpandAll: true, onCheck: (checked) => {
+    return (_jsxs(_Fragment, { children: [_jsx(Modal, { width: 900, title: `${config.label}角色 - ${partnerName || '-'}`, open: open, destroyOnHidden: true, footer: null, onCancel: () => onOpenChange(false), children: _jsx(Table, { rowKey: (record) => String(record.roleId), loading: loading, columns: columns, dataSource: roles, size: "small", pagination: false, tableLayout: "fixed", title: () => (_jsx(Button, { type: "primary", size: "small", icon: _jsx(PlusOutlined, {}), hidden: !canAddRole, onClick: () => void openRoleForm(), children: "\u65B0\u589E\u89D2\u8272" })) }) }), _jsx(Modal, { width: 680, title: currentRoleId ? '编辑角色' : '新增角色', open: formOpen, destroyOnHidden: true, confirmLoading: saving, onOk: handleSubmit, onCancel: closeRoleForm, children: _jsxs(Form, { form: form, layout: "vertical", children: [_jsx(Form.Item, { label: "\u89D2\u8272\u540D\u79F0", name: "roleName", rules: [{ required: true, message: '请输入角色名称' }], children: _jsx(Input, { placeholder: "\u8BF7\u8F93\u5165" }) }), _jsx(Form.Item, { label: "\u6743\u9650\u5B57\u7B26", name: "roleKey", rules: [{ required: true, message: '请输入权限字符' }], children: _jsx(Input, { placeholder: "\u4F8B\u5982 admin / staff" }) }), _jsx(Form.Item, { label: "\u6392\u5E8F", name: "roleSort", rules: [{ required: true, message: '请输入排序' }], children: _jsx(InputNumber, { min: 0, precision: 0, style: { width: '100%' } }) }), _jsx(Form.Item, { label: "\u72B6\u6001", name: "status", rules: [{ required: true, message: '请选择状态' }], children: _jsx(Select, { ...SEARCHABLE_SELECT_PROPS, options: statusOptions }) }), _jsx(Form.Item, { label: "\u83DC\u5355\u6743\u9650", children: _jsx("div", { style: { maxHeight: 260, overflow: 'auto', border: '1px solid #f0f0f0', padding: 8 }, children: menuTree.length > 0 ? (_jsx(Tree, { checkable: true, checkedKeys: checkedMenuIds, treeData: toTreeData(menuTree), defaultExpandAll: true, onCheck: (checked) => {
                                         const keys = Array.isArray(checked) ? checked : checked.checked;
                                         setCheckedMenuIds(normalizeKeys(keys));
                                     } })) : (_jsx(Typography.Text, { type: "secondary", children: "\u6682\u65E0\u53EF\u5206\u914D\u83DC\u5355" })) }) }), _jsx(Form.Item, { label: "\u5907\u6CE8", name: "remark", children: _jsx(Input.TextArea, { rows: 3, placeholder: "\u8BF7\u8F93\u5165" }) })] }) })] }));

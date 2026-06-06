@@ -85,6 +85,20 @@ public class PortalTokenSupportTest
     }
 
     @Test
+    public void getSessionCanResolveExplicitLoginResultTokenForAnonymousLoginAudit()
+    {
+        RecordingRedisCache redisCache = new RecordingRedisCache();
+        PortalTokenSupport support = support(redisCache);
+        bindRequest(Map.of("User-Agent", "Mozilla/5.0 Chrome/120.0.0.0"), "127.0.0.1");
+        PortalLoginIssue issue = support.createLogin("seller", 11L, "SAA010001", account(22L, "seller-owner"));
+
+        assertSame(issue.getSession(), support.getSession("seller", issue.getResult().getToken()));
+        assertSame(issue.getSession(), support.getSession("seller",
+                Constants.TOKEN_PREFIX + issue.getResult().getToken()));
+        assertNull(support.getSession("buyer", issue.getResult().getToken()));
+    }
+
+    @Test
     public void createLoginCopiesDirectLoginAuditIntoStoredSession()
     {
         RecordingRedisCache redisCache = new RecordingRedisCache();

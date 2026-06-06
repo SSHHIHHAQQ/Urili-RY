@@ -931,11 +931,29 @@ on duplicate key update
     update_time = sysdate(),
     remark = values(remark);
 
+update sys_config
+set config_name = '卖家端前端地址',
+    config_value = 'http://127.0.0.1:8001/seller/direct-login',
+    config_type = 'Y',
+    update_by = 'admin',
+    update_time = sysdate(),
+    remark = '管理端免密登录卖家端地址，占位配置'
+where config_key = 'portal.seller.web.url';
+
 insert into sys_config
     (config_name, config_key, config_value, config_type, create_by, create_time, update_by, update_time, remark)
 select '卖家端前端地址', 'portal.seller.web.url', 'http://127.0.0.1:8001/seller/direct-login',
        'Y', 'admin', sysdate(), '', null, '管理端免密登录卖家端地址，占位配置'
 where not exists (select 1 from sys_config where config_key = 'portal.seller.web.url');
+
+update sys_config
+set config_name = '买家端前端地址',
+    config_value = 'http://127.0.0.1:8001/buyer/direct-login',
+    config_type = 'Y',
+    update_by = 'admin',
+    update_time = sysdate(),
+    remark = '管理端免密登录买家端地址，占位配置'
+where config_key = 'portal.buyer.web.url';
 
 insert into sys_config
     (config_name, config_key, config_value, config_type, create_by, create_time, update_by, update_time, remark)

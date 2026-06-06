@@ -4,7 +4,7 @@ import {
   ProTable,
 } from '@ant-design/pro-components';
 import { Button, Popconfirm, Space, Tabs, Tag, Typography } from 'antd';
-import { useRef, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
+import { type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
 import {
   deleteLogisticsChannelPairing,
   deleteWarehousePairing,
@@ -18,6 +18,7 @@ import {
   getProTablePagination,
   getProTableScroll,
 } from '@/utils/proTableSearch';
+import { requestOperationText } from '../constants';
 import { resultOk, statusTag } from '../helpers';
 import styles from '../style.module.css';
 import type { LogisticsRow, PairingModalState, WarehouseRow } from '../types';
@@ -29,6 +30,8 @@ type ActionRef = MutableRefObject<ActionType | null>;
 
 type SyncTabsProps = {
   access: { hasPerms: (permission: string) => boolean };
+  dimensionActionRef: ActionRef;
+  inventoryActionRef: ActionRef;
   logActionRef: ActionRef;
   logisticsActionRef: ActionRef;
   onSkuSynced?: () => void;
@@ -40,6 +43,8 @@ type SyncTabsProps = {
 
 export default function SyncTabs({
   access,
+  dimensionActionRef,
+  inventoryActionRef,
   logActionRef,
   logisticsActionRef,
   onSkuSynced,
@@ -49,8 +54,6 @@ export default function SyncTabs({
   warehouseActionRef,
 }: SyncTabsProps) {
   const selectedCode = selectedConnection.connectionCode;
-  const dimensionActionRef = useRef<ActionType | null>(null);
-  const inventoryActionRef = useRef<ActionType | null>(null);
 
   const warehouseColumns: ProColumns<WarehouseRow>[] = [
     { title: '领星仓库代码', dataIndex: 'warehouseCode', width: 150 },
@@ -185,7 +188,12 @@ export default function SyncTabs({
 
   const logColumns: ProColumns<API.Integration.RequestLog>[] = [
     { title: '时间', dataIndex: 'createTime', width: 170, search: false },
-    { title: '操作', dataIndex: 'operation', width: 150 },
+    {
+      title: '类型',
+      dataIndex: 'operation',
+      width: 190,
+      renderText: (value) => requestOperationText[value] || value || '-',
+    },
     {
       title: '结果',
       dataIndex: 'status',

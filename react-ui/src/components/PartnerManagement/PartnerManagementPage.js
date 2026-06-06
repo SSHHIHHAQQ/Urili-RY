@@ -321,6 +321,7 @@ const PartnerManagementPage = ({ config }) => {
     const hasAuditPermission = access.hasPerms(`${permPrefix}:loginLog:list`)
         || access.hasPerms(`${permPrefix}:operLog:list`)
         || access.hasPerms(`${permPrefix}:ticket:list`);
+    const canEditPartner = access.hasPerms(`${permPrefix}:edit`) && access.hasPerms(`${permPrefix}:query`);
     const statusValueEnum = getStatusOptions(statusOptions);
     const levelValueEnum = optionsToValueEnum(levelOptions);
     const useStandardListTemplate = config.listTemplate === 'standard';
@@ -683,7 +684,7 @@ const PartnerManagementPage = ({ config }) => {
                     });
                 }
                 const operationItems = [
-                    _jsx(Button, { type: "link", size: "small", hidden: !access.hasPerms(`${permPrefix}:edit`), onClick: () => void openPartnerModal(record), children: "\u7F16\u8F91" }, "edit"),
+                    _jsx(Button, { type: "link", size: "small", hidden: !canEditPartner, onClick: () => void openPartnerModal(record), children: "\u7F16\u8F91" }, "edit"),
                     _jsx(Button, { type: "link", size: "small", hidden: !access.hasPerms(accountPermissions.list), onClick: () => {
                             setAccountPartner(record);
                             setAccountModalOpen(true);

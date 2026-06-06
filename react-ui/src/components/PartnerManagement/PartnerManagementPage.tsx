@@ -547,6 +547,7 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
   const hasAuditPermission = access.hasPerms(`${permPrefix}:loginLog:list`)
     || access.hasPerms(`${permPrefix}:operLog:list`)
     || access.hasPerms(`${permPrefix}:ticket:list`);
+  const canEditPartner = access.hasPerms(`${permPrefix}:edit`) && access.hasPerms(`${permPrefix}:query`);
   const statusValueEnum = getStatusOptions(statusOptions);
   const levelValueEnum = optionsToValueEnum(levelOptions);
   const useStandardListTemplate = config.listTemplate === 'standard';
@@ -997,7 +998,7 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
             type="link"
             size="small"
             key="edit"
-            hidden={!access.hasPerms(`${permPrefix}:edit`)}
+            hidden={!canEditPartner}
             onClick={() => void openPartnerModal(record)}
           >
             编辑

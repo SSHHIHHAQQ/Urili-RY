@@ -95,7 +95,7 @@ export default function ConnectionSummary({
               编辑
             </Button>
           </Tooltip>
-          <Tooltip title="同步仓库、物流渠道和SKU">
+          <Tooltip title="选择同步内容">
             <Button
               icon={<SyncOutlined />}
               hidden={!access.hasPerms('integration:upstream:sync')}

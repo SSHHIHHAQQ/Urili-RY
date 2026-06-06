@@ -12,6 +12,8 @@ import com.ruoyi.integration.domain.UpstreamSkuPairing;
 import com.ruoyi.integration.domain.UpstreamSkuPairingAuditEvent;
 import com.ruoyi.integration.domain.UpstreamSkuSyncItem;
 import com.ruoyi.integration.domain.UpstreamSkuSyncState;
+import com.ruoyi.integration.domain.UpstreamSyncBatch;
+import com.ruoyi.integration.domain.UpstreamSyncState;
 import com.ruoyi.integration.domain.UpstreamSystemConnection;
 import com.ruoyi.integration.domain.UpstreamWarehousePairing;
 import com.ruoyi.integration.domain.UpstreamWarehouseSyncItem;
@@ -47,6 +49,34 @@ public interface UpstreamSystemMapper
 
     List<UpstreamRequestLog> selectRequestLogList(@Param("connectionCode") String connectionCode);
 
+    int upsertSyncState(UpstreamSyncState state);
+
+    UpstreamSyncState selectSyncState(@Param("connectionCode") String connectionCode,
+        @Param("syncType") String syncType);
+
+    List<UpstreamSyncState> selectSyncStateList(@Param("connectionCode") String connectionCode);
+
+    int insertSyncBatch(UpstreamSyncBatch batch);
+
+    int updateSyncBatch(UpstreamSyncBatch batch);
+
+    int batchInsertWarehouseStage(@Param("items") List<UpstreamWarehouseSyncItem> items);
+
+    int insertNewWarehousesFromStage(@Param("connectionCode") String connectionCode,
+        @Param("syncBatchId") String syncBatchId);
+
+    int updateChangedWarehousesFromStage(@Param("connectionCode") String connectionCode,
+        @Param("syncBatchId") String syncBatchId);
+
+    int touchUnchangedWarehousesFromStage(@Param("connectionCode") String connectionCode,
+        @Param("syncBatchId") String syncBatchId);
+
+    int disableMissingWarehousesFromStage(@Param("connectionCode") String connectionCode,
+        @Param("syncBatchId") String syncBatchId);
+
+    int cleanupWarehouseStage(@Param("connectionCode") String connectionCode,
+        @Param("syncBatchId") String syncBatchId);
+
     int upsertWarehouseSyncItem(UpstreamWarehouseSyncItem item);
 
     int markMissingWarehouses(@Param("connectionCode") String connectionCode, @Param("syncBatchId") String syncBatchId);
@@ -67,6 +97,23 @@ public interface UpstreamSystemMapper
 
     int markMissingLogisticsChannels(@Param("connectionCode") String connectionCode, @Param("syncBatchId") String syncBatchId);
 
+    int batchInsertLogisticsChannelStage(@Param("items") List<UpstreamLogisticsChannelSyncItem> items);
+
+    int insertNewLogisticsChannelsFromStage(@Param("connectionCode") String connectionCode,
+        @Param("syncBatchId") String syncBatchId);
+
+    int updateChangedLogisticsChannelsFromStage(@Param("connectionCode") String connectionCode,
+        @Param("syncBatchId") String syncBatchId);
+
+    int touchUnchangedLogisticsChannelsFromStage(@Param("connectionCode") String connectionCode,
+        @Param("syncBatchId") String syncBatchId);
+
+    int disableMissingLogisticsChannelsFromStage(@Param("connectionCode") String connectionCode,
+        @Param("syncBatchId") String syncBatchId);
+
+    int cleanupLogisticsChannelStage(@Param("connectionCode") String connectionCode,
+        @Param("syncBatchId") String syncBatchId);
+
     List<UpstreamLogisticsChannelSyncItem> selectLogisticsChannelSyncList(@Param("connectionCode") String connectionCode,
         @Param("status") String status);
 
@@ -84,6 +131,37 @@ public interface UpstreamSystemMapper
     int batchUpsertSkuSyncItems(@Param("items") List<UpstreamSkuSyncItem> items);
 
     int updateSkuWmsDimensions(UpstreamSkuSyncItem item);
+
+    int batchInsertSkuStage(@Param("items") List<UpstreamSkuSyncItem> items);
+
+    int insertNewSkusFromStage(@Param("connectionCode") String connectionCode,
+        @Param("syncBatchId") String syncBatchId);
+
+    int updateChangedSkusFromStage(@Param("connectionCode") String connectionCode,
+        @Param("syncBatchId") String syncBatchId);
+
+    int touchUnchangedSkusFromStage(@Param("connectionCode") String connectionCode,
+        @Param("syncBatchId") String syncBatchId);
+
+    int disableMissingSkusFromStage(@Param("connectionCode") String connectionCode,
+        @Param("syncBatchId") String syncBatchId);
+
+    int cleanupSkuStage(@Param("connectionCode") String connectionCode,
+        @Param("syncBatchId") String syncBatchId);
+
+    int batchInsertSkuDimensionStage(@Param("items") List<UpstreamSkuSyncItem> items);
+
+    int insertNewSkusFromDimensionStage(@Param("connectionCode") String connectionCode,
+        @Param("syncBatchId") String syncBatchId);
+
+    int updateChangedSkuDimensionsFromStage(@Param("connectionCode") String connectionCode,
+        @Param("syncBatchId") String syncBatchId);
+
+    int touchUnchangedSkuDimensionsFromStage(@Param("connectionCode") String connectionCode,
+        @Param("syncBatchId") String syncBatchId);
+
+    int cleanupSkuDimensionStage(@Param("connectionCode") String connectionCode,
+        @Param("syncBatchId") String syncBatchId);
 
     int markMissingSkus(@Param("connectionCode") String connectionCode, @Param("syncBatchId") String syncBatchId);
 

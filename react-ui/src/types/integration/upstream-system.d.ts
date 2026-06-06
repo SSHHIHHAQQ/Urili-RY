@@ -61,6 +61,27 @@ declare namespace API.Integration {
     skuDimensionCount: number;
     warehouseStockCount: number;
     syncBatchId: string;
+    items?: SyncItemResult[];
+  }
+
+  export interface SyncItemResult {
+    syncType?: string;
+    status?: string;
+    count?: number;
+    pulledCount?: number;
+    insertedCount?: number;
+    changedCount?: number;
+    unchangedCount?: number;
+    disabledCount?: number;
+    errorMessage?: string;
+  }
+
+  export interface SyncRequest {
+    syncTypes: string[];
+  }
+
+  export interface SkuDimensionSelectedSyncRequest {
+    skuList: string[];
   }
 
   export interface WarehouseSyncItem {
@@ -172,6 +193,25 @@ declare namespace API.Integration {
     activeCount?: number;
     missingCount?: number;
     lastErrorMessage?: string;
+    updateTime?: string;
+  }
+
+  export interface SyncState {
+    connectionCode: string;
+    syncType: string;
+    status?: string;
+    syncBatchId?: string;
+    lastStartedTime?: string;
+    lastFinishedTime?: string;
+    lastSuccessTime?: string;
+    nextSyncTime?: string;
+    totalCount?: number;
+    successCount?: number;
+    failedCount?: number;
+    lastErrorCode?: string;
+    lastErrorMessage?: string;
+    lastMode?: string;
+    rateLimitMs?: number;
     updateTime?: string;
   }
 

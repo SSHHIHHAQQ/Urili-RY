@@ -83,6 +83,9 @@ public class SqlExecutionGuardContractTest
         assertGuard(backendRoot, "sql/warehouse_management_seed.sql",
                 "@confirm_warehouse_management_seed",
                 "APPLY_WAREHOUSE_MANAGEMENT_SEED", violations);
+        assertGuard(backendRoot, "sql/top_menu_seed.sql",
+                "@confirm_top_menu_seed",
+                "APPLY_TOP_MENU_SEED", violations);
 
         if (!violations.isEmpty())
         {
@@ -177,11 +180,131 @@ public class SqlExecutionGuardContractTest
         }
     }
 
+    @Test
+    public void sellerBuyerManagementSeedMustConvergePortalWebUrlConfig() throws IOException
+    {
+        Path backendRoot = findWorkspaceRoot().resolve("RuoYi-Vue");
+        Path seedSql = backendRoot.resolve("sql/seller_buyer_management_seed.sql");
+        String source = Files.readString(seedSql, StandardCharsets.UTF_8);
+        List<String> violations = new ArrayList<>();
+
+        for (String expected : new String[] {
+                "update sys_config",
+                "config_name = '卖家端前端地址'",
+                "config_value = 'http://127.0.0.1:8001/seller/direct-login'",
+                "where config_key = 'portal.seller.web.url'",
+                "config_name = '买家端前端地址'",
+                "config_value = 'http://127.0.0.1:8001/buyer/direct-login'",
+                "where config_key = 'portal.buyer.web.url'"
+        })
+        {
+            requireContains(violations, seedSql.getFileName().toString(), source, expected);
+        }
+        assertAppearsBefore(violations, seedSql.getFileName().toString(), source,
+                "config_value = 'http://127.0.0.1:8001/seller/direct-login'",
+                "select '卖家端前端地址', 'portal.seller.web.url'");
+        assertAppearsBefore(violations, seedSql.getFileName().toString(), source,
+                "config_value = 'http://127.0.0.1:8001/buyer/direct-login'",
+                "select '买家端前端地址', 'portal.buyer.web.url'");
+
+        if (!violations.isEmpty())
+        {
+            fail("seller/buyer management seed must converge portal web url config:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    @Test
+    public void accountLockMenuSeedsMustGuardSysMenuSlotsBeforeUpsert() throws IOException
+    {
+        Path backendRoot = findWorkspaceRoot().resolve("RuoYi-Vue");
+        List<String> violations = new ArrayList<>();
+
+        assertAccountLockMenuGuard(backendRoot.resolve("sql/20260605_seller_account_lock_control.sql"),
+                2322, "seller:admin:account:lock", "seller account lock menu signature", violations);
+        assertAccountLockMenuGuard(backendRoot.resolve("sql/20260605_buyer_account_lock_control.sql"),
+                2323, "buyer:admin:account:lock", "buyer account lock menu signature", violations);
+
+        if (!violations.isEmpty())
+        {
+            fail("account lock menu seeds must guard sys_menu slots before upsert:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    @Test
+    public void terminalOwnerUniqueConstraintMustAssertBaselineBeforeDynamicDdl() throws IOException
+    {
+        Path backendRoot = findWorkspaceRoot().resolve("RuoYi-Vue");
+        Path sqlFile = backendRoot.resolve("sql/20260605_terminal_owner_account_unique_constraint.sql");
+        String source = Files.readString(sqlFile, StandardCharsets.UTF_8);
+        List<String> violations = new ArrayList<>();
+
+        for (String expected : new String[] {
+                "create procedure assert_table_exists",
+                "create procedure assert_column_exists",
+                "call assert_table_exists('seller_account'",
+                "call assert_table_exists('buyer_account'",
+                "call assert_column_exists('seller_account', 'seller_id'",
+                "call assert_column_exists('seller_account', 'account_role'",
+                "call assert_column_exists('buyer_account', 'buyer_id'",
+                "call assert_column_exists('buyer_account', 'account_role'",
+                "drop procedure if exists assert_table_exists",
+                "drop procedure if exists assert_column_exists"
+        })
+        {
+            requireContains(violations, sqlFile.getFileName().toString(), source, expected);
+        }
+
+        assertAppearsBefore(violations, sqlFile.getFileName().toString(), source,
+                "call assert_column_exists('buyer_account', 'account_role'",
+                "call assert_no_duplicate_owner_account('seller_account'");
+        assertAppearsBefore(violations, sqlFile.getFileName().toString(), source,
+                "call assert_no_duplicate_owner_account('buyer_account'",
+                "call add_column_if_missing('seller_account'");
+
+        if (!violations.isEmpty())
+        {
+            fail("terminal OWNER unique constraint migration must fail closed before dynamic DDL:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
     private void requireContains(List<String> violations, String fileName, String source, String expected)
     {
         if (!source.contains(expected))
         {
             violations.add(fileName + " must contain: " + expected);
+        }
+    }
+
+    private void assertAccountLockMenuGuard(Path sqlFile, int menuId, String perms, String signatureMessage,
+            List<String> violations) throws IOException
+    {
+        String source = Files.readString(sqlFile, StandardCharsets.UTF_8);
+        requireContains(violations, sqlFile.getFileName().toString(), source,
+                "create procedure assert_sys_menu_slot");
+        requireContains(violations, sqlFile.getFileName().toString(), source,
+                "create procedure assert_sys_menu_signature_available");
+        requireContains(violations, sqlFile.getFileName().toString(), source,
+                "call assert_sys_menu_slot(" + menuId + ", '#', '', '', '" + perms + "'");
+        requireContains(violations, sqlFile.getFileName().toString(), source,
+                "call assert_sys_menu_signature_available(" + menuId + ", '#', '', '', '" + perms + "'");
+        requireContains(violations, sqlFile.getFileName().toString(), source, signatureMessage);
+        assertAppearsBefore(violations, sqlFile.getFileName().toString(), source,
+                "call assert_sys_menu_slot(" + menuId, "insert into sys_menu");
+        assertAppearsBefore(violations, sqlFile.getFileName().toString(), source,
+                "call assert_sys_menu_signature_available(" + menuId, "insert into sys_menu");
+    }
+
+    private void assertAppearsBefore(List<String> violations, String fileName, String source, String first,
+            String second)
+    {
+        int firstIndex = source.indexOf(first);
+        int secondIndex = source.indexOf(second);
+        if (firstIndex < 0 || secondIndex < 0 || firstIndex > secondIndex)
+        {
+            violations.add(fileName + " must contain " + first + " before " + second);
         }
     }
 

@@ -176,22 +176,61 @@ public class AdminDirectLoginPermissionContractTest
 
     private void assertFrontendPermissionGates(Path workspaceRoot, List<String> violations) throws IOException
     {
-        Path page = workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerManagementPage.tsx");
-        Path accountModal = workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerAccountModal.tsx");
-        Path auditModal = workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerAuditModal.tsx");
+        Path[] pages = new Path[] {
+                workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerManagementPage.tsx"),
+                workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerManagementPage.js")
+        };
+        Path[] accountModals = new Path[] {
+                workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerAccountModal.tsx"),
+                workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerAccountModal.js")
+        };
+        Path[] auditModals = new Path[] {
+                workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerAuditModal.tsx"),
+                workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerAuditModal.js")
+        };
 
-        String pageSource = Files.readString(page, StandardCharsets.UTF_8);
-        String accountModalSource = Files.readString(accountModal, StandardCharsets.UTF_8);
-        String auditModalSource = Files.readString(auditModal, StandardCharsets.UTF_8);
+        for (Path page : pages)
+        {
+            String pageSource = readRequired(page, violations);
+            if (pageSource.isEmpty())
+            {
+                continue;
+            }
+            assertContains(pageSource, "const permPrefix = `${config.moduleKey}:admin`", page, violations);
+            assertContains(pageSource, "access.hasPerms(`${permPrefix}:directLogin`)", page, violations);
+            assertContains(pageSource, "access.hasPerms(`${permPrefix}:ticket:list`)", page, violations);
+            assertContains(pageSource, "hasAuditPermission", page, violations);
+        }
+        for (Path accountModal : accountModals)
+        {
+            String accountModalSource = readRequired(accountModal, violations);
+            if (accountModalSource.isEmpty())
+            {
+                continue;
+            }
+            assertContains(accountModalSource,
+                    "access.hasPerms(`${permPrefix}:directLogin`) && config.services.directLoginAccount",
+                    accountModal, violations);
+        }
+        for (Path auditModal : auditModals)
+        {
+            String auditModalSource = readRequired(auditModal, violations);
+            if (auditModalSource.isEmpty())
+            {
+                continue;
+            }
+            assertContains(auditModalSource, "access.hasPerms(`${permPrefix}:ticket:list`)", auditModal, violations);
+        }
+    }
 
-        assertContains(pageSource, "const permPrefix = `${config.moduleKey}:admin`", page, violations);
-        assertContains(pageSource, "access.hasPerms(`${permPrefix}:directLogin`)", page, violations);
-        assertContains(pageSource, "access.hasPerms(`${permPrefix}:ticket:list`)", page, violations);
-        assertContains(pageSource, "hidden={!hasAuditPermission}", page, violations);
-        assertContains(accountModalSource,
-                "access.hasPerms(`${permPrefix}:directLogin`) && config.services.directLoginAccount",
-                accountModal, violations);
-        assertContains(auditModalSource, "access.hasPerms(`${permPrefix}:ticket:list`)", auditModal, violations);
+    private String readRequired(Path path, List<String> violations) throws IOException
+    {
+        if (!Files.exists(path))
+        {
+            violations.add(path.getFileName() + " must exist");
+            return "";
+        }
+        return Files.readString(path, StandardCharsets.UTF_8);
     }
 
     private void assertContains(String source, String expected, Path path, List<String> violations)

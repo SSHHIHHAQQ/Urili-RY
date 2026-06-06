@@ -15,6 +15,7 @@ import com.ruoyi.buyer.mapper.BuyerMapper;
 import com.ruoyi.buyer.mapper.BuyerPortalPermissionMapper;
 import com.ruoyi.buyer.service.IBuyerService;
 import com.ruoyi.common.exception.ServiceException;
+import com.ruoyi.system.domain.PortalRole;
 import com.ruoyi.system.service.support.PartnerSupport;
 
 public class BuyerPortalPermissionServiceImplTest
@@ -63,6 +64,60 @@ public class BuyerPortalPermissionServiceImplTest
     }
 
     @Test
+    public void assignAccountRolesRejectsOwnerAccountWithoutOwnerRoleBeforeMutatingBindings()
+    {
+        Buyer buyer = buyer(11L);
+        BuyerAccount account = account(22L, 11L);
+        account.setAccountRole(PartnerSupport.ACCOUNT_ROLE_OWNER);
+        RecordingBuyerPortalPermissionMapper permissionMapper = new RecordingBuyerPortalPermissionMapper(1)
+                .withOwnerRole(role(101L, 11L, "owner"));
+        BuyerPortalPermissionServiceImpl service = service(buyerService(buyer), buyerMapper(account),
+                permissionMapper.proxy());
+
+        assertServiceException(() -> service.assignAccountRoles(11L, 22L, new Long[] { 102L }));
+
+        assertEquals(1, permissionMapper.countRolesCallCount);
+        assertEquals(0, permissionMapper.deleteAccountRolesCallCount);
+        assertEquals(0, permissionMapper.batchAccountRolesCallCount);
+    }
+
+    @Test
+    public void assignAccountRolesAllowsOwnerAccountWhenOwnerRoleIsKept()
+    {
+        Buyer buyer = buyer(11L);
+        BuyerAccount account = account(22L, 11L);
+        account.setAccountRole(PartnerSupport.ACCOUNT_ROLE_OWNER);
+        RecordingBuyerPortalPermissionMapper permissionMapper = new RecordingBuyerPortalPermissionMapper(2)
+                .withOwnerRole(role(101L, 11L, "owner"));
+        BuyerPortalPermissionServiceImpl service = service(buyerService(buyer), buyerMapper(account),
+                permissionMapper.proxy());
+
+        int rows = service.assignAccountRoles(11L, 22L, new Long[] { 101L, 102L });
+
+        assertEquals(2, rows);
+        assertEquals(1, permissionMapper.deleteAccountRolesCallCount);
+        assertArrayEquals(new Long[] { 101L, 102L }, permissionMapper.batchedRoleIds);
+    }
+
+    @Test
+    public void updateRoleRejectsOwnerRoleBeforeMutatingBindings()
+    {
+        Buyer buyer = buyer(11L);
+        BuyerAccount account = account(22L, 11L);
+        RecordingBuyerPortalPermissionMapper permissionMapper = new RecordingBuyerPortalPermissionMapper(1)
+                .withSelectedRole(role(101L, 11L, "owner"));
+        BuyerPortalPermissionServiceImpl service = service(buyerService(buyer), buyerMapper(account),
+                permissionMapper.proxy());
+        PortalRole payload = role(101L, 11L, "owner-renamed");
+        payload.setRoleName("Owner");
+
+        assertServiceException(() -> service.updateRole(11L, payload));
+
+        assertEquals(0, permissionMapper.updateRoleCallCount);
+        assertEquals(0, permissionMapper.deleteRoleMenuCallCount);
+    }
+
+    @Test
     public void assignAccountRolesRejectsAccountFromAnotherBuyerBeforeMutatingBindings()
     {
         Buyer buyer = buyer(11L);
@@ -94,6 +149,23 @@ public class BuyerPortalPermissionServiceImplTest
         assertEquals(0, permissionMapper.batchAccountRolesCallCount);
     }
 
+    @Test
+    public void assignAccountRolesRejectsDisabledRolesBeforeMutatingBindings()
+    {
+        Buyer buyer = buyer(11L);
+        BuyerAccount account = account(22L, 11L);
+        RecordingBuyerPortalPermissionMapper permissionMapper = new RecordingBuyerPortalPermissionMapper(1);
+        BuyerPortalPermissionServiceImpl service = service(buyerService(buyer), buyerMapper(account),
+                permissionMapper.proxy());
+
+        assertServiceException(() -> service.assignAccountRoles(11L, 22L, new Long[] { 101L, 102L }));
+
+        assertEquals(1, permissionMapper.countRolesCallCount);
+        assertArrayEquals(new Long[] { 101L, 102L }, permissionMapper.countedRoleIds);
+        assertEquals(0, permissionMapper.deleteAccountRolesCallCount);
+        assertEquals(0, permissionMapper.batchAccountRolesCallCount);
+    }
+
     private BuyerPortalPermissionServiceImpl service(IBuyerService buyerService, BuyerMapper buyerMapper,
             BuyerPortalPermissionMapper permissionMapper)
     {
@@ -120,6 +192,18 @@ public class BuyerPortalPermissionServiceImplTest
         account.setBuyerId(buyerId);
         account.setStatus(PartnerSupport.STATUS_NORMAL);
         return account;
+    }
+
+    private PortalRole role(Long roleId, Long buyerId, String roleKey)
+    {
+        PortalRole role = new PortalRole();
+        role.setRoleId(roleId);
+        role.setSubjectId(buyerId);
+        role.setRoleName("Owner");
+        role.setRoleKey(roleKey);
+        role.setRoleSort(0);
+        role.setStatus(PartnerSupport.STATUS_NORMAL);
+        return role;
     }
 
     private IBuyerService buyerService(Buyer buyer)
@@ -277,9 +361,29 @@ public class BuyerPortalPermissionServiceImplTest
 
         private Long[] batchedRoleIds;
 
+        private PortalRole ownerRole;
+
+        private PortalRole selectedRole;
+
+        private int updateRoleCallCount;
+
+        private int deleteRoleMenuCallCount;
+
         private RecordingBuyerPortalPermissionMapper(int validRoleCount)
         {
             this.validRoleCount = validRoleCount;
+        }
+
+        private RecordingBuyerPortalPermissionMapper withOwnerRole(PortalRole ownerRole)
+        {
+            this.ownerRole = ownerRole;
+            return this;
+        }
+
+        private RecordingBuyerPortalPermissionMapper withSelectedRole(PortalRole selectedRole)
+        {
+            this.selectedRole = selectedRole;
+            return this;
         }
 
         private BuyerPortalPermissionMapper proxy()
@@ -292,6 +396,24 @@ public class BuyerPortalPermissionServiceImplTest
                     countedBuyerId = (Long) args[0];
                     countedRoleIds = (Long[]) args[1];
                     return validRoleCount;
+                }
+                if ("checkBuyerRoleKeyUnique".equals(methodName))
+                {
+                    return ownerRole;
+                }
+                if ("selectBuyerRoleById".equals(methodName))
+                {
+                    return selectedRole;
+                }
+                if ("updateBuyerRole".equals(methodName))
+                {
+                    updateRoleCallCount++;
+                    return 1;
+                }
+                if ("deleteBuyerRoleMenuByRoleId".equals(methodName))
+                {
+                    deleteRoleMenuCallCount++;
+                    return 1;
                 }
                 if ("deleteBuyerAccountRoles".equals(methodName))
                 {

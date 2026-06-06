@@ -462,7 +462,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                login_time as loginTime,
                expire_time as expireTime,
                logout_time as logoutTime,
-               status,
+               case
+                   when status = '0' and logout_time is null and expire_time &lt; sysdate() then '2'
+                   else status
+               end as status,
                direct_login as directLogin,
                direct_login_ticket_id as directLoginTicketId,
                acting_admin_id as actingAdminId,

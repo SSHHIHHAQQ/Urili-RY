@@ -49,17 +49,43 @@ function renderCompactText(value: unknown) {
   return <Typography.Text style={compactCellTextStyle} title={text}>{text}</Typography.Text>;
 }
 
+function isDirectLoginSession(record: API.Partner.PortalSessionProfile) {
+  return record.directLogin === true || String(record.directLogin) === '1';
+}
+
+function renderDirectLoginAudit(record: API.Partner.PortalSessionProfile) {
+  if (!isDirectLoginSession(record)) {
+    return null;
+  }
+  const actor = displayText(record.actingAdminName || record.actingAdminId);
+  const reason = displayText(record.directLoginReason);
+  const title = reason === '-' ? `免密代入：${actor}` : `免密代入：${actor} / ${reason}`;
+  return (
+    <Typography.Text type="secondary" style={compactCellTextStyle} title={title}>
+      免密：{actor}
+    </Typography.Text>
+  );
+}
+
 function renderSessionStatus(record: API.Partner.PortalSessionProfile) {
+  let statusTag: React.ReactNode;
   if (record.current) {
-    return <Tag color="processing">当前</Tag>;
+    statusTag = <Tag color="processing">当前</Tag>;
+  } else if (record.logoutTime || record.status === '1') {
+    statusTag = <Tag>已退出</Tag>;
+  } else if (record.status === '2') {
+    statusTag = <Tag color="default">已过期</Tag>;
+  } else if (record.status === '0') {
+    statusTag = <Tag color="success">有效</Tag>;
+  } else {
+    statusTag = <Tag>{displayText(record.status)}</Tag>;
   }
-  if (record.logoutTime || record.status === '1') {
-    return <Tag>已退出</Tag>;
-  }
-  if (record.status === '0') {
-    return <Tag color="success">有效</Tag>;
-  }
-  return <Tag>{displayText(record.status)}</Tag>;
+  return (
+    <>
+      {statusTag}
+      {renderDirectLoginAudit(record)}
+    </>
+  );
 }
 
 const sessionColumns: ColumnsType<API.Partner.PortalSessionProfile> = [

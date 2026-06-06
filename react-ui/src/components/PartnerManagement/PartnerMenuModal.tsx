@@ -256,6 +256,7 @@ const PartnerMenuModal: React.FC<PartnerMenuModalProps> = ({ config, open, onOpe
 
   const permPrefix = `${config.moduleKey}:admin`;
   const currentMenuId = currentMenu?.menuId;
+  const canEditMenu = access.hasPerms(`${permPrefix}:menu:edit`) && access.hasPerms(`${permPrefix}:menu:query`);
   const menuTree = useMemo(() => buildMenuTree(menus), [menus]);
   const parentTreeData = useMemo(
     () => [
@@ -425,7 +426,7 @@ const PartnerMenuModal: React.FC<PartnerMenuModalProps> = ({ config, open, onOpe
           <Button
             type="link"
             size="small"
-            hidden={!access.hasPerms(`${permPrefix}:menu:edit`)}
+            hidden={!canEditMenu}
             onClick={() => void openMenuForm(record)}
           >
             编辑

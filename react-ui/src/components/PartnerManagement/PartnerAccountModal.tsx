@@ -221,6 +221,7 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
   };
   const canAssignAccountRoles = access.hasPerms(accountPermissions.roleQuery)
     && access.hasPerms(accountPermissions.roleEdit);
+  const canQueryDept = access.hasPerms(`${permPrefix}:dept:query`);
   const accountLockEnabled = Boolean(config.services.lockAccount && config.services.unlockAccount);
   const canLockAccount = accountLockEnabled
     && Boolean(accountPermissions.lock)
@@ -236,7 +237,7 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
   );
 
   const loadDeptTree = async () => {
-    if (!partnerId) {
+    if (!partnerId || !canQueryDept) {
       setDeptTree([]);
       return;
     }
@@ -288,7 +289,7 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
           .catch(() => setAccountLockStatusOptions(lockStatusOptions));
       }
     }
-  }, [open, partnerId, config.moduleKey, accountLockEnabled]);
+  }, [open, partnerId, config.moduleKey, accountLockEnabled, canQueryDept]);
 
   const openAccountForm = (account?: AccountRecord) => {
     setCurrentAccount(account);

@@ -1,6 +1,6 @@
 import { type ActionType, PageContainer } from '@ant-design/pro-components';
 import { useAccess } from '@umijs/max';
-import { Empty } from 'antd';
+import { Checkbox, Empty, Modal, Space, Typography } from 'antd';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   addLogisticsChannelPairing,
@@ -23,18 +23,66 @@ import ConnectionSidebar from './components/ConnectionSidebar';
 import ConnectionSummary from './components/ConnectionSummary';
 import PairingModal from './components/PairingModal';
 import SyncTabs from './components/SyncTabs';
+import { syncTypeText } from './constants';
 import { resultOk } from './helpers';
 import './style.css';
 import styles from './style.module.css';
 import type { PairingModalState } from './types';
 
 const connectionPageSize = 200;
+const defaultManualSyncTypes = ['WAREHOUSE', 'LOGISTICS_CHANNEL', 'SKU'];
+
+const syncTypeOptions = [
+  {
+    label: '仓库',
+    value: 'WAREHOUSE',
+    permission: 'integration:upstream:sync',
+  },
+  {
+    label: '物流渠道',
+    value: 'LOGISTICS_CHANNEL',
+    permission: 'integration:upstream:sync',
+  },
+  {
+    label: 'SKU信息',
+    value: 'SKU',
+    permission: 'integration:upstream:sync',
+  },
+  {
+    label: 'SKU仓库尺寸重量',
+    value: 'SKU_DIMENSION',
+    permission: 'integration:upstream:dimensionSync',
+  },
+  {
+    label: 'SKU库存',
+    value: 'INVENTORY',
+    permission: 'integration:upstream:inventorySync',
+  },
+];
+
+const formatSyncItemResult = (item: API.Integration.SyncItemResult) => {
+  const label = syncTypeText[item.syncType || ''] || item.syncType || '同步项';
+  if (item.status === 'FAILED') {
+    return `${label}失败：${item.errorMessage || '-'}`;
+  }
+  const changedTotal = (item.insertedCount || 0) + (item.changedCount || 0);
+  return `${label}：拉取${item.pulledCount || item.count || 0}，新增${item.insertedCount || 0}，变更${item.changedCount || 0}，停用${item.disabledCount || 0}，未变${item.unchangedCount || 0}，写入${changedTotal}`;
+};
+
+const formatSyncResult = (data?: API.Integration.SyncResult) => {
+  if (data?.items?.length) {
+    return data.items.map(formatSyncItemResult).join('；');
+  }
+  return `仓库 ${data?.warehouseCount || 0}，渠道 ${data?.logisticsChannelCount || 0}，SKU ${data?.skuCount || 0}，尺寸重量 ${data?.skuDimensionCount || 0}，库存 ${data?.warehouseStockCount || 0}`;
+};
 
 export default function UpstreamSystemPage() {
   const access = useAccess();
   const warehouseActionRef = useRef<ActionType>(null);
   const logisticsActionRef = useRef<ActionType>(null);
   const skuActionRef = useRef<ActionType>(null);
+  const dimensionActionRef = useRef<ActionType>(null);
+  const inventoryActionRef = useRef<ActionType>(null);
   const logActionRef = useRef<ActionType>(null);
   const [connections, setConnections] = useState<
     API.Integration.UpstreamConnection[]
@@ -49,6 +97,16 @@ export default function UpstreamSystemPage() {
   }>({ open: false, mode: 'create' });
   const [pairingModal, setPairingModal] = useState<PairingModalState>({
     open: false,
+  });
+  const [syncModal, setSyncModal] = useState<{
+    open: boolean;
+    record?: API.Integration.UpstreamConnection;
+    syncTypes: string[];
+    submitting: boolean;
+  }>({
+    open: false,
+    syncTypes: defaultManualSyncTypes,
+    submitting: false,
   });
 
   const fetchConnections = useCallback(async (preferredCode?: string) => {
@@ -84,6 +142,8 @@ export default function UpstreamSystemPage() {
     warehouseActionRef.current?.reload();
     logisticsActionRef.current?.reload();
     skuActionRef.current?.reload();
+    dimensionActionRef.current?.reload();
+    inventoryActionRef.current?.reload();
     logActionRef.current?.reload();
   };
 
@@ -109,14 +169,44 @@ export default function UpstreamSystemPage() {
     }
   };
 
-  const handleSync = async (record: API.Integration.UpstreamConnection) => {
-    const hide = message.loading('正在同步');
-    const resp = await syncUpstreamConnection(record.connectionCode);
-    hide();
+  const handleSync = (record: API.Integration.UpstreamConnection) => {
+    const allowedDefaults = defaultManualSyncTypes.filter((type) => {
+      const option = syncTypeOptions.find((item) => item.value === type);
+      return option ? access.hasPerms(option.permission) : false;
+    });
+    setSyncModal({
+      open: true,
+      record,
+      syncTypes: allowedDefaults,
+      submitting: false,
+    });
+  };
+
+  const submitSync = async () => {
+    const record = syncModal.record;
+    if (!record) return;
+    if (syncModal.syncTypes.length === 0) {
+      message.warning('请选择同步内容');
+      return;
+    }
+    setSyncModal((current) => ({ ...current, submitting: true }));
+    const resp = await syncUpstreamConnection(record.connectionCode, {
+      syncTypes: syncModal.syncTypes,
+    });
+    setSyncModal((current) => ({ ...current, submitting: false }));
     if (resp.code === 200) {
-      message.success(
-        `同步完成：仓库 ${resp.data?.warehouseCount || 0}，渠道 ${resp.data?.logisticsChannelCount || 0}，SKU ${resp.data?.skuCount || 0}`,
-      );
+      const hasFailed = resp.data?.items?.some((item) => item.status === 'FAILED');
+      const feedback = `同步完成：${formatSyncResult(resp.data)}`;
+      if (hasFailed) {
+        message.warning(feedback);
+      } else {
+        message.success(feedback);
+      }
+      setSyncModal({
+        open: false,
+        syncTypes: defaultManualSyncTypes,
+        submitting: false,
+      });
       await reloadCurrent(record.connectionCode);
     } else {
       message.error(resp.msg);
@@ -186,6 +276,8 @@ export default function UpstreamSystemPage() {
             <SyncTabs
               key={selectedCode}
               access={access}
+              dimensionActionRef={dimensionActionRef}
+              inventoryActionRef={inventoryActionRef}
               logActionRef={logActionRef}
               logisticsActionRef={logisticsActionRef}
               onSkuSynced={() => fetchConnections(selectedCode)}
@@ -244,6 +336,46 @@ export default function UpstreamSystemPage() {
           return ok;
         }}
       />
+
+      <Modal
+        title="选择同步内容"
+        open={syncModal.open}
+        confirmLoading={syncModal.submitting}
+        okText="开始同步"
+        onCancel={() =>
+          setSyncModal({
+            open: false,
+            syncTypes: defaultManualSyncTypes,
+            submitting: false,
+          })
+        }
+        onOk={submitSync}
+      >
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <Typography.Text type="secondary">
+            尺寸重量为限速同步，库存为上游库存快照。
+          </Typography.Text>
+          <Checkbox.Group
+            value={syncModal.syncTypes}
+            onChange={(values) =>
+              setSyncModal((current) => ({
+                ...current,
+                syncTypes: values.map(String),
+              }))
+            }
+          >
+            <Space direction="vertical">
+              {syncTypeOptions
+                .filter((option) => access.hasPerms(option.permission))
+                .map((option) => (
+                  <Checkbox key={option.value} value={option.value}>
+                    {option.label}
+                  </Checkbox>
+                ))}
+            </Space>
+          </Checkbox.Group>
+        </Space>
+      </Modal>
 
       <PairingModal
         open={pairingModal.open}

@@ -94,6 +94,33 @@ begin
   end if;
 end//
 
+drop procedure if exists assert_table_exists//
+create procedure assert_table_exists(in p_table varchar(64), in p_message varchar(128))
+begin
+  if not exists (
+    select 1
+    from information_schema.tables
+    where table_schema = database()
+      and table_name = p_table
+  ) then
+    signal sqlstate '45000' set message_text = p_message;
+  end if;
+end//
+
+drop procedure if exists assert_column_exists//
+create procedure assert_column_exists(in p_table varchar(64), in p_column varchar(64), in p_message varchar(128))
+begin
+  if not exists (
+    select 1
+    from information_schema.columns
+    where table_schema = database()
+      and table_name = p_table
+      and column_name = p_column
+  ) then
+    signal sqlstate '45000' set message_text = p_message;
+  end if;
+end//
+
 drop procedure if exists assert_no_duplicate_owner_account//
 create procedure assert_no_duplicate_owner_account(in p_table varchar(64), in p_subject_column varchar(64), in p_message varchar(128))
 begin
@@ -150,6 +177,12 @@ end//
 delimiter ;
 
 call assert_terminal_owner_account_unique_constraint_confirmed();
+call assert_table_exists('seller_account', 'seller_account table is required before OWNER unique constraint migration');
+call assert_table_exists('buyer_account', 'buyer_account table is required before OWNER unique constraint migration');
+call assert_column_exists('seller_account', 'seller_id', 'seller_account.seller_id is required before OWNER unique constraint migration');
+call assert_column_exists('seller_account', 'account_role', 'seller_account.account_role is required before OWNER unique constraint migration');
+call assert_column_exists('buyer_account', 'buyer_id', 'buyer_account.buyer_id is required before OWNER unique constraint migration');
+call assert_column_exists('buyer_account', 'account_role', 'buyer_account.account_role is required before OWNER unique constraint migration');
 call assert_no_duplicate_owner_account('seller_account', 'seller_id', 'seller_account has duplicate OWNER accounts');
 call assert_no_duplicate_owner_account('buyer_account', 'buyer_id', 'buyer_account has duplicate OWNER accounts');
 
@@ -172,6 +205,8 @@ call assert_index_definition('buyer_account', 'uk_buyer_account_owner',
 drop procedure if exists add_column_if_missing;
 drop procedure if exists recreate_index_if_mismatch;
 drop procedure if exists assert_index_definition;
+drop procedure if exists assert_table_exists;
+drop procedure if exists assert_column_exists;
 drop procedure if exists assert_no_duplicate_owner_account;
 drop procedure if exists assert_owner_generated_column;
 drop procedure if exists assert_terminal_owner_account_unique_constraint_confirmed;

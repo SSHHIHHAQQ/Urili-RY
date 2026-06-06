@@ -59,6 +59,9 @@ const PartnerDeptModal = ({ config, open, partner, onOpenChange, }) => {
     const partnerName = getValue(partner, config.nameField) || getValue(partner, config.codeField) || '';
     const permPrefix = `${config.moduleKey}:admin`;
     const currentDeptId = currentDept?.deptId;
+    const canQueryDeptTree = access.hasPerms(`${permPrefix}:dept:query`);
+    const canAddDept = access.hasPerms(`${permPrefix}:dept:add`) && canQueryDeptTree;
+    const canEditDept = access.hasPerms(`${permPrefix}:dept:edit`) && canQueryDeptTree;
     const parentTreeData = [
         {
             id: 0,
@@ -76,7 +79,7 @@ const PartnerDeptModal = ({ config, open, partner, onOpenChange, }) => {
         try {
             const [listResp, treeResp] = await Promise.all([
                 config.services.listDepts(partnerId),
-                config.services.getDeptTree(partnerId),
+                canQueryDeptTree ? config.services.getDeptTree(partnerId) : Promise.resolve(undefined),
             ]);
             if (listResp.code === 200) {
                 setDepts((listResp.data || []));
@@ -84,7 +87,7 @@ const PartnerDeptModal = ({ config, open, partner, onOpenChange, }) => {
             else {
                 message.error(listResp.msg || '部门列表加载失败');
             }
-            if (treeResp.code === 200) {
+            if (treeResp?.code === 200) {
                 setDeptTree(treeResp.data || []);
             }
             else {
@@ -205,9 +208,9 @@ const PartnerDeptModal = ({ config, open, partner, onOpenChange, }) => {
             title: '操作',
             dataIndex: 'option',
             width: 120,
-            render: (_, record) => (_jsxs(Flex, { gap: 4, children: [_jsx(Button, { type: "link", size: "small", hidden: !access.hasPerms(`${permPrefix}:dept:edit`), onClick: () => openDeptForm(record), children: "\u7F16\u8F91" }), _jsx(Button, { type: "link", size: "small", danger: true, hidden: !access.hasPerms(`${permPrefix}:dept:remove`), onClick: () => handleRemove(record), children: "\u5220\u9664" })] })),
+            render: (_, record) => (_jsxs(Flex, { gap: 4, children: [_jsx(Button, { type: "link", size: "small", hidden: !canEditDept, onClick: () => openDeptForm(record), children: "\u7F16\u8F91" }), _jsx(Button, { type: "link", size: "small", danger: true, hidden: !access.hasPerms(`${permPrefix}:dept:remove`), onClick: () => handleRemove(record), children: "\u5220\u9664" })] })),
         },
     ];
-    return (_jsxs(_Fragment, { children: [_jsx(Modal, { width: 900, title: `${config.label}部门 - ${partnerName || '-'}`, open: open, destroyOnHidden: true, footer: null, onCancel: () => onOpenChange(false), children: _jsx(Table, { rowKey: (record) => String(record.deptId), loading: loading, columns: columns, dataSource: depts, size: "small", pagination: false, tableLayout: "fixed", title: () => (_jsx(Button, { type: "primary", size: "small", icon: _jsx(PlusOutlined, {}), hidden: !access.hasPerms(`${permPrefix}:dept:add`), onClick: () => openDeptForm(), children: "\u65B0\u589E\u90E8\u95E8" })) }) }), _jsx(Modal, { width: 640, title: currentDeptId ? '编辑部门' : '新增部门', open: formOpen, destroyOnHidden: true, confirmLoading: saving, onOk: handleSubmit, onCancel: closeDeptForm, children: _jsxs(Form, { form: form, layout: "vertical", children: [_jsx(Form.Item, { label: "\u4E0A\u7EA7\u90E8\u95E8", name: "parentId", children: _jsx(TreeSelect, { ...SEARCHABLE_TREE_SELECT_PROPS, treeDefaultExpandAll: true, placeholder: "\u8BF7\u9009\u62E9", treeData: parentTreeData, fieldNames: { label: 'label', value: 'id', children: 'children' } }) }), _jsx(Form.Item, { label: "\u90E8\u95E8\u540D\u79F0", name: "deptName", rules: [{ required: true, message: '请输入部门名称' }], children: _jsx(Input, { placeholder: "\u8BF7\u8F93\u5165" }) }), _jsx(Form.Item, { label: "\u6392\u5E8F", name: "orderNum", rules: [{ required: true, message: '请输入排序' }], children: _jsx(InputNumber, { min: 0, precision: 0, style: { width: '100%' } }) }), _jsx(Form.Item, { label: "\u8D1F\u8D23\u4EBA", name: "leader", children: _jsx(Input, { placeholder: "\u8BF7\u8F93\u5165" }) }), _jsx(Form.Item, { label: "\u8054\u7CFB\u7535\u8BDD", name: "phone", children: _jsx(Input, { placeholder: "\u8BF7\u8F93\u5165" }) }), _jsx(Form.Item, { label: "\u90AE\u7BB1", name: "email", children: _jsx(Input, { placeholder: "\u8BF7\u8F93\u5165" }) }), _jsx(Form.Item, { label: "\u72B6\u6001", name: "status", rules: [{ required: true, message: '请选择状态' }], children: _jsx(Select, { ...SEARCHABLE_SELECT_PROPS, options: statusOptions }) })] }) })] }));
+    return (_jsxs(_Fragment, { children: [_jsx(Modal, { width: 900, title: `${config.label}部门 - ${partnerName || '-'}`, open: open, destroyOnHidden: true, footer: null, onCancel: () => onOpenChange(false), children: _jsx(Table, { rowKey: (record) => String(record.deptId), loading: loading, columns: columns, dataSource: depts, size: "small", pagination: false, tableLayout: "fixed", title: () => (_jsx(Button, { type: "primary", size: "small", icon: _jsx(PlusOutlined, {}), hidden: !canAddDept, onClick: () => openDeptForm(), children: "\u65B0\u589E\u90E8\u95E8" })) }) }), _jsx(Modal, { width: 640, title: currentDeptId ? '编辑部门' : '新增部门', open: formOpen, destroyOnHidden: true, confirmLoading: saving, onOk: handleSubmit, onCancel: closeDeptForm, children: _jsxs(Form, { form: form, layout: "vertical", children: [_jsx(Form.Item, { label: "\u4E0A\u7EA7\u90E8\u95E8", name: "parentId", children: _jsx(TreeSelect, { ...SEARCHABLE_TREE_SELECT_PROPS, treeDefaultExpandAll: true, placeholder: "\u8BF7\u9009\u62E9", treeData: parentTreeData, fieldNames: { label: 'label', value: 'id', children: 'children' } }) }), _jsx(Form.Item, { label: "\u90E8\u95E8\u540D\u79F0", name: "deptName", rules: [{ required: true, message: '请输入部门名称' }], children: _jsx(Input, { placeholder: "\u8BF7\u8F93\u5165" }) }), _jsx(Form.Item, { label: "\u6392\u5E8F", name: "orderNum", rules: [{ required: true, message: '请输入排序' }], children: _jsx(InputNumber, { min: 0, precision: 0, style: { width: '100%' } }) }), _jsx(Form.Item, { label: "\u8D1F\u8D23\u4EBA", name: "leader", children: _jsx(Input, { placeholder: "\u8BF7\u8F93\u5165" }) }), _jsx(Form.Item, { label: "\u8054\u7CFB\u7535\u8BDD", name: "phone", children: _jsx(Input, { placeholder: "\u8BF7\u8F93\u5165" }) }), _jsx(Form.Item, { label: "\u90AE\u7BB1", name: "email", children: _jsx(Input, { placeholder: "\u8BF7\u8F93\u5165" }) }), _jsx(Form.Item, { label: "\u72B6\u6001", name: "status", rules: [{ required: true, message: '请选择状态' }], children: _jsx(Select, { ...SEARCHABLE_SELECT_PROPS, options: statusOptions }) })] }) })] }));
 };
 export default PartnerDeptModal;

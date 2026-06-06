@@ -7,6 +7,7 @@ export const systemKindText: Record<string, string> = {
 
 export const syncItemStatusText: Record<string, string> = {
   ACTIVE: '正常',
+  DISABLED: '停用',
   MISSING: '上游缺失',
   MIXED: '多状态',
 };
@@ -29,7 +30,7 @@ export const skuPairingStatusSearchOptions = [
 
 export const skuSyncItemStatusOptions = [
   { label: '正常', value: 'ACTIVE' },
-  { label: '上游缺失', value: 'MISSING' },
+  { label: '停用', value: 'DISABLED' },
 ];
 
 export const skuSyncItemStatusSearchOptions = [
@@ -55,3 +56,22 @@ export const inventoryScopeSearchOptions = [
 ];
 
 export const inventoryPairingStatusOptions = skuPairingStatusSearchOptions;
+
+export const syncTypeText: Record<string, string> = {
+  WAREHOUSE: '仓库',
+  LOGISTICS_CHANNEL: '物流渠道',
+  SKU: 'SKU信息',
+  SKU_DIMENSION: 'SKU仓库尺寸重量',
+  INVENTORY: 'SKU库存',
+};
+
+export const requestOperationText: Record<string, string> = {
+  AUTH_CHECK: '授权校验',
+  WAREHOUSE_SYNC: '仓库同步',
+  LOGISTICS_CHANNEL_SYNC: '物流渠道同步',
+  SKU_SYNC: 'SKU信息同步',
+  SKU_DIMENSION_SYNC: 'SKU仓库尺寸重量',
+  SKU_DIMENSION_FULL_SYNC: 'SKU仓库尺寸重量',
+  SKU_DIMENSION_SELECTED_SYNC: '指定SKU仓库尺寸重量',
+  INVENTORY_SYNC: 'SKU库存同步',
+};

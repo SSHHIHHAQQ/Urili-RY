@@ -132,6 +132,7 @@ public class BuyerPortalDeptServiceImpl implements IBuyerPortalDeptService
             return;
         }
         PortalDept parent = selectDeptById(buyerId, dept.getParentId());
+        PortalDeptSupport.assertDeptParentNotDescendant(dept, parent);
         dept.setAncestors(PortalDeptSupport.buildAncestors(parent));
     }
 }

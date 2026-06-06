@@ -345,6 +345,11 @@ declare namespace API.Partner {
     logoutTime?: string;
     status?: string;
     current?: boolean;
+    directLogin?: boolean;
+    directLoginTicketId?: number;
+    actingAdminId?: number;
+    actingAdminName?: string;
+    directLoginReason?: string;
   }
 
   export interface PortalOwnSessionProfile {

@@ -46,6 +46,10 @@ public class ProductPortalSchemaServiceImpl implements IProductPortalSchemaServi
     public List<PortalProductCategorySchemaItem> selectPortalSchema(Long categoryId)
     {
         ProductCategory category = productConfigService.selectCategoryById(categoryId);
+        if (category == null)
+        {
+            throw new ServiceException("Product category does not exist");
+        }
         if (!STATUS_NORMAL.equals(category.getEffectiveStatus()))
         {
             throw new ServiceException("Product category is disabled");

@@ -18,6 +18,7 @@ import org.springframework.validation.BindingResult;
 import org.springframework.web.multipart.MultipartFile;
 import com.alibaba.fastjson2.JSON;
 import com.ruoyi.common.annotation.PortalLog;
+import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.core.text.Convert;
 import com.ruoyi.common.enums.BusinessStatus;
 import com.ruoyi.common.enums.HttpMethod;
@@ -28,6 +29,7 @@ import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.common.utils.ip.IpUtils;
 import com.ruoyi.framework.manager.AsyncManager;
 import com.ruoyi.framework.manager.factory.AsyncFactory;
+import com.ruoyi.system.domain.PortalLoginResult;
 import com.ruoyi.system.domain.PortalLoginSession;
 import com.ruoyi.system.service.support.PortalSessionContext;
 import com.ruoyi.system.domain.PortalOperLog;
@@ -85,6 +87,10 @@ public class PortalLogAspect
             if (session == null)
             {
                 session = portalTokenSupport.getSession(controllerLog.terminal());
+            }
+            if (session == null && controllerLog.allowAnonymous())
+            {
+                session = resolveSessionFromLoginResult(controllerLog.terminal(), jsonResult);
             }
 
             PortalOperLog operLog = new PortalOperLog();
@@ -176,6 +182,25 @@ public class PortalLogAspect
                 + ", reason=" + safeAuditValue(session.getDirectLoginReason()) + "} ";
         operLog.setOperParam(StringUtils.substring(auditPrefix + safeAuditValue(operLog.getOperParam()), 0,
                 PARAM_MAX_LENGTH));
+    }
+
+    private PortalLoginSession resolveSessionFromLoginResult(String expectedTerminal, Object jsonResult)
+    {
+        if (!(jsonResult instanceof AjaxResult))
+        {
+            return null;
+        }
+        Object data = ((AjaxResult) jsonResult).get(AjaxResult.DATA_TAG);
+        if (!(data instanceof PortalLoginResult))
+        {
+            return null;
+        }
+        PortalLoginResult loginResult = (PortalLoginResult) data;
+        if (!StringUtils.equals(expectedTerminal, loginResult.getTerminal()))
+        {
+            return null;
+        }
+        return portalTokenSupport.getSession(expectedTerminal, loginResult.getToken());
     }
 
     private String safeAuditValue(String value)
