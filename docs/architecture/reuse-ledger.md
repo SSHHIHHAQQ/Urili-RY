@@ -8,13 +8,18 @@
   - `RuoYi-Vue/seller/src/main/java/com/ruoyi/seller/controller/SellerPortalAuthController.java`
   - `RuoYi-Vue/buyer/src/main/java/com/ruoyi/buyer/controller/BuyerPortalAuthController.java`
   - `RuoYi-Vue/ruoyi-system/src/main/java/com/ruoyi/system/domain/PortalDirectLoginToken.java`
+  - `RuoYi-Vue/ruoyi-system/src/main/java/com/ruoyi/system/domain/PortalLoginLog.java`
   - `RuoYi-Vue/ruoyi-system/src/main/java/com/ruoyi/system/domain/PortalLoginSession.java`
   - `RuoYi-Vue/ruoyi-system/src/main/java/com/ruoyi/system/service/support/PortalDirectLoginSupport.java`
   - `RuoYi-Vue/ruoyi-system/src/main/java/com/ruoyi/system/service/support/PortalTokenSupport.java`
+  - `RuoYi-Vue/seller/src/main/resources/mapper/seller/SellerMapper.xml`
+  - `RuoYi-Vue/buyer/src/main/resources/mapper/buyer/BuyerMapper.xml`
+  - `RuoYi-Vue/sql/20260607_terminal_login_log_direct_login_audit.sql`
   - `RuoYi-Vue/ruoyi-system/src/test/java/com/ruoyi/system/architecture/PortalAnonymousEndpointContractTest.java`
   - `RuoYi-Vue/ruoyi-system/src/test/java/com/ruoyi/system/architecture/PortalDirectLoginAuthContractTest.java`
   - `RuoYi-Vue/ruoyi-system/src/test/java/com/ruoyi/system/architecture/TerminalRouteOwnershipTest.java`
   - `RuoYi-Vue/ruoyi-system/src/test/java/com/ruoyi/system/architecture/SqlExecutionGuardContractTest.java`
+  - `RuoYi-Vue/ruoyi-system/src/test/java/com/ruoyi/system/architecture/TerminalSqlIsolationContractTest.java`
   - `react-ui/scripts/check-portal-token-isolation.mjs`
   - `react-ui/scripts/check-partner-management-template.mjs`
   - `react-ui/scripts/check-seller-portal-product-template.mjs`
@@ -22,15 +27,18 @@
   - `docs/plans/2026-06-06-three-terminal-p0p1-auth-audit-guard-hardening-record.md`
 - 当前用途：
   - 固定 seller/buyer 登录、免密登录这类认证入口的匿名例外和审计边界。
-  - 固定管理端免密代入后 acting admin 从 ticket payload 进入 portal session，并进入后续端内操作日志审计前缀。
+  - 固定管理端免密代入后 acting admin 从 ticket payload 进入 portal session、端内登录日志结构化字段，并进入后续端内操作日志审计前缀。
   - 固定 React portal、partner 管理和 seller/buyer 商品模板 guard 同时覆盖 TypeScript 源与当前并存的 JavaScript 副本。
   - 固定三端身份相关高影响 SQL helper 必须在第一个高影响 DDL/DML 前完成显式确认。
 - 复用规则：
   - seller/buyer 登录和免密登录接口不得加 `@PortalPreAuthorize`；必须使用 `@PortalLog(... allowAnonymous = true, isSaveResponseData = false)`，并显式写入正确 terminal。
   - 普通端内业务接口不得设置 `allowAnonymous = true`；缺少 portal session 时继续 fail-closed。
   - 免密 ticket payload 必须携带 `actingAdminId`、`actingAdminName` 和 `reason`；`PortalTokenSupport.createLogin(..., PortalDirectLoginToken)` 必须把这些字段复制到 `PortalLoginSession`。
+  - `PortalTokenSupport.buildLoginLog(...)` 必须对普通登录日志显式写 `directLogin=false`，避免 `seller_login_log.direct_login` / `buyer_login_log.direct_login` 的 `not null default 0` 在 MyBatis 显式插入 null 时失效。
+  - 免密登录成功和已解析 ticket 后的业务失败日志，必须通过 `buildDirectLoginLog(...)` 写入 `directLogin`、`directLoginTicketId`、`actingAdminId`、`actingAdminName`、`directLoginReason`；不要只把这些信息拼进 `msg` 文本。
+  - `seller_login_log` / `buyer_login_log` 必须保留上述 direct-login 审计字段，当前由 `20260604_three_terminal_isolation_migration.sql`、`seller_buyer_management_seed.sql` 和 `20260607_terminal_login_log_direct_login_audit.sql` 共同覆盖，且新增补丁必须纳入 SQL guard。
   - 后续端内操作日志应复用 `PortalLogAspect` 的 `directLoginAudit{ticketId, actingAdminId, actingAdminName, reason}` 前缀，不在业务 controller 中手写审计拼接。
-  - 如果需要把 acting admin 长期落到 `seller_session` / `buyer_session` 表，必须先走单独 DDL 方案确认；当前快速模式只保证 Redis session、登录日志和操作日志链路。
+  - 如果需要继续扩展 acting admin 到新的 session 设备字段、强退执行人或原因字段，必须先走单独 DDL 方案确认；当前快速模式只保证 Redis session、端内登录日志和操作日志链路。
   - `PortalLoginResultData` 等端内登录响应必须保持白名单字段，不得回流 `sellerId`、`buyerId`、`sellerAccountId`、`buyerAccountId`、`subjectId` 或 `accountId`。
   - partner 管理读模型不得暴露 `password`、`token`、`refreshToken`、`directLoginToken`、`loginUrl`、`tokenHash`、`authorization`、`accessToken`。
   - seller/buyer portal 商品和认证相关 guard 必须检查 `.ts/.tsx` 与 `.js`；只有明确 `export { default } from './index.tsx';` 这类纯 re-export 才可视为跟随 TypeScript 源。

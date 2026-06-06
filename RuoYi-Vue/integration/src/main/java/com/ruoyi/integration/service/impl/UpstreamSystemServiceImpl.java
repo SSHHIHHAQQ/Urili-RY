@@ -89,6 +89,9 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
     private UpstreamSystemMapper upstreamSystemMapper;
 
     @Autowired
+    private SourceProductReadModelService sourceProductReadModelService;
+
+    @Autowired
     private SecretCipherSupport secretCipherSupport;
 
     @Override
@@ -146,6 +149,7 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
     }
 
     @Override
+    @Transactional
     public int updateConnectionInfo(String connectionCode, UpstreamConnectionInfoRequest request)
     {
         selectConnectionByCode(connectionCode);
@@ -155,7 +159,9 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
         connection.setSettlementType(normalizeSettlementType(request.getSettlementType()));
         connection.setUpdateBy(SecurityUtils.getUsername());
         connection.setRemark(trimOptional(request.getRemark()));
-        return upstreamSystemMapper.updateConnectionInfo(connection);
+        int rows = upstreamSystemMapper.updateConnectionInfo(connection);
+        sourceProductReadModelService.rebuildOfficialMasterByConnection(connectionCode);
+        return rows;
     }
 
     @Override
@@ -362,6 +368,7 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
                 UpstreamSystemConstants.SYNC_STATUS_FRESH, syncBatchId, startedTime, finishedTime, finishedTime,
                 nextDailyTime(), dimensionCount, dimensionCount, 0, "", "", UpstreamSystemConstants.SYNC_MODE_SELECTED, 0);
             upstreamSystemMapper.updateConnectionSyncSummary(connectionCode);
+            sourceProductReadModelService.rebuildOfficialMasterByConnection(connectionCode);
 
             UpstreamSyncResult result = new UpstreamSyncResult();
             result.setSyncBatchId(syncBatchId);
@@ -411,6 +418,13 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
     }
 
     @Override
+    public long countSourceProductList(SourceProductQuery query)
+    {
+        SourceProductQuery normalized = normalizeSourceProductQuery(query);
+        return upstreamSystemMapper.countSourceProductList(normalized);
+    }
+
+    @Override
     public SourceProductGroupDetail selectSourceProductGroupDetail(SourceProductQuery query)
     {
         SourceProductQuery normalized = normalizeSourceProductQuery(query);
@@ -438,10 +452,6 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
     public List<SourceWarehouseStockItem> selectSourceWarehouseStockList(SourceWarehouseStockQuery query)
     {
         SourceWarehouseStockQuery normalized = normalizeSourceWarehouseStockQuery(query);
-        if (StringUtils.isNotBlank(normalized.getConnectionCode()))
-        {
-            selectConnectionByCode(normalized.getConnectionCode());
-        }
         List<SourceWarehouseStockItem> list = upstreamSystemMapper.selectSourceWarehouseStockList(normalized);
         fillSourceWarehouseStockLabels(list);
         return list;
@@ -603,6 +613,7 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
         {
             int rows = upstreamSystemMapper.insertSkuPairing(pairing);
             insertSkuAudit("PAIR", pairing, null, pairing, request.getRemark());
+            sourceProductReadModelService.rebuildOfficialMasterByConnection(connectionCode);
             return rows;
         }
         catch (DuplicateKeyException ex)
@@ -622,6 +633,7 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
         }
         int rows = upstreamSystemMapper.deleteSkuPairing(skuPairingId);
         insertSkuAudit("UNPAIR", current, current, null, "解除SKU配对");
+        sourceProductReadModelService.rebuildOfficialMasterByConnection(current.getConnectionCode());
         return rows;
     }
 
@@ -697,6 +709,14 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
             }
 
             Date finishedTime = new Date();
+            if (UpstreamSystemConstants.SYNC_TYPE_SKU.equals(syncType))
+            {
+                sourceProductReadModelService.rebuildOfficialMaster();
+            }
+            else if (UpstreamSystemConstants.SYNC_TYPE_SKU_DIMENSION.equals(syncType))
+            {
+                sourceProductReadModelService.rebuildOfficialMasterByConnection(connectionCode);
+            }
             recordSyncState(connectionCode, syncType, UpstreamSystemConstants.SYNC_STATUS_FRESH, syncBatchId,
                 startedTime, finishedTime, finishedTime, nextSyncTime(syncType), item.getPulledCount(),
                 item.getInsertedCount() + item.getChangedCount(), 0, "", "",
@@ -1141,14 +1161,17 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
         }
         else if (UpstreamSystemConstants.SYNC_TYPE_INVENTORY.equals(syncType))
         {
+            UpstreamInventorySyncState previous = upstreamSystemMapper.selectInventorySyncState(connectionCode);
             UpstreamInventorySyncState state = new UpstreamInventorySyncState();
             state.setConnectionCode(connectionCode);
             state.setStatus(UpstreamSystemConstants.SYNC_STATUS_SYNCING);
             state.setSyncBatchId(syncBatchId);
             state.setLastStartedTime(startedTime);
-            state.setTotalCount(0);
-            state.setActiveCount(0);
-            state.setMissingCount(0);
+            state.setLastSuccessTime(previous == null ? null : previous.getLastSuccessTime());
+            state.setNextSyncTime(previous == null ? null : previous.getNextSyncTime());
+            state.setTotalCount(previous == null ? 0 : previous.getTotalCount());
+            state.setActiveCount(previous == null ? 0 : previous.getActiveCount());
+            state.setMissingCount(previous == null ? 0 : previous.getMissingCount());
             state.setLastErrorMessage("");
             upstreamSystemMapper.upsertInventorySyncState(state);
         }
@@ -1206,15 +1229,18 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
         }
         else if (UpstreamSystemConstants.SYNC_TYPE_INVENTORY.equals(syncType))
         {
+            UpstreamInventorySyncState previous = upstreamSystemMapper.selectInventorySyncState(connectionCode);
             UpstreamInventorySyncState state = new UpstreamInventorySyncState();
             state.setConnectionCode(connectionCode);
             state.setStatus(UpstreamSystemConstants.SYNC_STATUS_FAILED);
             state.setSyncBatchId(syncBatchId);
             state.setLastStartedTime(startedTime);
             state.setLastFinishedTime(finishedTime);
-            state.setTotalCount(0);
-            state.setActiveCount(0);
-            state.setMissingCount(0);
+            state.setLastSuccessTime(previous == null ? null : previous.getLastSuccessTime());
+            state.setNextSyncTime(previous == null ? null : previous.getNextSyncTime());
+            state.setTotalCount(previous == null ? 0 : previous.getTotalCount());
+            state.setActiveCount(previous == null ? 0 : previous.getActiveCount());
+            state.setMissingCount(previous == null ? 0 : previous.getMissingCount());
             state.setLastErrorMessage(StringUtils.left(message, 500));
             upstreamSystemMapper.upsertInventorySyncState(state);
         }
@@ -1377,6 +1403,10 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
     {
         SourceProductQuery normalized = query == null ? new SourceProductQuery() : query;
         normalized.setRepositoryScope(trimOptional(normalized.getRepositoryScope()));
+        if (StringUtils.isBlank(normalized.getRepositoryScope()))
+        {
+            normalized.setRepositoryScope(SourceProductReadModelService.REPOSITORY_SCOPE_OFFICIAL_MASTER);
+        }
         normalized.setSourceSkuGroupKey(trimOptional(normalized.getSourceSkuGroupKey()));
         normalized.setConnectionCode(trimOptional(normalized.getConnectionCode()));
         normalized.setSystemKind(normalizeSystemKindOptional(normalized.getSystemKind()));

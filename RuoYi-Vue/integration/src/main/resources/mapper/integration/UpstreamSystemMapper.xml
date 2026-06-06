@@ -1403,288 +1403,224 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         )
     </sql>
 
-    <select id="selectSourceProductList" parameterType="SourceProductQuery" resultMap="SourceProductResult">
-        select min(c.connection_code) as connection_code,
-               <include refid="SourceProductSkuGroupKeyExpression" /> as source_sku_group_key,
-               <include refid="SourceProductDimensionGroupKeyExpression" /> as source_dimension_group_key,
-               <include refid="SourceProductDimensionGroupKeyExpression" /> as source_group_key,
-               max(case when conn.system_kind = 'LINGXING_WMS' then 'lingxing-wms' else conn.system_kind end) as system_kind,
-               group_concat(distinct conn.master_warehouse_name order by conn.master_warehouse_name separator ' / ') as master_warehouse_name,
-               group_concat(distinct c.connection_code order by c.connection_code separator ',') as source_connection_codes,
-               group_concat(distinct conn.master_warehouse_name order by conn.master_warehouse_name separator ' / ') as source_warehouse_names,
-               count(distinct c.connection_code) as warehouse_count,
-               count(1) as source_row_count,
-               c.master_sku,
-               c.master_product_name,
-               max(c.product_alias_name) as product_alias_name,
-               max(c.approve_status) as approve_status,
-               max(c.product_type) as product_type,
-               max(c.product_description) as product_description,
-               max(c.image_url) as image_url,
-               max(c.main_code) as main_code,
-               max(c.other_code) as other_code,
-               max(c.fnsku) as fnsku,
-               max(c.country_of_origin_name) as country_of_origin_name,
-               max(c.currency_code) as currency_code,
-               max(c.customhouse_code) as customhouse_code,
-               max(c.dangerous_cargo) as dangerous_cargo,
-               max(c.declare_name_cn) as declare_name_cn,
-               max(c.declare_name_en) as declare_name_en,
-               max(c.declare_price) as declare_price,
-               c.product_height,
-               max(c.product_height_bs) as product_height_bs,
-               c.product_length,
-               max(c.product_length_bs) as product_length_bs,
-               c.product_weight,
-               max(c.product_weight_bs) as product_weight_bs,
-               c.product_width,
-               max(c.product_width_bs) as product_width_bs,
-               c.wms_height,
-               max(c.wms_height_bs) as wms_height_bs,
-               c.wms_length,
-               max(c.wms_length_bs) as wms_length_bs,
-               c.wms_weight,
-               max(c.wms_weight_bs) as wms_weight_bs,
-               c.wms_width,
-               max(c.wms_width_bs) as wms_width_bs,
-               max(c.cat1_name) as cat1_name,
-               max(c.cat2_name) as cat2_name,
-               max(c.cat3_name) as cat3_name,
-               max(c.platform_sku_info_json) as platform_sku_info_json,
-               max(c.brazil_tax_info_json) as brazil_tax_info_json,
-               max(c.source_payload_hash) as source_payload_hash,
-               case when count(distinct c.status) = 1 then max(c.status) else 'MIXED' end as status,
-               max(c.search_text) as search_text,
-               max(c.sync_batch_id) as sync_batch_id,
-               min(c.first_seen_time) as first_seen_time,
-               max(c.last_seen_time) as last_seen_time,
-               max(c.update_time) as update_time,
-               case
-                   when sum(case when p.sku_pairing_id is not null then 1 else 0 end) = 0 then 'UNASSIGNED'
-                   when sum(case when p.sku_pairing_id is not null then 1 else 0 end) = count(1) then 'PAIRED'
-                   else 'PARTIAL'
-               end as pairing_status,
-               max(p.sku_pairing_id) as sku_pairing_id,
-               group_concat(distinct nullif(p.system_sku, '') order by p.system_sku separator ' / ') as system_sku,
-               group_concat(distinct nullif(p.system_sku_name, '') order by p.system_sku_name separator ' / ') as system_sku_name,
-               group_concat(distinct nullif(p.customer_name, '') order by p.customer_name separator ' / ') as customer_name
-        from upstream_system_sku_candidate c
-        inner join upstream_system_connection conn
-                on conn.connection_code = c.connection_code
-        left join upstream_system_sku_pairing p
-               on p.connection_code = c.connection_code
-              and p.master_sku = c.master_sku
-        where 1 = 1
-        <choose>
-            <when test="repositoryScope == 'THIRD_PARTY_MASTER'">
-                and 1 = 0
-            </when>
-            <otherwise>
-                and (conn.system_kind = 'lingxing-wms' or conn.system_kind = 'LINGXING_WMS')
-            </otherwise>
-        </choose>
+    <sql id="SourceProductReadModelFilter">
+        where d.repository_scope = #{repositoryScope}
         <if test="connectionCode != null and connectionCode != ''">
-            and c.connection_code = #{connectionCode}
-        </if>
-        <if test="sourceSkuGroupKey != null and sourceSkuGroupKey != ''">
-            and <include refid="SourceProductSkuGroupKeyExpression" /> = #{sourceSkuGroupKey}
-        </if>
-        <if test="systemKind != null and systemKind != ''">
-            and (
-                conn.system_kind = #{systemKind}
-                <if test="systemKind == 'lingxing-wms'">
-                    or conn.system_kind = 'LINGXING_WMS'
-                </if>
+            and exists (
+                select 1
+                from source_product_warehouse_detail wd
+                where wd.source_dimension_group_key = d.source_dimension_group_key
+                  and wd.connection_code = #{connectionCode}
             )
         </if>
+        <if test="sourceSkuGroupKey != null and sourceSkuGroupKey != ''">
+            and d.source_sku_group_key = #{sourceSkuGroupKey}
+        </if>
+        <if test="systemKind != null and systemKind != ''">
+            and d.system_kind = #{systemKind}
+        </if>
         <if test="masterWarehouseName != null and masterWarehouseName != ''">
-            and conn.master_warehouse_name like concat('%', #{masterWarehouseName}, '%')
+            and exists (
+                select 1
+                from source_product_warehouse_detail wd
+                where wd.source_dimension_group_key = d.source_dimension_group_key
+                  and wd.master_warehouse_name like concat('%', #{masterWarehouseName}, '%')
+            )
         </if>
         <if test="masterSku != null and masterSku != ''">
-            and c.master_sku like concat('%', #{masterSku}, '%')
+            and d.master_sku like concat('%', #{masterSku}, '%')
         </if>
         <if test="productName != null and productName != ''">
             and (
-                c.master_product_name like concat('%', #{productName}, '%')
-                or c.product_alias_name like concat('%', #{productName}, '%')
-                or c.product_description like concat('%', #{productName}, '%')
+                d.master_product_name like concat('%', #{productName}, '%')
+                or d.product_alias_name like concat('%', #{productName}, '%')
+                or d.product_description like concat('%', #{productName}, '%')
             )
         </if>
         <if test="identifyCodeKeyword != null and identifyCodeKeyword != ''">
             and (
-                c.main_code like concat('%', #{identifyCodeKeyword}, '%')
-                or c.other_code like concat('%', #{identifyCodeKeyword}, '%')
-                or c.fnsku like concat('%', #{identifyCodeKeyword}, '%')
+                d.main_code like concat('%', #{identifyCodeKeyword}, '%')
+                or d.other_code like concat('%', #{identifyCodeKeyword}, '%')
+                or d.fnsku like concat('%', #{identifyCodeKeyword}, '%')
             )
         </if>
         <if test="categoryKeyword != null and categoryKeyword != ''">
             and (
-                c.cat1_name like concat('%', #{categoryKeyword}, '%')
-                or c.cat2_name like concat('%', #{categoryKeyword}, '%')
-                or c.cat3_name like concat('%', #{categoryKeyword}, '%')
+                d.cat1_name like concat('%', #{categoryKeyword}, '%')
+                or d.cat2_name like concat('%', #{categoryKeyword}, '%')
+                or d.cat3_name like concat('%', #{categoryKeyword}, '%')
             )
         </if>
         <if test="approveStatus != null and approveStatus != ''">
-            and c.approve_status = #{approveStatus}
+            and d.approve_status = #{approveStatus}
         </if>
         <if test="dangerousCargo != null">
-            and c.dangerous_cargo = #{dangerousCargo}
+            and d.dangerous_cargo = #{dangerousCargo}
         </if>
         <if test="status != null and status != ''">
-            and c.status = #{status}
+            and d.status = #{status}
         </if>
         <if test="pairingStatus != null and pairingStatus != ''">
-            <choose>
-                <when test="pairingStatus == 'PAIRED'">
-                    and p.sku_pairing_id is not null
-                </when>
-                <when test="pairingStatus == 'UNASSIGNED'">
-                    and p.sku_pairing_id is null
-                </when>
-            </choose>
+            and d.pairing_status = #{pairingStatus}
         </if>
         <if test="keyword != null and keyword != ''">
             and (
-                c.search_text like concat('%', #{keyword}, '%')
-                or c.connection_code like concat('%', #{keyword}, '%')
-                or conn.master_warehouse_name like concat('%', #{keyword}, '%')
-                or p.system_sku like concat('%', #{keyword}, '%')
-                or p.system_sku_name like concat('%', #{keyword}, '%')
-                or p.customer_name like concat('%', #{keyword}, '%')
+                d.search_text like concat('%', #{keyword}, '%')
+                or d.source_connection_codes like concat('%', #{keyword}, '%')
+                or d.source_warehouse_names like concat('%', #{keyword}, '%')
+                or d.system_sku like concat('%', #{keyword}, '%')
+                or d.system_sku_name like concat('%', #{keyword}, '%')
+                or d.customer_name like concat('%', #{keyword}, '%')
             )
         </if>
-        group by c.master_sku,
-                 c.master_product_name,
-                 c.product_length,
-                 c.product_width,
-                 c.product_height,
-                 c.product_weight,
-                 c.wms_length,
-                 c.wms_width,
-                 c.wms_height,
-                 c.wms_weight
-        order by max(c.update_time) desc, c.master_sku asc
+    </sql>
+
+    <select id="countSourceProductList" parameterType="SourceProductQuery" resultType="long">
+        select count(1)
+        from source_product_dimension_group d
+        <include refid="SourceProductReadModelFilter" />
+    </select>
+
+    <select id="selectSourceProductList" parameterType="SourceProductQuery" resultMap="SourceProductResult">
+        select (
+                   select min(wd.connection_code)
+                   from source_product_warehouse_detail wd
+                   where wd.source_dimension_group_key = d.source_dimension_group_key
+               ) as connection_code,
+               d.source_sku_group_key,
+               d.source_dimension_group_key,
+               d.source_dimension_group_key as source_group_key,
+               d.system_kind,
+               d.master_warehouse_name,
+               d.source_connection_codes,
+               d.source_warehouse_names,
+               d.warehouse_count,
+               d.source_row_count,
+               d.master_sku,
+               d.master_product_name,
+               d.product_alias_name,
+               d.approve_status,
+               d.product_type,
+               d.product_description,
+               d.image_url,
+               d.main_code,
+               d.other_code,
+               d.fnsku,
+               d.country_of_origin_name,
+               d.currency_code,
+               d.customhouse_code,
+               d.dangerous_cargo,
+               d.declare_name_cn,
+               d.declare_name_en,
+               d.declare_price,
+               d.product_height,
+               d.product_height_bs,
+               d.product_length,
+               d.product_length_bs,
+               d.product_weight,
+               d.product_weight_bs,
+               d.product_width,
+               d.product_width_bs,
+               d.wms_height,
+               d.wms_height_bs,
+               d.wms_length,
+               d.wms_length_bs,
+               d.wms_weight,
+               d.wms_weight_bs,
+               d.wms_width,
+               d.wms_width_bs,
+               d.cat1_name,
+               d.cat2_name,
+               d.cat3_name,
+               d.platform_sku_info_json,
+               d.brazil_tax_info_json,
+               d.source_payload_hash,
+               d.status,
+               d.search_text,
+               d.sync_batch_id,
+               d.first_seen_time,
+               d.last_seen_time,
+               d.update_time,
+               d.pairing_status,
+               d.sku_pairing_id,
+               d.system_sku,
+               d.system_sku_name,
+               d.customer_name
+        from source_product_dimension_group d
+        <include refid="SourceProductReadModelFilter" />
+        order by d.update_time desc, d.source_dimension_group_key asc
     </select>
 
     <select id="selectSourceProductGroupSummary" parameterType="SourceProductQuery" resultMap="SourceProductResult">
-        select min(c.connection_code) as connection_code,
-               <include refid="SourceProductSkuGroupKeyExpression" /> as source_sku_group_key,
-               <include refid="SourceProductSkuGroupKeyExpression" /> as source_dimension_group_key,
-               <include refid="SourceProductSkuGroupKeyExpression" /> as source_group_key,
-               max(case when conn.system_kind = 'LINGXING_WMS' then 'lingxing-wms' else conn.system_kind end) as system_kind,
-               group_concat(distinct conn.master_warehouse_name order by conn.master_warehouse_name separator ' / ') as master_warehouse_name,
-               group_concat(distinct c.connection_code order by c.connection_code separator ',') as source_connection_codes,
-               group_concat(distinct conn.master_warehouse_name order by conn.master_warehouse_name separator ' / ') as source_warehouse_names,
-               count(distinct c.connection_code) as warehouse_count,
-               count(1) as source_row_count,
-               c.master_sku,
-               c.master_product_name,
-               max(c.product_alias_name) as product_alias_name,
-               max(c.approve_status) as approve_status,
-               max(c.product_type) as product_type,
-               max(c.product_description) as product_description,
-               max(c.image_url) as image_url,
-               max(c.main_code) as main_code,
-               max(c.other_code) as other_code,
-               max(c.fnsku) as fnsku,
-               max(c.country_of_origin_name) as country_of_origin_name,
-               max(c.currency_code) as currency_code,
-               max(c.customhouse_code) as customhouse_code,
-               max(c.dangerous_cargo) as dangerous_cargo,
-               max(c.declare_name_cn) as declare_name_cn,
-               max(c.declare_name_en) as declare_name_en,
-               max(c.declare_price) as declare_price,
-               max(c.product_height) as product_height,
-               max(c.product_height_bs) as product_height_bs,
-               max(c.product_length) as product_length,
-               max(c.product_length_bs) as product_length_bs,
-               max(c.product_weight) as product_weight,
-               max(c.product_weight_bs) as product_weight_bs,
-               max(c.product_width) as product_width,
-               max(c.product_width_bs) as product_width_bs,
-               max(c.wms_height) as wms_height,
-               max(c.wms_height_bs) as wms_height_bs,
-               max(c.wms_length) as wms_length,
-               max(c.wms_length_bs) as wms_length_bs,
-               max(c.wms_weight) as wms_weight,
-               max(c.wms_weight_bs) as wms_weight_bs,
-               max(c.wms_width) as wms_width,
-               max(c.wms_width_bs) as wms_width_bs,
-               max(c.cat1_name) as cat1_name,
-               max(c.cat2_name) as cat2_name,
-               max(c.cat3_name) as cat3_name,
-               max(c.platform_sku_info_json) as platform_sku_info_json,
-               max(c.brazil_tax_info_json) as brazil_tax_info_json,
-               max(c.source_payload_hash) as source_payload_hash,
-               case when count(distinct c.status) = 1 then max(c.status) else 'MIXED' end as status,
-               max(c.search_text) as search_text,
-               max(c.sync_batch_id) as sync_batch_id,
-               min(c.first_seen_time) as first_seen_time,
-               max(c.last_seen_time) as last_seen_time,
-               max(c.update_time) as update_time,
-               case
-                   when sum(case when p.sku_pairing_id is not null then 1 else 0 end) = 0 then 'UNASSIGNED'
-                   when sum(case when p.sku_pairing_id is not null then 1 else 0 end) = count(1) then 'PAIRED'
-                   else 'PARTIAL'
-               end as pairing_status,
-               max(p.sku_pairing_id) as sku_pairing_id,
-               group_concat(distinct nullif(p.system_sku, '') order by p.system_sku separator ' / ') as system_sku,
-               group_concat(distinct nullif(p.system_sku_name, '') order by p.system_sku_name separator ' / ') as system_sku_name,
-               group_concat(distinct nullif(p.customer_name, '') order by p.customer_name separator ' / ') as customer_name
-        from upstream_system_sku_candidate c
-        inner join upstream_system_connection conn
-                on conn.connection_code = c.connection_code
-        left join upstream_system_sku_pairing p
-               on p.connection_code = c.connection_code
-              and p.master_sku = c.master_sku
-        where 1 = 1
-        <choose>
-            <when test="repositoryScope == 'THIRD_PARTY_MASTER'">
-                and 1 = 0
-            </when>
-            <otherwise>
-                and (conn.system_kind = 'lingxing-wms' or conn.system_kind = 'LINGXING_WMS')
-            </otherwise>
-        </choose>
-        and <include refid="SourceProductSkuGroupKeyExpression" /> = #{sourceSkuGroupKey}
-        group by c.master_sku,
-                 c.master_product_name
+        select (
+                   select min(wd.connection_code)
+                   from source_product_warehouse_detail wd
+                   where wd.source_sku_group_key = g.source_sku_group_key
+               ) as connection_code,
+               g.source_sku_group_key,
+               g.source_sku_group_key as source_dimension_group_key,
+               g.source_sku_group_key as source_group_key,
+               g.system_kind,
+               g.source_warehouse_names as master_warehouse_name,
+               g.source_connection_codes,
+               g.source_warehouse_names,
+               g.warehouse_count,
+               g.source_row_count,
+               g.master_sku,
+               g.master_product_name,
+               g.status,
+               g.search_text,
+               g.latest_update_time as update_time,
+               g.pairing_status
+        from source_product_group g
+        where g.repository_scope = #{repositoryScope}
+          and g.source_sku_group_key = #{sourceSkuGroupKey}
         limit 1
     </select>
 
     <select id="selectSourceProductWarehouseDetailList" parameterType="SourceProductQuery" resultMap="SourceProductResult">
-        select c.*,
-               <include refid="SourceProductSkuGroupKeyExpression" /> as source_sku_group_key,
-               <include refid="SourceProductDimensionGroupKeyExpression" /> as source_dimension_group_key,
-               <include refid="SourceProductDimensionGroupKeyExpression" /> as source_group_key,
-               case when conn.system_kind = 'LINGXING_WMS' then 'lingxing-wms' else conn.system_kind end as system_kind,
-               conn.master_warehouse_name,
-               c.connection_code as source_connection_codes,
-               conn.master_warehouse_name as source_warehouse_names,
+        select w.connection_code,
+               w.source_sku_group_key,
+               w.source_dimension_group_key,
+               w.source_dimension_group_key as source_group_key,
+               w.system_kind,
+               w.master_warehouse_name,
+               w.connection_code as source_connection_codes,
+               w.master_warehouse_name as source_warehouse_names,
                1 as warehouse_count,
                1 as source_row_count,
-               case when p.sku_pairing_id is null then 'UNASSIGNED' else 'PAIRED' end as pairing_status,
-               p.sku_pairing_id,
-               p.system_sku,
-               p.system_sku_name,
-               p.customer_name
-        from upstream_system_sku_candidate c
-        inner join upstream_system_connection conn
-                on conn.connection_code = c.connection_code
-        left join upstream_system_sku_pairing p
-               on p.connection_code = c.connection_code
-              and p.master_sku = c.master_sku
-        where 1 = 1
-        <choose>
-            <when test="repositoryScope == 'THIRD_PARTY_MASTER'">
-                and 1 = 0
-            </when>
-            <otherwise>
-                and (conn.system_kind = 'lingxing-wms' or conn.system_kind = 'LINGXING_WMS')
-            </otherwise>
-        </choose>
-        and <include refid="SourceProductSkuGroupKeyExpression" /> = #{sourceSkuGroupKey}
-        order by conn.master_warehouse_name asc, c.connection_code asc
+               w.master_sku,
+               w.master_product_name,
+               w.product_height,
+               w.product_height_bs,
+               w.product_length,
+               w.product_length_bs,
+               w.product_weight,
+               w.product_weight_bs,
+               w.product_width,
+               w.product_width_bs,
+               w.wms_height,
+               w.wms_height_bs,
+               w.wms_length,
+               w.wms_length_bs,
+               w.wms_weight,
+               w.wms_weight_bs,
+               w.wms_width,
+               w.wms_width_bs,
+               w.source_payload_hash,
+               w.status,
+               w.first_seen_time,
+               w.last_seen_time,
+               w.update_time,
+               w.pairing_status,
+               w.sku_pairing_id,
+               w.system_sku,
+               w.system_sku_name,
+               w.customer_name
+        from source_product_warehouse_detail w
+        where w.repository_scope = #{repositoryScope}
+          and w.source_sku_group_key = #{sourceSkuGroupKey}
+        order by w.master_warehouse_name asc, w.connection_code asc
     </select>
 
     <insert id="upsertSourceWarehouseStock" parameterType="SourceWarehouseStockItem">

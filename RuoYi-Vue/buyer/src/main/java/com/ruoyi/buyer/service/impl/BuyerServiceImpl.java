@@ -891,8 +891,12 @@ public class BuyerServiceImpl implements IBuyerService
         PortalLoginSession session = issue.getSession();
         buyerMapper.updateBuyerAccountLoginInfo(account.getBuyerId(), account.getBuyerAccountId(),
             session.getLoginIp(), session.getLoginTime());
-        buyerMapper.insertBuyerLoginLog(portalTokenSupport.buildLoginLog(
-            account.getBuyerId(), account.getBuyerAccountId(), account.getUserName(), Constants.SUCCESS, message));
+        PortalLoginLog log = Boolean.TRUE.equals(session.getDirectLogin())
+            ? portalTokenSupport.buildDirectLoginLog(account.getBuyerId(), account.getBuyerAccountId(),
+                account.getUserName(), Constants.SUCCESS, message, session)
+            : portalTokenSupport.buildLoginLog(account.getBuyerId(), account.getBuyerAccountId(),
+                account.getUserName(), Constants.SUCCESS, message);
+        buyerMapper.insertBuyerLoginLog(log);
         buyerMapper.insertBuyerSession(session);
     }
 

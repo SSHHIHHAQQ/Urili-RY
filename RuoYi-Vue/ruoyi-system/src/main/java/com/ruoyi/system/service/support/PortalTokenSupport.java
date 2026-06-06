@@ -106,6 +106,7 @@ public class PortalTokenSupport
         log.setOs(UserAgentUtils.getOperatingSystem(userAgent));
         log.setStatus(status);
         log.setMsg(msg);
+        log.setDirectLogin(Boolean.FALSE);
         log.setLoginTime(new Date());
         return log;
     }
@@ -115,6 +116,14 @@ public class PortalTokenSupport
     {
         PortalLoginLog log = buildLoginLog(subjectId, accountId, userName, status, msg);
         applyDirectLoginAudit(log, directLoginToken);
+        return log;
+    }
+
+    public PortalLoginLog buildDirectLoginLog(Long subjectId, Long accountId, String userName, String status,
+            String msg, PortalLoginSession session)
+    {
+        PortalLoginLog log = buildLoginLog(subjectId, accountId, userName, status, msg);
+        applyDirectLoginAudit(log, session);
         return log;
     }
 
@@ -187,6 +196,19 @@ public class PortalTokenSupport
         log.setActingAdminId(directLoginToken.getActingAdminId());
         log.setActingAdminName(directLoginToken.getActingAdminName());
         log.setDirectLoginReason(directLoginToken.getDirectLoginReason());
+    }
+
+    private void applyDirectLoginAudit(PortalLoginLog log, PortalLoginSession session)
+    {
+        if (session == null || !Boolean.TRUE.equals(session.getDirectLogin()))
+        {
+            return;
+        }
+        log.setDirectLogin(Boolean.TRUE);
+        log.setDirectLoginTicketId(session.getDirectLoginTicketId());
+        log.setActingAdminId(session.getActingAdminId());
+        log.setActingAdminName(session.getActingAdminName());
+        log.setDirectLoginReason(session.getDirectLoginReason());
     }
 
     public void deleteLoginTokens(String terminal, List<String> tokenIds)

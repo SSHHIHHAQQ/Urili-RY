@@ -676,6 +676,26 @@ function checkPartnerTypes() {
       );
     }
   }
+
+  const loginLogBlock = extractInterfaceBlock(source, 'PortalLoginLog');
+  if (!loginLogBlock) {
+    violations.push(`${relativePath} must define PortalLoginLog`);
+  } else {
+    for (const expected of [
+      'directLogin?: boolean',
+      'directLoginTicketId?: number',
+      'actingAdminId?: number',
+      'actingAdminName?: string',
+      'directLoginReason?: string',
+    ]) {
+      assertIncludes(
+        loginLogBlock,
+        relativePath,
+        expected,
+        `PortalLoginLog must expose direct-login audit field ${expected}`,
+      );
+    }
+  }
 }
 
 function checkPartnerReadTypes() {

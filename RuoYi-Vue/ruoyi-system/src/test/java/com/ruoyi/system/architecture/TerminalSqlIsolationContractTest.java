@@ -54,6 +54,40 @@ public class TerminalSqlIsolationContractTest
     }
 
     @Test
+    public void terminalLoginLogTablesMustCarryDirectLoginAuditFields() throws IOException
+    {
+        Path backendRoot = findBackendRoot();
+        List<String> violations = new ArrayList<>();
+
+        for (String script : Arrays.asList(
+                "sql/20260604_three_terminal_isolation_migration.sql",
+                "sql/20260607_terminal_login_log_direct_login_audit.sql",
+                "sql/seller_buyer_management_seed.sql"))
+        {
+            Path path = backendRoot.resolve(script);
+            String sql = readText(path);
+            for (String table : Arrays.asList("seller_login_log", "buyer_login_log"))
+            {
+                for (String expected : Arrays.asList(
+                        "direct_login",
+                        "direct_login_ticket_id",
+                        "acting_admin_id",
+                        "acting_admin_name",
+                        "direct_login_reason"))
+                {
+                    requireContains(violations, path.getFileName().toString() + " " + table, sql, expected);
+                }
+            }
+        }
+
+        if (!violations.isEmpty())
+        {
+            fail("seller/buyer terminal login logs must carry direct-login audit fields:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    @Test
     public void currentIsolationMigrationMustNotBackfillTerminalAccountsFromSysUser() throws IOException
     {
         Path backendRoot = findBackendRoot();

@@ -232,6 +232,35 @@ public class PortalDirectLoginSupportTest
     }
 
     @Test
+    public void consumeTokenShouldAuditFailedPayloadWhenValidatorRejectsLogin()
+    {
+        PortalDirectLoginResult result = support.createToken("seller", 7L, "SAAA010001",
+                activeAccount(44L, "seller-owner"), "Support inspection",
+                PortalDirectLoginSupport.SELLER_WEB_URL_CONFIG_KEY, "http://fallback/seller/direct-login");
+        PortalDirectLoginToken[] auditedPayload = new PortalDirectLoginToken[1];
+        ServiceException[] auditedException = new ServiceException[1];
+
+        ServiceException exception = assertThrows(ServiceException.class,
+                () -> support.consumeToken("seller", result.getToken(), payload -> {
+                    throw new ServiceException("seller disabled");
+                }, (payload, failure) -> {
+                    auditedPayload[0] = payload;
+                    auditedException[0] = failure;
+                }));
+
+        assertEquals("seller disabled", exception.getMessage());
+        assertEquals(exception, auditedException[0]);
+        assertEquals(result.getTicketId(), auditedPayload[0].getTicketId());
+        assertEquals("seller", auditedPayload[0].getPortalType());
+        assertEquals(Long.valueOf(7L), auditedPayload[0].getPartnerId());
+        assertEquals(Long.valueOf(44L), auditedPayload[0].getAccountId());
+        assertEquals(1, ticketMapper.usedCalls);
+        assertEquals(result.getTicketId(), ticketMapper.usedTicketId);
+        assertTrue(redisCache.deletedKeys.contains(cacheKey(result.getToken())));
+        assertNull(redisCache.getCacheObject(cacheKey(result.getToken())));
+    }
+
+    @Test
     public void consumeTokenShouldRejectPayloadTargetMismatchBeforeMarkingTicketUsed()
     {
         PortalDirectLoginResult result = support.createToken("seller", 7L, "SAAA010001",

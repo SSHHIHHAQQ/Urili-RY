@@ -310,6 +310,11 @@ declare namespace API.Partner {
     os?: string;
     status?: string;
     msg?: string;
+    directLogin?: boolean;
+    directLoginTicketId?: number;
+    actingAdminId?: number;
+    actingAdminName?: string;
+    directLoginReason?: string;
     loginTime?: string;
   }
 

@@ -77,6 +77,9 @@ public class SqlExecutionGuardContractTest
         assertGuard(backendRoot, "sql/20260606_upstream_inventory_dimension_sync.sql",
                 "@confirm_upstream_inventory_dimension_sync",
                 "APPLY_UPSTREAM_INVENTORY_DIMENSION_SYNC", violations);
+        assertGuard(backendRoot, "sql/20260607_terminal_login_log_direct_login_audit.sql",
+                "@confirm_terminal_login_log_direct_login_audit",
+                "APPLY_TERMINAL_LOGIN_LOG_DIRECT_LOGIN_AUDIT", violations);
         assertGuard(backendRoot, "sql/seller_buyer_management_seed.sql",
                 "@confirm_seller_buyer_management_seed",
                 "APPLY_SELLER_BUYER_MANAGEMENT_SEED", violations);

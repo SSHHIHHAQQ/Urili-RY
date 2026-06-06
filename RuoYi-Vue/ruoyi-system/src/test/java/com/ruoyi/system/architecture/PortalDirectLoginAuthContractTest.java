@@ -106,6 +106,8 @@ public class PortalDirectLoginAuthContractTest
                 "ruoyi-system/src/main/java/com/ruoyi/system/domain/PortalDirectLoginToken.java");
         Path session = backendRoot.resolve(
                 "ruoyi-system/src/main/java/com/ruoyi/system/domain/PortalLoginSession.java");
+        Path loginLog = backendRoot.resolve(
+                "ruoyi-system/src/main/java/com/ruoyi/system/domain/PortalLoginLog.java");
         Path tokenSupport = backendRoot.resolve(
                 "ruoyi-system/src/main/java/com/ruoyi/system/service/support/PortalTokenSupport.java");
         Path logAspect = backendRoot.resolve(
@@ -117,10 +119,12 @@ public class PortalDirectLoginAuthContractTest
         Path sellerMapper = backendRoot.resolve("seller/src/main/resources/mapper/seller/SellerMapper.xml");
         Path buyerMapper = backendRoot.resolve("buyer/src/main/resources/mapper/buyer/BuyerMapper.xml");
         Path migrationSql = backendRoot.resolve("sql/20260604_three_terminal_isolation_migration.sql");
+        Path loginLogPatchSql = backendRoot.resolve("sql/20260607_terminal_login_log_direct_login_audit.sql");
         Path baseSeedSql = backendRoot.resolve("sql/seller_buyer_management_seed.sql");
 
         String tokenPayloadSource = Files.readString(tokenPayload, StandardCharsets.UTF_8);
         String sessionSource = Files.readString(session, StandardCharsets.UTF_8);
+        String loginLogSource = Files.readString(loginLog, StandardCharsets.UTF_8);
         String tokenSupportSource = Files.readString(tokenSupport, StandardCharsets.UTF_8);
         String logAspectSource = Files.readString(logAspect, StandardCharsets.UTF_8);
         String preAuthorizeAspectSource = Files.readString(preAuthorizeAspect, StandardCharsets.UTF_8);
@@ -128,6 +132,7 @@ public class PortalDirectLoginAuthContractTest
         String sellerMapperSource = Files.readString(sellerMapper, StandardCharsets.UTF_8);
         String buyerMapperSource = Files.readString(buyerMapper, StandardCharsets.UTF_8);
         String migrationSource = Files.readString(migrationSql, StandardCharsets.UTF_8);
+        String loginLogPatchSource = Files.readString(loginLogPatchSql, StandardCharsets.UTF_8);
         String baseSeedSource = Files.readString(baseSeedSql, StandardCharsets.UTF_8);
 
         for (String expected : Arrays.asList("actingAdminId", "actingAdminName", "directLoginReason"))
@@ -139,10 +144,19 @@ public class PortalDirectLoginAuthContractTest
         {
             requireContains(violations, session.getFileName().toString(), sessionSource, expected);
         }
+        for (String expected : Arrays.asList("directLogin", "directLoginTicketId", "actingAdminId",
+                "actingAdminName", "directLoginReason"))
+        {
+            requireContains(violations, loginLog.getFileName().toString(), loginLogSource, expected);
+        }
         requireContains(violations, tokenSupport.getFileName().toString(), tokenSupportSource,
                 "applyDirectLoginAudit(session, directLoginToken)");
         requireContains(violations, tokenSupport.getFileName().toString(), tokenSupportSource,
                 "session.setActingAdminId(directLoginToken.getActingAdminId())");
+        requireContains(violations, tokenSupport.getFileName().toString(), tokenSupportSource,
+                "public PortalLoginLog buildDirectLoginLog");
+        requireContains(violations, tokenSupport.getFileName().toString(), tokenSupportSource,
+                "log.setDirectLogin(Boolean.FALSE)");
         requireContains(violations, logAspect.getFileName().toString(), logAspectSource,
                 "directLoginAudit{ticketId=");
         requireContains(violations, logAspect.getFileName().toString(), logAspectSource,
@@ -162,12 +176,13 @@ public class PortalDirectLoginAuthContractTest
             requireContains(violations, sellerMapper.getFileName().toString(), sellerMapperSource, expected);
             requireContains(violations, buyerMapper.getFileName().toString(), buyerMapperSource, expected);
             requireContains(violations, migrationSql.getFileName().toString(), migrationSource, expected);
+            requireContains(violations, loginLogPatchSql.getFileName().toString(), loginLogPatchSource, expected);
             requireContains(violations, baseSeedSql.getFileName().toString(), baseSeedSource, expected);
         }
 
         if (!violations.isEmpty())
         {
-            fail("direct-login audit must carry acting admin into portal session and oper log:\n"
+            fail("direct-login audit must carry acting admin into portal session, login log, and oper log:\n"
                     + String.join("\n", violations));
         }
     }

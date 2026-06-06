@@ -58,7 +58,10 @@ public class UpstreamSystemTask
             upstreamSystemService.syncWarehouseStocksOnly(connectionCode).getWarehouseStockCount());
     }
 
-    private void runForLingxingConnections(String taskName, SyncInvoker invoker)
+    /**
+     * Keep scheduled upstream sync serial in this JVM. Quartz non-concurrent jobs are scoped by job key.
+     */
+    private synchronized void runForLingxingConnections(String taskName, SyncInvoker invoker)
     {
         UpstreamSystemConnection query = new UpstreamSystemConnection();
         query.setStatus(UpstreamSystemConstants.STATUS_ENABLED);

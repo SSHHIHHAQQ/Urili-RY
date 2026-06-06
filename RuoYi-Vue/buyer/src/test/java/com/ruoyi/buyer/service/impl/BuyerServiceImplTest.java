@@ -818,6 +818,7 @@ public class BuyerServiceImplTest
         assertEquals(Long.valueOf(1L), mapper.insertedSession.getActingAdminId());
         assertEquals("admin", mapper.insertedSession.getActingAdminName());
         assertEquals(Constants.SUCCESS, mapper.insertedLoginLog.getStatus());
+        assertDirectLoginAudit(mapper.insertedLoginLog);
         assertTrue(mapper.insertedLoginLog.getMsg().contains("ticketId=100"));
         assertTrue(mapper.insertedLoginLog.getMsg().contains("actingAdminName=admin"));
     }
@@ -873,6 +874,7 @@ public class BuyerServiceImplTest
             assertEquals(Constants.FAIL, mapper.insertedLoginLog.getStatus());
             assertEquals(Long.valueOf(11L), mapper.insertedLoginLog.getSubjectId());
             assertEquals(Long.valueOf(22L), mapper.insertedLoginLog.getAccountId());
+            assertDirectLoginAudit(mapper.insertedLoginLog);
             return;
         }
         throw new AssertionError("Expected ServiceException");
@@ -901,6 +903,7 @@ public class BuyerServiceImplTest
             assertEquals(Constants.FAIL, mapper.insertedLoginLog.getStatus());
             assertEquals(Long.valueOf(11L), mapper.insertedLoginLog.getSubjectId());
             assertEquals(Long.valueOf(22L), mapper.insertedLoginLog.getAccountId());
+            assertDirectLoginAudit(mapper.insertedLoginLog);
             return;
         }
         throw new AssertionError("Expected ServiceException");
@@ -930,6 +933,7 @@ public class BuyerServiceImplTest
             assertEquals(Constants.FAIL, mapper.insertedLoginLog.getStatus());
             assertEquals(Long.valueOf(11L), mapper.insertedLoginLog.getSubjectId());
             assertEquals(Long.valueOf(22L), mapper.insertedLoginLog.getAccountId());
+            assertDirectLoginAudit(mapper.insertedLoginLog);
             return;
         }
         throw new AssertionError("Expected ServiceException");
@@ -957,6 +961,7 @@ public class BuyerServiceImplTest
             assertEquals(Constants.FAIL, mapper.insertedLoginLog.getStatus());
             assertEquals(Long.valueOf(11L), mapper.insertedLoginLog.getSubjectId());
             assertEquals(null, mapper.insertedLoginLog.getAccountId());
+            assertDirectLoginAudit(mapper.insertedLoginLog);
             return;
         }
         throw new AssertionError("Expected ServiceException");
@@ -985,6 +990,7 @@ public class BuyerServiceImplTest
             assertEquals(Constants.FAIL, mapper.insertedLoginLog.getStatus());
             assertEquals(Long.valueOf(11L), mapper.insertedLoginLog.getSubjectId());
             assertEquals(null, mapper.insertedLoginLog.getAccountId());
+            assertDirectLoginAudit(mapper.insertedLoginLog);
             return;
         }
         throw new AssertionError("Expected ServiceException");
@@ -1277,6 +1283,15 @@ public class BuyerServiceImplTest
         token.setActingAdminName("admin");
         token.setDirectLoginReason("support check");
         return token;
+    }
+
+    private void assertDirectLoginAudit(PortalLoginLog log)
+    {
+        assertEquals(Boolean.TRUE, log.getDirectLogin());
+        assertEquals(Long.valueOf(100L), log.getDirectLoginTicketId());
+        assertEquals(Long.valueOf(1L), log.getActingAdminId());
+        assertEquals("admin", log.getActingAdminName());
+        assertEquals("support check", log.getDirectLoginReason());
     }
 
     private BuyerMapper mapper(Buyer buyer, BuyerAccount... accounts)
@@ -1683,6 +1698,14 @@ public class BuyerServiceImplTest
         public PortalDirectLoginToken consumeToken(String portalType, String token,
                 java.util.function.Consumer<PortalDirectLoginToken> validator)
         {
+            return consumeToken(portalType, token, validator, null);
+        }
+
+        @Override
+        public PortalDirectLoginToken consumeToken(String portalType, String token,
+                java.util.function.Consumer<PortalDirectLoginToken> validator,
+                java.util.function.BiConsumer<PortalDirectLoginToken, ServiceException> failureAuditor)
+        {
             consumeCount++;
             consumedPortalType = portalType;
             consumedTokenValue = token;
@@ -1692,7 +1715,18 @@ public class BuyerServiceImplTest
             }
             if (validator != null)
             {
-                validator.accept(tokenToConsume);
+                try
+                {
+                    validator.accept(tokenToConsume);
+                }
+                catch (ServiceException e)
+                {
+                    if (failureAuditor != null && tokenToConsume != null)
+                    {
+                        failureAuditor.accept(tokenToConsume, e);
+                    }
+                    throw e;
+                }
             }
             return tokenToConsume;
         }
@@ -1775,8 +1809,47 @@ public class BuyerServiceImplTest
             log.setIpaddr("127.0.0.1");
             log.setStatus(status);
             log.setMsg(msg);
+            log.setDirectLogin(Boolean.FALSE);
             log.setLoginTime(new Date());
             return log;
+        }
+
+        @Override
+        public PortalLoginLog buildDirectLoginLog(Long subjectId, Long accountId, String userName, String status,
+                String msg, PortalDirectLoginToken directLoginToken)
+        {
+            PortalLoginLog log = buildLoginLog(subjectId, accountId, userName, status, msg);
+            copyDirectLoginAudit(log, directLoginToken);
+            return log;
+        }
+
+        @Override
+        public PortalLoginLog buildDirectLoginLog(Long subjectId, Long accountId, String userName, String status,
+                String msg, PortalLoginSession session)
+        {
+            PortalLoginLog log = buildLoginLog(subjectId, accountId, userName, status, msg);
+            if (session != null && Boolean.TRUE.equals(session.getDirectLogin()))
+            {
+                log.setDirectLogin(Boolean.TRUE);
+                log.setDirectLoginTicketId(session.getDirectLoginTicketId());
+                log.setActingAdminId(session.getActingAdminId());
+                log.setActingAdminName(session.getActingAdminName());
+                log.setDirectLoginReason(session.getDirectLoginReason());
+            }
+            return log;
+        }
+
+        private void copyDirectLoginAudit(PortalLoginLog log, PortalDirectLoginToken directLoginToken)
+        {
+            if (directLoginToken == null)
+            {
+                return;
+            }
+            log.setDirectLogin(Boolean.TRUE);
+            log.setDirectLoginTicketId(directLoginToken.getTicketId());
+            log.setActingAdminId(directLoginToken.getActingAdminId());
+            log.setActingAdminName(directLoginToken.getActingAdminName());
+            log.setDirectLoginReason(directLoginToken.getDirectLoginReason());
         }
 
         @Override

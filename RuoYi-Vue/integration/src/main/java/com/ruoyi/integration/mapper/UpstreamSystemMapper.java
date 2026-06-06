@@ -172,9 +172,35 @@ public interface UpstreamSystemMapper
 
     List<SourceProductItem> selectSourceProductList(SourceProductQuery query);
 
+    long countSourceProductList(SourceProductQuery query);
+
     SourceProductItem selectSourceProductGroupSummary(SourceProductQuery query);
 
     List<SourceProductItem> selectSourceProductWarehouseDetailList(SourceProductQuery query);
+
+    int deleteAllSourceProductWarehouseDetails();
+
+    int deleteAllSourceProductDimensionGroups();
+
+    int deleteAllSourceProductGroups();
+
+    int insertAllSourceProductGroups(@Param("connectionCode") String connectionCode);
+
+    int insertAllSourceProductDimensionGroups(@Param("connectionCode") String connectionCode);
+
+    int insertAllSourceProductWarehouseDetails(@Param("connectionCode") String connectionCode);
+
+    int deleteSourceProductWarehouseDetailsByConnection(@Param("connectionCode") String connectionCode);
+
+    int deleteSourceProductDimensionGroupsByConnection(@Param("connectionCode") String connectionCode);
+
+    int deleteSourceProductGroupsByConnection(@Param("connectionCode") String connectionCode);
+
+    int insertSourceProductGroupsByConnection(@Param("connectionCode") String connectionCode);
+
+    int insertSourceProductDimensionGroupsByConnection(@Param("connectionCode") String connectionCode);
+
+    int insertSourceProductWarehouseDetailsByConnection(@Param("connectionCode") String connectionCode);
 
     int upsertSourceWarehouseStock(SourceWarehouseStockItem item);
 

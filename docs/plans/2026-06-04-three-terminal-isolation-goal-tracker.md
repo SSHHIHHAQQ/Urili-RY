@@ -6013,3 +6013,49 @@ P2 记录：
 - 本轮未执行远程 MySQL DDL/DML，未读取或写入 Redis。
 - 本轮未启动或重启后端。
 - 本轮未做浏览器、截图、DOM 或 UI 细调验收。
+
+## 2026-06-07 P0/P1 快速推进：免密登录日志结构化审计收口检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为参考方向，按当前快速推进模式只处理 P0/P1：编译、guard、接口、权限、串端、service/字段缺失。不做浏览器运行态验收、截图、DOM 检测或 UI 细调。
+
+子 Agent 执行情况：
+- 用户最新指定：子 Agent 优先使用 GPT-5.3 Codex；不可用时使用 `gpt-5.4`。
+- 本轮采纳上一批 6 个 `gpt-5.4` 子 Agent 的只读审计结论，GPT-5.3 Codex 不可用的原因是平台用量或可用性限制。
+- 本轮所有有效子 Agent 已关闭；一个未完成初始化的子 Agent 也已关闭。
+
+已完成：
+- `PortalTokenSupport` 普通登录日志显式写 `directLogin=false`，并新增从 `PortalLoginSession` 构建 direct-login 登录日志的重载。
+- `SellerServiceImpl` / `BuyerServiceImpl` 的免密登录成功日志、已解析 ticket 后的业务失败日志均写入结构化 direct-login 字段。
+- `SellerMapper.xml` / `BuyerMapper.xml` 的登录日志 resultMap、insert、list 查询投影补齐 `directLogin`、`directLoginTicketId`、`actingAdminId`、`actingAdminName`、`directLoginReason`。
+- `20260604_three_terminal_isolation_migration.sql`、`seller_buyer_management_seed.sql` 和新增 `20260607_terminal_login_log_direct_login_audit.sql` 补齐 seller/buyer login log direct-login 审计字段。
+- `PortalDirectLoginAuthContractTest`、`TerminalSqlIsolationContractTest`、`SqlExecutionGuardContractTest`、`PortalDirectLoginSupportTest`、`SellerServiceImplTest`、`BuyerServiceImplTest` 补齐对应契约和断言。
+- `react-ui/src/types/seller-buyer/party.d.ts` 和 `check-partner-management-template.mjs` 补齐 `PortalLoginLog` direct-login 字段契约。
+- 已更新复用台账：`docs/architecture/reuse-ledger.md`。
+- 新增记录：`docs/plans/2026-06-07-three-terminal-p0p1-direct-login-login-log-audit-record.md`。
+
+验证结果：
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn "-pl" "ruoyi-system,seller,buyer" "-Dtest=PortalDirectLoginSupportTest,PortalDirectLoginAuthContractTest,TerminalSqlIsolationContractTest,SqlExecutionGuardContractTest,SellerServiceImplTest,BuyerServiceImplTest" test`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:partner-management`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run tsc -- --pretty false`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run verify:three-terminal`：第一次因 buyer reactor 依赖陈旧触发 Surefire fork `NoClassDefFoundError`，刷新 reactor 依赖后重新执行通过，最终输出 `three-terminal verification passed.`。
+- `git diff --check`：通过；仅有 LF/CRLF 工作区换行提示，无 whitespace 错误。
+- `codegraph sync .`：通过；结果为 `Synced 2 changed files`，`Modified: 2 - 199 nodes in 911ms`；回填记录后复跑为 `Already up to date`。
+
+远程库执行：
+- 已追加执行 `RuoYi-Vue/sql/20260607_terminal_login_log_direct_login_audit.sql` 到当前远程运行库。
+- 执行来源：本机 `.env.local` 中的 `RUOYI_DB_*`，未输出凭证。
+- 执行前缺少字段：seller/buyer login log 各缺少 `direct_login`、`direct_login_ticket_id`、`acting_admin_id`、`acting_admin_name`、`direct_login_reason`。
+- 执行结果：`scriptExecuted=true`，`executedStatements=38`，执行后缺少字段为 `[]`。
+- 新增执行记录：`docs/plans/2026-06-07-terminal-login-log-direct-login-audit-db-execution-record.md`。
+- `git diff --check`：通过；仅有 LF/CRLF 工作区换行提示，无 whitespace 错误。
+- `codegraph sync .`：通过；结果为 `Synced 2 changed files`，`Modified: 2 - 247 nodes in 558ms`。
+- 记录回填后复跑 `codegraph sync .`：通过；结果为 `Synced 1 changed files`，`Modified: 1 - 79 nodes in 437ms`。
+
+边界说明：
+- 本轮未读取或写入 Redis。
+- 本轮未启动或重启后端。
+- 本轮未做浏览器、截图、DOM 或 UI 细调验收。
+
+残留 P2：
+- 管理端登录日志 UI 后续如需展示 direct-login 审计字段，优先放在详情展开区，不新增宽表列。
+- 强制踢出原因/执行人和 session 设备字段仍需后续 DDL 与写入链路增强。

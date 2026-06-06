@@ -891,8 +891,12 @@ public class SellerServiceImpl implements ISellerService
         PortalLoginSession session = issue.getSession();
         sellerMapper.updateSellerAccountLoginInfo(account.getSellerId(), account.getSellerAccountId(),
             session.getLoginIp(), session.getLoginTime());
-        sellerMapper.insertSellerLoginLog(portalTokenSupport.buildLoginLog(
-            account.getSellerId(), account.getSellerAccountId(), account.getUserName(), Constants.SUCCESS, message));
+        PortalLoginLog log = Boolean.TRUE.equals(session.getDirectLogin())
+            ? portalTokenSupport.buildDirectLoginLog(account.getSellerId(), account.getSellerAccountId(),
+                account.getUserName(), Constants.SUCCESS, message, session)
+            : portalTokenSupport.buildLoginLog(account.getSellerId(), account.getSellerAccountId(),
+                account.getUserName(), Constants.SUCCESS, message);
+        sellerMapper.insertSellerLoginLog(log);
         sellerMapper.insertSellerSession(session);
     }
 

@@ -518,6 +518,11 @@ create table if not exists seller_login_log (
   os varchar(50) default '',
   status char(1) default '0',
   msg varchar(255) default '',
+  direct_login tinyint(1) not null default 0,
+  direct_login_ticket_id bigint(20) default null,
+  acting_admin_id bigint(20) default null,
+  acting_admin_name varchar(64) default '',
+  direct_login_reason varchar(255) default '',
   login_time datetime,
   primary key (info_id),
   key idx_seller_login_log_account_time (seller_account_id, login_time),
@@ -525,6 +530,11 @@ create table if not exists seller_login_log (
 ) engine=innodb auto_increment=1 comment = '卖家端登录日志表';
 call add_column_if_missing('seller_login_log', 'seller_id', 'bigint(20) default null');
 call add_column_if_missing('seller_login_log', 'seller_account_id', 'bigint(20) default null');
+call add_column_if_missing('seller_login_log', 'direct_login', 'tinyint(1) not null default 0');
+call add_column_if_missing('seller_login_log', 'direct_login_ticket_id', 'bigint(20) default null');
+call add_column_if_missing('seller_login_log', 'acting_admin_id', 'bigint(20) default null');
+call add_column_if_missing('seller_login_log', 'acting_admin_name', 'varchar(64) default ''''');
+call add_column_if_missing('seller_login_log', 'direct_login_reason', 'varchar(255) default ''''');
 call recreate_index_if_mismatch('seller_login_log', 'idx_seller_login_log_account_time',
   'seller_account_id,login_time', 1, 'key idx_seller_login_log_account_time (seller_account_id, login_time)');
 call recreate_index_if_mismatch('seller_login_log', 'idx_seller_login_log_seller_time',
@@ -545,6 +555,11 @@ create table if not exists buyer_login_log (
   os varchar(50) default '',
   status char(1) default '0',
   msg varchar(255) default '',
+  direct_login tinyint(1) not null default 0,
+  direct_login_ticket_id bigint(20) default null,
+  acting_admin_id bigint(20) default null,
+  acting_admin_name varchar(64) default '',
+  direct_login_reason varchar(255) default '',
   login_time datetime,
   primary key (info_id),
   key idx_buyer_login_log_account_time (buyer_account_id, login_time),
@@ -552,6 +567,11 @@ create table if not exists buyer_login_log (
 ) engine=innodb auto_increment=1 comment = '买家端登录日志表';
 call add_column_if_missing('buyer_login_log', 'buyer_id', 'bigint(20) default null');
 call add_column_if_missing('buyer_login_log', 'buyer_account_id', 'bigint(20) default null');
+call add_column_if_missing('buyer_login_log', 'direct_login', 'tinyint(1) not null default 0');
+call add_column_if_missing('buyer_login_log', 'direct_login_ticket_id', 'bigint(20) default null');
+call add_column_if_missing('buyer_login_log', 'acting_admin_id', 'bigint(20) default null');
+call add_column_if_missing('buyer_login_log', 'acting_admin_name', 'varchar(64) default ''''');
+call add_column_if_missing('buyer_login_log', 'direct_login_reason', 'varchar(255) default ''''');
 call recreate_index_if_mismatch('buyer_login_log', 'idx_buyer_login_log_account_time',
   'buyer_account_id,login_time', 1, 'key idx_buyer_login_log_account_time (buyer_account_id, login_time)');
 call recreate_index_if_mismatch('buyer_login_log', 'idx_buyer_login_log_buyer_time',

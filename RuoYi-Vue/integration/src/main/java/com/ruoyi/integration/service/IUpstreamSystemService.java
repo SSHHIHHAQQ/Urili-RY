@@ -68,6 +68,8 @@ public interface IUpstreamSystemService
 
     List<SourceProductItem> selectSourceProductList(SourceProductQuery query);
 
+    long countSourceProductList(SourceProductQuery query);
+
     SourceProductGroupDetail selectSourceProductGroupDetail(SourceProductQuery query);
 
     List<SourceWarehouseStockItem> selectSourceWarehouseStockList(SourceWarehouseStockQuery query);

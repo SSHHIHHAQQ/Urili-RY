@@ -77,6 +77,11 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="os"            column="os"               />
         <result property="status"        column="status"           />
         <result property="msg"           column="msg"              />
+        <result property="directLogin"   column="direct_login"     />
+        <result property="directLoginTicketId" column="direct_login_ticket_id" />
+        <result property="actingAdminId" column="acting_admin_id"  />
+        <result property="actingAdminName" column="acting_admin_name" />
+        <result property="directLoginReason" column="direct_login_reason" />
         <result property="loginTime"     column="login_time"       />
     </resultMap>
 
@@ -371,16 +376,20 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <insert id="insertBuyerLoginLog" parameterType="PortalLoginLog">
         insert into buyer_login_log(
             buyer_id, buyer_account_id, user_name, ipaddr, login_location,
-            browser, os, status, msg, login_time
+            browser, os, status, msg, direct_login, direct_login_ticket_id,
+            acting_admin_id, acting_admin_name, direct_login_reason, login_time
         ) values (
             #{subjectId}, #{accountId}, #{userName}, #{ipaddr}, #{loginLocation},
-            #{browser}, #{os}, #{status}, #{msg}, #{loginTime}
+            #{browser}, #{os}, #{status}, #{msg}, #{directLogin}, #{directLoginTicketId},
+            #{actingAdminId}, #{actingAdminName}, #{directLoginReason}, #{loginTime}
         )
     </insert>
 
     <select id="selectBuyerLoginLogList" parameterType="PortalLoginLog" resultMap="BuyerLoginLogResult">
         select l.info_id, l.buyer_id, l.buyer_account_id, l.user_name, l.ipaddr,
-               l.login_location, l.browser, l.os, l.status, l.msg, l.login_time
+               l.login_location, l.browser, l.os, l.status, l.msg,
+               l.direct_login, l.direct_login_ticket_id, l.acting_admin_id,
+               l.acting_admin_name, l.direct_login_reason, l.login_time
         from buyer_login_log l
         where 1 = 1
         <if test="subjectId != null">
