@@ -46,10 +46,13 @@ public class ProductSpu extends BaseEntity
     private BigDecimal salePriceMin;
     private BigDecimal salePriceMax;
     private String currencySummary;
+    private String warehouseKindSummary;
     private Long availableStock;
     private Integer warehouseCount;
     private String inventoryStatus;
     private Date stockUpdateTime;
+    private List<Long> warehouseIds;
+    private List<ProductSpuWarehouse> warehouses;
     private List<ProductSku> skus;
     private List<ProductAttributeValue> attributeValues;
     private List<ProductImage> images;
@@ -122,6 +125,8 @@ public class ProductSpu extends BaseEntity
     public void setSalePriceMax(BigDecimal salePriceMax) { this.salePriceMax = salePriceMax; }
     public String getCurrencySummary() { return currencySummary; }
     public void setCurrencySummary(String currencySummary) { this.currencySummary = currencySummary; }
+    public String getWarehouseKindSummary() { return warehouseKindSummary; }
+    public void setWarehouseKindSummary(String warehouseKindSummary) { this.warehouseKindSummary = warehouseKindSummary; }
     public Long getAvailableStock() { return availableStock; }
     public void setAvailableStock(Long availableStock) { this.availableStock = availableStock; }
     public Integer getWarehouseCount() { return warehouseCount; }
@@ -130,6 +135,10 @@ public class ProductSpu extends BaseEntity
     public void setInventoryStatus(String inventoryStatus) { this.inventoryStatus = inventoryStatus; }
     public Date getStockUpdateTime() { return stockUpdateTime; }
     public void setStockUpdateTime(Date stockUpdateTime) { this.stockUpdateTime = stockUpdateTime; }
+    public List<Long> getWarehouseIds() { return warehouseIds; }
+    public void setWarehouseIds(List<Long> warehouseIds) { this.warehouseIds = warehouseIds; }
+    public List<ProductSpuWarehouse> getWarehouses() { return warehouses; }
+    public void setWarehouses(List<ProductSpuWarehouse> warehouses) { this.warehouses = warehouses; }
     public List<ProductSku> getSkus() { return skus; }
     public void setSkus(List<ProductSku> skus) { this.skus = skus; }
     public List<ProductAttributeValue> getAttributeValues() { return attributeValues; }

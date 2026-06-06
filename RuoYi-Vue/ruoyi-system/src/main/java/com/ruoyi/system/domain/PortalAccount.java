@@ -2,6 +2,7 @@ package com.ruoyi.system.domain;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.ruoyi.common.core.domain.BaseEntity;
 
 /**
@@ -25,6 +26,7 @@ public abstract class PortalAccount extends BaseEntity
 
     private String nickName;
 
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String password;
 
     private String email;

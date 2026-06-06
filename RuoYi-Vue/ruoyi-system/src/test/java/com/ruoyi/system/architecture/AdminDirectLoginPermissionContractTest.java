@@ -117,6 +117,13 @@ public class AdminDirectLoginPermissionContractTest
         assertContains(sql, "seller:admin:ticket:list", seed, violations);
         assertContains(sql, "buyer:admin:directLogin", seed, violations);
         assertContains(sql, "buyer:admin:ticket:list", seed, violations);
+
+        Path standaloneSeed = backendRoot.resolve("sql/20260606_admin_partner_page_direct_login_seed.sql");
+        String standaloneSql = Files.readString(standaloneSeed, StandardCharsets.UTF_8);
+        assertContains(standaloneSql, "seller:admin:list", standaloneSeed, violations);
+        assertContains(standaloneSql, "buyer:admin:list", standaloneSeed, violations);
+        assertContains(standaloneSql, "seller:admin:directLogin", standaloneSeed, violations);
+        assertContains(standaloneSql, "buyer:admin:directLogin", standaloneSeed, violations);
     }
 
     private void assertFrontendPermissionGates(Path workspaceRoot, List<String> violations) throws IOException

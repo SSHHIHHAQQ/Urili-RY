@@ -22,6 +22,7 @@ public class AdminAccountPermissionUiContractTest
         assertTerminalPageConfig(workspaceRoot, "Buyer", "buyer", violations);
         assertPartnerManagementPageGates(workspaceRoot, violations);
         assertPartnerAccountModalGates(workspaceRoot, violations);
+        assertPartnerAuditModalGates(workspaceRoot, violations);
 
         if (!violations.isEmpty())
         {
@@ -48,6 +49,13 @@ public class AdminAccountPermissionUiContractTest
         assertContains(source, "forceLogoutSubject: forceLogoutAdmin" + pageName + "Sessions", page, violations);
         assertContains(source, "forceLogoutAccount: forceLogoutAdmin" + pageName + "AccountSessions", page,
                 violations);
+        assertContains(source, "directLogin: createAdmin" + pageName + "DirectLogin", page, violations);
+        assertContains(source, "directLoginAccount: createAdmin" + pageName + "AccountDirectLogin", page,
+                violations);
+        assertContains(source, "listLoginLogs: getAdmin" + pageName + "LoginLogs", page, violations);
+        assertContains(source, "listOperLogs: getAdmin" + pageName + "OperLogs", page, violations);
+        assertContains(source, "listDirectLoginTickets: getAdmin" + pageName + "DirectLoginTickets", page,
+                violations);
     }
 
     private void assertPartnerManagementPageGates(Path workspaceRoot, List<String> violations) throws IOException
@@ -60,6 +68,14 @@ public class AdminAccountPermissionUiContractTest
         assertContains(source, "config.services.listSubjectSessions", page, violations);
         assertContains(source, "config.services.forceLogoutSubject", page, violations);
         assertContains(source, "access.hasPerms(`${permPrefix}:forceLogout`)", page, violations);
+        assertContains(source, "access.hasPerms(`${permPrefix}:directLogin`)", page, violations);
+        assertContains(source, "access.hasPerms(`${permPrefix}:dept:list`)", page, violations);
+        assertContains(source, "access.hasPerms(`${permPrefix}:role:list`)", page, violations);
+        assertContains(source, "hidden={!access.hasPerms(`${permPrefix}:menu:list`)}", page, violations);
+        assertContains(source, "const hasAuditPermission = access.hasPerms(`${permPrefix}:loginLog:list`)", page,
+                violations);
+        assertContains(source, "|| access.hasPerms(`${permPrefix}:operLog:list`)", page, violations);
+        assertContains(source, "|| access.hasPerms(`${permPrefix}:ticket:list`)", page, violations);
     }
 
     private void assertPartnerAccountModalGates(Path workspaceRoot, List<String> violations) throws IOException
@@ -77,6 +93,17 @@ public class AdminAccountPermissionUiContractTest
         assertContains(source, "config.services.listAccountSessions", modal, violations);
         assertContains(source, "config.services.forceLogoutAccount", modal, violations);
         assertContains(source, "access.hasPerms(`${permPrefix}:forceLogout`)", modal, violations);
+        assertContains(source, "access.hasPerms(`${permPrefix}:directLogin`) && config.services.directLoginAccount",
+                modal, violations);
+    }
+
+    private void assertPartnerAuditModalGates(Path workspaceRoot, List<String> violations) throws IOException
+    {
+        Path modal = workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerAuditModal.tsx");
+        String source = Files.readString(modal, StandardCharsets.UTF_8);
+        assertContains(source, "access.hasPerms(`${permPrefix}:loginLog:list`)", modal, violations);
+        assertContains(source, "access.hasPerms(`${permPrefix}:operLog:list`)", modal, violations);
+        assertContains(source, "access.hasPerms(`${permPrefix}:ticket:list`)", modal, violations);
     }
 
     private void assertContains(String source, String expected, Path path, List<String> violations)

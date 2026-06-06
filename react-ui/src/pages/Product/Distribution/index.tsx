@@ -45,6 +45,7 @@ import {
   type SalesStatusTabValue,
   salesStatusValueEnum,
   sourceTypeValueEnum,
+  warehouseKindText,
 } from './constants';
 import ProductDetailDrawer from './components/ProductDetailDrawer';
 import ProductDistributionOperationLogDrawer from './components/ProductDistributionOperationLogDrawer';
@@ -99,8 +100,8 @@ const tailRuleOptions = [
   { label: '取整数', value: 'INTEGER' },
 ];
 const TABLE_SELECTION_COLUMN_WIDTH = 48;
-const SPU_TABLE_SCROLL_X = 2480;
-const SKU_TABLE_SCROLL_X = 2900;
+const SPU_TABLE_SCROLL_X = 2580;
+const SKU_TABLE_SCROLL_X = 3000;
 const SKU_DETAIL_TABLE_SCROLL_X = 1680;
 
 function resultOk(resp: API.Result, successText: string) {
@@ -135,6 +136,15 @@ function renderSkuControlStatusTag(record: API.ProductDistribution.Sku) {
   return <Tag color={record.controlStatus === 'DISABLED' ? 'error' : 'success'}>
     {getControlStatusText(record.controlStatus || 'NORMAL')}
   </Tag>;
+}
+
+function renderWarehouseKindTag(kind?: string) {
+  if (!kind) return '--';
+  if (kind === 'MIXED') {
+    return <Tag color="error">{warehouseKindText[kind]}</Tag>;
+  }
+  const color = kind === 'official' ? 'blue' : 'purple';
+  return <Tag color={color}>{warehouseKindText[kind] || kind}</Tag>;
 }
 
 function formatAmount(value?: number | null) {
@@ -590,6 +600,13 @@ export default function ProductDistributionPage() {
     },
     { title: '币种', dataIndex: 'currencySummary', search: false, width: 90 },
     {
+      title: '仓库类型',
+      dataIndex: 'warehouseKindSummary',
+      search: false,
+      width: 100,
+      render: (_, record) => renderWarehouseKindTag(record.warehouseKindSummary),
+    },
+    {
       title: '总可售库存',
       dataIndex: 'availableStock',
       search: false,
@@ -739,6 +756,13 @@ export default function ProductDistributionPage() {
     { title: '供货价', dataIndex: 'supplyPrice', search: false, width: 90, render: (value) => formatAmount(value as number) },
     { title: '销售价', dataIndex: 'salePrice', search: false, width: 90, render: (value) => formatAmount(value as number) },
     { title: '币种', dataIndex: 'currencyCode', search: false, width: 80 },
+    {
+      title: '仓库类型',
+      dataIndex: 'warehouseKindSummary',
+      search: false,
+      width: 100,
+      render: (_, record) => renderWarehouseKindTag(record.warehouseKindSummary),
+    },
     {
       title: '可售库存',
       dataIndex: 'availableStock',

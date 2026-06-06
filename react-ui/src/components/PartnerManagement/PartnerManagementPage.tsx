@@ -68,8 +68,8 @@ type PartnerService = {
   update: (data: any) => Promise<API.Result>;
   changeStatus: (data: any) => Promise<API.Result>;
   getAccounts: (id: number) => Promise<{ code: number; msg?: string; data: API.Partner.PortalAccountBase[] }>;
-  addAccount: (id: number, data: API.Partner.PortalAccountBase) => Promise<API.Result>;
-  updateAccount: (id: number, data: API.Partner.PortalAccountBase) => Promise<API.Result>;
+  addAccount: (id: number, data: API.Partner.PortalAccountPayload) => Promise<API.Result>;
+  updateAccount: (id: number, data: API.Partner.PortalAccountPayload) => Promise<API.Result>;
   listDepts: (id: number) => Promise<API.Partner.PortalDeptListResult>;
   getDeptTree: (id: number) => Promise<API.Partner.PortalDeptTreeResult>;
   addDept: (id: number, data: API.Partner.PortalDept) => Promise<API.Result>;
@@ -88,7 +88,7 @@ type PartnerService = {
   updateRole: (id: number, data: API.Partner.PortalRole) => Promise<API.Result>;
   changeRoleStatus: (id: number, data: Pick<API.Partner.PortalRole, 'roleId' | 'status'>) => Promise<API.Result>;
   removeRoles: (id: number, roleIds: number[]) => Promise<API.Result>;
-  resetAccountDefaultPassword: (data: any) => Promise<API.Result>;
+  resetAccountDefaultPassword: (id: number, accountId: number) => Promise<API.Result>;
   lockAccount?: (id: number, accountId: number, lockReason: string) => Promise<API.Result>;
   unlockAccount?: (id: number, accountId: number) => Promise<API.Result>;
   listSubjectSessions?: (id: number, params?: Record<string, any>) => Promise<API.Partner.PortalAuditPageResult<API.Partner.PortalSessionProfile>>;
@@ -862,7 +862,9 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
       colSize: 2,
       valueType: 'digitRange',
       hideInTable: true,
-      formItemRender: () => <BalanceRangeInput />,
+      formItemRender: (_, config) => (
+        <BalanceRangeInput value={config.value} onChange={config.onChange} />
+      ),
     },
     ...(config.showRechargePlaceholder
       ? [

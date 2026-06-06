@@ -52,7 +52,7 @@ export async function getAdminSellerAccounts(sellerId: number) {
   });
 }
 
-export async function addAdminSellerAccount(sellerId: number, data: API.Partner.SellerAccount) {
+export async function addAdminSellerAccount(sellerId: number, data: API.Partner.SellerAccountPayload) {
   return request<API.Result>(`/api/seller/admin/sellers/${sellerId}/accounts`, {
     method: 'POST',
     headers: {
@@ -62,7 +62,7 @@ export async function addAdminSellerAccount(sellerId: number, data: API.Partner.
   });
 }
 
-export async function updateAdminSellerAccount(sellerId: number, data: API.Partner.SellerAccount) {
+export async function updateAdminSellerAccount(sellerId: number, data: API.Partner.SellerAccountPayload) {
   return request<API.Result>(`/api/seller/admin/sellers/${sellerId}/accounts`, {
     method: 'PUT',
     headers: {
@@ -248,8 +248,12 @@ export async function removeAdminSellerRoles(sellerId: number, roleIds: number[]
   });
 }
 
-export async function resetAdminSellerAccountPassword(data: Pick<API.Partner.SellerAccount, 'sellerAccountId' | 'password'>) {
-  return request<API.Result>('/api/seller/admin/sellers/accounts/resetPwd', {
+export async function resetAdminSellerAccountPassword(
+  sellerId: number,
+  sellerAccountId: number,
+  data: Pick<API.Partner.SellerAccountPayload, 'password'>,
+) {
+  return request<API.Result>(`/api/seller/admin/sellers/${sellerId}/accounts/${sellerAccountId}/resetPwd`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json;charset=UTF-8',
@@ -258,13 +262,9 @@ export async function resetAdminSellerAccountPassword(data: Pick<API.Partner.Sel
   });
 }
 
-export async function resetAdminSellerAccountDefaultPassword(data: Pick<API.Partner.SellerAccount, 'sellerAccountId'>) {
-  return request<API.Result>('/api/seller/admin/sellers/accounts/resetDefaultPwd', {
+export async function resetAdminSellerAccountDefaultPassword(sellerId: number, sellerAccountId: number) {
+  return request<API.Result>(`/api/seller/admin/sellers/${sellerId}/accounts/${sellerAccountId}/resetDefaultPwd`, {
     method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json;charset=UTF-8',
-    },
-    data,
   });
 }
 

@@ -1,0 +1,277 @@
+import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
+import { LinkOutlined } from '@ant-design/icons';
+import { SettingDrawer } from '@ant-design/pro-components';
+import { history, Link } from '@umijs/max';
+import { App as AntdApp, ConfigProvider } from 'antd';
+import { AvatarDropdown, AvatarName, Question, SelectLang } from '@/components';
+import defaultSettings from '../config/defaultSettings';
+import { clearSessionToken, clearTerminalSessionToken, getAccessToken, getTokenExpireTime } from './access';
+import { PageEnum } from './enums/pagesEnums';
+import { errorConfig } from './requestErrorConfig';
+import { getRemoteMenu, getRoutersInfo, getUserInfo, patchRouteWithRemoteMenus, setRemoteMenu } from './services/session';
+import { AntdFeedbackProvider } from './utils/feedback';
+import { getPortalTerminalFromApiUrl } from './utils/portalRequest';
+import './global.css';
+const isDev = process.env.NODE_ENV === 'development';
+const PORTAL_ROUTE_PREFIXES = ['/seller/direct-login', '/buyer/direct-login', '/seller/portal', '/buyer/portal'];
+function isPortalRoute(pathname) {
+    return PORTAL_ROUTE_PREFIXES.some((prefix) => pathname === prefix || pathname?.startsWith(`${prefix}/`));
+}
+function redirectToLogin() {
+    const { pathname, search, hash } = history.location;
+    if (pathname === PageEnum.LOGIN || isPortalRoute(pathname)) {
+        return;
+    }
+    const redirect = `${pathname}${search || ''}${hash || ''}`;
+    history.replace(`${PageEnum.LOGIN}?redirect=${encodeURIComponent(redirect)}`);
+}
+function clearAdminSession() {
+    clearSessionToken();
+    setRemoteMenu(null);
+}
+function getResponseCode(data) {
+    if (!data || typeof data !== 'object') {
+        return undefined;
+    }
+    const responseData = data;
+    return responseData.code ?? responseData.errorCode;
+}
+function isUnauthorizedCode(code) {
+    return Number(code) === 401;
+}
+function handleUnauthorizedResponse(requestUrl) {
+    const portalTerminal = getPortalTerminalFromApiUrl(requestUrl);
+    if (portalTerminal) {
+        clearTerminalSessionToken(portalTerminal);
+        return;
+    }
+    clearAdminSession();
+    redirectToLogin();
+}
+/**
+ * @see  https://umijs.org/zh-CN/plugins/plugin-initial-state
+ * */
+export async function getInitialState() {
+    const fetchUserInfo = async () => {
+        try {
+            const response = await getUserInfo({
+                skipErrorHandler: true,
+            });
+            if (!response?.user) {
+                clearAdminSession();
+                return undefined;
+            }
+            const avatar = response.user.avatar || 'https://gw.alipayobjects.com/zos/rmsportal/BiazfanxmamNRoxxVxka.png';
+            return {
+                ...response.user,
+                avatar,
+                permissions: response.permissions,
+                roles: response.roles,
+            };
+        }
+        catch (error) {
+            console.log(error);
+            clearAdminSession();
+            redirectToLogin();
+        }
+        return undefined;
+    };
+    // 如果不是登录页面，执行
+    const { location } = history;
+    if (location.pathname !== PageEnum.LOGIN && !isPortalRoute(location.pathname)) {
+        const currentUser = await fetchUserInfo();
+        return {
+            fetchUserInfo,
+            currentUser,
+            settings: defaultSettings,
+        };
+    }
+    return {
+        fetchUserInfo,
+        settings: defaultSettings,
+    };
+}
+// ProLayout 支持的api https://procomponents.ant.design/components/layout
+export const layout = ({ initialState, setInitialState }) => {
+    return {
+        actionsRender: () => [_jsx(Question, {}, "doc"), _jsx(SelectLang, {}, "SelectLang")],
+        avatarProps: {
+            src: initialState?.currentUser?.avatar || undefined,
+            title: _jsx(AvatarName, {}),
+            render: (_, avatarChildren) => {
+                return _jsx(AvatarDropdown, { menu: true, children: avatarChildren });
+            },
+        },
+        waterMarkProps: {
+        // content: initialState?.currentUser?.nickName,
+        },
+        menu: {
+            locale: false,
+            // 每当 initialState?.currentUser?.userid 发生修改时重新执行 request
+            params: {
+                userId: initialState?.currentUser?.userId,
+            },
+            request: async () => {
+                if (!initialState?.currentUser?.userId) {
+                    return [];
+                }
+                return getRemoteMenu();
+            },
+        },
+        footerRender: false,
+        onPageChange: () => {
+            const { location } = history;
+            // 如果没有登录，重定向到 login
+            if (!initialState?.currentUser && location.pathname !== PageEnum.LOGIN && !isPortalRoute(location.pathname)) {
+                redirectToLogin();
+            }
+        },
+        layoutBgImgList: [
+            {
+                src: 'https://mdn.alipayobjects.com/yuyan_qk0oxh/afts/img/D2LWSqNny4sAAAAAAAAAAAAAFl94AQBr',
+                left: 85,
+                bottom: 100,
+                height: '303px',
+            },
+            {
+                src: 'https://mdn.alipayobjects.com/yuyan_qk0oxh/afts/img/C2TWRpJpiC0AAAAAAAAAAAAAFl94AQBr',
+                bottom: -68,
+                right: -45,
+                height: '303px',
+            },
+            {
+                src: 'https://mdn.alipayobjects.com/yuyan_qk0oxh/afts/img/F6vSTbj8KpYAAAAAAAAAAAAAFl94AQBr',
+                bottom: 0,
+                left: 0,
+                width: '331px',
+            },
+        ],
+        links: isDev
+            ? [
+                _jsxs(Link, { to: "/umi/plugin/openapi", target: "_blank", children: [_jsx(LinkOutlined, {}), _jsx("span", { children: "OpenAPI \u6587\u6863" })] }, "openapi"),
+            ]
+            : [],
+        menuHeaderRender: undefined,
+        // 自定义 403 页面
+        // unAccessible: <div>unAccessible</div>,
+        // 增加一个 loading 的状态
+        childrenRender: (children) => {
+            // if (initialState?.loading) return <PageLoading />;
+            return (_jsxs(_Fragment, { children: [children, _jsx(SettingDrawer, { disableUrlParams: true, enableDarkTheme: true, settings: initialState?.settings, onSettingChange: (settings) => {
+                            setInitialState((preInitialState) => ({
+                                ...preInitialState,
+                                settings,
+                            }));
+                        } })] }));
+        },
+        ...initialState?.settings,
+    };
+};
+export function rootContainer(container) {
+    return (_jsx(ConfigProvider, { select: { showSearch: true }, children: _jsx(AntdApp, { children: _jsx(AntdFeedbackProvider, { children: container }) }) }));
+}
+export async function onRouteChange({ location }) {
+    if (isPortalRoute(location.pathname)) {
+        return;
+    }
+    if (location.pathname !== PageEnum.LOGIN && !getAccessToken()) {
+        redirectToLogin();
+        return;
+    }
+    const menus = getRemoteMenu();
+    if (menus !== null || location.pathname === PageEnum.LOGIN) {
+        return;
+    }
+    try {
+        const routers = await getRoutersInfo();
+        setRemoteMenu(routers);
+    }
+    catch (error) {
+        console.log(error);
+        clearAdminSession();
+        redirectToLogin();
+    }
+}
+// export function patchRoutes({ routes, routeComponents }) {
+//   console.log('patchRoutes', routes, routeComponents);
+// }
+export async function patchClientRoutes({ routes }) {
+    // console.log('patchClientRoutes', routes);
+    patchRouteWithRemoteMenus(routes);
+}
+export function render(oldRender) {
+    // console.log('render get routers', oldRender)
+    if (isPortalRoute(history.location.pathname)) {
+        oldRender();
+        return;
+    }
+    const token = getAccessToken();
+    if (!token || token?.length === 0) {
+        clearAdminSession();
+        redirectToLogin();
+        oldRender();
+        return;
+    }
+    getRoutersInfo().then(res => {
+        setRemoteMenu(res);
+    }).catch(error => {
+        console.log(error);
+        clearAdminSession();
+    }).finally(() => {
+        oldRender();
+    });
+}
+/**
+ * @name request 配置，可以配置错误处理
+ * 它基于 axios 和 ahooks 的 useRequest 提供了一套统一的网络请求和错误处理方案。
+ * @doc https://umijs.org/docs/max/request#配置
+ */
+export const request = {
+    ...errorConfig,
+    requestInterceptors: [
+        (url, options) => {
+            const headers = options.headers ?? {};
+            options.headers = headers;
+            console.log('request ====>:', url);
+            const authHeader = headers.Authorization;
+            const isToken = headers.isToken;
+            delete headers.isToken;
+            if (!authHeader && isToken !== false) {
+                const expireTime = getTokenExpireTime();
+                if (expireTime) {
+                    const left = Number(expireTime) - Date.now();
+                    if (left < 0) {
+                        clearAdminSession();
+                    }
+                    else {
+                        const accessToken = getAccessToken();
+                        if (accessToken) {
+                            headers.Authorization = `Bearer ${accessToken}`;
+                        }
+                    }
+                }
+                else {
+                    clearAdminSession();
+                }
+            }
+            return { url, options };
+        },
+    ],
+    responseInterceptors: [
+        (response) => {
+            if (isUnauthorizedCode(getResponseCode(response?.data))) {
+                handleUnauthorizedResponse(response?.config?.url);
+            }
+            return response;
+        },
+        // (response) =>
+        // {
+        //   // // 不再需要异步处理读取返回体内容，可直接在data中读出，部分字段可在 config 中找到
+        //   // const { data = {} as any, config } = response;
+        //   // // do something
+        //   // console.log('data: ', data)
+        //   // console.log('config: ', config)
+        //   return response
+        // },
+    ],
+};

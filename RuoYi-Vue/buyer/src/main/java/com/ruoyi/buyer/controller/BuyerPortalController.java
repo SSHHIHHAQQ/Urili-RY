@@ -31,9 +31,11 @@ import com.ruoyi.system.domain.PortalDeptProfile;
 import com.ruoyi.system.domain.PortalLoginLog;
 import com.ruoyi.system.domain.PortalLoginSession;
 import com.ruoyi.system.domain.PortalOperLog;
+import com.ruoyi.system.domain.PortalOwnSessionProfile;
 import com.ruoyi.system.domain.PortalPasswordChangeRequest;
 import com.ruoyi.system.domain.PortalRole;
 import com.ruoyi.system.domain.PortalRoleProfile;
+import com.ruoyi.system.domain.PortalSessionProfile;
 import com.ruoyi.system.domain.PortalSubjectProfile;
 import com.ruoyi.system.service.support.PortalSessionContext;
 
@@ -190,7 +192,12 @@ public class BuyerPortalController extends BaseController
     {
         PortalLoginSession session = PortalSessionContext.requireSession("buyer");
         startPortalListPage();
-        return getDataTable(buyerService.selectBuyerOwnSessionList(session));
+        List<PortalOwnSessionProfile> profiles = new ArrayList<>();
+        for (PortalSessionProfile profile : buyerService.selectBuyerOwnSessionList(session))
+        {
+            profiles.add(buildOwnSessionProfile(profile));
+        }
+        return getDataTable(profiles);
     }
 
     private void startPortalListPage()
@@ -287,6 +294,19 @@ public class BuyerPortalController extends BaseController
         profile.setRoleKey(role.getRoleKey());
         profile.setRoleSort(role.getRoleSort());
         profile.setStatus(role.getStatus());
+        return profile;
+    }
+
+    private PortalOwnSessionProfile buildOwnSessionProfile(PortalSessionProfile source)
+    {
+        PortalOwnSessionProfile profile = new PortalOwnSessionProfile();
+        profile.setUserName(source.getUserName());
+        profile.setLoginIp(source.getLoginIp());
+        profile.setLoginTime(source.getLoginTime());
+        profile.setExpireTime(source.getExpireTime());
+        profile.setLogoutTime(source.getLogoutTime());
+        profile.setStatus(source.getStatus());
+        profile.setCurrent(source.getCurrent());
         return profile;
     }
 }

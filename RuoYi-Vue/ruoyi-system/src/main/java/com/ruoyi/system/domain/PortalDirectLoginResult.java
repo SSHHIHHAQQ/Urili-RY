@@ -3,6 +3,7 @@ package com.ruoyi.system.domain;
 import java.io.Serializable;
 import java.util.Date;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 /**
  * One-time direct-login link returned to admin pages.
@@ -26,6 +27,7 @@ public class PortalDirectLoginResult implements Serializable
 
     private String username;
 
+    @JsonIgnore
     public String getToken()
     {
         return token;

@@ -43,7 +43,8 @@ public class PortalLogAspect
     private static final Logger log = LoggerFactory.getLogger(PortalLogAspect.class);
 
     /** Excluded sensitive properties. */
-    public static final String[] EXCLUDE_PROPERTIES = { "password", "oldPassword", "newPassword", "confirmPassword" };
+    public static final String[] EXCLUDE_PROPERTIES = { "password", "oldPassword", "newPassword", "confirmPassword",
+            "token", "jwt", "directLoginToken", "loginUrl", "accessToken", "refreshToken", "authorization" };
 
     /** Cost time holder. */
     private static final ThreadLocal<Long> TIME_THREADLOCAL = new NamedThreadLocal<Long>("Portal Cost Time");
@@ -135,7 +136,8 @@ public class PortalLogAspect
         }
         if (portalLog.isSaveResponseData() && StringUtils.isNotNull(jsonResult))
         {
-            operLog.setJsonResult(StringUtils.substring(JSON.toJSONString(jsonResult), 0, 2000));
+            operLog.setJsonResult(StringUtils.substring(
+                    JSON.toJSONString(jsonResult, excludePropertyPreFilter(portalLog.excludeParamNames())), 0, 2000));
         }
     }
 

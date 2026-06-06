@@ -28,6 +28,17 @@ declare namespace API.ProductDistribution {
     sortOrder?: number;
   }
 
+  export interface ProductWarehouse {
+    id?: number;
+    spuId?: number;
+    warehouseId?: number;
+    warehouseCode?: string;
+    warehouseName?: string;
+    warehouseKind?: 'official' | 'third_party' | string;
+    settlementCurrency?: string;
+    sellerId?: number;
+  }
+
   export interface Sku {
     skuId?: number;
     spuId?: number;
@@ -58,6 +69,7 @@ declare namespace API.ProductDistribution {
     supplyPrice?: number;
     salePrice?: number;
     currencyCode?: string;
+    warehouseKindSummary?: string;
     skuStatus?: string;
     controlStatus?: string;
     spuControlStatus?: string;
@@ -112,11 +124,14 @@ declare namespace API.ProductDistribution {
     salePriceMin?: number;
     salePriceMax?: number;
     currencySummary?: string;
+    warehouseKindSummary?: string;
     availableStock?: number;
     warehouseCount?: number;
     inventoryStatus?: string;
     stockUpdateTime?: string;
     outboundWarehouseCodes?: string[];
+    warehouseIds?: number[];
+    warehouses?: ProductWarehouse[];
     skus?: Sku[];
     attributeValues?: AttributeValue[];
     images?: ProductImage[];

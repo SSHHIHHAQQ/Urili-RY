@@ -219,34 +219,24 @@ public class SellerServiceImpl implements ISellerService
 
     @Override
     @Transactional
-    public int resetSellerAccountPassword(SellerAccount account)
+    public int resetSellerAccountPassword(Long sellerId, Long sellerAccountId, String password)
     {
-        if (StringUtils.isBlank(account.getPassword()))
+        if (StringUtils.isBlank(password))
         {
             throw new ServiceException("新密码不能为空");
         }
-        SellerAccount current = selectSellerAccountByPayload(account);
-        if (current == null)
-        {
-            throw new ServiceException("卖家账号不存在");
-        }
-        selectSellerById(current.getSellerId());
+        SellerAccount current = selectSellerAccountById(sellerId, sellerAccountId);
         int rows = sellerMapper.resetSellerAccountPassword(current.getSellerAccountId(),
-            SecurityUtils.encryptPassword(account.getPassword()), SecurityUtils.getUsername());
+            SecurityUtils.encryptPassword(password), SecurityUtils.getUsername());
         forceLogoutSellerAccountSessionsAfterPasswordReset(rows, current.getSellerId(), current.getSellerAccountId());
         return rows;
     }
 
     @Override
     @Transactional
-    public int resetSellerAccountDefaultPassword(SellerAccount account)
+    public int resetSellerAccountDefaultPassword(Long sellerId, Long sellerAccountId)
     {
-        SellerAccount current = selectSellerAccountByPayload(account);
-        if (current == null)
-        {
-            throw new ServiceException("卖家账号不存在");
-        }
-        selectSellerById(current.getSellerId());
+        SellerAccount current = selectSellerAccountById(sellerId, sellerAccountId);
         int rows = sellerMapper.resetSellerAccountPassword(current.getSellerAccountId(),
             SecurityUtils.encryptPassword(PartnerSupport.DEFAULT_OWNER_PASSWORD), SecurityUtils.getUsername());
         forceLogoutSellerAccountSessionsAfterPasswordReset(rows, current.getSellerId(), current.getSellerAccountId());
@@ -376,7 +366,8 @@ public class SellerServiceImpl implements ISellerService
 
     private void assertSellerSessionAccount(PortalLoginSession session)
     {
-        if (session == null || session.getSubjectId() == null || session.getAccountId() == null)
+        if (session == null || !"seller".equals(session.getTerminal()) || session.getSubjectId() == null
+                || session.getAccountId() == null || StringUtils.isBlank(session.getTokenId()))
         {
             throw new ServiceException("登录状态已失效");
         }
@@ -500,10 +491,7 @@ public class SellerServiceImpl implements ISellerService
     @Transactional
     public int logoutSeller(PortalLoginSession session)
     {
-        if (session == null)
-        {
-            throw new ServiceException("登录状态已失效");
-        }
+        assertSellerSessionAccount(session);
         int rows = sellerMapper.logoutSellerSession(session.getSubjectId(), session.getAccountId(), session.getTokenId());
         sellerMapper.insertSellerLoginLog(portalTokenSupport.buildLoginLog(
             session.getSubjectId(), session.getAccountId(), session.getUserName(), Constants.SUCCESS, "退出成功"));
@@ -515,10 +503,7 @@ public class SellerServiceImpl implements ISellerService
     @Transactional
     public int updateSellerOwnPassword(PortalLoginSession session, PortalPasswordChangeRequest request)
     {
-        if (session == null)
-        {
-            throw new ServiceException("登录状态已失效");
-        }
+        assertSellerSessionAccount(session);
         String oldPassword = request == null ? null : request.getOldPassword();
         String newPassword = PartnerSupport.normalizePasswordChange(oldPassword,
             request == null ? null : request.getNewPassword(),

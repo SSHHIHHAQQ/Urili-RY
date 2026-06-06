@@ -20,6 +20,8 @@ public interface IWarehouseService
 
     List<Warehouse> selectThirdPartyWarehouseList(Warehouse query);
 
+    Warehouse selectWarehouseById(Long warehouseId);
+
     Warehouse selectOfficialWarehouseById(Long warehouseId);
 
     Warehouse selectThirdPartyWarehouseById(Long warehouseId);

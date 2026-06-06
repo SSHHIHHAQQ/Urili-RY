@@ -19,9 +19,6 @@ import com.ruoyi.integration.domain.UpstreamWarehouseSyncItem;
 import com.ruoyi.integration.domain.request.WarehousePairingRequest;
 import com.ruoyi.integration.service.IUpstreamSystemService;
 import com.ruoyi.integration.support.UpstreamSystemConstants;
-import com.ruoyi.seller.domain.Seller;
-import com.ruoyi.seller.service.ISellerService;
-import com.ruoyi.system.service.support.PartnerSupport;
 import com.ruoyi.warehouse.domain.UsCity;
 import com.ruoyi.warehouse.domain.UsState;
 import com.ruoyi.warehouse.domain.Warehouse;
@@ -48,9 +45,6 @@ public class WarehouseServiceImpl implements IWarehouseService
     private WarehouseMapper warehouseMapper;
 
     @Autowired
-    private ISellerService sellerService;
-
-    @Autowired
     private IFinanceCurrencyService financeCurrencyService;
 
     @Autowired
@@ -68,6 +62,21 @@ public class WarehouseServiceImpl implements IWarehouseService
     {
         query = normalizeQuery(query, KIND_THIRD_PARTY);
         return warehouseMapper.selectWarehouseList(query);
+    }
+
+    @Override
+    public Warehouse selectWarehouseById(Long warehouseId)
+    {
+        if (warehouseId == null)
+        {
+            throw new ServiceException("仓库ID不能为空");
+        }
+        Warehouse warehouse = warehouseMapper.selectWarehouseById(warehouseId);
+        if (warehouse == null)
+        {
+            throw new ServiceException("仓库不存在");
+        }
+        return warehouse;
     }
 
     @Override
@@ -313,14 +322,9 @@ public class WarehouseServiceImpl implements IWarehouseService
         {
             throw new ServiceException("归属卖家不能为空");
         }
-        Seller seller = sellerService.selectSellerById(sellerId);
-        if (seller == null)
+        if (warehouseMapper.countNormalSellerById(sellerId) <= 0)
         {
             throw new ServiceException("归属卖家不存在");
-        }
-        if (!PartnerSupport.STATUS_NORMAL.equals(seller.getStatus()))
-        {
-            throw new ServiceException("只能选择正常状态卖家");
         }
     }
 

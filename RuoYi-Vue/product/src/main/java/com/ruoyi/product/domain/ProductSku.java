@@ -40,6 +40,7 @@ public class ProductSku extends BaseEntity
     private BigDecimal supplyPrice;
     private BigDecimal salePrice;
     private String currencyCode;
+    private String warehouseKindSummary;
     private String skuStatus;
     private String controlStatus;
     private String spuControlStatus;
@@ -113,6 +114,8 @@ public class ProductSku extends BaseEntity
     public void setSalePrice(BigDecimal salePrice) { this.salePrice = salePrice; }
     public String getCurrencyCode() { return currencyCode; }
     public void setCurrencyCode(String currencyCode) { this.currencyCode = currencyCode; }
+    public String getWarehouseKindSummary() { return warehouseKindSummary; }
+    public void setWarehouseKindSummary(String warehouseKindSummary) { this.warehouseKindSummary = warehouseKindSummary; }
     public String getSkuStatus() { return skuStatus; }
     public void setSkuStatus(String skuStatus) { this.skuStatus = skuStatus; }
     public String getControlStatus() { return controlStatus; }

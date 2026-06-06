@@ -1,5 +1,157 @@
 # 三端独立改造目标追踪
 
+## 2026-06-06 快速推进 P0/P1 类型脱敏与 Maven 构件复核检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，并按快速推进模式只处理 P0/P1：编译、guard、接口、权限、串端、service/字段缺失。不做浏览器运行态验收、截图、DOM 检测或 UI 细调；P2 只记录不阻塞。
+
+已完成：
+
+- 使用 `gpt-5.3-codex-spark` 启动 6 个只读子 agent；其中 4 个完成，2 个因上下文窗口报错退出并已关闭，所有子 agent 均已关闭。
+- 修复前端账号响应类型 P1：`PortalAccountBase` 不再包含 `password`，避免卖家/买家账号列表、详情等响应类型长期携带敏感字段。
+- 新增 `PortalAccountPayload`、`SellerAccountPayload`、`BuyerAccountPayload`，仅新增、编辑、重置密码等写接口 payload 保留 `password`。
+- 同步更新 seller/buyer 管理端 service 入参和 `PartnerManagementPage` 共享服务签名，保持请求行为不变。
+- 补强 `react-ui/scripts/check-partner-management-template.mjs`：固定 `PortalAccountBase` 不得包含 `password`、`PortalAccountPayload` 必须单独承载写入密码、`DirectLoginResult` 不得暴露 direct-login `token`。
+- 复核并处理 Maven 本机构件污染 P1：`product` 单模块依赖解析曾从本机 `.m2` 旧 `warehouse-3.9.2` 构件中解析到 seller，表现为疑似 `product -> warehouse -> seller -> product` 闭环；已执行 `mvn -pl warehouse -am -DskipTests install` 重新安装当前 `warehouse` 及上游构件。
+- 移动并补记子 agent 生成的依赖审计报告：`docs/reviews/2026-06-06-product-warehouse-seller-buyer-dependency-readonly-audit.md`。该报告原始 P1 已由主代理复核为本机 Maven 旧构件污染，不是当前源码 POM 的真实闭环。
+
+子 agent 结论处理：
+
+- 后端 controller 路径、权限注解、terminal 边界未发现 P0/P1。
+- 前端 service 路径未发现 seller/buyer 串端；`PortalLoginResultData.token` 是登录成功后必须返回的端 JWT，`PortalPasswordChangeParams` 是改密接口必要入参，不作为本轮泄漏问题处理。
+- SQL 子 agent 提出的“`seller_role_menu` / `buyer_role_menu` 未绑定 `seller:admin:*` / `buyer:admin:*`”不采纳为问题：后台管理权限归 `sys_menu/sys_role_menu`，端内 `seller_menu/buyer_menu` 不应承接管理端 admin 权限。
+- seller/buyer 独立域表缺少数据库 FK、`product_spu_warehouse` FK 执行顺序依赖，记录为后续数据库完整性 P2；本轮未直接对远程库执行 DDL。
+
+验证结果：
+
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:partner-management`：通过，`Partner management template guard passed.`。
+- `cd E:\Urili-Ruoyi\react-ui; npm run tsc -- --pretty false`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npx biome lint src/types/seller-buyer/party.d.ts src/types/seller-buyer/seller.d.ts src/types/seller-buyer/buyer.d.ts src/services/seller/seller.ts src/services/buyer/buyer.ts src/components/PartnerManagement/PartnerManagementPage.tsx`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npx biome lint scripts/check-partner-management-template.mjs src/types/seller-buyer/party.d.ts src/types/seller-buyer/seller.d.ts src/types/seller-buyer/buyer.d.ts src/services/seller/seller.ts src/services/buyer/buyer.ts src/components/PartnerManagement/PartnerManagementPage.tsx`：通过。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl warehouse -am -DskipTests install`：通过，刷新本机 Maven 构件。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl product -DskipTests dependency:list -DincludeArtifactIds=seller -DincludeTypes=jar`：通过，返回 `none`。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl product -DskipTests dependency:tree "-Dincludes=com.ruoyi:seller"`：通过，无 seller 依赖输出。
+- `cd E:\Urili-Ruoyi; git diff --check -- <本检查点核心文件>`：通过，仅有 LF/CRLF 工作区换行提示。
+- `cd E:\Urili-Ruoyi; rg -n "[ \t]+$" <本检查点核心文件>`：无尾随空白匹配。
+- `cd E:\Urili-Ruoyi; codegraph sync .`：通过，CodeGraph 返回 `Synced 6 changed files`，`Modified: 6 - 309 nodes`。
+- 补强 partner guard 后再次执行 `cd E:\Urili-Ruoyi; codegraph sync .`：通过，CodeGraph 返回 `Synced 1 changed files`，`Modified: 1 - 20 nodes`。
+
+数据源与运行边界：
+
+- 本检查点未连接远程 MySQL / Redis，未执行 SQL，未写远程数据。
+- 本检查点未启动浏览器，未做截图、DOM 检测或 UI 细调。
+
+## 2026-06-06 快速推进 P0/P1 补充修复检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，并按当前快速推进模式只处理 P0/P1：编译、guard、接口、权限、串端、service/字段缺失。不做浏览器运行态验收、截图、DOM 检测或 UI 细调；P2 只记录不阻塞。
+
+已完成：
+
+- 按用户最新要求使用 `gpt-5.3-codex-spark` 优先启动 6 个只读子 agent；本轮 6 个子 agent 均已关闭。若后续该模型不可用，再回退 `gpt-5.4`。
+- 修复端内账号密码响应泄漏 P1：`PortalAccount.password` 改为 Jackson write-only，创建、修改、重置密码仍可反序列化写入，但账号列表/详情响应不再序列化 `password`。
+- 新增 `PortalAccountTest`，固定“password 可写入、不可输出”的序列化契约。
+- 固定管理端免密响应脱敏契约：`PortalDirectLoginResultTest` 覆盖响应 JSON 不输出 `token` 字段；前端 `API.Partner.DirectLoginResult` 同步移除 `token` 字段。
+- 修复卖家/买家管理共享表格余额区间筛选 P1：`BalanceRangeInput` 透传 ProTable 搜索表单的 `value/onChange`，避免 `balanceRange` 提交时丢失。
+- 修复分销商品 SKU 快照字段缺失 P1：`ProductDistributionMapper.xml` 的 SKU 查询恢复 `seller_name`、`category_name`、`warehouse_kind_summary` 等 SPU/仓库汇总字段，不再写死为 `null`。
+- 补齐 `RuoYi-Vue/sql/20260606_product_spu_warehouse_binding.sql` 中 `product_spu_warehouse` 到 `product_spu`、`warehouse`、`seller` 的外键声明；本轮只改 SQL 文件，没有执行 SQL。
+- 新增只读权限契约审计报告：`docs/reviews/2026-06-06-seller-buyer-permission-contract-readonly-audit.md`。
+
+P2 记录：
+
+- `seller_role_menu` / `buyer_role_menu` 默认绑定当前按所有有效角色执行，后续角色细分时需要确认是否限定 owner 或基础角色范围。
+- 早前检查点中的占位式验证命令已改为实际文件列表，便于后续回放。
+
+验证结果：
+
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system,seller,buyer -am "-Dtest=PortalAccountTest,PortalDirectLoginResultTest,PortalDirectLoginSupportTest,SellerServiceImplTest,BuyerServiceImplTest,AdminDirectLoginPermissionContractTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，ruoyi-system `Tests run: 9`，seller `Tests run: 28`，buyer `Tests run: 28`，均无失败。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -DskipTests compile`：通过，13 个 Maven 模块均 `BUILD SUCCESS`。
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:portal-token`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:partner-management`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:seller-portal-product`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:buyer-portal-product`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run tsc -- --pretty false`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npx biome lint src/components/PartnerManagement/PartnerManagementPage.tsx src/types/seller-buyer/party.d.ts src/pages/Product/Distribution/EditPage.tsx`：通过。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl product,warehouse -am -DskipTests compile`：通过。
+- `cd E:\Urili-Ruoyi; git diff --check -- <本检查点核心文件>`：通过，仅有 LF/CRLF 工作区换行提示。
+- `cd E:\Urili-Ruoyi; rg -n "[ \t]+$" <本检查点核心文件>`：无尾随空白匹配。
+- `cd E:\Urili-Ruoyi; codegraph sync .`：通过，CodeGraph 返回 `Synced 4 changed files`，`Added: 1, Modified: 3 - 242 nodes`。
+
+数据源与运行边界：
+
+- 本检查点未建立数据库连接，未连接 Redis，未执行 SQL，未写远程 MySQL / Redis。
+- 本检查点不启动浏览器，不做截图、DOM 检测或 UI 细调。
+
+## 2026-06-06 快速推进模式检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向。当前进入快速推进模式：只修 P0/P1，包括编译、guard、接口、权限、串端、service/字段缺失；不做浏览器运行态验收、截图、DOM 检测或 UI 细调；P2 问题只记录，不阻塞推进。卖家代码级通过后，买家按已确认模板机械复制，只替换 terminal、字段、权限、service、URL、字典和文案，并只跑最小必要测试和合并 Markdown 记录。
+
+已完成：
+
+- 使用 6 个只读子 agent 并行检查卖家管理模板、卖家后端控制面、买家复制边界、验证脚本、文档同步点和菜单权限 seed；子 agent 均已关闭。
+- 保留 P0/P1 检查结论：卖家管理真实菜单路径为 `/partner/seller`，组件为 `Seller/index`；`/seller` 不是管理端卖家管理路径。
+- 保留接口级只读验收结论：当前管理端登录、`/getRouters`、卖家列表、账号、部门、角色、会话、登录日志、操作日志、免密票据列表均返回 `code=200`；未执行写接口。
+- 回退本轮临时 UI 细调 diff：不在快速模式下推进 `PageContainer title`、横向滚动、截图或 DOM 类 P2 修正。
+- 新增只读审计报告：`docs/reviews/2026-06-06-seller-buyer-management-homology-readonly-audit.md`。
+- 新增只读菜单权限报告：`docs/reviews/2026-06-06-seller-admin-menu-permission-readonly-audit.md`。
+
+验证结果：
+
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:partner-management`：通过，`Partner management template guard passed.`。
+- `cd E:\Urili-Ruoyi\react-ui; npm run tsc -- --pretty false`：通过。
+
+当前判断：
+
+- 当前可继续按“卖家代码级 P0/P1 通过 -> 机械复制买家 -> 最小测试 -> 合并 Markdown 记录”的方式推进。
+- 后续同类任务不再用浏览器运行态、截图或 DOM 检测作为阻塞验收；如发现 UI 细节问题，记录为 P2，除非它导致编译、guard、接口、权限或串端风险。
+- 本轮未执行 SQL，未连接远程 MySQL / Redis 写数据，未修改远程数据。
+
+## 2026-06-06 快速推进 P0/P1 修复检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，并按当前快速推进模式只处理 P0/P1：编译、guard、接口、权限、串端、service/字段缺失。不做浏览器运行态验收、截图、DOM 检测或 UI 细调；P2 只记录不阻塞。
+
+已完成：
+
+- 修复后端 Maven P0：打断 `seller -> product -> warehouse -> seller` 循环依赖。
+  - `warehouse` 不再通过 Maven 依赖 `seller` 模块。
+  - `WarehouseServiceImpl#validateNormalSeller(...)` 改为通过 `WarehouseMapper.countNormalSellerById(...)` 校验卖家存在且状态正常。
+  - `WarehouseMapper.xml` 新增只读计数 SQL，仍然查 `seller` 表，不新增表、不改 DDL。
+- 修复免密代入 P1：`PortalDirectLoginResult#getToken()` 增加 `@JsonIgnore`，管理端免密创建响应不再额外暴露明文 `token` 字段；`loginUrl` 仍按既有契约携带一次性 direct-login token。
+- 保持用户已确认的免密有效期：`PortalDirectLoginSupport.EXPIRE_MINUTES = 30` 未改。
+- 修复前端编译 P0：`Product/Distribution/EditPage.tsx` 的仓库列表空响应补齐 `msg` 和 `total` 字段，满足 `WarehousePageResult` 类型。
+- 修复同一变更文件的确定性 lint 问题：移除非空断言，改为类型守卫和显式 `forEach` 块。
+- 保留 6 个子 agent 的 P0/P1 结论；本轮子 agent 均已关闭：
+  - seller/buyer Controller 权限和路由未发现 P0/P1。
+  - seller/buyer Service、Mapper、XML 未发现 P0/P1 串端或字段缺失。
+  - seller/buyer 前端配置、service、共享组件调用未发现指定范围 P0/P1。
+  - SQL seed 未发现菜单权限 P0/P1 缺陷。
+  - 免密扫描中“30 分钟有效期”按用户已确认口径不改；“响应额外返回 token”已按 P1 收敛。
+
+P2 记录：
+
+- `TerminalSeedPermissionContractTest` 尚未严格证明端内权限来自 `seller_menu` / `buyer_menu` 且绑定默认角色，记录为测试覆盖 P2。
+- `SellerAdminPermissionContractTest` / `BuyerAdminPermissionContractTest` 尚未严格校验 `sys_menu` 行类型、父菜单归属和 `menu_type='F'`，记录为测试覆盖 P2。
+- `react-ui/scripts/check-partner-management-template.mjs` 对 directLogin、forceLogout、dept/role/menu/audit 的前端权限门禁覆盖还可加强，记录为 guard 覆盖 P2。
+
+验证结果：
+
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl seller,buyer,ruoyi-system -am -DskipTests compile`：通过，确认循环依赖已解除。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system,seller,buyer -am -DskipTests compile`：通过。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system,seller,buyer -am "-Dtest=PortalDirectLoginSupportTest,PortalTokenSupportTest,PortalPermissionCheckerTest,PortalPermissionSupportTest,SellerAdminPermissionContractTest,BuyerAdminPermissionContractTest,AdminDirectLoginPermissionContractTest,AdminAccountPermissionUiContractTest,TerminalSeedPermissionContractTest,TerminalSqlIsolationContractTest,SellerServiceImplTest,BuyerServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，ruoyi-system `Tests run: 29`，seller `Tests run: 28`，buyer `Tests run: 28`，均无失败。
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:portal-token`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:partner-management`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:seller-portal-product`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:buyer-portal-product`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run tsc -- --pretty false`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npx biome lint src/components/PartnerManagement/PartnerManagementPage.tsx src/types/seller-buyer/party.d.ts src/pages/Product/Distribution/EditPage.tsx`：通过。
+- `cd E:\Urili-Ruoyi; git diff --check -- RuoYi-Vue/ruoyi-system/src/main/java/com/ruoyi/system/domain/PortalAccount.java RuoYi-Vue/ruoyi-system/src/main/java/com/ruoyi/system/domain/PortalDirectLoginResult.java RuoYi-Vue/ruoyi-system/src/test/java/com/ruoyi/system/domain/PortalAccountTest.java RuoYi-Vue/ruoyi-system/src/test/java/com/ruoyi/system/domain/PortalDirectLoginResultTest.java RuoYi-Vue/product/src/main/resources/mapper/product/ProductDistributionMapper.xml RuoYi-Vue/sql/20260606_product_spu_warehouse_binding.sql RuoYi-Vue/warehouse/pom.xml RuoYi-Vue/warehouse/src/main/java/com/ruoyi/warehouse/mapper/WarehouseMapper.java RuoYi-Vue/warehouse/src/main/java/com/ruoyi/warehouse/service/impl/WarehouseServiceImpl.java RuoYi-Vue/warehouse/src/main/resources/mapper/warehouse/WarehouseMapper.xml react-ui/src/components/PartnerManagement/PartnerManagementPage.tsx react-ui/src/types/seller-buyer/party.d.ts react-ui/src/pages/Product/Distribution/EditPage.tsx docs/plans/2026-06-04-three-terminal-isolation-goal-tracker.md`：通过，仅有 LF/CRLF 工作区换行提示。
+- `cd E:\Urili-Ruoyi; rg -n "[ \t]+$" RuoYi-Vue/ruoyi-system/src/main/java/com/ruoyi/system/domain/PortalAccount.java RuoYi-Vue/ruoyi-system/src/main/java/com/ruoyi/system/domain/PortalDirectLoginResult.java RuoYi-Vue/ruoyi-system/src/test/java/com/ruoyi/system/domain/PortalAccountTest.java RuoYi-Vue/ruoyi-system/src/test/java/com/ruoyi/system/domain/PortalDirectLoginResultTest.java RuoYi-Vue/product/src/main/resources/mapper/product/ProductDistributionMapper.xml RuoYi-Vue/sql/20260606_product_spu_warehouse_binding.sql RuoYi-Vue/warehouse/pom.xml RuoYi-Vue/warehouse/src/main/java/com/ruoyi/warehouse/mapper/WarehouseMapper.java RuoYi-Vue/warehouse/src/main/java/com/ruoyi/warehouse/service/impl/WarehouseServiceImpl.java RuoYi-Vue/warehouse/src/main/resources/mapper/warehouse/WarehouseMapper.xml react-ui/src/components/PartnerManagement/PartnerManagementPage.tsx react-ui/src/types/seller-buyer/party.d.ts react-ui/src/pages/Product/Distribution/EditPage.tsx docs/plans/2026-06-04-three-terminal-isolation-goal-tracker.md`：无尾随空白匹配。
+- `cd E:\Urili-Ruoyi; codegraph sync .`：通过，CodeGraph 返回 `Already up to date`。
+
+当前判断：
+
+- 当前 P0/P1 编译、guard、权限契约、免密响应敏感字段和 seller/buyer 代码级对称检查通过。
+- 本检查点未执行 SQL，未连接远程 MySQL / Redis 写数据，未修改远程数据。
+- 浏览器运行态、截图、DOM 和 UI 细调均未作为本检查点验收项。
+
 ## 2026-06-06 免密 Redis 明文 Token 收敛检查点
 
 本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，按“先做一套标准卖家模板，验收通过后复制买家；每个切片只改一类东西”的节奏推进。本轮只处理一类问题：管理端免密代入的一次性明文 token 仍可返回给管理端用于短时直登链接，但 Redis 侧不再用明文 token 做 key，也不在 payload 中保存明文 token。本轮不改前端、不执行 SQL、不连接远程 MySQL / Redis。
@@ -4780,3 +4932,343 @@
 
 - seller portal 商品列表 service 已被静态守卫纳入查询参数清洗契约。
 - buyer 仍未复制；后续复制前必须先完成 seller 模板验收并确认买家商品浏览口径。
+
+## 2026-06-06 P0/P1 快速推进：日志敏感字段加固与子 Agent 复核检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，并按用户最新要求进入快速推进模式：只修 P0/P1，不做浏览器、截图、DOM 或 UI 细调；可并行项尽量使用子 Agent，且优先使用 `gpt-5.3-codex-spark`，不可用再退到 `gpt-5.4`。
+
+已完成：
+
+- 启动并关闭 6 个子 Agent，分别只读检查 Portal 日志、管理端日志、seller 后端权限、buyer 后端权限、前端类型/service、SQL/seed。
+- 修复日志敏感字段加固点：
+  - `LogAspect.EXCLUDE_PROPERTIES` 和 `PortalLogAspect.EXCLUDE_PROPERTIES` 补充 `token`、`jwt`、`directLoginToken`、`accessToken`、`refreshToken`、`authorization`。
+  - `LogAspect` 和 `PortalLogAspect` 的响应 JSON 也统一走 `excludePropertyPreFilter(...)`，避免以后响应对象带凭证字段时写入日志。
+- 新增 `LogAspectSensitiveFieldFilterTest`，锁住管理端日志和 portal 日志的响应敏感字段过滤契约。
+- 将 SQL 子 Agent 写到 `output/` 的只读审计报告迁入 `docs/reviews/2026-06-06-seller-buyer-isolation-sql-p0p1-audit.md`。
+- 给 `docs/reviews/2026-06-06-buyer-backend-permission-audit.md` 补充主代理复核：买家端自助基础接口只做 terminal/session 鉴权不作为本轮 P1。
+- 给 `docs/reviews/2026-06-06-seller-buyer-isolation-sql-p0p1-audit.md` 补充主代理复核：重复 `menu_id` 和迁移脚本兼容性先归为 SQL 治理风险，不作为当前代码级 P0/P1 阻塞。
+
+子 Agent 结论处理：
+
+- Portal 日志：未发现当前明文落盘 P0；接受“凭证字段排除不完整”的 P1 加固建议，已修。
+- 管理端日志：`LogAspect` 已过滤密码字段，未确认明文密码落盘；本轮进一步加固响应过滤和 token 类字段。
+- seller 权限：未发现 P0/P1 串端或权限缺失。
+- buyer 权限：子 Agent 将基础自助接口缺少细分 `hasPermi` 标成 P1；主代理复核后不采纳为本轮阻塞项。
+- 前端类型/service：`PortalLoginResultData.token` 是登录接口必要返回，不是 PartnerManagement 响应暴露；现有 guard 已限制管理页和免密结果不消费 token。
+- SQL/seed：重复 `menu_id`、禁用旧 `seller/buyer` 角色和生成列兼容性记录为迁移治理风险；本轮未执行数据库 DDL/DML，不改远端库。
+
+验证结果：
+
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-framework -am "-Dtest=LogAspectSensitiveFieldFilterTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`Tests run: 3, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -DskipTests compile`：通过，13 个 Maven 模块 `BUILD SUCCESS`。
+- `git diff --check -- <本切片相关文件>`：通过，仅有 LF/CRLF 工作区换行提示。
+- 相关文件尾随空白检查：通过。
+- 冲突标记扫描：未发现真实冲突块；仅命中若依原有 `// *========数据库日志=========*//` 注释。
+- `cd E:\Urili-Ruoyi; codegraph sync .`：通过，输出 `Synced 3 changed files`，`Added: 1, Modified: 2 - 123 nodes`。
+
+当前判断：
+
+- 本轮已完成一个真实 P1 加固：管理端与 portal 操作日志都不会把 token/directLoginToken 等凭证字段写入响应日志。
+- 三端独立主线仍保持：管理端走 `sys_*`，seller/buyer 端内账号、权限、日志和会话独立。
+- 当前没有执行远程 MySQL/Redis 操作，没有启动浏览器验收。
+- SQL seed 重放治理、买家商品浏览业务口径、三端物理前端拆分仍是后续任务，不阻塞当前 P0/P1 代码级收口。
+## 2026-06-06 P0/P1 快速推进：端 token、免密目标绑定与账号重置归属收口检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，并按快速推进模式只处理 P0/P1：编译、guard、接口、权限、串端、service/字段缺失。未做浏览器运行态验收、截图、DOM 检测或 UI 细调；本轮没有执行远程 MySQL/Redis DDL/DML。
+
+子 Agent 执行情况：
+
+- 按用户要求优先尝试 `gpt-5.3-codex-spark`；平台返回用量/可用性限制后，降级使用 `gpt-5.4`。
+- 6 个有效子 Agent 已完成并关闭，切片分别覆盖：admin TokenService/portal token、免密登录、权限 seed、管理端账号控制接口、前端管理模板、portal 商品数据范围。
+- 采纳并修复的 P1：管理端 TokenService 不应接受 portal JWT；免密登录 Redis payload 必须与数据库 ticket 目标绑定；卖家/买家账号重置密码必须按主体+账号双重收口。
+- 记录但本轮不阻塞的 P2/治理项：直登 token 仍在 URL 中流转需后续单独设计；Portal Home 响应仍暴露 `terminal/subjectId/accountId` 等内部字段；综合 seed 默认菜单树和 active role 自动补权需要后续 SQL 治理。
+
+已完成：
+
+- 更新 `RuoYi-Vue/ruoyi-framework/src/main/java/com/ruoyi/framework/web/service/TokenService.java`：
+  - admin TokenService 解析 JWT 后，若缺少 `Constants.LOGIN_USER_KEY`，直接返回 `null`，不再尝试读取 `login_tokens:null`。
+  - 新增 `TokenServiceTerminalIsolationTest`，覆盖 portal claims 不能被 admin TokenService 接受。
+- 更新 `RuoYi-Vue/ruoyi-system/src/main/java/com/ruoyi/system/service/support/PortalDirectLoginSupport.java`：
+  - `consumeToken` 读取 Redis payload 和 DB ticket 后，额外校验 `targetSubjectId`、`targetSubjectNo`、`targetAccountId`、`targetUserName` 与 payload 中的主体、账号、用户名一致。
+  - 任一不一致时删除 Redis cache 并拒绝消费；比较逻辑使用空值安全方式。
+  - 新增 `PortalDirectLoginSupportTest` 回归用例，覆盖 payload 目标被篡改时不标记 ticket used、不标记 expired，并清理缓存。
+- 更新卖家/买家管理端账号重置密码链路：
+  - 后端路由从全局 `/accounts/resetPwd` / `/accounts/resetDefaultPwd` 收口为 `/{sellerId}/accounts/{accountId}/resetPwd`、`/{sellerId}/accounts/{accountId}/resetDefaultPwd`，买家侧同构为 `/{buyerId}/accounts/{accountId}/...`。
+  - Service 签名改为显式接收 `sellerId/buyerId + accountId + password`，内部复用 `selectSellerAccountById(sellerId, accountId)` / `selectBuyerAccountById(buyerId, accountId)` 做归属校验。
+  - 卖家/买家 Service 测试新增跨主体重置拒绝用例，确认失败时不更新密码、不强制踢会话。
+  - 前端 seller/buyer service URL 和共享账号弹窗调用同步改为主体+账号路径；弹窗重置密码前补 `partnerId` 防守。
+  - `check-partner-management-template.mjs` 同步更新卖家/买家模板守卫，要求默认重置密码 URL 使用 scoped 路由。
+
+验证结果：
+
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-framework -am "-Dtest=TokenServiceTerminalIsolationTest,LogAspectSensitiveFieldFilterTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`Tests run: 4, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system,seller,buyer -am "-Dtest=PortalDirectLoginSupportTest,SellerServiceImplTest,BuyerServiceImplTest,SellerAdminPermissionContractTest,BuyerAdminPermissionContractTest,TokenServiceTerminalIsolationTest,LogAspectSensitiveFieldFilterTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，system `Tests run: 11`、seller `Tests run: 30`、buyer `Tests run: 30`，均 0 failure / 0 error。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -DskipTests compile`：通过，13 个 Maven 模块 `BUILD SUCCESS`。
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:partner-management`：通过，`Partner management template guard passed.`。
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:portal-token`：通过，`Portal token isolation guard passed.`。
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:seller-portal-product`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:buyer-portal-product`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run tsc -- --pretty false`：通过。
+- `cd E:\Urili-Ruoyi; codegraph sync .`：通过，首次同步输出 `Synced 19 changed files`，`Added: 1, Modified: 18 - 1,340 nodes`。
+
+当前判断：
+
+- 本轮已把 3 个真实 P1 收口到代码和测试：admin/portal token claim 隔离、免密登录 ticket/payload 目标绑定、账号重置密码主体归属校验。
+- 卖家和买家本轮保持同构复制：卖家侧确认后机械替换 buyer 文案、路径、service、权限和测试，没有重新设计第二套。
+- 仍未开始三端前端物理拆分；当前阶段继续以 `react-ui/` 管理端验证为入口。
+
+## 2026-06-06 P0/P1 快速推进：Portal Home 字段收口与自助会话 guard 检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，并按当前快速推进模式只处理 P0/P1：编译、guard、接口、权限、串端、service/字段缺失。本轮未做浏览器运行态验收、截图、DOM 检测或 UI 细调；未执行远程 MySQL/Redis DDL/DML。
+
+子 Agent 执行情况：
+
+- 按用户最新要求优先尝试 `gpt-5.3-codex-spark`；平台返回用量/可用性限制后，降级使用 `gpt-5.4`。
+- 6 个 `gpt-5.4` 子 Agent 完成只读复核，切片覆盖：权限 seed、Portal Home 响应、端内账号权限模型、前端管理模板、免密登录生命周期、自助接口会话 guard。
+- 本轮采纳并修复的 P1：Portal Home 自助响应不应暴露内部 identity 字段；seller/buyer 自助日志、会话、登出、改密必须校验当前端 `terminal` 和 `tokenId`。
+- 记录但本轮不阻塞的 P2/后续项：免密登录 ticket 生命周期还可继续细化失败消费策略；综合 seed 给普通管理角色自动补 seller/buyer 菜单权限需要后续 SQL 治理；账号弹窗部门树权限可再做 fail-soft 优化。
+
+已完成：
+
+- 新增 `PortalOwnSessionProfile`，仅用于 seller/buyer 端内自助 `/account/sessions` 返回，保留 `userName`、`loginIp`、`loginTime`、`expireTime`、`logoutTime`、`status`、`current`，不返回 `terminal`、`subjectId`、`accountId`、`tokenId`。
+- 保留 `PortalSessionProfile` 作为管理端会话审计 DTO，继续暴露 `terminal`、`subjectId`、`accountId` 给管理端 `PartnerSessionModal` 使用，仅隐藏 `tokenId`。
+- `SellerPortalController` / `BuyerPortalController` 将端内自助会话列表从 `PortalSessionProfile` 转成 `PortalOwnSessionProfile` 后返回。
+- `PortalPermissionInfo`、`PortalSubjectProfile`、`PortalAccountProfile`、`PortalDeptProfile`、`PortalRoleProfile` 的内部 identity 字段加 `@JsonIgnore`，避免 Portal Home 自助响应继续暴露端、主体、账号内部 ID。
+- 前端 `Portal Home`、`portal/session.ts` 和 `party.d.ts` 同步拆分 `PortalOwnSessionProfile` 与管理端 `PortalSessionProfile`，并把 `check-portal-token-isolation.mjs` 扩展为类型静态守卫。
+- `SellerServiceImpl.assertSellerSessionAccount(...)` / `BuyerServiceImpl.assertBuyerSessionAccount(...)` 增加 `terminal` 与 `tokenId` 校验；`logout*`、`update*OwnPassword` 入口统一先过该断言。
+- `SellerServiceImplTest` / `BuyerServiceImplTest` 新增错误端、缺 token 不进入 mapper 查询/登出 SQL/Redis token 删除/改密更新的回归用例。
+
+验证结果：
+
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn "-pl" "seller,buyer" -am "-Dtest=SellerServiceImplTest,BuyerServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，seller `Tests run: 34, Failures: 0, Errors: 0, Skipped: 0`；buyer `Tests run: 34, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn "-pl" "ruoyi-system" "-Dtest=PortalHomeProfileSerializationTest,PortalSessionProfileTest,PortalAccountTest,PortalDirectLoginResultTest" test`：通过，`Tests run: 8, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn "-pl" "seller,buyer" -am -DskipTests compile`：通过，9 个相关 Maven 模块 `BUILD SUCCESS`。
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:portal-token`：通过，`Portal token isolation guard passed.`。
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:partner-management`：通过，`Partner management template guard passed.`。
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:seller-portal-product`：通过，`Seller portal product template guard passed.`。
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:buyer-portal-product`：通过，`Buyer portal product template guard passed.`。
+- `cd E:\Urili-Ruoyi\react-ui; npm run tsc -- --pretty false`：通过。
+- `git diff --check -- <本轮相关文件>`：通过，仅有工作区 LF/CRLF 换行提示。
+- `cd E:\Urili-Ruoyi; codegraph sync .`：通过，输出 `Synced 260 changed files`，`Added: 245, Modified: 15 - 3,637 nodes`。
+
+当前判断：
+
+- Portal Home 端内自助响应已经把内部 identity 字段和管理端审计字段分开：端内用户只拿展示字段，管理端仍可审计 terminal/subject/account。
+- seller/buyer 自助接口的 service guard 不再只依赖 subject/account，已补上 terminal/tokenId 防线，避免 admin 或另一端 session 形态误入端内自助链路。
+- 本轮未改远程库、未做浏览器验收，符合当前 P0/P1 快速推进边界。
+
+## 2026-06-06 P0/P1 快速推进：账号弹窗部门树 fail-soft 检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为参考方向，并按当前快速推进模式只处理 P0/P1：编译、guard、接口、权限、串端、service/字段缺失。本轮未做浏览器运行态验收、截图、DOM 检测或 UI 细调。
+
+子 Agent 执行情况：
+
+- 按用户要求优先尝试 `gpt-5.3-codex-spark`；平台返回用量限制后，已关闭失败子 Agent，并降级使用 `gpt-5.4`。
+- `gpt-5.4` 子 Agent 只读复核确认：`PartnerAccountModal` 原先把 `getAccounts(partnerId)` 和 `getDeptTree(partnerId)` 放在同一个 `Promise.all`，在“有账号权限、无部门权限”的可达组合下，部门树 403 会导致账号列表整体进入失败分支。
+- 子 Agent 已关闭；本轮没有保留仍在运行的子 Agent。
+
+已完成：
+
+- 更新 `react-ui/src/components/PartnerManagement/PartnerAccountModal.tsx`：
+  - 新增独立 `loadDeptTree()`。
+  - `loadAccounts()` 只等待 `config.services.getAccounts(partnerId)`，账号列表不再被部门树接口失败拖垮。
+  - `getDeptTree` 失败或无权限时只清空 `deptTree`，不再弹“账号列表加载失败”。
+  - 弹窗打开时分别触发 `void loadAccounts()` 和 `void loadDeptTree()`。
+- 同步更新 `react-ui/src/components/PartnerManagement/PartnerAccountModal.js`，避免同名 JS 旁支在运行解析时保留旧 `Promise.all` 行为。
+- 更新 `react-ui/scripts/check-partner-management-template.mjs`：
+  - 新增 `checkAccountModalFailSoft(...)`。
+  - 要求账号列表和部门树加载路径解耦。
+  - 禁止重新出现 `getAccounts(partnerId)` 与 `getDeptTree(partnerId)` 绑定在同一个 `Promise.all` 的模板回归。
+  - 同时检查 `.tsx` 和存在的同名 `.js`。
+
+验证结果：
+
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:partner-management`：通过，输出 `Partner management template guard passed.`。
+- `cd E:\Urili-Ruoyi\react-ui; npm run tsc -- --pretty false`：通过。
+- `cd E:\Urili-Ruoyi; git diff --check -- <本轮相关文件>`：通过，仅有工作区 LF/CRLF 换行提示。
+- `cd E:\Urili-Ruoyi; codegraph sync .`：通过，输出 `Synced 3 changed files`，`Modified: 3 - 101 nodes`。
+
+当前判断：
+
+- 这是一个真实 P1 权限串扰问题：账号弹窗入口只要求账号列表权限，但部门树权限是独立权限；部门树失败不能阻塞账号列表。
+- 当前修复保持卖家/买家同构模板，不重新设计页面，不调整 UI 细节。
+- 本轮未执行数据库 DDL/DML，未读取或写入 Redis。
+
+## 2026-06-06 P0/P1 快速推进：Portal 登录结果与日志脱敏检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为参考方向，并按当前快速推进模式只处理 P0/P1：编译、guard、接口、权限、串端、service/字段缺失。本轮未做浏览器运行态验收、截图、DOM 检测或 UI 细调；未执行远程 MySQL/Redis DDL/DML。
+
+子 Agent 执行情况：
+
+- 按用户要求优先尝试 `gpt-5.3-codex-spark`；连续 3 个子 Agent 因平台用量/可用性限制失败，均已关闭。
+- 降级使用 6 个 `gpt-5.4` 子 Agent 并行只读复核，切片覆盖：免密登录 ticket/敏感字段、Portal 自助接口、管理端 seller/buyer 后端链路、前端同构模板、SQL seed/migration、后端编译模块边界。
+- 6 个 `gpt-5.4` 子 Agent 已完成并关闭；当前没有保留运行中的子 Agent。
+
+已完成：
+
+- 新增 `PortalPreAuthorizeAspectTest`，补上 `@PortalPreAuthorize` 切面执行级测试，覆盖授权时写入/清理 `PortalSessionContext`、嵌套旧上下文恢复、无权限时不执行目标方法。
+- `PortalLoginResult` 的 `subjectId`、`accountId` 加 `@JsonIgnore`，避免 seller/buyer 登录结果继续暴露内部主体 ID 和账号 ID。
+- 新增 `PortalLoginResultTest`，确认登录 JSON 只保留 `token`、`terminal`、`subjectNo`、`username` 等前端需要字段，不包含 `subjectId`、`accountId`。
+- 前端 `PortalLoginResultData` 类型同步移除 `subjectId`、`accountId`。
+- `check-portal-token-isolation.mjs` 增加 `PortalLoginResultData` 静态守卫，防止后续把内部 identity 字段重新加回端内登录结果类型。
+- `LogAspect` / `PortalLogAspect` 的敏感字段过滤补充 `loginUrl`，并继续过滤 `token`、`jwt`、`directLoginToken`、`accessToken`、`refreshToken`、`authorization`。
+- `LogAspectSensitiveFieldFilterTest` 同步覆盖 `loginUrl`，避免带免密 token 的 URL 被写入操作日志响应体。
+
+记录但本轮不阻塞的 P2/后续项：
+
+- 当前管理端免密登录仍返回 `loginUrl` 给前端打开，这是已确认功能链路；本轮不直接移除 `PortalDirectLoginResult.loginUrl`，否则会破坏当前免密登录体验。后续如要更安全，应单独设计一次性兑换/后端跳转流程。
+- 子 Agent 提到的 `20260606_product_spu_warehouse_binding.sql` 引号问题，经当前文件复核未复现，当前脚本行内引号闭合正常，本轮不改。
+- SQL seed 的隔离 DDL、direct-login 权限补种、MySQL generated column 兼容性属于部署治理问题，本轮先记录，不在代码级 P1 快速切片中展开。
+- product/warehouse 模块级测试覆盖仍可补强，当前不阻塞三端账号权限 P0/P1 收口。
+
+验证结果：
+
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system,ruoyi-framework -am "-Dtest=PortalLoginResultTest,PortalHomeProfileSerializationTest,PortalDirectLoginResultTest,PortalDirectLoginTicketTest,PortalPreAuthorizeAspectTest,LogAspectSensitiveFieldFilterTest,PortalPermissionCheckerTest,TokenServiceTerminalIsolationTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，ruoyi-system `Tests run: 13, Failures: 0, Errors: 0, Skipped: 0`；ruoyi-framework `Tests run: 7, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:portal-token`：通过，输出 `Portal token isolation guard passed.`。
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:partner-management`：通过，输出 `Partner management template guard passed.`。
+- `cd E:\Urili-Ruoyi\react-ui; npm run tsc -- --pretty false`：通过。
+- `cd E:\Urili-Ruoyi; git diff --check -- <本轮相关文件>`：通过，仅有工作区 LF/CRLF 换行提示。
+- `cd E:\Urili-Ruoyi; codegraph sync .`：通过，输出 `Synced 8 changed files`，`Added: 2, Modified: 6 - 304 nodes`。
+
+当前判断：
+
+- seller/buyer 登录结果已经从“携带内部 ID”收口为“端内前端实际需要字段 + token”，更符合三端账号隔离方向。
+- 端内权限切面现在有执行级测试兜底，能验证上下文不会串端、不会泄漏到后续请求。
+- 免密登录 `loginUrl` 暂时保留为当前功能出口，但已补日志脱敏防线；后续如果切换成后端兑换跳转，再单独改 DTO 和前端打开逻辑。
+## 2026-06-06 P0/P1 快速推进：管理端 seller/buyer 账号权限与守卫补强检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为参考方向，按当前快速推进模式只处理 P0/P1：编译、guard、接口、权限、串端、service/字段缺失。本轮不做浏览器运行态验收、不做截图/DOM 检测、不做 UI 细调；未执行远程 MySQL/Redis DDL/DML。
+
+子 Agent 执行情况：
+
+- 按用户要求优先尝试 `gpt-5.3-codex-spark`；平台返回用量/可用性限制后，降级使用 `gpt-5.4`。
+- 6 个 `gpt-5.4` 子 Agent 已完成并关闭，只读切片覆盖：SQL seed、管理端后端链路、portal 自助接口、前端同构模板、测试/guard、product/warehouse 依赖边界。
+- 本轮采纳并修复的 P1：独立增量 seed 缺 seller/buyer 页面与 directLogin 权限；前端管理模板 guard 未覆盖 `.js` 运行旁支；UI 权限合同未锁 directLogin/dept/role/menu/audit；seller/buyer 账号级嵌套路由合同只锁 reset 路由；缺统一三端验证入口。
+- 记录但本轮不阻塞的 P2：directLogin token 仍通过 URL 流转；portal product service 可补 `tokenId` guard；Mapper 层 bare accountId 可做防御式二次收口；generated column / standalone seed 部署顺序属于后续 SQL 治理。
+
+已完成：
+
+- 新增 `RuoYi-Vue/sql/20260606_admin_partner_page_direct_login_seed.sql`，作为独立增量 seed，补齐：
+  - `2011` 卖家管理页面菜单与 `seller:admin:list`
+  - `2012` 买家管理页面菜单与 `buyer:admin:list`
+  - `2205` 卖家管理端免密登录权限 `seller:admin:directLogin`
+  - `2215` 买家管理端免密登录权限 `buyer:admin:directLogin`
+  - 本轮只新增 SQL 文件，未对远程数据库执行 DML。
+- 更新 `AdminDirectLoginPermissionContractTest`，要求新增 standalone seed 同时包含页面基础权限和 directLogin 权限，避免只跑增量脚本时菜单/权限缺口回归。
+- 更新 `SellerServiceImplTest` / `BuyerServiceImplTest`，补 seller/buyer 同构的跨主体账号防护用例：
+  - 跨主体 `update*Account` 必须拒绝，且不写 mapper。
+  - 跨主体 `lock*Account` 必须拒绝，且不写锁定、不踢 session。
+  - 跨主体 `forceLogout*AccountSessions` 必须拒绝，且不删 Redis token、不写 logout。
+- 更新 `SellerAdminPermissionContractTest` / `BuyerAdminPermissionContractTest`，把账号级嵌套路由固定为 `/{sellerId|buyerId}/accounts/{accountId}/...`，覆盖 roles、lock/unlock、reset、sessions、forceLogout、directLogin，并锁住 login/oper/ticket 审计权限。
+- 更新 `AdminAccountPermissionUiContractTest`，锁住管理端 UI 对 directLogin、dept、role、menu、forceLogout、audit、账号角色、账号直登等入口的端 scoped 权限判断。
+- 更新 `react-ui/scripts/check-partner-management-template.mjs`：
+  - 同时检查 seller/buyer service 的 `.ts` 和存在的 `.js` 旁支。
+  - 同时检查 `PartnerManagementPage.tsx/.js`、`PartnerAccountModal.tsx/.js`、`PartnerSessionModal.tsx/.js`。
+  - 补齐账号 roles、resetPwd、resetDefaultPwd、sessions、directLogin 等 scoped service URL 守卫。
+  - 继续禁止共享模板硬编码 `/api/seller`、`/api/buyer`、`/api/system`。
+- 新增 `react-ui/scripts/verify-three-terminal.mjs` 并在 `package.json` 增加 `verify:three-terminal`：
+  - 串行执行 `guard:portal-token`、`guard:partner-management`、`guard:seller-portal-product`、`guard:buyer-portal-product`、`tsc` 和后端三端隔离关键合同测试。
+  - Windows 下通过 `cmd.exe /c` 调用固定命令参数，避免 `spawnSync('npm.cmd')` 的 `EINVAL` 和 shell args 弃用警告。
+
+验证结果：
+
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl seller,buyer -am "-Dtest=SellerServiceImplTest,BuyerServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，seller `Tests run: 37, Failures: 0, Errors: 0, Skipped: 0`；buyer `Tests run: 37, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:partner-management`：通过，输出 `Partner management template guard passed.`。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system -am "-Dtest=AdminDirectLoginPermissionContractTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`Tests run: 1, Failures: 0, Errors: 0, Skipped: 0`。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system,seller,buyer -am "-Dtest=AdminDirectLoginPermissionContractTest,AdminAccountPermissionUiContractTest,SellerAdminPermissionContractTest,BuyerAdminPermissionContractTest,SellerServiceImplTest,BuyerServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，ruoyi-system `Tests run: 6`，seller `Tests run: 37`，buyer `Tests run: 37`，均 0 failure / 0 error。
+- `cd E:\Urili-Ruoyi\react-ui; npm run verify:three-terminal`：通过，覆盖前端四个 guard、`tsc --noEmit --pretty false`、后端 `ruoyi-system/ruoyi-framework/seller/buyer` 三端隔离合同测试；最终输出 `three-terminal verification passed.`。
+
+边界说明：
+
+- 本轮没有启动浏览器，没有做截图/DOM 检测，没有做页面列宽或视觉细节调整。
+- 本轮没有执行远程数据库 DDL/DML；新增 seed 文件需要后续按数据库变更确认流程执行。
+- 工作区已有大量既有改动和未跟踪文件，本轮未回滚、未清理无关文件。
+- `cd E:\Urili-Ruoyi; codegraph sync .`：通过，CodeGraph 返回 `Synced 8 changed files`，`Added: 1, Modified: 7 - 532 nodes`。
+
+## 2026-06-06 P0/P1 快速推进：管理端 seller/buyer 页面与免密权限 seed 远程库执行检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为参考方向，按当前快速推进模式处理权限/菜单实际可用性 P1：上一检查点新增了 standalone seed，但尚未落到当前远程运行库。本轮只执行并验证该 seed，不做浏览器、截图、DOM 或 UI 细调。
+
+已完成：
+
+- 确认当前后端配置基线：`application.yml` 激活 `druid`。
+- 确认本机 `.env.local` 中存在 `RUOYI_DB_URL`、`RUOYI_DB_USERNAME`、`RUOYI_DB_PASSWORD`，且目标不是本地 MySQL。
+- 使用 Maven 本地缓存的 `mysql-connector-j` JDBC 驱动和 `jshell` 执行 `RuoYi-Vue/sql/20260606_admin_partner_page_direct_login_seed.sql`。
+- 显式执行 `set names utf8mb4` 后重放幂等 seed。
+- 新增执行记录：`docs/plans/2026-06-06-admin-partner-page-direct-login-seed-db-execution-record.md`。
+
+远程库执行结果：
+
+- 执行前目标 `menu_id in (2011, 2012, 2205, 2215)` 计数：`4`。
+- 执行后目标权限行数：`4`。
+- `sys_menu` 中目标权限计数：`4`。
+- 最终远程库包含：
+  - `2011` / `seller:admin:list` / `Seller/index`
+  - `2012` / `buyer:admin:list` / `Buyer/index`
+  - `2205` / `seller:admin:directLogin`
+  - `2215` / `buyer:admin:directLogin`
+- 中文字段 HEX 校验为 UTF-8 正常字节；JShell/PowerShell 控制台显示层乱码不影响数据库真实值。
+
+验证结果：
+
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system -am "-Dtest=AdminDirectLoginPermissionContractTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`Tests run: 1, Failures: 0, Errors: 0, Skipped: 0`，Maven `BUILD SUCCESS`。
+- `cd E:\Urili-Ruoyi; codegraph sync .`：通过，输出 `Already up to date`。
+
+边界说明：
+
+- 本轮未执行 DDL。
+- 本轮未写 `sys_role_menu`，只补 `sys_menu` 权限点。
+- 本轮未读取或写入 Redis。
+- 本轮未重启后端；如果运行态菜单缓存需要立即刷新，后续可按运行环境需要重启或清理缓存。
+
+## 2026-06-06 P0/P1 快速推进：三端管理权限覆盖验证检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为开发方向，按快速推进模式只处理 P0/P1：编译、guard、接口、权限、串端、service/字段缺失。本轮不做浏览器运行态验收、截图、DOM 检测或 UI 细调。
+
+子 Agent 执行情况：
+
+- 按用户要求优先使用 `gpt-5.3-codex-spark` 启动 6 个只读 explorer 子 Agent。
+- 子 Agent 切片覆盖：seller/buyer 后端控制面、portal 会话/日志链路、前端同构模板、SQL/seed、product/warehouse 边界、验证脚本与合同测试。
+- 主线程两次等待均超时，未收到可用审计结论。
+- 为避免阻塞主线，已关闭 6 个子 Agent；关闭前状态均为 `running`，随后均收到 `shutdown` 通知。
+- 本轮有效结论以主线程当前验证和远程库只读核验为准。
+
+已完成：
+
+- 重新执行三端最小门禁：`cd E:\Urili-Ruoyi\react-ui; npm run verify:three-terminal`。
+- 执行远程库 `sys_menu` 权限覆盖只读核验，覆盖当前管理端代码实际使用的 seller/buyer 管理权限点。
+- 新增验证记录：`docs/plans/2026-06-06-three-terminal-permission-coverage-verification-record.md`。
+
+验证结果：
+
+- `guard:portal-token`：通过，输出 `Portal token isolation guard passed.`。
+- `guard:partner-management`：通过，输出 `Partner management template guard passed.`。
+- `guard:seller-portal-product`：通过，输出 `Seller portal product template guard passed.`。
+- `guard:buyer-portal-product`：通过，输出 `Buyer portal product template guard passed.`。
+- `tsc --noEmit --pretty false`：通过。
+- 后端 `ruoyi-system,ruoyi-framework,seller,buyer` 三端合同测试通过，Maven `BUILD SUCCESS`。
+- `npm run verify:three-terminal` 最终输出：`three-terminal verification passed.`。
+- 远程库权限覆盖有效读库结果：当前代码涉及的 seller/buyer 管理端权限点总数 `66`，远程库 `sys_menu` 命中 `66`，缺失 `0`；命中行均为 `status=0`、`visible=0`。
+- `cd E:\Urili-Ruoyi; codegraph sync .`：通过，输出 `Already up to date`。
+
+读库说明：
+
+- 本轮从本机 `.env.local` 注入 `RUOYI_DB_URL`、`RUOYI_DB_USERNAME`、`RUOYI_DB_PASSWORD`，仅用于 JDBC 只读验证。
+- 本轮记录不输出 JDBC URL、数据库账号、数据库密码、Redis 地址、Redis 密码或 token secret。
+- 第一次使用 `jshell` 脚本执行读库比对时，脚本文件带 UTF-8 BOM，导致 `import java.sql.*` 未被正确解析；该次输出的 `missing=66` 是无效结果，已丢弃。
+- 最终有效证据来自后续临时 Java 类执行结果。
+
+当前判断：
+
+- 当前三端最小门禁通过，未发现新增编译、guard 或合同测试 P0/P1。
+- 远程运行库 `sys_menu` 已覆盖管理端代码实际使用的 66 个 seller/buyer 管理权限点。
+- 上一轮只验证 4 个 standalone seed 权限点；本轮已扩展为当前管理端代码用到的 seller/buyer 管理权限点全量覆盖。
+
+边界说明：
+
+- 本轮未修改业务代码。
+- 本轮未修改 SQL 文件。
+- 本轮未执行远程数据库 DDL/DML。
+- 本轮未写 `sys_role_menu`。
+- 本轮未读取或写入 Redis。
+- 本轮未重启后端。

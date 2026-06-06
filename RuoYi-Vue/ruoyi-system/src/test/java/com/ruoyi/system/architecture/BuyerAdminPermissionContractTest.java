@@ -71,6 +71,40 @@ public class BuyerAdminPermissionContractTest
         assertHandlerPermission(handlers, "accountSessions", "buyer:admin:forceLogout", violations);
         assertHandlerPermission(handlers, "forceLogoutBuyer", "buyer:admin:forceLogout", violations);
         assertHandlerPermission(handlers, "forceLogoutBuyerAccount", "buyer:admin:forceLogout", violations);
+        assertHandlerPermission(handlers, "directLogin", "buyer:admin:directLogin", violations);
+        assertHandlerPermission(handlers, "accountDirectLogin", "buyer:admin:directLogin", violations);
+        assertHandlerPermission(handlers, "loginLogs", "buyer:admin:loginLog:list", violations);
+        assertHandlerPermission(handlers, "operLogs", "buyer:admin:operLog:list", violations);
+        assertHandlerPermission(handlers, "directLoginTickets", "buyer:admin:ticket:list", violations);
+        assertHandlerRouteContains(handlers, "accounts", "@GetMapping(\"/{buyerId}/accounts\")", violations);
+        assertHandlerRouteContains(handlers, "accountRoles",
+                "@GetMapping(\"/{buyerId}/accounts/{accountId}/roles\")", violations);
+        assertHandlerRouteContains(handlers, "assignAccountRoles",
+                "@PutMapping(\"/{buyerId}/accounts/{accountId}/roles\")", violations);
+        assertHandlerRouteContains(handlers, "addAccount", "@PostMapping(\"/{buyerId}/accounts\")", violations);
+        assertHandlerRouteContains(handlers, "editAccount", "@PutMapping(\"/{buyerId}/accounts\")", violations);
+        assertHandlerRouteContains(handlers, "lockAccount",
+                "@PutMapping(\"/{buyerId}/accounts/{accountId}/lock\")", violations);
+        assertHandlerRouteContains(handlers, "unlockAccount",
+                "@PutMapping(\"/{buyerId}/accounts/{accountId}/unlock\")", violations);
+        assertHandlerRouteContains(handlers, "resetPassword", "@PutMapping(\"/{buyerId}/accounts/{accountId}/resetPwd\")", violations);
+        assertHandlerRouteContains(handlers, "resetDefaultPassword",
+                "@PutMapping(\"/{buyerId}/accounts/{accountId}/resetDefaultPwd\")", violations);
+        assertHandlerRouteContains(handlers, "sessions", "@GetMapping(\"/{buyerId}/sessions/list\")", violations);
+        assertHandlerRouteContains(handlers, "accountSessions",
+                "@GetMapping(\"/{buyerId}/accounts/{accountId}/sessions/list\")", violations);
+        assertHandlerRouteContains(handlers, "forceLogoutBuyer",
+                "@DeleteMapping(\"/{buyerId}/sessions\")", violations);
+        assertHandlerRouteContains(handlers, "forceLogoutBuyerAccount",
+                "@DeleteMapping(\"/{buyerId}/accounts/{accountId}/sessions\")", violations);
+        assertHandlerRouteContains(handlers, "directLogin", "@PostMapping(\"/{buyerId}/directLogin\")",
+                violations);
+        assertHandlerRouteContains(handlers, "accountDirectLogin",
+                "@PostMapping(\"/{buyerId}/accounts/{accountId}/directLogin\")", violations);
+        assertHandlerRouteContains(handlers, "loginLogs", "@GetMapping(\"/loginLogs/list\")", violations);
+        assertHandlerRouteContains(handlers, "operLogs", "@GetMapping(\"/operLogs/list\")", violations);
+        assertHandlerRouteContains(handlers, "directLoginTickets",
+                "@GetMapping(\"/directLoginTickets/list\")", violations);
 
         if (!violations.isEmpty())
         {
@@ -171,6 +205,25 @@ public class BuyerAdminPermissionContractTest
         if (!target.annotations.contains("@PreAuthorize(\"@ss.hasPermi('" + expectedPermission + "')\")"))
         {
             violations.add("AdminBuyerController#" + methodName + " must require " + expectedPermission);
+        }
+    }
+
+    private void assertHandlerRouteContains(List<HandlerMethod> handlers, String methodName, String expectedRoute,
+            List<String> violations)
+    {
+        HandlerMethod target = handlers.stream()
+                .filter(handler -> methodName.equals(handler.name))
+                .findFirst()
+                .orElse(null);
+        if (target == null)
+        {
+            violations.add("AdminBuyerController#" + methodName + " must exist");
+            return;
+        }
+        if (!target.annotations.contains(expectedRoute))
+        {
+            violations.add("AdminBuyerController#" + methodName + " must keep subject/account scoped route "
+                    + expectedRoute);
         }
     }
 

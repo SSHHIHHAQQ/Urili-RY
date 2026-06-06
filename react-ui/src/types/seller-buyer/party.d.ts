@@ -17,7 +17,6 @@ declare namespace API.Partner {
     status?: string;
     userName?: string;
     nickName?: string;
-    password?: string;
     email?: string;
     phonenumber?: string;
     userStatus?: string;
@@ -29,6 +28,10 @@ declare namespace API.Partner {
     updateBy?: string;
     updateTime?: string;
     remark?: string;
+  }
+
+  export interface PortalAccountPayload extends PortalAccountBase {
+    password?: string;
   }
 
   export interface PortalDept {
@@ -148,7 +151,6 @@ declare namespace API.Partner {
   }
 
   export interface DirectLoginResult {
-    token: string;
     ticketId?: number;
     loginUrl: string;
     expireMinutes: number;
@@ -173,9 +175,7 @@ declare namespace API.Partner {
   export interface PortalLoginResultData {
     token: string;
     terminal: PortalTerminal;
-    subjectId: number;
     subjectNo?: string;
-    accountId: number;
     username: string;
     nickName?: string;
     expireMinutes?: number;
@@ -195,10 +195,7 @@ declare namespace API.Partner {
   }
 
   export interface PortalPermissionInfo {
-    terminal?: PortalTerminal;
-    subjectId?: number;
     subjectNo?: string;
-    accountId?: number;
     userName?: string;
     nickName?: string;
     roles?: string[];
@@ -212,8 +209,6 @@ declare namespace API.Partner {
   }
 
   export interface PortalSubjectProfile {
-    terminal?: PortalTerminal;
-    subjectId?: number;
     subjectNo?: string;
     subjectCode?: string;
     subjectName?: string;
@@ -242,9 +237,6 @@ declare namespace API.Partner {
   }
 
   export interface PortalAccountProfile {
-    terminal?: PortalTerminal;
-    subjectId?: number;
-    accountId?: number;
     deptId?: number;
     deptName?: string;
     accountRole?: string;
@@ -270,8 +262,6 @@ declare namespace API.Partner {
   }
 
   export interface PortalDeptProfile {
-    terminal?: PortalTerminal;
-    subjectId?: number;
     deptId?: number;
     parentId?: number;
     parentName?: string;
@@ -290,8 +280,6 @@ declare namespace API.Partner {
   }
 
   export interface PortalRoleProfile {
-    terminal?: PortalTerminal;
-    subjectId?: number;
     roleId?: number;
     roleName?: string;
     roleKey?: string;
@@ -350,6 +338,16 @@ declare namespace API.Partner {
     terminal?: PortalTerminal;
     subjectId?: number;
     accountId?: number;
+    userName?: string;
+    loginIp?: string;
+    loginTime?: string;
+    expireTime?: string;
+    logoutTime?: string;
+    status?: string;
+    current?: boolean;
+  }
+
+  export interface PortalOwnSessionProfile {
     userName?: string;
     loginIp?: string;
     loginTime?: string;

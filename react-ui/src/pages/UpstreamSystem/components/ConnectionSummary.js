@@ -1,0 +1,22 @@
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { CheckCircleOutlined, DownOutlined, EditOutlined, KeyOutlined, SafetyCertificateOutlined, StopOutlined, SyncOutlined, UpOutlined, } from '@ant-design/icons';
+import { Button, Popconfirm, Tooltip, Typography } from 'antd';
+import { useEffect, useState } from 'react';
+import { settlementTypeText, systemKindText } from '../constants';
+import { statusTag } from '../helpers';
+import styles from '../style.module.css';
+const settlementText = (value) => settlementTypeText[value || ''] || value || '-';
+function SummaryItem({ label, value, wide }) {
+    return (_jsxs("div", { className: `${styles.summaryItem} ${wide ? styles.summaryItemWide : ''}`, children: [_jsx("span", { className: styles.summaryLabel, children: label }), _jsx(Typography.Text, { ellipsis: true, className: styles.summaryValue, children: _jsx("span", { className: styles.summaryValueText, children: value ?? '-' }) })] }));
+}
+export default function ConnectionSummary({ access, connection, onAuthorize, onCredential, onEdit, onSync, onToggleStatus, }) {
+    const [detailsOpen, setDetailsOpen] = useState(false);
+    const systemKind = systemKindText[connection.systemKind || ''] || connection.systemKind || '-';
+    useEffect(() => {
+        setDetailsOpen(false);
+    }, [connection.connectionCode]);
+    return (_jsxs("div", { className: styles.summaryPanel, children: [_jsxs("div", { className: styles.summaryHeader, children: [_jsxs("div", { className: styles.summaryTitleBlock, children: [_jsxs("div", { className: styles.summaryTitleLine, children: [_jsx(Typography.Title, { level: 4, className: styles.summaryTitle, children: connection.masterWarehouseName }), statusTag(connection.status)] }), _jsxs(Typography.Text, { type: "secondary", className: styles.summarySubtitle, children: [connection.connectionCode, " \u00B7 ", systemKind] }), _jsx(Button, { className: styles.summaryDetailToggle, icon: detailsOpen ? _jsx(UpOutlined, {}) : _jsx(DownOutlined, {}), size: "small", type: "link", onClick: () => setDetailsOpen((open) => !open), children: detailsOpen ? '收起详情' : '展开详情' })] }), _jsxs("div", { className: styles.summaryActions, children: [_jsx(Tooltip, { title: "\u7F16\u8F91\u4E3B\u4ED3\u8D44\u6599", children: _jsx(Button, { icon: _jsx(EditOutlined, {}), hidden: !access.hasPerms('integration:upstream:edit'), onClick: onEdit, children: "\u7F16\u8F91" }) }), _jsx(Tooltip, { title: "\u540C\u6B65\u4ED3\u5E93\u3001\u7269\u6D41\u6E20\u9053\u548CSKU", children: _jsx(Button, { icon: _jsx(SyncOutlined, {}), hidden: !access.hasPerms('integration:upstream:sync'), onClick: onSync, children: "\u540C\u6B65" }) }), _jsx(Tooltip, { title: "\u6821\u9A8C\u5F53\u524D\u6388\u6743\u662F\u5426\u53EF\u7528", children: _jsx(Button, { icon: _jsx(SafetyCertificateOutlined, {}), hidden: !access.hasPerms('integration:upstream:sync'), onClick: onAuthorize, children: "\u6821\u9A8C\u6388\u6743" }) }), _jsx(Tooltip, { title: "\u66F4\u65B0 Key \u548C Secret", children: _jsx(Button, { icon: _jsx(KeyOutlined, {}), hidden: !access.hasPerms('integration:upstream:credential'), onClick: onCredential, children: "\u91CD\u65B0\u6388\u6743" }) }), _jsx(Popconfirm, { title: connection.status === 'ENABLED'
+                                    ? '确认停用该主仓接入？'
+                                    : '确认启用该主仓接入？', onConfirm: onToggleStatus, children: _jsx(Button, { danger: connection.status === 'ENABLED', icon: connection.status === 'ENABLED' ? (_jsx(StopOutlined, {})) : (_jsx(CheckCircleOutlined, {})), hidden: !access.hasPerms('integration:upstream:edit'), children: connection.status === 'ENABLED' ? '停用' : '启用' }) })] })] }), detailsOpen ? (_jsxs("div", { className: styles.summaryGrid, children: [_jsx(SummaryItem, { label: "\u6388\u6743\u72B6\u6001", value: statusTag(connection.credentialStatus ||
+                            (connection.appKeyMask ? 'CONFIGURED' : undefined)) }), _jsx(SummaryItem, { label: "\u6700\u8FD1\u540C\u6B65", value: connection.lastSyncTime || '-' }), _jsx(SummaryItem, { label: "\u6700\u8FD1\u6388\u6743", value: connection.lastAuthorizedTime || '-' }), _jsx(SummaryItem, { label: "\u8BF7\u6C42\u65E5\u5FD7\u6570", value: connection.requestLogCount ?? 0 }), _jsx(SummaryItem, { label: "\u7ED3\u7B97\u7C7B\u578B", value: settlementText(connection.settlementType) }), _jsx(SummaryItem, { label: "Key", value: connection.appKeyMask || '-' }), _jsx(SummaryItem, { label: "\u5907\u6CE8", value: connection.remark || '-', wide: true })] })) : null] }));
+}

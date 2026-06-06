@@ -144,7 +144,7 @@ export async function getPortalOperLogs(terminal: PortalTerminal, params?: Recor
 }
 
 export async function getPortalSessions(terminal: PortalTerminal, params?: Record<string, any>) {
-  return request<API.Partner.PortalAuditPageResult<API.Partner.PortalSessionProfile>>(
+  return request<API.Partner.PortalAuditPageResult<API.Partner.PortalOwnSessionProfile>>(
     buildPortalUrl(terminal, '/account/sessions'),
     {
       method: 'GET',

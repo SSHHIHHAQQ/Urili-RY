@@ -1,6 +1,7 @@
 package com.ruoyi.system.domain;
 
 import java.io.Serializable;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 /**
  * Seller/buyer terminal visible department profile.
@@ -9,8 +10,10 @@ public class PortalDeptProfile implements Serializable
 {
     private static final long serialVersionUID = 1L;
 
+    @JsonIgnore
     private String terminal;
 
+    @JsonIgnore
     private Long subjectId;
 
     private Long deptId;

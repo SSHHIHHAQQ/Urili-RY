@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Date;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -180,6 +181,14 @@ public class PortalDirectLoginSupport
         {
             redisCache.deleteObject(cacheKey);
             throw new ServiceException("免密登录票据不匹配");
+        }
+        if (!Objects.equals(ticket.getTargetSubjectId(), payload.getPartnerId())
+                || !StringUtils.equals(ticket.getTargetSubjectNo(), payload.getPartnerNo())
+                || !Objects.equals(ticket.getTargetAccountId(), payload.getAccountId())
+                || !StringUtils.equals(ticket.getTargetUserName(), payload.getUsername()))
+        {
+            redisCache.deleteObject(cacheKey);
+            throw new ServiceException("免密登录目标不匹配");
         }
         return payload;
     }

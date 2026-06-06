@@ -23,11 +23,6 @@
 
         <dependency>
             <groupId>com.ruoyi</groupId>
-            <artifactId>seller</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>com.ruoyi</groupId>
             <artifactId>finance</artifactId>
         </dependency>
 

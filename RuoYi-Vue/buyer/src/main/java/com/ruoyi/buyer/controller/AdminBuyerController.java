@@ -142,18 +142,20 @@ public class AdminBuyerController extends BaseController
 
     @PreAuthorize("@ss.hasPermi('buyer:admin:account:resetPwd')")
     @Log(title = "买家账号", businessType = BusinessType.UPDATE)
-    @PutMapping("/accounts/resetPwd")
-    public AjaxResult resetPassword(@RequestBody BuyerAccount account)
+    @PutMapping("/{buyerId}/accounts/{accountId}/resetPwd")
+    public AjaxResult resetPassword(@PathVariable("buyerId") Long buyerId, @PathVariable("accountId") Long accountId,
+            @RequestBody BuyerAccount account)
     {
-        return toAjax(buyerService.resetBuyerAccountPassword(account));
+        return toAjax(buyerService.resetBuyerAccountPassword(buyerId, accountId, account == null ? null : account.getPassword()));
     }
 
     @PreAuthorize("@ss.hasPermi('buyer:admin:account:resetPwd')")
     @Log(title = "买家账号", businessType = BusinessType.UPDATE)
-    @PutMapping("/accounts/resetDefaultPwd")
-    public AjaxResult resetDefaultPassword(@RequestBody BuyerAccount account)
+    @PutMapping("/{buyerId}/accounts/{accountId}/resetDefaultPwd")
+    public AjaxResult resetDefaultPassword(@PathVariable("buyerId") Long buyerId,
+            @PathVariable("accountId") Long accountId)
     {
-        return toAjax(buyerService.resetBuyerAccountDefaultPassword(account));
+        return toAjax(buyerService.resetBuyerAccountDefaultPassword(buyerId, accountId));
     }
 
     @PreAuthorize("@ss.hasPermi('buyer:admin:resetPwd')")

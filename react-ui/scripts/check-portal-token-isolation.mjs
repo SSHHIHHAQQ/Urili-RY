@@ -17,6 +17,13 @@ const portalServiceFile = path.join(
 const appFile = path.join(root, 'src', 'app.tsx');
 const requestErrorConfigFile = path.join(root, 'src', 'requestErrorConfig.ts');
 const portalRequestFile = path.join(root, 'src', 'utils', 'portalRequest.ts');
+const portalTypeFile = path.join(
+  root,
+  'src',
+  'types',
+  'seller-buyer',
+  'party.d.ts',
+);
 const forbiddenPatterns = [
   /\bgetAccessToken\b/,
   /\bsetSessionToken\b/,
@@ -53,6 +60,30 @@ function walk(dir) {
 
 function read(file) {
   return fs.readFileSync(file, 'utf8');
+}
+
+function extractInterfaceBlock(source, interfaceName) {
+  const start = source.indexOf(`interface ${interfaceName}`);
+  if (start < 0) {
+    return '';
+  }
+  const bodyStart = source.indexOf('{', start);
+  if (bodyStart < 0) {
+    return '';
+  }
+  let depth = 0;
+  for (let index = bodyStart; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === '{') {
+      depth += 1;
+    } else if (char === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return source.slice(start, index + 1);
+      }
+    }
+  }
+  return '';
 }
 
 const violations = [];
@@ -140,6 +171,52 @@ if (fs.existsSync(portalRequestFile)) {
   }
 } else {
   violations.push('src/utils/portalRequest.ts is missing');
+}
+
+if (fs.existsSync(portalTypeFile)) {
+  const source = read(portalTypeFile);
+  const internalHomeResponseTypes = [
+    'PortalPermissionInfo',
+    'PortalSubjectProfile',
+    'PortalAccountProfile',
+    'PortalDeptProfile',
+    'PortalRoleProfile',
+    'PortalOwnSessionProfile',
+  ];
+  for (const interfaceName of internalHomeResponseTypes) {
+    const block = extractInterfaceBlock(source, interfaceName);
+    if (!block) {
+      violations.push(
+        `src/types/seller-buyer/party.d.ts must define ${interfaceName}`,
+      );
+      continue;
+    }
+    for (const fieldName of ['terminal', 'subjectId', 'accountId']) {
+      const fieldPattern = new RegExp(`\\b${fieldName}\\s*\\?\\s*:`);
+      if (fieldPattern.test(block)) {
+        violations.push(
+          `${interfaceName} must not expose internal portal identity field ${fieldName}`,
+        );
+      }
+    }
+  }
+  const loginResultBlock = extractInterfaceBlock(source, 'PortalLoginResultData');
+  if (!loginResultBlock) {
+    violations.push(
+      'src/types/seller-buyer/party.d.ts must define PortalLoginResultData',
+    );
+  } else {
+    for (const fieldName of ['subjectId', 'accountId']) {
+      const fieldPattern = new RegExp(`\\b${fieldName}\\s*\\?*\\s*:`);
+      if (fieldPattern.test(loginResultBlock)) {
+        violations.push(
+          `PortalLoginResultData must not expose internal portal identity field ${fieldName}`,
+        );
+      }
+    }
+  }
+} else {
+  violations.push('src/types/seller-buyer/party.d.ts is missing');
 }
 
 for (const file of [appFile, requestErrorConfigFile]) {

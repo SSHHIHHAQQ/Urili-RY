@@ -52,7 +52,7 @@ export async function getAdminBuyerAccounts(buyerId: number) {
   });
 }
 
-export async function addAdminBuyerAccount(buyerId: number, data: API.Partner.BuyerAccount) {
+export async function addAdminBuyerAccount(buyerId: number, data: API.Partner.BuyerAccountPayload) {
   return request<API.Result>(`/api/buyer/admin/buyers/${buyerId}/accounts`, {
     method: 'POST',
     headers: {
@@ -62,7 +62,7 @@ export async function addAdminBuyerAccount(buyerId: number, data: API.Partner.Bu
   });
 }
 
-export async function updateAdminBuyerAccount(buyerId: number, data: API.Partner.BuyerAccount) {
+export async function updateAdminBuyerAccount(buyerId: number, data: API.Partner.BuyerAccountPayload) {
   return request<API.Result>(`/api/buyer/admin/buyers/${buyerId}/accounts`, {
     method: 'PUT',
     headers: {
@@ -248,8 +248,12 @@ export async function removeAdminBuyerDept(buyerId: number, deptId: number) {
   });
 }
 
-export async function resetAdminBuyerAccountPassword(data: Pick<API.Partner.BuyerAccount, 'buyerAccountId' | 'password'>) {
-  return request<API.Result>('/api/buyer/admin/buyers/accounts/resetPwd', {
+export async function resetAdminBuyerAccountPassword(
+  buyerId: number,
+  buyerAccountId: number,
+  data: Pick<API.Partner.BuyerAccountPayload, 'password'>,
+) {
+  return request<API.Result>(`/api/buyer/admin/buyers/${buyerId}/accounts/${buyerAccountId}/resetPwd`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json;charset=UTF-8',
@@ -258,13 +262,9 @@ export async function resetAdminBuyerAccountPassword(data: Pick<API.Partner.Buye
   });
 }
 
-export async function resetAdminBuyerAccountDefaultPassword(data: Pick<API.Partner.BuyerAccount, 'buyerAccountId'>) {
-  return request<API.Result>('/api/buyer/admin/buyers/accounts/resetDefaultPwd', {
+export async function resetAdminBuyerAccountDefaultPassword(buyerId: number, buyerAccountId: number) {
+  return request<API.Result>(`/api/buyer/admin/buyers/${buyerId}/accounts/${buyerAccountId}/resetDefaultPwd`, {
     method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json;charset=UTF-8',
-    },
-    data,
   });
 }
 

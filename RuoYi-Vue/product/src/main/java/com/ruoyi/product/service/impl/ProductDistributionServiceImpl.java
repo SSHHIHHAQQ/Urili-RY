@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -28,11 +29,14 @@ import com.ruoyi.product.domain.ProductSellerSnapshot;
 import com.ruoyi.product.domain.ProductSku;
 import com.ruoyi.product.domain.ProductSkuSalePriceUpdateRequest;
 import com.ruoyi.product.domain.ProductSpu;
+import com.ruoyi.product.domain.ProductSpuWarehouse;
 import com.ruoyi.product.mapper.ProductDistributionMapper;
 import com.ruoyi.product.mapper.ProductDistributionOperationLogMapper;
 import com.ruoyi.product.service.IProductConfigService;
 import com.ruoyi.product.service.IProductDistributionService;
 import com.ruoyi.product.service.ProductSellerLookupService;
+import com.ruoyi.warehouse.domain.Warehouse;
+import com.ruoyi.warehouse.service.IWarehouseService;
 
 /**
  * 商城商品 SPU/SKU 服务实现。
@@ -55,6 +59,8 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
     private static final String STATUS_OFF_SALE = "OFF_SALE";
     private static final String CONTROL_NORMAL = "NORMAL";
     private static final String CONTROL_DISABLED = "DISABLED";
+    private static final String WAREHOUSE_OFFICIAL = "official";
+    private static final String WAREHOUSE_THIRD_PARTY = "third_party";
     private static final String OP_SALES_STATUS_CHANGE = "SALES_STATUS_CHANGE";
     private static final String OP_CONTROL_DISABLE = "CONTROL_DISABLE";
     private static final String OP_CONTROL_RECOVER = "CONTROL_RECOVER";
@@ -79,6 +85,9 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
 
     @Autowired
     private IFinanceCurrencyService financeCurrencyService;
+
+    @Autowired
+    private IWarehouseService warehouseService;
 
     @Override
     public List<ProductSpu> selectProductList(ProductSpu query)
@@ -107,6 +116,7 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
     {
         ProductSpu product = requireProduct(spuId);
         product.setSkus(productDistributionMapper.selectSkuListBySpuId(spuId));
+        fillWarehouseBindings(product);
         product.setAttributeValues(productDistributionMapper.selectAttributeValuesBySpuId(spuId));
         product.setImages(productDistributionMapper.selectImagesBySpuId(spuId));
         return product;
@@ -117,6 +127,7 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
     {
         ProductSpu product = requireOnSaleProduct(spuId);
         product.setSkus(productDistributionMapper.selectOnSaleSkuListBySpuId(spuId));
+        fillWarehouseBindings(product);
         return product;
     }
 
@@ -130,6 +141,7 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
         product.setCreateBy(operator);
         product.setUpdateBy(operator);
         int rows = productDistributionMapper.insertSpu(product);
+        saveWarehouses(product);
         saveSkus(product, List.of());
         saveAttributeValues(product);
         saveImages(product);
@@ -148,6 +160,7 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
         product.setSourceRefId(current.getSourceRefId());
         product.setUpdateBy(currentUsername());
         int rows = productDistributionMapper.updateSpu(product);
+        saveWarehouses(product);
         saveSkus(product, productDistributionMapper.selectSkuListBySpuId(product.getSpuId()));
         saveAttributeValues(product);
         saveImages(product);
@@ -412,6 +425,7 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
         product.setSourceRefId(current == null ? "" : trimToEmpty(current.getSourceRefId()));
         fillSellerSnapshot(product);
         fillCategorySnapshot(product);
+        normalizeWarehouseBindings(product);
         if (StringUtils.isNotBlank(product.getSellerSpuCode())
             && productDistributionMapper.countSellerSpuCode(product.getSellerId(), product.getSellerSpuCode(),
                 product.getSpuId()) > 0)
@@ -456,6 +470,128 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
         }
         product.setCategoryCode(category.getCategoryCode());
         product.setCategoryName(category.getCategoryName());
+    }
+
+    private void normalizeWarehouseBindings(ProductSpu product)
+    {
+        List<Long> warehouseIds = requireWarehouseIds(product);
+        List<ProductSpuWarehouse> warehouses = new ArrayList<>();
+        String selectedCurrency = null;
+        String selectedKind = null;
+        for (Long warehouseId : warehouseIds)
+        {
+            Warehouse warehouse = warehouseService.selectWarehouseById(warehouseId);
+            if (!STATUS_NORMAL.equals(warehouse.getStatus()))
+            {
+                throw new ServiceException("发货仓库不是正常状态：" + warehouseLabel(warehouse));
+            }
+            String currency = requireTrim(warehouse.getSettlementCurrency(),
+                "发货仓库未维护币种：" + warehouseLabel(warehouse)).toUpperCase();
+            validateCurrency(currency);
+            String kind = requireTrim(warehouse.getWarehouseKind(),
+                "发货仓库未维护类型：" + warehouseLabel(warehouse));
+            if (!WAREHOUSE_OFFICIAL.equals(kind) && !WAREHOUSE_THIRD_PARTY.equals(kind))
+            {
+                throw new ServiceException("发货仓库类型不支持：" + warehouseLabel(warehouse));
+            }
+            if (selectedCurrency != null && !selectedCurrency.equals(currency))
+            {
+                throw new ServiceException("发货仓库必须选择相同币种");
+            }
+            if (selectedKind != null && !selectedKind.equals(kind))
+            {
+                throw new ServiceException("官方仓和三方仓不能混在一起选择");
+            }
+            if (WAREHOUSE_THIRD_PARTY.equals(kind) && !product.getSellerId().equals(warehouse.getSellerId()))
+            {
+                throw new ServiceException("第三方发货仓库不属于当前卖家：" + warehouseLabel(warehouse));
+            }
+            selectedCurrency = currency;
+            selectedKind = kind;
+
+            ProductSpuWarehouse binding = new ProductSpuWarehouse();
+            binding.setWarehouseId(warehouse.getWarehouseId());
+            binding.setWarehouseCode(requireTrim(warehouse.getWarehouseCode(), "发货仓库编码不能为空"));
+            binding.setWarehouseName(requireTrim(warehouse.getWarehouseName(), "发货仓库名称不能为空"));
+            binding.setWarehouseKind(kind);
+            binding.setSettlementCurrency(currency);
+            binding.setSellerId(product.getSellerId());
+            warehouses.add(binding);
+        }
+        product.setWarehouses(warehouses);
+        product.setWarehouseIds(warehouses.stream().map(ProductSpuWarehouse::getWarehouseId).collect(Collectors.toList()));
+    }
+
+    private List<Long> requireWarehouseIds(ProductSpu product)
+    {
+        Set<Long> ids = new LinkedHashSet<>();
+        if (product.getWarehouseIds() != null)
+        {
+            for (Long warehouseId : product.getWarehouseIds())
+            {
+                if (warehouseId == null)
+                {
+                    throw new ServiceException("发货仓库参数不完整");
+                }
+                ids.add(warehouseId);
+            }
+        }
+        if (ids.isEmpty() && product.getWarehouses() != null)
+        {
+            for (ProductSpuWarehouse warehouse : product.getWarehouses())
+            {
+                if (warehouse == null || warehouse.getWarehouseId() == null)
+                {
+                    throw new ServiceException("发货仓库参数不完整");
+                }
+                ids.add(warehouse.getWarehouseId());
+            }
+        }
+        if (ids.isEmpty())
+        {
+            throw new ServiceException("请选择发货仓库");
+        }
+        return new ArrayList<>(ids);
+    }
+
+    private void saveWarehouses(ProductSpu product)
+    {
+        List<ProductSpuWarehouse> warehouses = product.getWarehouses();
+        if (warehouses == null || warehouses.isEmpty())
+        {
+            throw new ServiceException("请选择发货仓库");
+        }
+        productDistributionMapper.deleteWarehousesBySpuId(product.getSpuId());
+        for (ProductSpuWarehouse warehouse : warehouses)
+        {
+            warehouse.setSpuId(product.getSpuId());
+            warehouse.setSellerId(product.getSellerId());
+            warehouse.setCreateBy(currentUsername());
+            productDistributionMapper.insertSpuWarehouse(warehouse);
+        }
+    }
+
+    private void fillWarehouseBindings(ProductSpu product)
+    {
+        List<ProductSpuWarehouse> warehouses = productDistributionMapper.selectWarehousesBySpuId(product.getSpuId());
+        product.setWarehouses(warehouses);
+        product.setWarehouseIds(warehouses.stream().map(ProductSpuWarehouse::getWarehouseId).collect(Collectors.toList()));
+    }
+
+    private String resolveWarehouseCurrency(ProductSpu product)
+    {
+        List<ProductSpuWarehouse> warehouses = product.getWarehouses();
+        if (warehouses == null || warehouses.isEmpty())
+        {
+            throw new ServiceException("请选择发货仓库以确定 SKU 币种");
+        }
+        return requireTrim(warehouses.get(0).getSettlementCurrency(), "发货仓库币种不能为空").toUpperCase();
+    }
+
+    private String warehouseLabel(Warehouse warehouse)
+    {
+        return StringUtils.defaultIfBlank(warehouse.getWarehouseName(),
+            StringUtils.defaultIfBlank(warehouse.getWarehouseCode(), String.valueOf(warehouse.getWarehouseId())));
     }
 
     private void saveSkus(ProductSpu product, List<ProductSku> currentSkus)
@@ -519,7 +655,7 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
         sku.setPackageQuantity(trimToEmpty(sku.getPackageQuantity()));
         sku.setCapacity(trimToEmpty(sku.getCapacity()));
         sku.setSkuImageUrl(trimToEmpty(sku.getSkuImageUrl()));
-        sku.setCurrencyCode(requireTrim(sku.getCurrencyCode(), "SKU 币种不能为空").toUpperCase());
+        sku.setCurrencyCode(resolveWarehouseCurrency(product));
         sku.setSkuStatus(normalizeSkuSaveStatus(product, sku, currentSku));
         sku.setControlStatus(currentSku == null ? CONTROL_NORMAL
             : normalizeControlStatus(StringUtils.defaultIfBlank(currentSku.getControlStatus(), CONTROL_NORMAL)));
@@ -722,6 +858,10 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
         if (StringUtils.isBlank(product.getMainImageUrl()))
         {
             throw new ServiceException("商品上架前必须上传 SPU 主图");
+        }
+        if (product.getWarehouses() == null || product.getWarehouses().isEmpty())
+        {
+            throw new ServiceException("商品上架前必须绑定发货仓库");
         }
     }
 

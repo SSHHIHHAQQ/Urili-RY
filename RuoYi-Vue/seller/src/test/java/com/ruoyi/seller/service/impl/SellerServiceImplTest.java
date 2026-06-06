@@ -34,6 +34,7 @@ import com.ruoyi.system.domain.PortalLoginLog;
 import com.ruoyi.system.domain.PortalLoginResult;
 import com.ruoyi.system.domain.PortalLoginSession;
 import com.ruoyi.system.domain.PortalOperLog;
+import com.ruoyi.system.domain.PortalPasswordChangeRequest;
 import com.ruoyi.system.domain.PortalSessionProfile;
 import com.ruoyi.system.service.support.PartnerSupport;
 import com.ruoyi.system.service.support.PortalDirectLoginSupport;
@@ -185,11 +186,7 @@ public class SellerServiceImplTest
         RecordingPortalTokenSupport tokenSupport = new RecordingPortalTokenSupport();
         SellerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper().proxy(),
             tokenSupport);
-        SellerAccount payload = new SellerAccount();
-        payload.setSellerAccountId(22L);
-        payload.setPassword("new-secret");
-
-        int rows = service.resetSellerAccountPassword(payload);
+        int rows = service.resetSellerAccountPassword(11L, 22L, "new-secret");
 
         assertEquals(1, rows);
         assertEquals(Long.valueOf(22L), mapper.resetPasswordAccountId);
@@ -214,10 +211,7 @@ public class SellerServiceImplTest
         RecordingPortalTokenSupport tokenSupport = new RecordingPortalTokenSupport();
         SellerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper().proxy(),
             tokenSupport);
-        SellerAccount payload = new SellerAccount();
-        payload.setSellerAccountId(22L);
-
-        int rows = service.resetSellerAccountDefaultPassword(payload);
+        int rows = service.resetSellerAccountDefaultPassword(11L, 22L);
 
         assertEquals(1, rows);
         assertEquals(Long.valueOf(22L), mapper.resetPasswordAccountId);
@@ -228,6 +222,52 @@ public class SellerServiceImplTest
         assertEquals(Long.valueOf(22L), mapper.forceLogoutAccountId);
         assertEquals("seller", tokenSupport.deletedTerminal);
         assertEquals(mapper.onlineTokenIds, tokenSupport.deletedTokenIds);
+    }
+
+    @Test
+    public void resetSellerAccountPasswordRejectsAccountOutsideSeller()
+    {
+        authenticateAdmin();
+        Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
+        SellerAccount account = account(22L, 12L, "seller-staff", PartnerSupport.STATUS_NORMAL);
+        RecordingSellerMapper mapper = recordingMapper(seller, account);
+        SellerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper().proxy(),
+            new RecordingPortalTokenSupport());
+
+        try
+        {
+            service.resetSellerAccountPassword(11L, 22L, "new-secret");
+        }
+        catch (ServiceException e)
+        {
+            assertEquals(null, mapper.resetPasswordAccountId);
+            assertEquals(0, mapper.forceLogoutCallCount);
+            return;
+        }
+        throw new AssertionError("Expected ServiceException");
+    }
+
+    @Test
+    public void resetSellerAccountDefaultPasswordRejectsAccountOutsideSeller()
+    {
+        authenticateAdmin();
+        Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
+        SellerAccount account = account(22L, 12L, "seller-staff", PartnerSupport.STATUS_NORMAL);
+        RecordingSellerMapper mapper = recordingMapper(seller, account);
+        SellerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper().proxy(),
+            new RecordingPortalTokenSupport());
+
+        try
+        {
+            service.resetSellerAccountDefaultPassword(11L, 22L);
+        }
+        catch (ServiceException e)
+        {
+            assertEquals(null, mapper.resetPasswordAccountId);
+            assertEquals(0, mapper.forceLogoutCallCount);
+            return;
+        }
+        throw new AssertionError("Expected ServiceException");
     }
 
     @Test
@@ -288,6 +328,33 @@ public class SellerServiceImplTest
     }
 
     @Test
+    public void updateSellerAccountRejectsAccountOutsideSeller()
+    {
+        authenticateAdmin();
+        Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
+        SellerAccount otherSellerAccount = account(22L, 12L, "other-seller-staff", PartnerSupport.STATUS_NORMAL);
+        RecordingSellerMapper mapper = recordingMapper(seller, otherSellerAccount);
+        SellerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper().proxy(),
+            new RecordingPortalTokenSupport());
+        SellerAccount update = new SellerAccount();
+        update.setSellerAccountId(22L);
+        update.setNickName("Other Seller Staff");
+        update.setStatus("1");
+
+        try
+        {
+            service.updateSellerAccount(11L, update);
+        }
+        catch (ServiceException e)
+        {
+            assertEquals(null, mapper.updatedAccount);
+            assertEquals(0, mapper.forceLogoutCallCount);
+            return;
+        }
+        throw new AssertionError("Expected ServiceException");
+    }
+
+    @Test
     public void lockSellerAccountLocksAccountAndForcesOnlyThatAccountSessionsOut()
     {
         authenticateAdmin();
@@ -342,6 +409,31 @@ public class SellerServiceImplTest
     }
 
     @Test
+    public void lockSellerAccountRejectsAccountOutsideSellerBeforeMutatingOrKicking()
+    {
+        authenticateAdmin();
+        Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
+        SellerAccount otherSellerAccount = account(22L, 12L, "other-seller-staff", PartnerSupport.STATUS_NORMAL);
+        RecordingSellerMapper mapper = recordingMapper(seller, otherSellerAccount);
+        RecordingPortalTokenSupport tokenSupport = new RecordingPortalTokenSupport();
+        SellerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper().proxy(),
+            tokenSupport);
+
+        try
+        {
+            service.lockSellerAccount(11L, 22L, "risk review");
+        }
+        catch (ServiceException e)
+        {
+            assertEquals(0, mapper.updateLockStatusCallCount);
+            assertEquals(0, mapper.forceLogoutCallCount);
+            assertEquals(0, tokenSupport.deleteLoginTokensCallCount);
+            return;
+        }
+        throw new AssertionError("Expected ServiceException");
+    }
+
+    @Test
     public void unlockSellerAccountUnlocksWithoutForceLogout()
     {
         authenticateAdmin();
@@ -364,6 +456,29 @@ public class SellerServiceImplTest
         assertEquals("", mapper.lockReasonValue);
         assertEquals(0, mapper.forceLogoutCallCount);
         assertEquals(0, tokenSupport.deleteLoginTokensCallCount);
+    }
+
+    @Test
+    public void forceLogoutSellerAccountSessionsRejectsAccountOutsideSeller()
+    {
+        Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
+        SellerAccount otherSellerAccount = account(22L, 12L, "other-seller-staff", PartnerSupport.STATUS_NORMAL);
+        RecordingSellerMapper mapper = recordingMapper(seller, otherSellerAccount);
+        RecordingPortalTokenSupport tokenSupport = new RecordingPortalTokenSupport();
+        SellerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper().proxy(),
+            tokenSupport);
+
+        try
+        {
+            service.forceLogoutSellerAccountSessions(11L, 22L);
+        }
+        catch (ServiceException e)
+        {
+            assertEquals(0, mapper.forceLogoutCallCount);
+            assertEquals(0, tokenSupport.deleteLoginTokensCallCount);
+            return;
+        }
+        throw new AssertionError("Expected ServiceException");
     }
 
     @Test
@@ -478,6 +593,29 @@ public class SellerServiceImplTest
         assertEquals(Long.valueOf(22L), mapper.sessionProfileAccountId);
         assertEquals(Boolean.TRUE, current.getCurrent());
         assertEquals(Boolean.FALSE, other.getCurrent());
+    }
+
+    @Test
+    public void selectSellerOwnSessionListRejectsWrongTerminalBeforeMapper()
+    {
+        Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
+        SellerAccount account = account(22L, 11L, "seller-staff", PartnerSupport.STATUS_NORMAL);
+        RecordingSellerMapper mapper = recordingMapper(seller, account);
+        SellerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport());
+        PortalLoginSession session = session(11L, 22L);
+        session.setTerminal("buyer");
+
+        try
+        {
+            service.selectSellerOwnSessionList(session);
+        }
+        catch (ServiceException e)
+        {
+            assertEquals(null, mapper.sessionProfileSellerId);
+            assertEquals(null, mapper.sessionProfileAccountId);
+            return;
+        }
+        throw new AssertionError("Expected ServiceException");
     }
 
     @Test
@@ -762,6 +900,28 @@ public class SellerServiceImplTest
     }
 
     @Test
+    public void selectSellerOwnLoginLogListRejectsMissingTokenBeforeMapper()
+    {
+        Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
+        SellerAccount account = account(22L, 11L, "seller-staff", PartnerSupport.STATUS_NORMAL);
+        RecordingSellerMapper mapper = recordingMapper(seller, account);
+        SellerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport());
+        PortalLoginSession session = session(11L, 22L);
+        session.setTokenId(null);
+
+        try
+        {
+            service.selectSellerOwnLoginLogList(session, new PortalLoginLog());
+        }
+        catch (ServiceException e)
+        {
+            assertEquals(null, mapper.loginLogQuery);
+            return;
+        }
+        throw new AssertionError("Expected ServiceException");
+    }
+
+    @Test
     public void selectSellerOwnOperLogListUsesSessionScopeAndIgnoresClientScope()
     {
         Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
@@ -790,6 +950,55 @@ public class SellerServiceImplTest
         assertEquals(null, mapper.operLogQuery.getParams().get("unexpected"));
         assertEquals(Long.valueOf(99L), request.getSubjectId());
         assertEquals(Long.valueOf(88L), request.getAccountId());
+    }
+
+    @Test
+    public void logoutSellerRejectsWrongTerminalBeforeMapperAndTokenDelete()
+    {
+        Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
+        SellerAccount account = account(22L, 11L, "seller-staff", PartnerSupport.STATUS_NORMAL);
+        RecordingSellerMapper mapper = recordingMapper(seller, account);
+        RecordingPortalTokenSupport tokenSupport = new RecordingPortalTokenSupport();
+        SellerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper().proxy(),
+            tokenSupport);
+        PortalLoginSession session = session(11L, 22L);
+        session.setTerminal("buyer");
+
+        try
+        {
+            service.logoutSeller(session);
+        }
+        catch (ServiceException e)
+        {
+            assertEquals(0, mapper.logoutSessionCallCount);
+            assertEquals(null, mapper.insertedLoginLog);
+            assertEquals(0, tokenSupport.deleteLoginTokenCallCount);
+            assertEquals(0, tokenSupport.deleteLoginTokensCallCount);
+            return;
+        }
+        throw new AssertionError("Expected ServiceException");
+    }
+
+    @Test
+    public void updateSellerOwnPasswordRejectsMissingTokenBeforeMapper()
+    {
+        Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
+        SellerAccount account = account(22L, 11L, "seller-staff", PartnerSupport.STATUS_NORMAL);
+        RecordingSellerMapper mapper = recordingMapper(seller, account);
+        SellerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport());
+        PortalLoginSession session = session(11L, 22L);
+        session.setTokenId(null);
+
+        try
+        {
+            service.updateSellerOwnPassword(session, new PortalPasswordChangeRequest());
+        }
+        catch (ServiceException e)
+        {
+            assertEquals(null, mapper.resetPasswordAccountId);
+            return;
+        }
+        throw new AssertionError("Expected ServiceException");
     }
 
     private SellerServiceImpl service(SellerMapper mapper, PortalDirectLoginSupport directLoginSupport)
@@ -939,6 +1148,14 @@ public class SellerServiceImplTest
 
         private int forceLogoutCallCount;
 
+        private Long logoutSellerId;
+
+        private Long logoutAccountId;
+
+        private String logoutTokenId;
+
+        private int logoutSessionCallCount;
+
         private Long loginInfoAccountId;
 
         private String loginInfoIp;
@@ -1049,6 +1266,14 @@ public class SellerServiceImplTest
                 forceLogoutSellerId = (Long) args[0];
                 forceLogoutAccountId = (Long) args[1];
                 return onlineTokenIds.size();
+            }
+            if ("logoutSellerSession".equals(methodName))
+            {
+                logoutSessionCallCount++;
+                logoutSellerId = (Long) args[0];
+                logoutAccountId = (Long) args[1];
+                logoutTokenId = (String) args[2];
+                return 1;
             }
             if ("updateSellerAccountLoginInfo".equals(methodName))
             {
@@ -1285,6 +1510,10 @@ public class SellerServiceImplTest
 
         private int deleteLoginTokensCallCount;
 
+        private PortalLoginSession deletedSession;
+
+        private int deleteLoginTokenCallCount;
+
         @Override
         public PortalLoginIssue createLogin(String terminal, Long subjectId, String subjectNo, PortalAccount account)
         {
@@ -1341,6 +1570,14 @@ public class SellerServiceImplTest
             deleteLoginTokensCallCount++;
             deletedTerminal = terminal;
             deletedTokenIds = tokenIds;
+        }
+
+        @Override
+        public void deleteLoginToken(PortalLoginSession session)
+        {
+            deleteLoginTokenCallCount++;
+            deletedSession = session;
+            super.deleteLoginToken(session);
         }
     }
 }

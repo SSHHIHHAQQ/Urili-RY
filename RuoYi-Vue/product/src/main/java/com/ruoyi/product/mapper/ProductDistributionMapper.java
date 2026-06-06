@@ -7,6 +7,7 @@ import com.ruoyi.product.domain.ProductAttributeValue;
 import com.ruoyi.product.domain.ProductImage;
 import com.ruoyi.product.domain.ProductSku;
 import com.ruoyi.product.domain.ProductSpu;
+import com.ruoyi.product.domain.ProductSpuWarehouse;
 
 /**
  * 商城商品 SPU/SKU Mapper。
@@ -75,4 +76,10 @@ public interface ProductDistributionMapper
     int insertImage(ProductImage image);
 
     int deleteImagesBySpuId(@Param("spuId") Long spuId);
+
+    List<ProductSpuWarehouse> selectWarehousesBySpuId(@Param("spuId") Long spuId);
+
+    int insertSpuWarehouse(ProductSpuWarehouse warehouse);
+
+    int deleteWarehousesBySpuId(@Param("spuId") Long spuId);
 }

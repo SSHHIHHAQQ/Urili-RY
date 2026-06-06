@@ -266,4 +266,11 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         order by seller_code asc, seller_id asc
         limit 100
     </select>
+
+    <select id="countNormalSellerById" resultType="int">
+        select count(1)
+        from seller
+        where seller_id = #{sellerId}
+          and status = '0'
+    </select>
 </mapper>

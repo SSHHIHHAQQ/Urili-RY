@@ -157,6 +157,26 @@ public class PortalDirectLoginSupportTest
     }
 
     @Test
+    public void consumeTokenShouldRejectPayloadTargetMismatchBeforeMarkingTicketUsed()
+    {
+        PortalDirectLoginResult result = support.createToken("seller", 7L, "SAAA010001",
+                activeAccount(44L, "seller-owner"), "Support inspection",
+                PortalDirectLoginSupport.SELLER_WEB_URL_CONFIG_KEY, "http://fallback/seller/direct-login");
+        String cacheKey = cacheKey(result.getToken());
+        PortalDirectLoginToken payload = redisCache.getCacheObject(cacheKey);
+        payload.setPartnerId(8L);
+
+        ServiceException exception = assertThrows(ServiceException.class,
+                () -> support.consumeToken("seller", result.getToken()));
+
+        assertEquals("免密登录目标不匹配", exception.getMessage());
+        assertEquals(0, ticketMapper.usedCalls);
+        assertEquals(0, ticketMapper.expiredCalls);
+        assertTrue(redisCache.deletedKeys.contains(cacheKey));
+        assertNull(redisCache.getCacheObject(cacheKey));
+    }
+
+    @Test
     public void consumeTokenShouldRejectTerminalMismatchWithoutConsumingTicket()
     {
         PortalDirectLoginResult result = support.createToken("seller", 7L, "SAAA010001",

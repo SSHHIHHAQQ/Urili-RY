@@ -40,9 +40,9 @@ public interface ISellerService
 
     public int unlockSellerAccount(Long sellerId, Long sellerAccountId);
 
-    public int resetSellerAccountPassword(SellerAccount account);
+    public int resetSellerAccountPassword(Long sellerId, Long sellerAccountId, String password);
 
-    public int resetSellerAccountDefaultPassword(SellerAccount account);
+    public int resetSellerAccountDefaultPassword(Long sellerId, Long sellerAccountId);
 
     public int resetSellerOwnerPassword(Long sellerId);
 

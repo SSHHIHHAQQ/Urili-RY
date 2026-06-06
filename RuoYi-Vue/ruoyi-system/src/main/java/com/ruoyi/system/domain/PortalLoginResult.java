@@ -3,6 +3,7 @@ package com.ruoyi.system.domain;
 import java.io.Serializable;
 import java.util.Date;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 /**
  * Seller/buyer portal login result.
@@ -15,10 +16,12 @@ public class PortalLoginResult implements Serializable
 
     private String terminal;
 
+    @JsonIgnore
     private Long subjectId;
 
     private String subjectNo;
 
+    @JsonIgnore
     private Long accountId;
 
     private String username;

@@ -219,34 +219,24 @@ public class BuyerServiceImpl implements IBuyerService
 
     @Override
     @Transactional
-    public int resetBuyerAccountPassword(BuyerAccount account)
+    public int resetBuyerAccountPassword(Long buyerId, Long buyerAccountId, String password)
     {
-        if (StringUtils.isBlank(account.getPassword()))
+        if (StringUtils.isBlank(password))
         {
             throw new ServiceException("新密码不能为空");
         }
-        BuyerAccount current = selectBuyerAccountByPayload(account);
-        if (current == null)
-        {
-            throw new ServiceException("买家账号不存在");
-        }
-        selectBuyerById(current.getBuyerId());
+        BuyerAccount current = selectBuyerAccountById(buyerId, buyerAccountId);
         int rows = buyerMapper.resetBuyerAccountPassword(current.getBuyerAccountId(),
-            SecurityUtils.encryptPassword(account.getPassword()), SecurityUtils.getUsername());
+            SecurityUtils.encryptPassword(password), SecurityUtils.getUsername());
         forceLogoutBuyerAccountSessionsAfterPasswordReset(rows, current.getBuyerId(), current.getBuyerAccountId());
         return rows;
     }
 
     @Override
     @Transactional
-    public int resetBuyerAccountDefaultPassword(BuyerAccount account)
+    public int resetBuyerAccountDefaultPassword(Long buyerId, Long buyerAccountId)
     {
-        BuyerAccount current = selectBuyerAccountByPayload(account);
-        if (current == null)
-        {
-            throw new ServiceException("买家账号不存在");
-        }
-        selectBuyerById(current.getBuyerId());
+        BuyerAccount current = selectBuyerAccountById(buyerId, buyerAccountId);
         int rows = buyerMapper.resetBuyerAccountPassword(current.getBuyerAccountId(),
             SecurityUtils.encryptPassword(PartnerSupport.DEFAULT_OWNER_PASSWORD), SecurityUtils.getUsername());
         forceLogoutBuyerAccountSessionsAfterPasswordReset(rows, current.getBuyerId(), current.getBuyerAccountId());
@@ -376,7 +366,8 @@ public class BuyerServiceImpl implements IBuyerService
 
     private void assertBuyerSessionAccount(PortalLoginSession session)
     {
-        if (session == null || session.getSubjectId() == null || session.getAccountId() == null)
+        if (session == null || !"buyer".equals(session.getTerminal()) || session.getSubjectId() == null
+                || session.getAccountId() == null || StringUtils.isBlank(session.getTokenId()))
         {
             throw new ServiceException("登录状态已失效");
         }
@@ -500,10 +491,7 @@ public class BuyerServiceImpl implements IBuyerService
     @Transactional
     public int logoutBuyer(PortalLoginSession session)
     {
-        if (session == null)
-        {
-            throw new ServiceException("登录状态已失效");
-        }
+        assertBuyerSessionAccount(session);
         int rows = buyerMapper.logoutBuyerSession(session.getSubjectId(), session.getAccountId(), session.getTokenId());
         buyerMapper.insertBuyerLoginLog(portalTokenSupport.buildLoginLog(
             session.getSubjectId(), session.getAccountId(), session.getUserName(), Constants.SUCCESS, "退出成功"));
@@ -515,10 +503,7 @@ public class BuyerServiceImpl implements IBuyerService
     @Transactional
     public int updateBuyerOwnPassword(PortalLoginSession session, PortalPasswordChangeRequest request)
     {
-        if (session == null)
-        {
-            throw new ServiceException("登录状态已失效");
-        }
+        assertBuyerSessionAccount(session);
         String oldPassword = request == null ? null : request.getOldPassword();
         String newPassword = PartnerSupport.normalizePasswordChange(oldPassword,
             request == null ? null : request.getNewPassword(),

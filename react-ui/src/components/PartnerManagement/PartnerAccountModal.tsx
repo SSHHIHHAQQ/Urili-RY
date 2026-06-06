@@ -234,6 +234,24 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
     [accountRoleOptions, currentAccount?.accountRole],
   );
 
+  const loadDeptTree = async () => {
+    if (!partnerId) {
+      setDeptTree([]);
+      return;
+    }
+
+    try {
+      const resp = await config.services.getDeptTree(partnerId);
+      if (resp.code === 200) {
+        setDeptTree(resp.data || []);
+        return;
+      }
+      setDeptTree([]);
+    } catch {
+      setDeptTree([]);
+    }
+  };
+
   const loadAccounts = async () => {
     if (!partnerId) {
       setAccounts([]);
@@ -243,19 +261,11 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
 
     setLoading(true);
     try {
-      const [accountResp, deptResp] = await Promise.all([
-        config.services.getAccounts(partnerId),
-        config.services.getDeptTree(partnerId),
-      ]);
+      const accountResp = await config.services.getAccounts(partnerId);
       if (accountResp.code === 200) {
         setAccounts((accountResp.data || []) as AccountRecord[]);
       } else {
         message.error(accountResp.msg || '账号列表加载失败');
-      }
-      if (deptResp.code === 200) {
-        setDeptTree(deptResp.data || []);
-      } else {
-        setDeptTree([]);
       }
     } catch {
       message.error('账号列表加载失败，请重试');
@@ -267,6 +277,7 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
   useEffect(() => {
     if (open) {
       void loadAccounts();
+      void loadDeptTree();
       getDictSelectOption(`${config.moduleKey}_account_role`)
         .then((data) => setAccountRoleOptions(normalizeDictSelectOptions(data as DictSelectRawOption[], fallbackAccountRoleOptions)))
         .catch(() => setAccountRoleOptions(fallbackAccountRoleOptions));
@@ -327,17 +338,14 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
 
   const handleResetPassword = (account: AccountRecord) => {
     const accountId = getAccountId(config, account);
-    if (!accountId) {
+    if (!partnerId || !accountId) {
       return;
     }
     modal.confirm({
       title: `确认重置账号 ${account.userName || account.nickName || accountId} 的密码吗？`,
       content: `密码将重置为默认密码 ${DEFAULT_ACCOUNT_PASSWORD}。`,
       onOk: async () => {
-        const resp = await config.services.resetAccountDefaultPassword({
-          accountId,
-          [config.accountIdField]: accountId,
-        });
+        const resp = await config.services.resetAccountDefaultPassword(partnerId, accountId);
         if (resp.code === 200) {
           message.success(`密码已重置为 ${DEFAULT_ACCOUNT_PASSWORD}`);
           return;

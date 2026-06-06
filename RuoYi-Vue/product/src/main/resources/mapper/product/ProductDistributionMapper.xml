@@ -36,6 +36,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="salePriceMin"    column="sale_price_min"   />
         <result property="salePriceMax"    column="sale_price_max"   />
         <result property="currencySummary" column="currency_summary" />
+        <result property="warehouseKindSummary" column="warehouse_kind_summary" />
         <result property="availableStock"  column="available_stock"  />
         <result property="warehouseCount"  column="warehouse_count"  />
         <result property="inventoryStatus" column="inventory_status" />
@@ -76,6 +77,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="supplyPrice"     column="supply_price"     />
         <result property="salePrice"       column="sale_price"       />
         <result property="currencyCode"    column="currency_code"    />
+        <result property="warehouseKindSummary" column="warehouse_kind_summary" />
         <result property="skuStatus"       column="sku_status"       />
         <result property="controlStatus"   column="control_status"   />
         <result property="spuControlStatus" column="spu_control_status" />
@@ -132,6 +134,19 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="createTime" column="create_time" />
     </resultMap>
 
+    <resultMap type="ProductSpuWarehouse" id="ProductSpuWarehouseResult">
+        <id     property="id"                 column="id"                  />
+        <result property="spuId"              column="spu_id"              />
+        <result property="warehouseId"        column="warehouse_id"        />
+        <result property="warehouseCode"      column="warehouse_code"      />
+        <result property="warehouseName"      column="warehouse_name"      />
+        <result property="warehouseKind"      column="warehouse_kind"      />
+        <result property="settlementCurrency" column="settlement_currency" />
+        <result property="sellerId"           column="seller_id"           />
+        <result property="createBy"           column="create_by"           />
+        <result property="createTime"         column="create_time"         />
+    </resultMap>
+
     <sql id="spuAggregateSelect">
         select p.*,
                ifnull(s.sku_count, 0) as sku_count,
@@ -140,6 +155,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                s.sale_price_min,
                s.sale_price_max,
                s.currency_summary,
+               wh.warehouse_kind_summary,
                null as available_stock,
                null as warehouse_count,
                null as inventory_status,
@@ -158,6 +174,12 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
               and control_status = 'NORMAL'
             group by spu_id
         ) s on s.spu_id = p.spu_id
+        left join (
+            select spu_id,
+                   case when count(distinct warehouse_kind) = 1 then min(warehouse_kind) else 'MIXED' end as warehouse_kind_summary
+            from product_spu_warehouse
+            group by spu_id
+        ) wh on wh.spu_id = p.spu_id
     </sql>
 
     <sql id="spuOnSaleAggregateSelect">
@@ -168,6 +190,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                s.sale_price_min,
                s.sale_price_max,
                s.currency_summary,
+               wh.warehouse_kind_summary,
                null as available_stock,
                null as warehouse_count,
                null as inventory_status,
@@ -185,6 +208,12 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
               and control_status = 'NORMAL'
             group by spu_id
         ) s on s.spu_id = p.spu_id
+        left join (
+            select spu_id,
+                   case when count(distinct warehouse_kind) = 1 then min(warehouse_kind) else 'MIXED' end as warehouse_kind_summary
+            from product_spu_warehouse
+            group by spu_id
+        ) wh on wh.spu_id = p.spu_id
     </sql>
 
     <select id="selectProductList" parameterType="ProductSpu" resultMap="ProductSpuResult">
@@ -385,12 +414,19 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                p.product_name_en,
                p.spu_status,
                p.control_status as spu_control_status,
+               wh.warehouse_kind_summary,
                null as available_stock,
                null as warehouse_count,
                null as inventory_status,
                null as stock_update_time
         from product_sku sk
         inner join product_spu p on p.spu_id = sk.spu_id and p.del_flag = '0'
+        left join (
+            select spu_id,
+                   case when count(distinct warehouse_kind) = 1 then min(warehouse_kind) else 'MIXED' end as warehouse_kind_summary
+            from product_spu_warehouse
+            group by spu_id
+        ) wh on wh.spu_id = sk.spu_id
         where sk.del_flag = '0'
         <if test="keyword != null and keyword != ''">
             and (
@@ -444,20 +480,28 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
     <select id="selectSkuListBySpuId" resultMap="ProductSkuResult">
         select sk.*,
-               null as system_spu_code,
-               null as seller_spu_code,
-               null as seller_name,
-               null as category_id,
-               null as category_name,
-               null as product_name,
-               null as product_name_en,
-               null as spu_status,
-               null as spu_control_status,
+               p.system_spu_code,
+               p.seller_spu_code,
+               p.seller_name,
+               p.category_id,
+               p.category_name,
+               p.product_name,
+               p.product_name_en,
+               p.spu_status,
+               p.control_status as spu_control_status,
+               wh.warehouse_kind_summary,
                null as available_stock,
                null as warehouse_count,
                null as inventory_status,
                null as stock_update_time
         from product_sku sk
+        left join product_spu p on p.spu_id = sk.spu_id
+        left join (
+            select spu_id,
+                   case when count(distinct warehouse_kind) = 1 then min(warehouse_kind) else 'MIXED' end as warehouse_kind_summary
+            from product_spu_warehouse
+            group by spu_id
+        ) wh on wh.spu_id = sk.spu_id
         where sk.spu_id = #{spuId}
           and sk.del_flag = '0'
         order by sort_order asc, sku_id asc
@@ -465,20 +509,28 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
     <select id="selectOnSaleSkuListBySpuId" resultMap="ProductSkuResult">
         select sk.*,
-               null as system_spu_code,
-               null as seller_spu_code,
-               null as seller_name,
-               null as category_id,
-               null as category_name,
-               null as product_name,
-               null as product_name_en,
-               null as spu_status,
-               null as spu_control_status,
+               p.system_spu_code,
+               p.seller_spu_code,
+               p.seller_name,
+               p.category_id,
+               p.category_name,
+               p.product_name,
+               p.product_name_en,
+               p.spu_status,
+               p.control_status as spu_control_status,
+               wh.warehouse_kind_summary,
                null as available_stock,
                null as warehouse_count,
                null as inventory_status,
                null as stock_update_time
         from product_sku sk
+        left join product_spu p on p.spu_id = sk.spu_id
+        left join (
+            select spu_id,
+                   case when count(distinct warehouse_kind) = 1 then min(warehouse_kind) else 'MIXED' end as warehouse_kind_summary
+            from product_spu_warehouse
+            group by spu_id
+        ) wh on wh.spu_id = sk.spu_id
         where sk.spu_id = #{spuId}
           and sk.sku_status = 'ON_SALE'
           and sk.control_status = 'NORMAL'
@@ -488,20 +540,28 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
     <select id="selectSkuById" resultMap="ProductSkuResult">
         select sk.*,
-               null as system_spu_code,
-               null as seller_spu_code,
-               null as seller_name,
-               null as category_id,
-               null as category_name,
-               null as product_name,
-               null as product_name_en,
-               null as spu_status,
-               null as spu_control_status,
+               p.system_spu_code,
+               p.seller_spu_code,
+               p.seller_name,
+               p.category_id,
+               p.category_name,
+               p.product_name,
+               p.product_name_en,
+               p.spu_status,
+               p.control_status as spu_control_status,
+               wh.warehouse_kind_summary,
                null as available_stock,
                null as warehouse_count,
                null as inventory_status,
                null as stock_update_time
         from product_sku sk
+        left join product_spu p on p.spu_id = sk.spu_id
+        left join (
+            select spu_id,
+                   case when count(distinct warehouse_kind) = 1 then min(warehouse_kind) else 'MIXED' end as warehouse_kind_summary
+            from product_spu_warehouse
+            group by spu_id
+        ) wh on wh.spu_id = sk.spu_id
         where sk.sku_id = #{skuId}
           and sk.del_flag = '0'
         limit 1
@@ -675,6 +735,29 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
     <delete id="deleteImagesBySpuId">
         delete from product_image
+        where spu_id = #{spuId}
+    </delete>
+
+    <select id="selectWarehousesBySpuId" resultMap="ProductSpuWarehouseResult">
+        select id, spu_id, warehouse_id, warehouse_code, warehouse_name, warehouse_kind,
+               settlement_currency, seller_id, create_by, create_time
+        from product_spu_warehouse
+        where spu_id = #{spuId}
+        order by id asc
+    </select>
+
+    <insert id="insertSpuWarehouse" parameterType="ProductSpuWarehouse" useGeneratedKeys="true" keyProperty="id">
+        insert into product_spu_warehouse(
+            spu_id, warehouse_id, warehouse_code, warehouse_name, warehouse_kind,
+            settlement_currency, seller_id, create_by, create_time
+        ) values (
+            #{spuId}, #{warehouseId}, #{warehouseCode}, #{warehouseName}, #{warehouseKind},
+            #{settlementCurrency}, #{sellerId}, #{createBy}, sysdate()
+        )
+    </insert>
+
+    <delete id="deleteWarehousesBySpuId">
+        delete from product_spu_warehouse
         where spu_id = #{spuId}
     </delete>
 </mapper>

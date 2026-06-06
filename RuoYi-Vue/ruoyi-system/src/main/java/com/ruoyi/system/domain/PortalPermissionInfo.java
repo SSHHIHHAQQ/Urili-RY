@@ -2,6 +2,7 @@ package com.ruoyi.system.domain;
 
 import java.io.Serializable;
 import java.util.Set;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 /**
  * Seller/buyer terminal permission snapshot for the current account.
@@ -10,12 +11,15 @@ public class PortalPermissionInfo implements Serializable
 {
     private static final long serialVersionUID = 1L;
 
+    @JsonIgnore
     private String terminal;
 
+    @JsonIgnore
     private Long subjectId;
 
     private String subjectNo;
 
+    @JsonIgnore
     private Long accountId;
 
     private String userName;

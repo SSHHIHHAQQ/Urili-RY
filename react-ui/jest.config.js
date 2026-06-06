@@ -1,0 +1,17 @@
+import { configUmiAlias, createConfig } from '@umijs/max/test';
+export default async () => {
+    const config = await configUmiAlias({
+        ...createConfig({
+            target: 'browser',
+        }),
+    });
+    console.log();
+    return {
+        ...config,
+        testEnvironmentOptions: {
+            ...(config?.testEnvironmentOptions || {}),
+            url: 'http://localhost:8000',
+        },
+        setupFiles: [...(config.setupFiles || []), './tests/setupTests.jsx'],
+    };
+};

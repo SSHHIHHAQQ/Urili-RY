@@ -40,4 +40,6 @@ public interface WarehouseMapper
     List<UsCity> selectUsCityList(@Param("stateName") String stateName, @Param("keyword") String keyword);
 
     List<WarehouseOption> selectNormalSellerOptions(@Param("keyword") String keyword);
+
+    int countNormalSellerById(@Param("sellerId") Long sellerId);
 }

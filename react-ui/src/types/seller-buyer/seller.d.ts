@@ -83,6 +83,13 @@ declare namespace API.Partner {
     lockReason?: string;
   }
 
+  export interface SellerAccountPayload extends PortalAccountPayload {
+    sellerAccountId?: number;
+    sellerId?: number;
+    lockStatus?: string;
+    lockReason?: string;
+  }
+
   export interface SellerAccountListResult {
     code: number;
     msg: string;

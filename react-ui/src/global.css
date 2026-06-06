@@ -197,14 +197,7 @@
 .ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table .ant-table-wrapper .ant-table {
   flex: 1;
   min-height: 0;
-  overflow: auto;
-}
-
-.ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table .ant-table .ant-table-thead > tr > th {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background: #fafafa;
+  overflow: hidden;
 }
 
 .ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table .ant-table-pagination.ant-pagination {

@@ -1,7 +1,7 @@
 import { ArrowLeftOutlined, SaveOutlined } from '@ant-design/icons';
 import { PageContainer } from '@ant-design/pro-components';
 import { history, useParams } from '@umijs/max';
-import { Affix, Button, Card, DatePicker, Form, Input, InputNumber, Select, Space, TreeSelect } from 'antd';
+import { Affix, Button, Card, DatePicker, Form, Input, InputNumber, Radio, Select, Space, TreeSelect } from 'antd';
 import dayjs from 'dayjs';
 import { useEffect, useMemo, useState } from 'react';
 import { getCategoryList, getCategorySchema } from '@/services/product/product';
@@ -37,9 +37,16 @@ const ATTRIBUTE_DATE_FORMAT = 'YYYY-MM-DD';
 
 type WarehouseOption = {
   label: string;
-  value: string;
+  value: number;
   currencyCode: string;
   currencyLabel: string;
+  warehouseKind: string;
+  warehouseKindLabel: string;
+};
+
+const warehouseKindLabels: Record<string, string> = {
+  official: '官方仓',
+  third_party: '三方仓',
 };
 
 function parseAttributeJsonArray(value?: string) {
@@ -79,16 +86,52 @@ function stripSkuRows(rows: (API.ProductDistribution.Sku & { rowKey?: string })[
   return rows.map(({ rowKey: _rowKey, ...row }) => row);
 }
 
-function toWarehouseOption(warehouse: API.Warehouse.Warehouse): WarehouseOption {
-  const value = String(warehouse.warehouseCode || warehouse.warehouseId || '');
+function toWarehouseOption(warehouse: API.Warehouse.Warehouse): WarehouseOption | undefined {
+  const value = Number(warehouse.warehouseId);
+  if (!Number.isFinite(value)) return undefined;
   const currencyCode = warehouse.settlementCurrency || '';
-  const warehouseText = warehouse.warehouseName || warehouse.warehouseCode || value;
+  const warehouseKind = warehouse.warehouseKind || '';
+  const warehouseKindLabel = warehouseKindLabels[warehouseKind] || warehouseKind || '-';
+  const warehouseText = warehouse.warehouseName || warehouse.warehouseCode || String(value);
   return {
-    label: `${warehouseText}（${warehouse.warehouseCode || '-'} / ${currencyCode || '-'}）`,
+    label: `${warehouseText}（${warehouse.warehouseCode || '-'} / ${warehouseKindLabel} / ${currencyCode || '-'}）`,
     value,
     currencyCode,
     currencyLabel: currencyCode,
+    warehouseKind,
+    warehouseKindLabel,
   };
+}
+
+function toBoundWarehouseOption(warehouse: API.ProductDistribution.ProductWarehouse): WarehouseOption | undefined {
+  const value = Number(warehouse.warehouseId);
+  if (!Number.isFinite(value)) return undefined;
+  const currencyCode = warehouse.settlementCurrency || '';
+  const warehouseKind = warehouse.warehouseKind || '';
+  const warehouseKindLabel = warehouseKindLabels[warehouseKind] || warehouseKind || '-';
+  const warehouseText = warehouse.warehouseName || warehouse.warehouseCode || String(value);
+  return {
+    label: `${warehouseText}（${warehouse.warehouseCode || '-'} / ${warehouseKindLabel} / ${currencyCode || '-'}）`,
+    value,
+    currencyCode,
+    currencyLabel: currencyCode,
+    warehouseKind,
+    warehouseKindLabel,
+  };
+}
+
+function mergeWarehouseOptions(options: WarehouseOption[], boundWarehouses?: API.ProductDistribution.ProductWarehouse[]) {
+  const map = new Map<number, WarehouseOption>();
+  options.forEach((item) => {
+    map.set(item.value, item);
+  });
+  (boundWarehouses || []).forEach((warehouse) => {
+    const option = toBoundWarehouseOption(warehouse);
+    if (option && !map.has(option.value)) {
+      map.set(option.value, option);
+    }
+  });
+  return Array.from(map.values());
 }
 
 export default function ProductDistributionEditPage() {
@@ -102,6 +145,7 @@ export default function ProductDistributionEditPage() {
   const isEdit = !!spuId;
   const [form] = Form.useForm<ProductEditValues>();
   const mainImageUrl = Form.useWatch('mainImageUrl', form);
+  const selectedSellerId = Form.useWatch('sellerId', form);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [product, setProduct] = useState<API.ProductDistribution.Spu>();
@@ -111,7 +155,8 @@ export default function ProductDistributionEditPage() {
   const [warehouseOptions, setWarehouseOptions] = useState<WarehouseOption[]>([]);
   const [galleryUrls, setGalleryUrls] = useState<string[]>([]);
   const [detailBlocks, setDetailBlocks] = useState<DetailContentBlock[]>([]);
-  const [selectedWarehouseCodes, setSelectedWarehouseCodes] = useState<string[]>([]);
+  const [selectedWarehouseKind, setSelectedWarehouseKind] = useState<string>();
+  const [selectedWarehouseIds, setSelectedWarehouseIds] = useState<number[]>([]);
   const [skuRows, setSkuRows] = useState<(API.ProductDistribution.Sku & { rowKey?: string })[]>([
     { rowKey: 'sku-new-0', skuStatus: 'DRAFT', sortOrder: 0 },
   ]);
@@ -121,6 +166,13 @@ export default function ProductDistributionEditPage() {
     [categories],
   );
 
+  const availableWarehouseOptions = useMemo(
+    () => selectedWarehouseKind
+      ? warehouseOptions.filter((item) => item.warehouseKind === selectedWarehouseKind)
+      : [],
+    [selectedWarehouseKind, warehouseOptions],
+  );
+
   useEffect(() => {
     Promise.all([
       getCategoryList({ status: '0' }),
@@ -128,23 +180,37 @@ export default function ProductDistributionEditPage() {
     ]).then(([categoryResp, sellerResp]) => {
       setCategories(categoryResp.data || []);
       setSellerOptions(
-        (sellerResp.rows || []).map((seller) => ({
-          label: `${seller.sellerName || seller.sellerShortName || seller.sellerNo}（${seller.sellerNo || '-'}）`,
-          value: seller.sellerId!,
-        })),
+        (sellerResp.rows || []).flatMap((seller) =>
+          seller.sellerId == null
+            ? []
+            : [{
+                label: `${seller.sellerName || seller.sellerShortName || seller.sellerNo}（${seller.sellerNo || '-'}）`,
+                value: seller.sellerId,
+              }],
+        ),
       );
     });
 
+  }, []);
+
+  useEffect(() => {
     Promise.all([
       getOfficialWarehouseList({ pageNum: 1, pageSize: 500, status: '0' }),
-      getThirdPartyWarehouseList({ pageNum: 1, pageSize: 500, status: '0' }),
+      selectedSellerId
+        ? getThirdPartyWarehouseList({ pageNum: 1, pageSize: 500, status: '0', sellerId: selectedSellerId })
+        : Promise.resolve({ code: 200, msg: 'ok', total: 0, rows: [] } satisfies API.Warehouse.WarehousePageResult),
     ]).then(([officialWarehouseResp, thirdPartyWarehouseResp]) => {
-      setWarehouseOptions([
+      const options = [
         ...(officialWarehouseResp.code === 200 ? officialWarehouseResp.rows || [] : []),
         ...(thirdPartyWarehouseResp.code === 200 ? thirdPartyWarehouseResp.rows || [] : []),
-      ].map(toWarehouseOption).filter((item) => item.value));
-    }).catch(() => setWarehouseOptions([]));
-  }, []);
+      ].map(toWarehouseOption).filter((item): item is WarehouseOption => !!item);
+      const boundWarehouses = selectedSellerId === product?.sellerId ? product?.warehouses : undefined;
+      setWarehouseOptions(mergeWarehouseOptions(options, boundWarehouses));
+    }).catch(() => {
+      const boundWarehouses = selectedSellerId === product?.sellerId ? product?.warehouses : undefined;
+      setWarehouseOptions(mergeWarehouseOptions([], boundWarehouses));
+    });
+  }, [product?.warehouses, selectedSellerId]);
 
   useEffect(() => {
     if (!spuId) {
@@ -165,10 +231,16 @@ export default function ProductDistributionEditPage() {
         form.setFieldsValue({ ...current, attributeValueMap });
         setDetailBlocks(parseDetailContent(current.detailContent));
         setSkuRows((current.skus || []).map((sku) => ({ ...sku, rowKey: String(sku.skuId) })));
+        setSelectedWarehouseKind(current.warehouses?.[0]?.warehouseKind);
+        setSelectedWarehouseIds(current.warehouseIds || (current.warehouses || [])
+          .map((item) => item.warehouseId)
+          .filter((warehouseId): warehouseId is number => warehouseId != null));
+        setWarehouseOptions((options) => mergeWarehouseOptions(options, current.warehouses));
         setGalleryUrls(
           (current.images || [])
-            .filter((item) => item.imageRole === 'GALLERY' && item.imageUrl)
-            .map((item) => item.imageUrl!),
+            .filter((item): item is API.ProductDistribution.ProductImage & { imageUrl: string } =>
+              item.imageRole === 'GALLERY' && !!item.imageUrl)
+            .map((item) => item.imageUrl),
         );
         if (current.categoryId) {
           loadSchema(current.categoryId);
@@ -191,22 +263,39 @@ export default function ProductDistributionEditPage() {
     }
   };
 
+  const handleSellerChange = () => {
+    setSelectedWarehouseIds([]);
+  };
+
+  const handleWarehouseKindChange = (kind: string) => {
+    setSelectedWarehouseKind(kind);
+    setSelectedWarehouseIds([]);
+  };
+
   const selectedWarehouses = useMemo(
-    () => selectedWarehouseCodes
-      .map((code) => warehouseOptions.find((item) => item.value === code))
+    () => selectedWarehouseIds
+      .map((warehouseId) => warehouseOptions.find((item) => item.value === warehouseId))
       .filter(Boolean) as WarehouseOption[],
-    [selectedWarehouseCodes, warehouseOptions],
+    [selectedWarehouseIds, warehouseOptions],
   );
 
   const derivedCurrencyCode = selectedWarehouses[0]?.currencyCode;
   const derivedCurrencyLabel = selectedWarehouses[0]?.currencyLabel;
 
-  const handleWarehouseChange = (nextCodes: string[]) => {
-    const nextWarehouses = nextCodes
-      .map((code) => warehouseOptions.find((item) => item.value === code))
+  const handleWarehouseChange = (nextIds: number[]) => {
+    const nextWarehouses = nextIds
+      .map((warehouseId) => availableWarehouseOptions.find((item) => item.value === warehouseId))
       .filter(Boolean) as WarehouseOption[];
+    if (nextIds.length !== nextWarehouses.length) {
+      message.warning('请选择当前仓库类型下的发货仓库');
+      return;
+    }
     if (nextWarehouses.some((item) => !item.currencyCode)) {
       message.warning('所选发货仓库未维护币种');
+      return;
+    }
+    if (nextWarehouses.some((item) => !item.warehouseKind)) {
+      message.warning('所选发货仓库未维护仓库类型');
       return;
     }
     const currencyCodes = new Set(nextWarehouses.map((item) => item.currencyCode));
@@ -214,7 +303,12 @@ export default function ProductDistributionEditPage() {
       message.warning('发货仓库必须选择相同币种');
       return;
     }
-    setSelectedWarehouseCodes(nextCodes);
+    const warehouseKinds = new Set(nextWarehouses.map((item) => item.warehouseKind));
+    if (warehouseKinds.size > 1) {
+      message.warning('官方仓和三方仓不能混在一起选择');
+      return;
+    }
+    setSelectedWarehouseIds(nextIds);
   };
 
   const buildAttributeValues = (values: ProductEditValues): API.ProductDistribution.AttributeValue[] =>
@@ -322,6 +416,14 @@ export default function ProductDistributionEditPage() {
       message.error('至少需要维护一个 SKU');
       return;
     }
+    if (!selectedWarehouseKind) {
+      message.error('请选择仓库类型');
+      return;
+    }
+    if (!selectedWarehouseIds.length) {
+      message.error('请选择发货仓库');
+      return;
+    }
     const nextSpuStatus = isEdit
       ? product?.spuStatus || values.spuStatus || 'DRAFT'
       : targetStatus || values.spuStatus || 'DRAFT';
@@ -347,6 +449,7 @@ export default function ProductDistributionEditPage() {
       ...values,
       detailContent: serializeDetailContent(detailBlocks),
       spuStatus: nextSpuStatus,
+      warehouseIds: selectedWarehouseIds,
       skus: cleanSkus,
       attributeValues: buildAttributeValues(values),
       images: [
@@ -403,7 +506,7 @@ export default function ProductDistributionEditPage() {
                 <Input placeholder="卖家自己的 SPU 编码" />
               </Form.Item>
               <Form.Item name="sellerId" label="绑定卖家" rules={[{ required: true, message: '请选择卖家' }]}>
-                <Select {...SEARCHABLE_SELECT_PROPS} options={sellerOptions} placeholder="请选择卖家" />
+                <Select {...SEARCHABLE_SELECT_PROPS} options={sellerOptions} placeholder="请选择卖家" onChange={handleSellerChange} />
               </Form.Item>
               <Form.Item name="categoryId" label="商品分类" rules={[{ required: true, message: '请选择末级商品分类' }]}>
                 <TreeSelect
@@ -414,13 +517,26 @@ export default function ProductDistributionEditPage() {
                   onChange={handleCategoryChange}
                 />
               </Form.Item>
-              <Form.Item label="发货仓库（预留）">
+              <Form.Item label="仓库类型" required>
+                <Radio.Group value={selectedWarehouseKind} onChange={(event) => handleWarehouseKindChange(event.target.value)}>
+                  <Radio.Button value="official">官方仓</Radio.Button>
+                  <Radio.Button value="third_party">三方仓</Radio.Button>
+                </Radio.Group>
+              </Form.Item>
+              <Form.Item label="发货仓库" required>
                 <Select
                   {...SEARCHABLE_SELECT_PROPS}
                   mode="multiple"
-                  value={selectedWarehouseCodes}
-                  options={warehouseOptions}
-                  placeholder="选择币种相同的发货仓库"
+                  value={selectedWarehouseIds}
+                  options={availableWarehouseOptions}
+                  placeholder={
+                    selectedWarehouseKind
+                      ? selectedWarehouseKind === 'third_party' && !selectedSellerId
+                        ? '请先选择卖家'
+                        : '选择同币种的发货仓库'
+                      : '请先选择仓库类型'
+                  }
+                  disabled={!selectedWarehouseKind || (selectedWarehouseKind === 'third_party' && !selectedSellerId)}
                   onChange={handleWarehouseChange}
                 />
               </Form.Item>

@@ -40,7 +40,7 @@ type PortalHomeData = {
   roles?: API.Partner.PortalRoleProfile[];
 };
 
-type PortalSessionRow = API.Partner.PortalSessionProfile & {
+type PortalSessionRow = API.Partner.PortalOwnSessionProfile & {
   uiRowKey: string;
 };
 
@@ -113,7 +113,7 @@ function renderDeptList(depts?: API.Partner.PortalDeptProfile[]) {
   );
 }
 
-function renderSessionStatus(record: API.Partner.PortalSessionProfile) {
+function renderSessionStatus(record: API.Partner.PortalOwnSessionProfile) {
   if (record.current) {
     return <Tag color="processing">当前</Tag>;
   }
@@ -182,8 +182,7 @@ const PortalHomePage: React.FC = () => {
             .map((row, index) => ({
               ...row,
               uiRowKey: [
-                row.terminal || currentTerminal,
-                row.accountId || 0,
+                currentTerminal,
                 row.userName || '',
                 row.loginTime || '',
                 row.expireTime || '',

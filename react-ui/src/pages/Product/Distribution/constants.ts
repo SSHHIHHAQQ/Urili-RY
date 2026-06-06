@@ -55,6 +55,12 @@ export const sourceTypeValueEnum: ProSchemaValueEnumObj = {
   SOURCE_PRODUCT: { text: '来源商品库生成', status: 'Default' },
 };
 
+export const warehouseKindText: Record<string, string> = {
+  official: '官方仓',
+  third_party: '三方仓',
+  MIXED: '混合',
+};
+
 export const skuSpecFields: { label: string; value: keyof API.ProductDistribution.Sku }[] = [
   { label: '颜色', value: 'color' },
   { label: '尺寸', value: 'size' },

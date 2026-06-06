@@ -2,6 +2,7 @@ package com.ruoyi.system.domain;
 
 import java.io.Serializable;
 import java.util.Date;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 /**
  * Seller/buyer terminal visible current account profile.
@@ -10,10 +11,13 @@ public class PortalAccountProfile implements Serializable
 {
     private static final long serialVersionUID = 1L;
 
+    @JsonIgnore
     private String terminal;
 
+    @JsonIgnore
     private Long subjectId;
 
+    @JsonIgnore
     private Long accountId;
 
     private Long deptId;

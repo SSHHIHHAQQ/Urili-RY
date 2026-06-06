@@ -2,6 +2,7 @@ package com.ruoyi.system.domain;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 /**
  * Seller/buyer terminal visible subject profile.
@@ -10,8 +11,10 @@ public class PortalSubjectProfile implements Serializable
 {
     private static final long serialVersionUID = 1L;
 
+    @JsonIgnore
     private String terminal;
 
+    @JsonIgnore
     private Long subjectId;
 
     private String subjectNo;
