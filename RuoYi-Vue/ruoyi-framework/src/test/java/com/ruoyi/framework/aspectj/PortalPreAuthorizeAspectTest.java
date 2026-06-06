@@ -92,9 +92,9 @@ public class PortalPreAuthorizeAspectTest
 
     private PortalPreAuthorizeAspect aspect(PortalLoginSession session, IPortalPermissionCheckService service)
     {
-        PortalPermissionChecker checker = new PortalPermissionChecker(new FakePortalTokenSupport(session),
-                Arrays.asList(service));
-        return new PortalPreAuthorizeAspect(checker);
+        FakePortalTokenSupport tokenSupport = new FakePortalTokenSupport(session);
+        PortalPermissionChecker checker = new PortalPermissionChecker(tokenSupport, Arrays.asList(service));
+        return new PortalPreAuthorizeAspect(checker, tokenSupport);
     }
 
     private ProceedingJoinPoint joinPoint(Method method, ProceedAction action)

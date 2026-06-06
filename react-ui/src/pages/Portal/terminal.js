@@ -1,28 +1,29 @@
 import { clearTerminalSessionToken, setTerminalSessionToken } from '@/access';
-import { buyerPortalSessionService, sellerPortalSessionService, } from '@/services/portal/session';
+import { buyerPortalSessionService, sellerPortalSessionService } from '@/services/portal/session';
+import { getPortalLoginPath, getPortalTerminalFromPath } from '@/utils/portalPaths';
+
 export const PORTAL_META = {
     seller: {
-        label: '卖家端',
+        label: 'Seller portal',
         homePath: '/seller/portal',
+        loginPath: getPortalLoginPath('seller'),
     },
     buyer: {
-        label: '买家端',
+        label: 'Buyer portal',
         homePath: '/buyer/portal',
+        loginPath: getPortalLoginPath('buyer'),
     },
 };
+
 export const PORTAL_SERVICE = {
     seller: sellerPortalSessionService,
     buyer: buyerPortalSessionService,
 };
+
 export function getPortalTerminal(pathname) {
-    if (pathname.startsWith('/seller/')) {
-        return 'seller';
-    }
-    if (pathname.startsWith('/buyer/')) {
-        return 'buyer';
-    }
-    return undefined;
+    return getPortalTerminalFromPath(pathname);
 }
+
 export function persistPortalLogin(result, expectedTerminal) {
     if (!result?.token || result.terminal !== expectedTerminal) {
         clearPortalLogin(expectedTerminal);
@@ -33,9 +34,10 @@ export function persistPortalLogin(result, expectedTerminal) {
     }
     const terminal = expectedTerminal;
     const expireTime = Date.now() + (result.expireMinutes || 30) * 60 * 1000;
-    setTerminalSessionToken(terminal, result.token, result.token, expireTime);
+    setTerminalSessionToken(terminal, result.token, undefined, expireTime);
     return true;
 }
+
 export function clearPortalLogin(terminal) {
     clearTerminalSessionToken(terminal);
 }

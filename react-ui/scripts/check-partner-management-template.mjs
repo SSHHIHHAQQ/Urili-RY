@@ -5,7 +5,9 @@ const root = process.cwd();
 
 const files = {
   sellerPage: path.join(root, 'src', 'pages', 'Seller', 'index.tsx'),
+  sellerPageJs: path.join(root, 'src', 'pages', 'Seller', 'index.js'),
   buyerPage: path.join(root, 'src', 'pages', 'Buyer', 'index.tsx'),
+  buyerPageJs: path.join(root, 'src', 'pages', 'Buyer', 'index.js'),
   sellerService: path.join(root, 'src', 'services', 'seller', 'seller.ts'),
   sellerServiceJs: path.join(root, 'src', 'services', 'seller', 'seller.js'),
   buyerService: path.join(root, 'src', 'services', 'buyer', 'buyer.ts'),
@@ -38,6 +40,62 @@ const files = {
     'PartnerManagement',
     'PartnerAccountModal.js',
   ),
+  accountRoleModal: path.join(
+    root,
+    'src',
+    'components',
+    'PartnerManagement',
+    'PartnerAccountRoleModal.tsx',
+  ),
+  accountRoleModalJs: path.join(
+    root,
+    'src',
+    'components',
+    'PartnerManagement',
+    'PartnerAccountRoleModal.js',
+  ),
+  deptModal: path.join(
+    root,
+    'src',
+    'components',
+    'PartnerManagement',
+    'PartnerDeptModal.tsx',
+  ),
+  deptModalJs: path.join(
+    root,
+    'src',
+    'components',
+    'PartnerManagement',
+    'PartnerDeptModal.js',
+  ),
+  roleModal: path.join(
+    root,
+    'src',
+    'components',
+    'PartnerManagement',
+    'PartnerRoleModal.tsx',
+  ),
+  roleModalJs: path.join(
+    root,
+    'src',
+    'components',
+    'PartnerManagement',
+    'PartnerRoleModal.js',
+  ),
+  menuModal: path.join(
+    root,
+    'src',
+    'components',
+    'PartnerManagement',
+    'PartnerMenuModal.tsx',
+  ),
+  menuModalJs: path.join(
+    root,
+    'src',
+    'components',
+    'PartnerManagement',
+    'PartnerMenuModal.js',
+  ),
   sessionModal: path.join(
     root,
     'src',
@@ -59,7 +117,16 @@ const files = {
     'PartnerManagement',
     'PartnerAuditModal.tsx',
   ),
+  auditModalJs: path.join(
+    root,
+    'src',
+    'components',
+    'PartnerManagement',
+    'PartnerAuditModal.js',
+  ),
   partnerTypes: path.join(root, 'src', 'types', 'seller-buyer', 'party.d.ts'),
+  sellerTypes: path.join(root, 'src', 'types', 'seller-buyer', 'seller.d.ts'),
+  buyerTypes: path.join(root, 'src', 'types', 'seller-buyer', 'buyer.d.ts'),
 };
 
 const modules = [
@@ -67,6 +134,7 @@ const modules = [
     key: 'seller',
     label: '卖家',
     pageKey: 'sellerPage',
+    pageJsKey: 'sellerPageJs',
     serviceKey: 'sellerService',
     serviceJsKey: 'sellerServiceJs',
     serviceImport: "@/services/seller/seller",
@@ -145,6 +213,7 @@ const modules = [
     key: 'buyer',
     label: '买家',
     pageKey: 'buyerPage',
+    pageJsKey: 'buyerPageJs',
     serviceKey: 'buyerService',
     serviceJsKey: 'buyerServiceJs',
     serviceImport: "@/services/buyer/buyer",
@@ -267,7 +336,11 @@ function assertNoPattern(source, relativePath, pattern, message) {
 
 function extractConfigBlock(source, moduleKey) {
   const marker = `const ${moduleKey}Config: PartnerModuleConfig = {`;
-  const start = source.indexOf(marker);
+  const fallbackMarker = `const ${moduleKey}Config = {`;
+  let start = source.indexOf(marker);
+  if (start < 0) {
+    start = source.indexOf(fallbackMarker);
+  }
   if (start < 0) {
     return '';
   }
@@ -430,6 +503,67 @@ function checkPage(module) {
       `must wire ${serviceName} into the ${module.key} management template`,
     );
   }
+
+  const jsFile = files[module.pageJsKey];
+  const jsSource = readOptional(jsFile);
+  if (jsSource) {
+    const jsRelativePath = toRelative(jsFile);
+    assertIncludes(
+      jsSource,
+      jsRelativePath,
+      "import PartnerManagementPage from '@/components/PartnerManagement/PartnerManagementPage';",
+      'must use the shared PartnerManagementPage template',
+    );
+    assertIncludes(
+      jsSource,
+      jsRelativePath,
+      `from '${module.serviceImport}'`,
+      `must import only ${module.key} admin services`,
+    );
+    assertNoPattern(
+      jsSource,
+      jsRelativePath,
+      /\brequest\s*(?:<[^;]+?>)?\s*\(/,
+      'must not call request(...) directly',
+    );
+    assertNoPattern(
+      jsSource,
+      jsRelativePath,
+      forbiddenServiceImport,
+      'must not import cross-terminal or system services',
+    );
+    for (const forbidden of module.forbiddenWords) {
+      assertNotIncludes(
+        jsSource,
+        jsRelativePath,
+        forbidden,
+        `must not reference cross-terminal token ${forbidden}`,
+      );
+    }
+    const jsConfigBlock = extractConfigBlock(jsSource, module.key);
+    if (!jsConfigBlock) {
+      violations.push(`${jsRelativePath} must define ${module.key}Config`);
+    } else {
+      for (const [fieldName, value] of [
+        ['moduleKey', module.key],
+        ['idField', module.idField],
+        ['noField', module.noField],
+        ['codeField', module.codeField],
+        ['nameField', module.nameField],
+        ['ownerIdField', module.idField],
+        ['accountIdField', module.accountIdField],
+        ['listTemplate', 'standard'],
+        ['searchStorageKey', module.searchStorageKey],
+      ]) {
+        assertIncludes(
+          jsConfigBlock,
+          jsRelativePath,
+          `${fieldName}: '${value}'`,
+          `must configure ${fieldName}: '${value}'`,
+        );
+      }
+    }
+  }
 }
 
 function checkServiceSource(module, source, relativePath) {
@@ -509,12 +643,70 @@ function checkPartnerTypes() {
   if (!directLoginBlock) {
     violations.push(`${relativePath} must define DirectLoginResult`);
   } else {
-    assertNoPattern(
+    assertIncludes(
       directLoginBlock,
       relativePath,
-      /\btoken\s*[:?]/,
-      'DirectLoginResult must not expose direct-login token',
+      'token: string',
+      'DirectLoginResult must expose direct-login token for postMessage delivery',
     );
+  }
+}
+
+function checkPartnerReadTypes() {
+  const sensitiveResponseFields = [
+    'password',
+    'token',
+    'refreshToken',
+    'directLoginToken',
+    'loginUrl',
+    'tokenHash',
+    'authorization',
+    'accessToken',
+  ];
+  const readTypeGroups = [
+    {
+      file: files.sellerTypes,
+      interfaces: [
+        'Seller',
+        'SellerPageResult',
+        'SellerInfoResult',
+        'SellerAccount',
+        'SellerAccountListResult',
+      ],
+    },
+    {
+      file: files.buyerTypes,
+      interfaces: [
+        'Buyer',
+        'BuyerPageResult',
+        'BuyerInfoResult',
+        'BuyerAccount',
+        'BuyerAccountListResult',
+      ],
+    },
+  ];
+
+  for (const group of readTypeGroups) {
+    const source = readRequired(group.file);
+    const relativePath = toRelative(group.file);
+    if (!source) {
+      continue;
+    }
+    for (const interfaceName of group.interfaces) {
+      const block = extractInterfaceBlock(source, interfaceName);
+      if (!block) {
+        violations.push(`${relativePath} must define ${interfaceName}`);
+        continue;
+      }
+      for (const fieldName of sensitiveResponseFields) {
+        const fieldPattern = new RegExp(`\\b${fieldName}\\s*\\??\\s*:`, 'i');
+        if (fieldPattern.test(block)) {
+          violations.push(
+            `${relativePath} ${interfaceName} must not expose sensitive response field ${fieldName}`,
+          );
+        }
+      }
+    }
   }
 }
 
@@ -583,6 +775,94 @@ function checkAccountModalSource(source, relativePath) {
   checkAccountModalFailSoft(source, relativePath);
 }
 
+function checkAccountRoleModalSource(source, relativePath) {
+  if (!source) {
+    return;
+  }
+  for (const expected of [
+    'config.services.getAccountRoles(partnerId, accountId)',
+    'config.services.assignAccountRoles(partnerId, accountId, selectedRoleIds)',
+    'normalizeRoleIds',
+    'account[config.accountIdField] || account.accountId',
+  ]) {
+    assertIncludes(
+      source,
+      relativePath,
+      expected,
+      `must keep account role modal scoped behavior for ${expected}`,
+    );
+  }
+  assertNoPattern(
+    source,
+    relativePath,
+    /\/api\/(?:seller|buyer|system)\//,
+    'must not hardcode API paths inside account role modal',
+  );
+}
+
+function checkDeptModalSource(source, relativePath) {
+  if (!source) {
+    return;
+  }
+  for (const expected of [
+    'const permPrefix = `${config.moduleKey}:admin`',
+    'config.services.listDepts(partnerId)',
+    'config.services.getDeptTree(partnerId)',
+    'config.services.updateDept(partnerId, payload)',
+    'config.services.addDept(partnerId, payload)',
+    'config.services.removeDept(partnerId, dept.deptId',
+    'access.hasPerms(`${permPrefix}:dept:add`)',
+    'access.hasPerms(`${permPrefix}:dept:edit`)',
+    'access.hasPerms(`${permPrefix}:dept:remove`)',
+  ]) {
+    assertIncludes(
+      source,
+      relativePath,
+      expected,
+      `must keep department modal terminal-scoped behavior for ${expected}`,
+    );
+  }
+  assertNoPattern(
+    source,
+    relativePath,
+    /\/api\/(?:seller|buyer|system)\//,
+    'must not hardcode API paths inside department modal',
+  );
+}
+
+function checkRoleModalSource(source, relativePath) {
+  if (!source) {
+    return;
+  }
+  for (const expected of [
+    'const permPrefix = `${config.moduleKey}:admin`',
+    'config.services.listRoles(partnerId)',
+    'config.services.getRole(partnerId, role.roleId)',
+    'config.services.getRoleMenuTree(partnerId, role.roleId)',
+    'config.services.getMenuTree()',
+    'config.services.updateRole(partnerId, payload)',
+    'config.services.addRole(partnerId, payload)',
+    'config.services.changeRoleStatus(partnerId',
+    'config.services.removeRoles(partnerId, [role.roleId',
+    'access.hasPerms(`${permPrefix}:role:add`)',
+    'access.hasPerms(`${permPrefix}:role:edit`)',
+    'access.hasPerms(`${permPrefix}:role:remove`)',
+  ]) {
+    assertIncludes(
+      source,
+      relativePath,
+      expected,
+      `must keep role modal terminal-scoped behavior for ${expected}`,
+    );
+  }
+  assertNoPattern(
+    source,
+    relativePath,
+    /\/api\/(?:seller|buyer|system)\//,
+    'must not hardcode API paths inside role modal',
+  );
+}
+
 function checkPageTemplateSource(source, relativePath, requireTypeExport) {
   if (!source) {
     return;
@@ -599,6 +879,8 @@ function checkPageTemplateSource(source, relativePath, requireTypeExport) {
     'PartnerAuditModal',
     'listTemplate ===',
     'searchStorageKey',
+    'searchFieldCount',
+    'openPortalDirectLoginWindow',
     'config.services.directLogin',
     'config.services.forceLogoutSubject',
   ];
@@ -620,6 +902,27 @@ function checkPageTemplateSource(source, relativePath, requireTypeExport) {
     /\/api\/(?:seller|buyer|system)\//,
     'must not hardcode API paths inside the shared page template',
   );
+  assertIncludes(
+    source,
+    relativePath,
+    'fieldCount: config.searchFieldCount',
+    'must pass configured fieldCount into getPersistedProTableSearch',
+  );
+  for (const expected of [
+    'list: `${permPrefix}:account:list`',
+    'add: `${permPrefix}:account:add`',
+    'edit: `${permPrefix}:account:edit`',
+    'resetPwd: `${permPrefix}:account:resetPwd`',
+    'roleQuery: `${permPrefix}:account:role:query`',
+    'roleEdit: `${permPrefix}:account:role:edit`',
+  ]) {
+    assertIncludes(
+      source,
+      relativePath,
+      expected,
+      `must keep account permission fallback ${expected}`,
+    );
+  }
 }
 
 function checkSessionModalSource(source, relativePath) {
@@ -648,23 +951,106 @@ function checkSessionModalSource(source, relativePath) {
   );
 }
 
+function checkMenuModalSource(source, relativePath) {
+  if (!source) {
+    return;
+  }
+  if (source.includes("from './PartnerMenuModal.tsx'")) {
+    return;
+  }
+  for (const expected of [
+    'validateMenuPathForTerminal',
+    'validateMenuComponentForTerminal',
+    'validateMenuPermsForTerminal',
+    'normalized.startsWith(`${moduleKey}:`)',
+    'forbiddenPathRoots',
+    'forbiddenComponentRoots',
+    'normalized.startsWith(`${moduleKey}:admin:`)',
+  ]) {
+    assertIncludes(
+      source,
+      relativePath,
+      expected,
+      `must keep terminal fail-closed menu validation for ${expected}`,
+    );
+  }
+}
+
+function checkAuditModalSource(source, relativePath, requireTabLabels) {
+  if (!source) {
+    return;
+  }
+  for (const expected of [
+    'config.services.listLoginLogs',
+    'config.services.listOperLogs',
+    'config.services.listDirectLoginTickets',
+    'getPersistedProTableSearch',
+  ]) {
+    assertIncludes(
+      source,
+      relativePath,
+      expected,
+      `must keep audit modal support for ${expected}`,
+    );
+  }
+  if (requireTabLabels) {
+    for (const expected of [
+      "label: '登录日志'",
+      "label: '操作日志'",
+      "label: '免密票据'",
+    ]) {
+      assertIncludes(
+        source,
+        relativePath,
+        expected,
+        `must keep audit modal support for ${expected}`,
+      );
+    }
+  }
+  assertNoPattern(
+    source,
+    relativePath,
+    /\btokenHash\b|\bdirectLoginToken\b|\bloginUrl\b/,
+    'must not render direct-login sensitive token fields',
+  );
+}
+
 function checkSharedTemplate() {
   const pageTemplateSource = readRequired(files.pageTemplate);
   const pageTemplateJsSource = readOptional(files.pageTemplateJs);
   const accountModalSource = readRequired(files.accountModal);
   const accountModalJsSource = readOptional(files.accountModalJs);
+  const accountRoleModalSource = readRequired(files.accountRoleModal);
+  const accountRoleModalJsSource = readOptional(files.accountRoleModalJs);
+  const deptModalSource = readRequired(files.deptModal);
+  const deptModalJsSource = readOptional(files.deptModalJs);
+  const roleModalSource = readRequired(files.roleModal);
+  const roleModalJsSource = readOptional(files.roleModalJs);
   const sessionModalSource = readRequired(files.sessionModal);
   const sessionModalJsSource = readOptional(files.sessionModalJs);
   const auditModalSource = readRequired(files.auditModal);
+  const auditModalJsSource = readOptional(files.auditModalJs);
+  const menuModalSource = readRequired(files.menuModal);
+  const menuModalJsSource = readOptional(files.menuModalJs);
 
   checkPageTemplateSource(pageTemplateSource, toRelative(files.pageTemplate), true);
   checkPageTemplateSource(pageTemplateJsSource, toRelative(files.pageTemplateJs), false);
 
   checkAccountModalSource(accountModalSource, toRelative(files.accountModal));
   checkAccountModalSource(accountModalJsSource, toRelative(files.accountModalJs));
+  checkAccountRoleModalSource(accountRoleModalSource, toRelative(files.accountRoleModal));
+  checkAccountRoleModalSource(accountRoleModalJsSource, toRelative(files.accountRoleModalJs));
+  checkDeptModalSource(deptModalSource, toRelative(files.deptModal));
+  checkDeptModalSource(deptModalJsSource, toRelative(files.deptModalJs));
+  checkRoleModalSource(roleModalSource, toRelative(files.roleModal));
+  checkRoleModalSource(roleModalJsSource, toRelative(files.roleModalJs));
 
   checkSessionModalSource(sessionModalSource, toRelative(files.sessionModal));
   checkSessionModalSource(sessionModalJsSource, toRelative(files.sessionModalJs));
+  checkMenuModalSource(menuModalSource, toRelative(files.menuModal));
+  checkMenuModalSource(menuModalJsSource, toRelative(files.menuModalJs));
+  checkAuditModalSource(auditModalSource, toRelative(files.auditModal), true);
+  checkAuditModalSource(auditModalJsSource, toRelative(files.auditModalJs), false);
 
   if (auditModalSource) {
     const relativePath = toRelative(files.auditModal);
@@ -698,6 +1084,7 @@ for (const module of modules) {
   checkService(module);
 }
 checkPartnerTypes();
+checkPartnerReadTypes();
 checkSharedTemplate();
 
 if (violations.length > 0) {

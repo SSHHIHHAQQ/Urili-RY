@@ -1,9 +1,16 @@
 declare namespace API.Integration {
   export interface SourceProductItem {
+    sourceGroupKey?: string;
+    sourceSkuGroupKey?: string;
+    sourceDimensionGroupKey?: string;
     connectionCode: string;
     systemKind?: string;
     systemKindLabel?: string;
     masterWarehouseName?: string;
+    sourceConnectionCodes?: string;
+    sourceWarehouseNames?: string;
+    warehouseCount?: number;
+    sourceRowCount?: number;
     masterSku: string;
     masterProductName: string;
     productAliasName?: string;
@@ -61,5 +68,11 @@ declare namespace API.Integration {
     msg: string;
     total: number;
     rows: SourceProductItem[];
+  }
+
+  export interface SourceProductGroupDetail {
+    group?: SourceProductItem;
+    dimensionGroups?: SourceProductItem[];
+    warehouses?: SourceProductItem[];
   }
 }

@@ -8,6 +8,8 @@ public class UpstreamSyncResult
     private int warehouseCount;
     private int logisticsChannelCount;
     private int skuCount;
+    private int skuDimensionCount;
+    private int warehouseStockCount;
     private String syncBatchId;
 
     public int getWarehouseCount() { return warehouseCount; }
@@ -16,6 +18,10 @@ public class UpstreamSyncResult
     public void setLogisticsChannelCount(int logisticsChannelCount) { this.logisticsChannelCount = logisticsChannelCount; }
     public int getSkuCount() { return skuCount; }
     public void setSkuCount(int skuCount) { this.skuCount = skuCount; }
+    public int getSkuDimensionCount() { return skuDimensionCount; }
+    public void setSkuDimensionCount(int skuDimensionCount) { this.skuDimensionCount = skuDimensionCount; }
+    public int getWarehouseStockCount() { return warehouseStockCount; }
+    public void setWarehouseStockCount(int warehouseStockCount) { this.warehouseStockCount = warehouseStockCount; }
     public String getSyncBatchId() { return syncBatchId; }
     public void setSyncBatchId(String syncBatchId) { this.syncBatchId = syncBatchId; }
 }

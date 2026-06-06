@@ -187,6 +187,7 @@ create table if not exists upstream_system_sku_sync_state (
   primary key (connection_code)
 ) engine=innodb comment='SKU同步状态表';
 
+
 create table if not exists upstream_system_request_log (
   request_log_id             bigint(20)   not null auto_increment comment '请求日志ID',
   connection_code            varchar(64)  not null                comment '主仓接入编号',
@@ -304,6 +305,9 @@ values
      sysdate(), '', null, ''),
     (2306, '请求日志查看', 2031, 35, '#', '', '', '',
      1, 0, 'F', '0', '0', 'integration:upstream:log', '#', 'admin',
+     sysdate(), '', null, ''),
+    (2307, '仓库尺寸重量同步', 2031, 40, '#', '', '', '',
+     1, 0, 'F', '0', '0', 'integration:upstream:dimensionSync', '#', 'admin',
      sysdate(), '', null, '')
 on duplicate key update
     menu_name = values(menu_name),
@@ -323,3 +327,5 @@ on duplicate key update
     update_by = 'admin',
     update_time = sysdate(),
     remark = values(remark);
+
+-- Upstream inventory schema, permissions, and scheduled job are intentionally omitted until the inventory schema is confirmed.

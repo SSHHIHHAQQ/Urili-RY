@@ -8,3 +8,10 @@ export async function getSourceProductList(params?: Record<string, any>) {
     params,
   });
 }
+
+export async function getSourceProductGroupDetail(params?: Record<string, any>) {
+  return request<API.Result & { data: API.Integration.SourceProductGroupDetail }>(`${baseUrl}/group-detail`, {
+    method: 'GET',
+    params,
+  });
+}

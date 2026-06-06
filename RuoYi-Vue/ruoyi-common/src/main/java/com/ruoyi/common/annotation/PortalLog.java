@@ -41,6 +41,11 @@ public @interface PortalLog
     public boolean isSaveResponseData() default true;
 
     /**
+     * Whether an endpoint can be audited before a portal session exists.
+     */
+    public boolean allowAnonymous() default false;
+
+    /**
      * Request parameters to exclude.
      */
     public String[] excludeParamNames() default {};

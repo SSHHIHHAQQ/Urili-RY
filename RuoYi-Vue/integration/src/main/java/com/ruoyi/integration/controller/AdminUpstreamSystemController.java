@@ -18,8 +18,10 @@ import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.core.page.TableDataInfo;
 import com.ruoyi.common.enums.BusinessType;
+import com.ruoyi.integration.domain.SourceWarehouseStockItem;
 import com.ruoyi.integration.domain.UpstreamSkuSyncItem;
 import com.ruoyi.integration.domain.UpstreamSystemConnection;
+import com.ruoyi.integration.domain.query.SourceWarehouseStockQuery;
 import com.ruoyi.integration.domain.request.LogisticsChannelPairingRequest;
 import com.ruoyi.integration.domain.request.SkuPairingRequest;
 import com.ruoyi.integration.domain.request.UpstreamConnectionInfoRequest;
@@ -123,6 +125,40 @@ public class AdminUpstreamSystemController extends BaseController
         return success(upstreamSystemService.syncSkusOnly(connectionCode));
     }
 
+    @PreAuthorize("@ss.hasPermi('integration:upstream:dimensionSync')")
+    @Log(title = "上游SKU仓库尺寸重量同步", businessType = BusinessType.OTHER)
+    @PostMapping("/{connectionCode}/sku-dimensions/sync")
+    public AjaxResult syncSkuDimensions(@PathVariable("connectionCode") String connectionCode)
+    {
+        return success(upstreamSystemService.syncSkuDimensionsOnly(connectionCode));
+    }
+
+    @PreAuthorize("@ss.hasPermi('integration:upstream:inventorySync')")
+    @Log(title = "上游SKU库存同步", businessType = BusinessType.OTHER)
+    @PostMapping("/{connectionCode}/inventory/sync")
+    public AjaxResult syncInventory(@PathVariable("connectionCode") String connectionCode)
+    {
+        return success(upstreamSystemService.syncWarehouseStocksOnly(connectionCode));
+    }
+
+    @PreAuthorize("@ss.hasPermi('integration:upstream:inventoryQuery')")
+    @GetMapping("/{connectionCode}/inventory/list")
+    public TableDataInfo inventory(@PathVariable("connectionCode") String connectionCode,
+        SourceWarehouseStockQuery query)
+    {
+        startPage();
+        query.setConnectionCode(connectionCode);
+        List<SourceWarehouseStockItem> list = upstreamSystemService.selectSourceWarehouseStockList(query);
+        return getDataTable(list);
+    }
+
+    @PreAuthorize("@ss.hasPermi('integration:upstream:inventoryQuery')")
+    @GetMapping("/{connectionCode}/inventory-sync-state")
+    public AjaxResult inventorySyncState(@PathVariable("connectionCode") String connectionCode)
+    {
+        return success(upstreamSystemService.selectInventorySyncState(connectionCode));
+    }
+
     @PreAuthorize("@ss.hasPermi('integration:upstream:query')")
     @GetMapping("/{connectionCode}/warehouses")
     public AjaxResult warehouses(@PathVariable("connectionCode") String connectionCode,
@@ -192,11 +228,13 @@ public class AdminUpstreamSystemController extends BaseController
     public TableDataInfo skus(@PathVariable("connectionCode") String connectionCode,
         @RequestParam(value = "status", required = false) String status,
         @RequestParam(value = "pairingStatus", required = false) String pairingStatus,
+        @RequestParam(value = "dimensionStatus", required = false) String dimensionStatus,
         @RequestParam(value = "field", required = false) String field,
         @RequestParam(value = "keyword", required = false) String keyword)
     {
         startPage();
-        List<UpstreamSkuSyncItem> list = upstreamSystemService.selectSkuSyncList(connectionCode, status, pairingStatus, field, keyword);
+        List<UpstreamSkuSyncItem> list = upstreamSystemService.selectSkuSyncList(connectionCode, status,
+            pairingStatus, dimensionStatus, field, keyword);
         return getDataTable(list);
     }
 

@@ -10,13 +10,29 @@ const componentFile = path.join(
   'Home',
   'SellerOwnDistributionProductList.tsx',
 );
+const componentJsFile = path.join(
+  root,
+  'src',
+  'pages',
+  'Portal',
+  'Home',
+  'SellerOwnDistributionProductList.js',
+);
 const homeFile = path.join(root, 'src', 'pages', 'Portal', 'Home', 'index.tsx');
+const homeJsFile = path.join(root, 'src', 'pages', 'Portal', 'Home', 'index.js');
 const portalServiceFile = path.join(
   root,
   'src',
   'services',
   'portal',
   'session.ts',
+);
+const portalServiceJsFile = path.join(
+  root,
+  'src',
+  'services',
+  'portal',
+  'session.js',
 );
 
 const requiredServiceFunctions = [
@@ -71,76 +87,93 @@ function assertNoPattern(source, relativePath, pattern, message) {
 }
 
 const componentSource = readRequired(componentFile);
+const componentJsSource = readRequired(componentJsFile);
 const homeSource = readRequired(homeFile);
+const homeJsSource = readRequired(homeJsFile);
 const portalServiceSource = readRequired(portalServiceFile);
+const portalServiceJsSource = readRequired(portalServiceJsFile);
 
-if (componentSource) {
-  const relativePath = toRelative(componentFile);
+function checkComponentSource(source, relativePath, requireTypes) {
+  if (!source) {
+    return;
+  }
   for (const fnName of requiredServiceFunctions) {
-    if (!componentSource.includes(fnName)) {
+    if (!source.includes(fnName)) {
       violations.push(`${relativePath} must use ${fnName}`);
     }
   }
-  if (!componentSource.includes("from '@/services/portal/session'")) {
+  if (!source.includes("from '@/services/portal/session'")) {
     violations.push(
       `${relativePath} must import seller product APIs from portal session service`,
     );
   }
-  if (!componentSource.includes('API.Partner.SellerPortalProduct')) {
-    violations.push(`${relativePath} must use API.Partner.SellerPortalProduct`);
-  }
-  if (!componentSource.includes('API.Partner.SellerPortalProductSku')) {
-    violations.push(
-      `${relativePath} must use API.Partner.SellerPortalProductSku`,
-    );
+  if (requireTypes) {
+    if (!source.includes('API.Partner.SellerPortalProduct')) {
+      violations.push(`${relativePath} must use API.Partner.SellerPortalProduct`);
+    }
+    if (!source.includes('API.Partner.SellerPortalProductSku')) {
+      violations.push(
+        `${relativePath} must use API.Partner.SellerPortalProductSku`,
+      );
+    }
   }
   for (const requiredToken of [
     'ProTable',
-    'ProColumns',
     'getPersistedProTableSearch',
     'getProTablePagination',
     'getProTableScroll',
   ]) {
-    if (!componentSource.includes(requiredToken)) {
+    if (!source.includes(requiredToken)) {
       violations.push(`${relativePath} must use standard ProTable template token ${requiredToken}`);
     }
   }
-  if (!componentSource.includes('pageNum: currentPage')) {
+  if (requireTypes && !source.includes('ProColumns')) {
+    violations.push(`${relativePath} must use standard ProTable template token ProColumns`);
+  }
+  if (!source.includes('pageNum: currentPage')) {
     violations.push(`${relativePath} must map ProTable current to RuoYi pageNum`);
   }
-  if (!componentSource.includes('pageSize: currentPageSize')) {
+  if (!source.includes('pageSize: currentPageSize')) {
     violations.push(`${relativePath} must map ProTable pageSize to RuoYi pageSize`);
   }
   assertNoPattern(
-    componentSource,
+    source,
     relativePath,
     /\brequest\s*(?:<[^;]+?>)?\s*\(/,
     'must not call request(...) directly',
   );
   assertNoPattern(
-    componentSource,
+    source,
     relativePath,
     /from\s+['"]@\/services\/product\//,
     'must not import admin product services',
   );
   assertNoPattern(
-    componentSource,
+    source,
     relativePath,
     /\/api\/(?:product\/admin|seller)\/distribution-products/,
     'must not hardcode product API paths',
   );
   assertNoPattern(
-    componentSource,
+    source,
     relativePath,
     /\bAPI\.ProductDistribution\b/,
     'must not reuse admin product distribution types',
   );
 }
 
-if (homeSource) {
-  const relativePath = toRelative(homeFile);
+checkComponentSource(componentSource, toRelative(componentFile), true);
+checkComponentSource(componentJsSource, toRelative(componentJsFile), false);
+
+function checkHomeSource(source, relativePath) {
+  if (!source) {
+    return;
+  }
+  if (source.includes("export { default } from './index.tsx';")) {
+    return;
+  }
   if (
-    !homeSource.includes(
+    !source.includes(
       "import SellerOwnDistributionProductList from './SellerOwnDistributionProductList';",
     )
   ) {
@@ -148,7 +181,7 @@ if (homeSource) {
       `${relativePath} must import SellerOwnDistributionProductList`,
     );
   }
-  const componentIndex = homeSource.indexOf(
+  const componentIndex = source.indexOf(
     '<SellerOwnDistributionProductList',
   );
   if (componentIndex < 0) {
@@ -156,11 +189,11 @@ if (homeSource) {
       `${relativePath} must render SellerOwnDistributionProductList`,
     );
   } else {
-    const sellerBranchIndex = homeSource.lastIndexOf(
+    const sellerBranchIndex = source.lastIndexOf(
       "terminal === 'seller'",
       componentIndex,
     );
-    const buyerBranchIndex = homeSource.lastIndexOf(
+    const buyerBranchIndex = source.lastIndexOf(
       "terminal === 'buyer'",
       componentIndex,
     );
@@ -172,10 +205,15 @@ if (homeSource) {
   }
 }
 
-if (portalServiceSource) {
-  const relativePath = toRelative(portalServiceFile);
+checkHomeSource(homeSource, toRelative(homeFile));
+checkHomeSource(homeJsSource, toRelative(homeJsFile));
+
+function checkPortalServiceSource(source, relativePath) {
+  if (!source) {
+    return;
+  }
   for (const fnName of requiredServiceFunctions) {
-    const fnSource = extractFunction(portalServiceSource, fnName);
+    const fnSource = extractFunction(source, fnName);
     if (!fnSource) {
       violations.push(`${relativePath} must export ${fnName}`);
       continue;
@@ -194,7 +232,7 @@ if (portalServiceSource) {
   }
 
   const listSource = extractFunction(
-    portalServiceSource,
+    source,
     'getSellerPortalDistributionProducts',
   );
   if (listSource) {
@@ -215,6 +253,9 @@ if (portalServiceSource) {
     }
   }
 }
+
+checkPortalServiceSource(portalServiceSource, toRelative(portalServiceFile));
+checkPortalServiceSource(portalServiceJsSource, toRelative(portalServiceJsFile));
 
 if (violations.length > 0) {
   console.error('Seller portal product template guard failed:');

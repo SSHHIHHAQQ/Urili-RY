@@ -167,6 +167,7 @@ public class AdminBuyerController extends BaseController
     }
 
     @PreAuthorize("@ss.hasPermi('buyer:admin:forceLogout')")
+    @Log(title = "Buyer session list", businessType = BusinessType.OTHER, isSaveResponseData = false)
     @GetMapping("/{buyerId}/sessions/list")
     public TableDataInfo sessions(@PathVariable("buyerId") Long buyerId)
     {
@@ -176,6 +177,7 @@ public class AdminBuyerController extends BaseController
     }
 
     @PreAuthorize("@ss.hasPermi('buyer:admin:forceLogout')")
+    @Log(title = "Buyer account session list", businessType = BusinessType.OTHER, isSaveResponseData = false)
     @GetMapping("/{buyerId}/accounts/{accountId}/sessions/list")
     public TableDataInfo accountSessions(@PathVariable("buyerId") Long buyerId, @PathVariable("accountId") Long accountId)
     {
@@ -220,6 +222,7 @@ public class AdminBuyerController extends BaseController
     }
 
     @PreAuthorize("@ss.hasPermi('buyer:admin:loginLog:list')")
+    @Log(title = "Buyer login log list", businessType = BusinessType.OTHER, isSaveResponseData = false)
     @GetMapping("/loginLogs/list")
     public TableDataInfo loginLogs(PortalLoginLog log)
     {
@@ -229,6 +232,7 @@ public class AdminBuyerController extends BaseController
     }
 
     @PreAuthorize("@ss.hasPermi('buyer:admin:operLog:list')")
+    @Log(title = "Buyer operation log list", businessType = BusinessType.OTHER, isSaveResponseData = false)
     @GetMapping("/operLogs/list")
     public TableDataInfo operLogs(PortalOperLog log)
     {
@@ -238,6 +242,7 @@ public class AdminBuyerController extends BaseController
     }
 
     @PreAuthorize("@ss.hasPermi('buyer:admin:ticket:list')")
+    @Log(title = "Buyer direct-login ticket list", businessType = BusinessType.OTHER, isSaveResponseData = false)
     @GetMapping("/directLoginTickets/list")
     public TableDataInfo directLoginTickets(PortalDirectLoginTicket ticket)
     {

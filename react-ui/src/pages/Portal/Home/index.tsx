@@ -19,6 +19,7 @@ import { history, useLocation } from '@umijs/max';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getTerminalAccessToken } from '@/access';
 import { message } from '@/utils/feedback';
+import { matchPermission } from '@/utils/permission';
 import {
   clearPortalLogin,
   getPortalTerminal,
@@ -45,6 +46,14 @@ type PortalSessionRow = API.Partner.PortalOwnSessionProfile & {
 };
 
 type PasswordFormValues = API.Partner.PortalPasswordChangeParams;
+
+function hasPortalPermission(permissions: string[] | undefined, permission: string) {
+  return matchPermission(permissions, permission);
+}
+
+function portalPermission(terminal: PortalTerminal, permission: string) {
+  return `${terminal}:${permission}`;
+}
 
 const pageStyle: React.CSSProperties = {
   minHeight: '100vh',
@@ -143,13 +152,22 @@ const PortalHomePage: React.FC = () => {
     setLoading(true);
     try {
       const service = PORTAL_SERVICE[currentTerminal];
-      const [infoRes, subjectRes, accountRes, accountsRes, deptsRes, rolesRes] = await Promise.all([
+      const [infoRes, subjectRes, accountRes] = await Promise.all([
         service.getInfo(),
         service.getSubjectProfile(),
         service.getAccountProfile(),
-        service.getAccounts(),
-        service.getDepts(),
-        service.getRoles(),
+      ]);
+      const permissions = infoRes.data?.permissions || [];
+      const [accountsRes, deptsRes, rolesRes] = await Promise.all([
+        hasPortalPermission(permissions, portalPermission(currentTerminal, 'account:list'))
+          ? service.getAccounts()
+          : Promise.resolve({ data: [] }),
+        hasPortalPermission(permissions, portalPermission(currentTerminal, 'dept:list'))
+          ? service.getDepts()
+          : Promise.resolve({ data: [] }),
+        hasPortalPermission(permissions, portalPermission(currentTerminal, 'role:list'))
+          ? service.getRoles()
+          : Promise.resolve({ data: [] }),
       ]);
       setData({
         info: infoRes.data,
@@ -163,7 +181,7 @@ const PortalHomePage: React.FC = () => {
       console.log(error);
       clearPortalLogin(currentTerminal);
       message.error('登录状态已失效');
-      history.replace('/user/login');
+      history.replace(PORTAL_META[currentTerminal].loginPath);
     } finally {
       setLoading(false);
     }
@@ -208,11 +226,11 @@ const PortalHomePage: React.FC = () => {
 
   useEffect(() => {
     if (!terminal) {
-      history.replace('/user/login');
+      history.replace('/seller/login');
       return;
     }
     if (!getTerminalAccessToken(terminal)) {
-      history.replace('/user/login');
+      history.replace(PORTAL_META[terminal].loginPath);
       return;
     }
     loadData(terminal);
@@ -229,7 +247,7 @@ const PortalHomePage: React.FC = () => {
       console.log(error);
     } finally {
       clearPortalLogin(terminal);
-      history.replace('/user/login');
+      history.replace(PORTAL_META[terminal].loginPath);
     }
   };
 
@@ -259,6 +277,15 @@ const PortalHomePage: React.FC = () => {
 
   const meta = PORTAL_META[terminal];
   const permissions = data.info?.permissions || [];
+  const canViewAccounts = hasPortalPermission(permissions, portalPermission(terminal, 'account:list'));
+  const canViewDepts = hasPortalPermission(permissions, portalPermission(terminal, 'dept:list'));
+  const canViewRoles = hasPortalPermission(permissions, portalPermission(terminal, 'role:list'));
+  const canViewProductSchema = hasPortalPermission(permissions, portalPermission(terminal, 'product:category:list'))
+    && hasPortalPermission(permissions, portalPermission(terminal, 'product:schema:query'));
+  const canViewDistributionProducts = hasPortalPermission(
+    permissions,
+    portalPermission(terminal, 'product:distribution:list'),
+  );
   const gridColumns = screens.lg ? 3 : screens.sm ? 2 : 1;
   const contentGridStyle: React.CSSProperties = {
     ...gridStyle,
@@ -366,34 +393,39 @@ const PortalHomePage: React.FC = () => {
               <Descriptions.Item label="状态">{displayText(data.account?.status)}</Descriptions.Item>
             </Descriptions>
           </Card>
+          {canViewRoles ? (
+            <Card title="Roles" variant="borderless">
+              {renderRoleList(data.roles)}
+            </Card>
+          ) : null}
 
-          <Card title="端内角色" variant="borderless">
-            {renderRoleList(data.roles)}
-          </Card>
+          {canViewDepts ? (
+            <Card title="Departments" variant="borderless">
+              {renderDeptList(data.depts)}
+            </Card>
+          ) : null}
 
-          <Card title="端内部门" variant="borderless">
-            {renderDeptList(data.depts)}
-          </Card>
+          {canViewAccounts ? (
+            <Card title="Accounts" variant="borderless">
+              <Typography.Text>{data.accounts?.length || 0}</Typography.Text>
+            </Card>
+          ) : null}
 
-          <Card title="端内账号" variant="borderless">
-            <Typography.Text>{data.accounts?.length || 0}</Typography.Text>
-          </Card>
-
-          {terminal === 'seller' ? (
+          {canViewProductSchema && terminal === 'seller' ? (
             <div style={fullGridStyle}>
               <SellerProductSchemaPreview />
             </div>
-          ) : terminal === 'buyer' ? (
+          ) : canViewProductSchema && terminal === 'buyer' ? (
             <div style={fullGridStyle}>
               <BuyerProductSchemaPreview />
             </div>
           ) : null}
 
-          {terminal === 'seller' ? (
+          {canViewDistributionProducts && terminal === 'seller' ? (
             <div style={fullGridStyle}>
               <SellerOwnDistributionProductList />
             </div>
-          ) : terminal === 'buyer' ? (
+          ) : canViewDistributionProducts && terminal === 'buyer' ? (
             <div style={fullGridStyle}>
               <BuyerDistributionProductList />
             </div>

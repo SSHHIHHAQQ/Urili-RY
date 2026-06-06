@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import com.ruoyi.common.core.controller.BaseController;
+import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.core.page.TableDataInfo;
 import com.ruoyi.integration.domain.SourceProductItem;
 import com.ruoyi.integration.domain.query.SourceProductQuery;
@@ -29,5 +30,12 @@ public class AdminSourceProductController extends BaseController
         startPage();
         List<SourceProductItem> list = upstreamSystemService.selectSourceProductList(query);
         return getDataTable(list);
+    }
+
+    @PreAuthorize("@ss.hasPermi('product:list:list')")
+    @GetMapping("/group-detail")
+    public AjaxResult groupDetail(SourceProductQuery query)
+    {
+        return AjaxResult.success(upstreamSystemService.selectSourceProductGroupDetail(query));
     }
 }

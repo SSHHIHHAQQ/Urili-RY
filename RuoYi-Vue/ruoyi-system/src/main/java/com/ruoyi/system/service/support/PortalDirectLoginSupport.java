@@ -1,6 +1,5 @@
 package com.ruoyi.system.service.support;
 
-import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -60,8 +59,9 @@ public class PortalDirectLoginSupport
         Date expireTime = new Date(now.getTime() + EXPIRE_MINUTES * 60L * 1000L);
         String token = portalType + "_" + IdUtils.fastSimpleUUID();
         String tokenHash = hashToken(token);
-        Long actingAdminId = SecurityUtils.getUserId();
-        String actingAdminName = SecurityUtils.getUsername();
+        Long actingAdminId = resolveActingAdminId();
+        String actingAdminName = resolveActingAdminName();
+        assertActingAdmin(actingAdminId, actingAdminName);
 
         PortalDirectLoginTicket ticket = new PortalDirectLoginTicket();
         ticket.setTerminal(portalType);
@@ -85,6 +85,9 @@ public class PortalDirectLoginSupport
         payload.setPartnerNo(partnerNo);
         payload.setAccountId(account.getAccountId());
         payload.setUsername(account.getUserName());
+        payload.setActingAdminId(actingAdminId);
+        payload.setActingAdminName(actingAdminName);
+        payload.setDirectLoginReason(directLoginReason);
         payload.setCreateBy(actingAdminName);
         payload.setCreateTime(now);
         payload.setExpireTime(expireTime);
@@ -94,17 +97,12 @@ public class PortalDirectLoginSupport
         PortalDirectLoginResult result = new PortalDirectLoginResult();
         result.setToken(token);
         result.setTicketId(ticket.getTicketId());
-        result.setLoginUrl(buildLoginUrl(webUrlConfigKey, fallbackWebUrl, token));
+        result.setLoginUrl(buildLoginUrl(webUrlConfigKey, fallbackWebUrl));
         result.setExpireMinutes(EXPIRE_MINUTES);
         result.setExpireTime(expireTime);
         result.setAccountId(account.getAccountId());
         result.setUsername(account.getUserName());
         return result;
-    }
-
-    public PortalDirectLoginToken consumeToken(String portalType, String token)
-    {
-        return consumeToken(portalType, token, null);
     }
 
     public PortalDirectLoginToken consumeToken(String portalType, String token, Consumer<PortalDirectLoginToken> validator)
@@ -115,14 +113,15 @@ public class PortalDirectLoginSupport
         }
 
         Date now = new Date();
+        if (validator == null)
+        {
+            throw new ServiceException("免密登录 token 校验器不能为空");
+        }
         String tokenHash = hashToken(token);
         String cacheKey = cacheKey(tokenHash);
         PortalDirectLoginTicket ticket = loadUsableTicket(portalType, tokenHash, now, cacheKey);
         PortalDirectLoginToken payload = loadUsablePayload(portalType, cacheKey, ticket, now);
-        if (validator != null)
-        {
-            validator.accept(payload);
-        }
+        validator.accept(payload);
 
         if (ticketMapper.markPortalDirectLoginTicketUsed(ticket.getTicketId(), now, IpUtils.getIpAddr(), SYSTEM_OPERATOR) <= 0)
         {
@@ -132,6 +131,38 @@ public class PortalDirectLoginSupport
 
         redisCache.deleteObject(cacheKey);
         return payload;
+    }
+
+    private void assertActingAdmin(Long actingAdminId, String actingAdminName)
+    {
+        if (actingAdminId == null || actingAdminId <= 0 || StringUtils.isBlank(actingAdminName))
+        {
+            throw new ServiceException("免密登录后台操作人不能为空");
+        }
+    }
+
+    private Long resolveActingAdminId()
+    {
+        try
+        {
+            return SecurityUtils.getUserId();
+        }
+        catch (ServiceException e)
+        {
+            throw new ServiceException("免密登录后台操作人不能为空");
+        }
+    }
+
+    private String resolveActingAdminName()
+    {
+        try
+        {
+            return SecurityUtils.getUsername();
+        }
+        catch (ServiceException e)
+        {
+            throw new ServiceException("免密登录后台操作人不能为空");
+        }
     }
 
     private PortalDirectLoginTicket loadUsableTicket(String portalType, String tokenHash, Date now, String cacheKey)
@@ -205,7 +236,7 @@ public class PortalDirectLoginSupport
         }
     }
 
-    private String buildLoginUrl(String webUrlConfigKey, String fallbackWebUrl, String token)
+    private String buildLoginUrl(String webUrlConfigKey, String fallbackWebUrl)
     {
         String baseUrl = StringUtils.defaultIfBlank(configService.selectConfigByKey(webUrlConfigKey), fallbackWebUrl);
         if (StringUtils.isBlank(baseUrl))
@@ -213,8 +244,7 @@ public class PortalDirectLoginSupport
             throw new ServiceException("端前端地址未配置：" + webUrlConfigKey);
         }
 
-        String separator = baseUrl.contains("?") ? "&" : "?";
-        return baseUrl + separator + "directLoginToken=" + URLEncoder.encode(token, StandardCharsets.UTF_8);
+        return baseUrl;
     }
 
     private String hashToken(String token)

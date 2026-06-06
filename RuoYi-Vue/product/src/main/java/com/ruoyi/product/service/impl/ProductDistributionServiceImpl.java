@@ -13,6 +13,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.ruoyi.common.exception.ServiceException;
@@ -81,7 +82,7 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
     private IProductConfigService productConfigService;
 
     @Autowired
-    private ProductSellerLookupService productSellerLookupService;
+    private ObjectProvider<ProductSellerLookupService> productSellerLookupService;
 
     @Autowired
     private IFinanceCurrencyService financeCurrencyService;
@@ -425,7 +426,7 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
         product.setSourceRefId(current == null ? "" : trimToEmpty(current.getSourceRefId()));
         fillSellerSnapshot(product);
         fillCategorySnapshot(product);
-        normalizeWarehouseBindings(product);
+        normalizeWarehouseBindings(product, current);
         if (StringUtils.isNotBlank(product.getSellerSpuCode())
             && productDistributionMapper.countSellerSpuCode(product.getSellerId(), product.getSellerSpuCode(),
                 product.getSpuId()) > 0)
@@ -444,7 +445,12 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
         {
             throw new ServiceException("请选择卖家");
         }
-        ProductSellerSnapshot seller = productSellerLookupService.selectSellerSnapshot(product.getSellerId());
+        ProductSellerLookupService lookupService = productSellerLookupService.getIfAvailable();
+        if (lookupService == null)
+        {
+            throw new ServiceException("Product seller lookup service is not enabled");
+        }
+        ProductSellerSnapshot seller = lookupService.selectSellerSnapshot(product.getSellerId());
         if (seller == null)
         {
             throw new ServiceException("卖家不存在");
@@ -472,7 +478,7 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
         product.setCategoryName(category.getCategoryName());
     }
 
-    private void normalizeWarehouseBindings(ProductSpu product)
+    private void normalizeWarehouseBindings(ProductSpu product, ProductSpu current)
     {
         List<Long> warehouseIds = requireWarehouseIds(product);
         List<ProductSpuWarehouse> warehouses = new ArrayList<>();
@@ -518,8 +524,49 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
             binding.setSellerId(product.getSellerId());
             warehouses.add(binding);
         }
+        validateWarehouseKindChange(current, selectedKind);
         product.setWarehouses(warehouses);
         product.setWarehouseIds(warehouses.stream().map(ProductSpuWarehouse::getWarehouseId).collect(Collectors.toList()));
+    }
+
+    private void validateWarehouseKindChange(ProductSpu current, String selectedKind)
+    {
+        if (current == null || STATUS_DRAFT.equals(current.getSpuStatus()))
+        {
+            return;
+        }
+        String currentKind = resolveWarehouseKind(productDistributionMapper.selectWarehousesBySpuId(current.getSpuId()));
+        if (StringUtils.isBlank(currentKind))
+        {
+            return;
+        }
+        if (!StringUtils.equals(currentKind, selectedKind))
+        {
+            throw new ServiceException("仅草稿商品允许修改仓库类型");
+        }
+    }
+
+    private String resolveWarehouseKind(List<ProductSpuWarehouse> warehouses)
+    {
+        String resolvedKind = null;
+        if (warehouses == null)
+        {
+            return null;
+        }
+        for (ProductSpuWarehouse warehouse : warehouses)
+        {
+            if (warehouse == null || StringUtils.isBlank(warehouse.getWarehouseKind()))
+            {
+                continue;
+            }
+            String kind = warehouse.getWarehouseKind();
+            if (resolvedKind != null && !resolvedKind.equals(kind))
+            {
+                return "MIXED";
+            }
+            resolvedKind = kind;
+        }
+        return resolvedKind;
     }
 
     private List<Long> requireWarehouseIds(ProductSpu product)

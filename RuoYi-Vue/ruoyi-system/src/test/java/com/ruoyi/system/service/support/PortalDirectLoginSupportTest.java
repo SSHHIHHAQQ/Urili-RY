@@ -94,7 +94,8 @@ public class PortalDirectLoginSupportTest
         assertEquals(Long.valueOf(44L), result.getAccountId());
         assertEquals("seller-owner", result.getUsername());
         assertTrue(result.getToken().startsWith("seller_"));
-        assertEquals(SELLER_WEB_URL + "?directLoginToken=" + result.getToken(), result.getLoginUrl());
+        assertEquals(SELLER_WEB_URL, result.getLoginUrl());
+        assertFalse(result.getLoginUrl().contains(result.getToken()));
 
         String cacheKey = cacheKey(result.getToken());
         assertEquals(cacheKey, redisCache.lastSetKey);
@@ -118,13 +119,40 @@ public class PortalDirectLoginSupportTest
     }
 
     @Test
+    public void createTokenShouldKeepConfiguredHashRouteUrlClean()
+    {
+        inject(support, "configService", configService("https://portal.example/#/seller/direct-login"));
+
+        PortalDirectLoginResult result = support.createToken("seller", 7L, "SAAA010001",
+                activeAccount(44L, "seller-owner"), "Need to inspect seller workspace",
+                PortalDirectLoginSupport.SELLER_WEB_URL_CONFIG_KEY, null);
+
+        assertEquals("https://portal.example/#/seller/direct-login", result.getLoginUrl());
+        assertFalse(result.getLoginUrl().contains(result.getToken()));
+    }
+
+    @Test
+    public void createTokenShouldKeepConfiguredHashRouteQueryUrlClean()
+    {
+        inject(support, "configService", configService("https://portal.example/#/seller/direct-login?source=admin"));
+
+        PortalDirectLoginResult result = support.createToken("seller", 7L, "SAAA010001",
+                activeAccount(44L, "seller-owner"), "Need to inspect seller workspace",
+                PortalDirectLoginSupport.SELLER_WEB_URL_CONFIG_KEY, null);
+
+        assertEquals("https://portal.example/#/seller/direct-login?source=admin", result.getLoginUrl());
+        assertFalse(result.getLoginUrl().contains(result.getToken()));
+    }
+
+    @Test
     public void consumeTokenShouldMarkTicketUsedOnceAndDeleteRedisPayload()
     {
         PortalDirectLoginResult result = support.createToken("seller", 7L, "SAAA010001",
                 activeAccount(44L, "seller-owner"), "Support inspection",
                 PortalDirectLoginSupport.SELLER_WEB_URL_CONFIG_KEY, "http://fallback/seller/direct-login");
 
-        PortalDirectLoginToken payload = support.consumeToken("seller", result.getToken());
+        PortalDirectLoginToken payload = support.consumeToken("seller", result.getToken(), token -> {
+        });
 
         assertEquals(result.getTicketId(), payload.getTicketId());
         assertEquals(1, ticketMapper.usedCalls);
@@ -135,7 +163,8 @@ public class PortalDirectLoginSupportTest
         assertTrue(redisCache.deletedKeys.contains(cacheKey(result.getToken())));
         assertNull(redisCache.getCacheObject(cacheKey(result.getToken())));
 
-        assertThrows(ServiceException.class, () -> support.consumeToken("seller", result.getToken()));
+        assertThrows(ServiceException.class, () -> support.consumeToken("seller", result.getToken(), token -> {
+        }));
         assertEquals(1, ticketMapper.usedCalls);
     }
 
@@ -167,7 +196,8 @@ public class PortalDirectLoginSupportTest
         payload.setPartnerId(8L);
 
         ServiceException exception = assertThrows(ServiceException.class,
-                () -> support.consumeToken("seller", result.getToken()));
+                () -> support.consumeToken("seller", result.getToken(), token -> {
+                }));
 
         assertEquals("免密登录目标不匹配", exception.getMessage());
         assertEquals(0, ticketMapper.usedCalls);
@@ -183,7 +213,8 @@ public class PortalDirectLoginSupportTest
                 activeAccount(44L, "seller-owner"), "Support inspection",
                 PortalDirectLoginSupport.SELLER_WEB_URL_CONFIG_KEY, "http://fallback/seller/direct-login");
 
-        assertThrows(ServiceException.class, () -> support.consumeToken("buyer", result.getToken()));
+        assertThrows(ServiceException.class, () -> support.consumeToken("buyer", result.getToken(), token -> {
+        }));
 
         assertEquals(0, ticketMapper.usedCalls);
         assertEquals(0, ticketMapper.expiredCalls);
@@ -210,7 +241,8 @@ public class PortalDirectLoginSupportTest
         payload.setExpireTime(new Date(System.currentTimeMillis() - 1000L));
         redisCache.values.put(cacheKey, payload);
 
-        assertThrows(ServiceException.class, () -> support.consumeToken("seller", token));
+        assertThrows(ServiceException.class, () -> support.consumeToken("seller", token, ignored -> {
+        }));
 
         assertEquals(0, ticketMapper.usedCalls);
         assertEquals(1, ticketMapper.expiredCalls);
@@ -227,6 +259,21 @@ public class PortalDirectLoginSupportTest
                 activeAccount(44L, "seller-owner"), "   ",
                 PortalDirectLoginSupport.SELLER_WEB_URL_CONFIG_KEY, "http://fallback/seller/direct-login"));
 
+        assertNull(ticketMapper.insertedTicket);
+        assertTrue(redisCache.values.isEmpty());
+    }
+
+    @Test
+    public void createTokenShouldRequireActingAdminBeforePersistingTicketOrRedisPayload()
+    {
+        SecurityContextHolder.clearContext();
+
+        ServiceException exception = assertThrows(ServiceException.class,
+                () -> support.createToken("seller", 7L, "SAAA010001",
+                        activeAccount(44L, "seller-owner"), "Support inspection",
+                        PortalDirectLoginSupport.SELLER_WEB_URL_CONFIG_KEY, "http://fallback/seller/direct-login"));
+
+        assertEquals("免密登录后台操作人不能为空", exception.getMessage());
         assertNull(ticketMapper.insertedTicket);
         assertTrue(redisCache.values.isEmpty());
     }

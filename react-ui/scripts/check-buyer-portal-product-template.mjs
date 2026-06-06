@@ -10,13 +10,29 @@ const componentFile = path.join(
   'Home',
   'BuyerDistributionProductList.tsx',
 );
+const componentJsFile = path.join(
+  root,
+  'src',
+  'pages',
+  'Portal',
+  'Home',
+  'BuyerDistributionProductList.js',
+);
 const homeFile = path.join(root, 'src', 'pages', 'Portal', 'Home', 'index.tsx');
+const homeJsFile = path.join(root, 'src', 'pages', 'Portal', 'Home', 'index.js');
 const portalServiceFile = path.join(
   root,
   'src',
   'services',
   'portal',
   'session.ts',
+);
+const portalServiceJsFile = path.join(
+  root,
+  'src',
+  'services',
+  'portal',
+  'session.js',
 );
 const typeFile = path.join(root, 'src', 'types', 'seller-buyer', 'party.d.ts');
 
@@ -99,110 +115,127 @@ function assertNoBuyerForbiddenFields(source, relativePath) {
 }
 
 const componentSource = readRequired(componentFile);
+const componentJsSource = readRequired(componentJsFile);
 const homeSource = readRequired(homeFile);
+const homeJsSource = readRequired(homeJsFile);
 const portalServiceSource = readRequired(portalServiceFile);
+const portalServiceJsSource = readRequired(portalServiceJsFile);
 const typeSource = readRequired(typeFile);
 
-if (componentSource) {
-  const relativePath = toRelative(componentFile);
+function checkComponentSource(source, relativePath, requireTypes) {
+  if (!source) {
+    return;
+  }
   for (const fnName of requiredServiceFunctions) {
-    if (!componentSource.includes(fnName)) {
+    if (!source.includes(fnName)) {
       violations.push(`${relativePath} must use ${fnName}`);
     }
   }
-  if (!componentSource.includes("from '@/services/portal/session'")) {
+  if (!source.includes("from '@/services/portal/session'")) {
     violations.push(
       `${relativePath} must import buyer product APIs from portal session service`,
     );
   }
-  if (!componentSource.includes('API.Partner.BuyerPortalProduct')) {
-    violations.push(`${relativePath} must use API.Partner.BuyerPortalProduct`);
-  }
-  if (!componentSource.includes('API.Partner.BuyerPortalProductSku')) {
-    violations.push(
-      `${relativePath} must use API.Partner.BuyerPortalProductSku`,
-    );
+  if (requireTypes) {
+    if (!source.includes('API.Partner.BuyerPortalProduct')) {
+      violations.push(`${relativePath} must use API.Partner.BuyerPortalProduct`);
+    }
+    if (!source.includes('API.Partner.BuyerPortalProductSku')) {
+      violations.push(
+        `${relativePath} must use API.Partner.BuyerPortalProductSku`,
+      );
+    }
   }
   for (const requiredToken of [
     'ProTable',
-    'ProColumns',
     'getPersistedProTableSearch',
     'getProTablePagination',
     'getProTableScroll',
   ]) {
-    if (!componentSource.includes(requiredToken)) {
+    if (!source.includes(requiredToken)) {
       violations.push(`${relativePath} must use standard ProTable template token ${requiredToken}`);
     }
   }
-  if (!componentSource.includes('pageNum: currentPage')) {
+  if (requireTypes && !source.includes('ProColumns')) {
+    violations.push(`${relativePath} must use standard ProTable template token ProColumns`);
+  }
+  if (!source.includes('pageNum: currentPage')) {
     violations.push(`${relativePath} must map ProTable current to RuoYi pageNum`);
   }
-  if (!componentSource.includes('pageSize: currentPageSize')) {
+  if (!source.includes('pageSize: currentPageSize')) {
     violations.push(`${relativePath} must map ProTable pageSize to RuoYi pageSize`);
   }
   assertNoPattern(
-    componentSource,
+    source,
     relativePath,
     /\bspuStatus\s*:\s*params\.spuStatus\b/,
     'must not expose buyer product status as a query filter; buyer visibility is fixed to ON_SALE by backend',
   );
   assertNoPattern(
-    componentSource,
+    source,
     relativePath,
     /\brequest\s*(?:<[^;]+?>)?\s*\(/,
     'must not call request(...) directly',
   );
   assertNoPattern(
-    componentSource,
+    source,
     relativePath,
     /from\s+['"]@\/services\/product\//,
     'must not import admin product services',
   );
   assertNoPattern(
-    componentSource,
+    source,
     relativePath,
     /\/api\/(?:product\/admin|seller|buyer)\/distribution-products/,
     'must not hardcode product API paths',
   );
   assertNoPattern(
-    componentSource,
+    source,
     relativePath,
     /\bAPI\.ProductDistribution\b/,
     'must not reuse admin product distribution types',
   );
   assertNoPattern(
-    componentSource,
+    source,
     relativePath,
     /\bAPI\.Partner\.SellerPortalProduct\b/,
     'must not reuse seller product DTO',
   );
   assertNoPattern(
-    componentSource,
+    source,
     relativePath,
     /\bAPI\.Partner\.SellerPortalProductSku\b/,
     'must not reuse seller SKU DTO',
   );
-  assertNoBuyerForbiddenFields(componentSource, relativePath);
+  assertNoBuyerForbiddenFields(source, relativePath);
 }
 
-if (homeSource) {
-  const relativePath = toRelative(homeFile);
+checkComponentSource(componentSource, toRelative(componentFile), true);
+checkComponentSource(componentJsSource, toRelative(componentJsFile), false);
+
+function checkHomeSource(source, relativePath) {
+  if (!source) {
+    return;
+  }
+  if (source.includes("export { default } from './index.tsx';")) {
+    return;
+  }
   if (
-    !homeSource.includes(
+    !source.includes(
       "import BuyerDistributionProductList from './BuyerDistributionProductList';",
     )
   ) {
     violations.push(`${relativePath} must import BuyerDistributionProductList`);
   }
-  const componentIndex = homeSource.indexOf('<BuyerDistributionProductList');
+  const componentIndex = source.indexOf('<BuyerDistributionProductList');
   if (componentIndex < 0) {
     violations.push(`${relativePath} must render BuyerDistributionProductList`);
   } else {
-    const buyerBranchIndex = homeSource.lastIndexOf(
+    const buyerBranchIndex = source.lastIndexOf(
       "terminal === 'buyer'",
       componentIndex,
     );
-    const sellerBranchIndex = homeSource.lastIndexOf(
+    const sellerBranchIndex = source.lastIndexOf(
       "terminal === 'seller'",
       componentIndex,
     );
@@ -213,15 +246,15 @@ if (homeSource) {
     }
   }
 
-  const sellerComponentIndex = homeSource.indexOf(
+  const sellerComponentIndex = source.indexOf(
     '<SellerOwnDistributionProductList',
   );
   if (sellerComponentIndex >= 0) {
-    const sellerBranchIndex = homeSource.lastIndexOf(
+    const sellerBranchIndex = source.lastIndexOf(
       "terminal === 'seller'",
       sellerComponentIndex,
     );
-    const buyerBranchIndex = homeSource.lastIndexOf(
+    const buyerBranchIndex = source.lastIndexOf(
       "terminal === 'buyer'",
       sellerComponentIndex,
     );
@@ -233,10 +266,15 @@ if (homeSource) {
   }
 }
 
-if (portalServiceSource) {
-  const relativePath = toRelative(portalServiceFile);
+checkHomeSource(homeSource, toRelative(homeFile));
+checkHomeSource(homeJsSource, toRelative(homeJsFile));
+
+function checkPortalServiceSource(source, relativePath) {
+  if (!source) {
+    return;
+  }
   for (const fnName of requiredServiceFunctions) {
-    const fnSource = extractFunction(portalServiceSource, fnName);
+    const fnSource = extractFunction(source, fnName);
     if (!fnSource) {
       violations.push(`${relativePath} must export ${fnName}`);
       continue;
@@ -258,7 +296,7 @@ if (portalServiceSource) {
   }
 
   const listSource = extractFunction(
-    portalServiceSource,
+    source,
     'getBuyerPortalDistributionProducts',
   );
   if (listSource) {
@@ -279,6 +317,9 @@ if (portalServiceSource) {
     }
   }
 }
+
+checkPortalServiceSource(portalServiceSource, toRelative(portalServiceFile));
+checkPortalServiceSource(portalServiceJsSource, toRelative(portalServiceJsFile));
 
 if (typeSource) {
   const relativePath = toRelative(typeFile);

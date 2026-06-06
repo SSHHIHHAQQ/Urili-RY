@@ -110,8 +110,15 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <resultMap type="SourceProductItem" id="SourceProductResult">
         <id     property="connectionCode"       column="connection_code"       />
         <id     property="masterSku"            column="master_sku"            />
+        <result property="sourceGroupKey"       column="source_group_key"      />
+        <result property="sourceSkuGroupKey"    column="source_sku_group_key"  />
+        <result property="sourceDimensionGroupKey" column="source_dimension_group_key" />
         <result property="systemKind"           column="system_kind"           />
         <result property="masterWarehouseName"  column="master_warehouse_name" />
+        <result property="sourceConnectionCodes" column="source_connection_codes" />
+        <result property="sourceWarehouseNames" column="source_warehouse_names" />
+        <result property="warehouseCount"       column="warehouse_count"       />
+        <result property="sourceRowCount"       column="source_row_count"      />
         <result property="masterProductName"    column="master_product_name"   />
         <result property="productAliasName"     column="product_alias_name"    />
         <result property="approveStatus"        column="approve_status"        />
@@ -233,6 +240,56 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="lastSuccessTime" column="last_success_time" />
         <result property="lastErrorMessage" column="last_error_message" />
         <result property="nextSyncTime" column="next_sync_time" />
+        <result property="updateTime" column="update_time" />
+    </resultMap>
+
+    <resultMap type="SourceWarehouseStockItem" id="SourceWarehouseStockResult">
+        <id     property="inventorySnapshotId" column="inventory_snapshot_id" />
+        <result property="connectionCode" column="connection_code" />
+        <result property="systemKind" column="system_kind" />
+        <result property="masterWarehouseName" column="master_warehouse_name" />
+        <result property="upstreamWarehouseCode" column="upstream_warehouse_code" />
+        <result property="upstreamWarehouseName" column="upstream_warehouse_name" />
+        <result property="masterSku" column="master_sku" />
+        <result property="masterProductName" column="master_product_name" />
+        <result property="inventoryScope" column="inventory_scope" />
+        <result property="inventoryAttribute" column="inventory_attribute" />
+        <result property="batchNo" column="batch_no" />
+        <result property="locationCode" column="location_code" />
+        <result property="totalQuantity" column="total_quantity" />
+        <result property="availableQuantity" column="available_quantity" />
+        <result property="lockedQuantity" column="locked_quantity" />
+        <result property="inTransitQuantity" column="in_transit_quantity" />
+        <result property="boxedQuantity" column="boxed_quantity" />
+        <result property="unboxedQuantity" column="unboxed_quantity" />
+        <result property="systemWarehouseCode" column="system_warehouse_code" />
+        <result property="systemWarehouseName" column="system_warehouse_name" />
+        <result property="systemSku" column="system_sku" />
+        <result property="systemSkuName" column="system_sku_name" />
+        <result property="customerName" column="customer_name" />
+        <result property="warehousePairingStatus" column="warehouse_pairing_status" />
+        <result property="skuPairingStatus" column="sku_pairing_status" />
+        <result property="status" column="status" />
+        <result property="syncBatchId" column="sync_batch_id" />
+        <result property="sourcePayloadJson" column="source_payload_json" />
+        <result property="sourcePayloadHash" column="source_payload_hash" />
+        <result property="firstSeenTime" column="first_seen_time" />
+        <result property="lastSeenTime" column="last_seen_time" />
+        <result property="updateTime" column="update_time" />
+    </resultMap>
+
+    <resultMap type="UpstreamInventorySyncState" id="InventorySyncStateResult">
+        <id     property="connectionCode" column="connection_code" />
+        <result property="status" column="status" />
+        <result property="syncBatchId" column="sync_batch_id" />
+        <result property="lastStartedTime" column="last_started_time" />
+        <result property="lastFinishedTime" column="last_finished_time" />
+        <result property="lastSuccessTime" column="last_success_time" />
+        <result property="nextSyncTime" column="next_sync_time" />
+        <result property="totalCount" column="total_count" />
+        <result property="activeCount" column="active_count" />
+        <result property="missingCount" column="missing_count" />
+        <result property="lastErrorMessage" column="last_error_message" />
         <result property="updateTime" column="update_time" />
     </resultMap>
 
@@ -529,14 +586,14 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             product_weight_bs = values(product_weight_bs),
             product_width = values(product_width),
             product_width_bs = values(product_width_bs),
-            wms_height = values(wms_height),
-            wms_height_bs = values(wms_height_bs),
-            wms_length = values(wms_length),
-            wms_length_bs = values(wms_length_bs),
-            wms_weight = values(wms_weight),
-            wms_weight_bs = values(wms_weight_bs),
-            wms_width = values(wms_width),
-            wms_width_bs = values(wms_width_bs),
+            wms_height = coalesce(values(wms_height), wms_height),
+            wms_height_bs = coalesce(values(wms_height_bs), wms_height_bs),
+            wms_length = coalesce(values(wms_length), wms_length),
+            wms_length_bs = coalesce(values(wms_length_bs), wms_length_bs),
+            wms_weight = coalesce(values(wms_weight), wms_weight),
+            wms_weight_bs = coalesce(values(wms_weight_bs), wms_weight_bs),
+            wms_width = coalesce(values(wms_width), wms_width),
+            wms_width_bs = coalesce(values(wms_width_bs), wms_width_bs),
             cat1_name = values(cat1_name),
             cat2_name = values(cat2_name),
             cat3_name = values(cat3_name),
@@ -605,14 +662,14 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             product_weight_bs = values(product_weight_bs),
             product_width = values(product_width),
             product_width_bs = values(product_width_bs),
-            wms_height = values(wms_height),
-            wms_height_bs = values(wms_height_bs),
-            wms_length = values(wms_length),
-            wms_length_bs = values(wms_length_bs),
-            wms_weight = values(wms_weight),
-            wms_weight_bs = values(wms_weight_bs),
-            wms_width = values(wms_width),
-            wms_width_bs = values(wms_width_bs),
+            wms_height = coalesce(values(wms_height), wms_height),
+            wms_height_bs = coalesce(values(wms_height_bs), wms_height_bs),
+            wms_length = coalesce(values(wms_length), wms_length),
+            wms_length_bs = coalesce(values(wms_length_bs), wms_length_bs),
+            wms_weight = coalesce(values(wms_weight), wms_weight),
+            wms_weight_bs = coalesce(values(wms_weight_bs), wms_weight_bs),
+            wms_width = coalesce(values(wms_width), wms_width),
+            wms_width_bs = coalesce(values(wms_width_bs), wms_width_bs),
             cat1_name = values(cat1_name),
             cat2_name = values(cat2_name),
             cat3_name = values(cat3_name),
@@ -626,6 +683,25 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             last_seen_time = sysdate(),
             update_time = sysdate()
     </insert>
+
+    <update id="updateSkuWmsDimensions" parameterType="UpstreamSkuSyncItem">
+        update upstream_system_sku_candidate
+        <set>
+            <if test="wmsHeight != null">wms_height = #{wmsHeight},</if>
+            <if test="wmsHeightBs != null">wms_height_bs = #{wmsHeightBs},</if>
+            <if test="wmsLength != null">wms_length = #{wmsLength},</if>
+            <if test="wmsLengthBs != null">wms_length_bs = #{wmsLengthBs},</if>
+            <if test="wmsWeight != null">wms_weight = #{wmsWeight},</if>
+            <if test="wmsWeightBs != null">wms_weight_bs = #{wmsWeightBs},</if>
+            <if test="wmsWidth != null">wms_width = #{wmsWidth},</if>
+            <if test="wmsWidthBs != null">wms_width_bs = #{wmsWidthBs},</if>
+            <if test="sourcePayloadJson != null and sourcePayloadJson != ''">source_payload_json = #{sourcePayloadJson},</if>
+            <if test="sourcePayloadHash != null and sourcePayloadHash != ''">source_payload_hash = #{sourcePayloadHash},</if>
+            update_time = sysdate()
+        </set>
+        where connection_code = #{connectionCode}
+          and master_sku = #{masterSku}
+    </update>
 
     <update id="markMissingSkus">
         update upstream_system_sku_candidate
@@ -660,6 +736,36 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                 </when>
             </choose>
         </if>
+        <if test="dimensionStatus != null and dimensionStatus != ''">
+            <choose>
+                <when test="dimensionStatus == 'COMPLETE'">
+                    and c.wms_length is not null
+                    and c.wms_width is not null
+                    and c.wms_height is not null
+                    and c.wms_weight is not null
+                </when>
+                <when test="dimensionStatus == 'MISSING'">
+                    and c.wms_length is null
+                    and c.wms_width is null
+                    and c.wms_height is null
+                    and c.wms_weight is null
+                </when>
+                <when test="dimensionStatus == 'PARTIAL'">
+                    and (
+                        c.wms_length is not null
+                        or c.wms_width is not null
+                        or c.wms_height is not null
+                        or c.wms_weight is not null
+                    )
+                    and (
+                        c.wms_length is null
+                        or c.wms_width is null
+                        or c.wms_height is null
+                        or c.wms_weight is null
+                    )
+                </when>
+            </choose>
+        </if>
         <if test="keyword != null and keyword != ''">
             <choose>
                 <when test="field == 'masterSku'">
@@ -687,60 +793,104 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         order by c.update_time desc, c.master_sku asc
     </select>
 
+    <sql id="SourceProductSkuGroupKeyExpression">
+        concat(
+            'OFFICIAL_MASTER:',
+            sha2(
+                concat(
+                    'OFFICIAL_MASTER|',
+                    char_length(trim(coalesce(c.master_sku, ''))),
+                    ':',
+                    trim(coalesce(c.master_sku, '')),
+                    '|',
+                    char_length(trim(coalesce(c.master_product_name, ''))),
+                    ':',
+                    trim(coalesce(c.master_product_name, ''))
+                ),
+                256
+            )
+        )
+    </sql>
+
+    <sql id="SourceProductDimensionGroupKeyExpression">
+        concat_ws('|',
+            <include refid="SourceProductSkuGroupKeyExpression" />,
+            coalesce(cast(c.product_length as char), 'NULL'),
+            coalesce(cast(c.product_width as char), 'NULL'),
+            coalesce(cast(c.product_height as char), 'NULL'),
+            coalesce(cast(c.product_weight as char), 'NULL'),
+            coalesce(cast(c.wms_length as char), 'NULL'),
+            coalesce(cast(c.wms_width as char), 'NULL'),
+            coalesce(cast(c.wms_height as char), 'NULL'),
+            coalesce(cast(c.wms_weight as char), 'NULL')
+        )
+    </sql>
+
     <select id="selectSourceProductList" parameterType="SourceProductQuery" resultMap="SourceProductResult">
-        select c.connection_code,
-               conn.system_kind,
-               conn.master_warehouse_name,
+        select min(c.connection_code) as connection_code,
+               <include refid="SourceProductSkuGroupKeyExpression" /> as source_sku_group_key,
+               <include refid="SourceProductDimensionGroupKeyExpression" /> as source_dimension_group_key,
+               <include refid="SourceProductDimensionGroupKeyExpression" /> as source_group_key,
+               max(case when conn.system_kind = 'LINGXING_WMS' then 'lingxing-wms' else conn.system_kind end) as system_kind,
+               group_concat(distinct conn.master_warehouse_name order by conn.master_warehouse_name separator ' / ') as master_warehouse_name,
+               group_concat(distinct c.connection_code order by c.connection_code separator ',') as source_connection_codes,
+               group_concat(distinct conn.master_warehouse_name order by conn.master_warehouse_name separator ' / ') as source_warehouse_names,
+               count(distinct c.connection_code) as warehouse_count,
+               count(1) as source_row_count,
                c.master_sku,
                c.master_product_name,
-               c.product_alias_name,
-               c.approve_status,
-               c.product_type,
-               c.product_description,
-               c.image_url,
-               c.main_code,
-               c.other_code,
-               c.fnsku,
-               c.country_of_origin_name,
-               c.currency_code,
-               c.customhouse_code,
-               c.dangerous_cargo,
-               c.declare_name_cn,
-               c.declare_name_en,
-               c.declare_price,
+               max(c.product_alias_name) as product_alias_name,
+               max(c.approve_status) as approve_status,
+               max(c.product_type) as product_type,
+               max(c.product_description) as product_description,
+               max(c.image_url) as image_url,
+               max(c.main_code) as main_code,
+               max(c.other_code) as other_code,
+               max(c.fnsku) as fnsku,
+               max(c.country_of_origin_name) as country_of_origin_name,
+               max(c.currency_code) as currency_code,
+               max(c.customhouse_code) as customhouse_code,
+               max(c.dangerous_cargo) as dangerous_cargo,
+               max(c.declare_name_cn) as declare_name_cn,
+               max(c.declare_name_en) as declare_name_en,
+               max(c.declare_price) as declare_price,
                c.product_height,
-               c.product_height_bs,
+               max(c.product_height_bs) as product_height_bs,
                c.product_length,
-               c.product_length_bs,
+               max(c.product_length_bs) as product_length_bs,
                c.product_weight,
-               c.product_weight_bs,
+               max(c.product_weight_bs) as product_weight_bs,
                c.product_width,
-               c.product_width_bs,
+               max(c.product_width_bs) as product_width_bs,
                c.wms_height,
-               c.wms_height_bs,
+               max(c.wms_height_bs) as wms_height_bs,
                c.wms_length,
-               c.wms_length_bs,
+               max(c.wms_length_bs) as wms_length_bs,
                c.wms_weight,
-               c.wms_weight_bs,
+               max(c.wms_weight_bs) as wms_weight_bs,
                c.wms_width,
-               c.wms_width_bs,
-               c.cat1_name,
-               c.cat2_name,
-               c.cat3_name,
-               c.platform_sku_info_json,
-               c.brazil_tax_info_json,
-               c.source_payload_hash,
-               c.status,
-               c.search_text,
-               c.sync_batch_id,
-               c.first_seen_time,
-               c.last_seen_time,
-               c.update_time,
-               case when p.sku_pairing_id is null then 'UNASSIGNED' else 'PAIRED' end as pairing_status,
-               p.sku_pairing_id,
-               p.system_sku,
-               p.system_sku_name,
-               p.customer_name
+               max(c.wms_width_bs) as wms_width_bs,
+               max(c.cat1_name) as cat1_name,
+               max(c.cat2_name) as cat2_name,
+               max(c.cat3_name) as cat3_name,
+               max(c.platform_sku_info_json) as platform_sku_info_json,
+               max(c.brazil_tax_info_json) as brazil_tax_info_json,
+               max(c.source_payload_hash) as source_payload_hash,
+               case when count(distinct c.status) = 1 then max(c.status) else 'MIXED' end as status,
+               max(c.search_text) as search_text,
+               max(c.sync_batch_id) as sync_batch_id,
+               min(c.first_seen_time) as first_seen_time,
+               max(c.last_seen_time) as last_seen_time,
+               max(c.update_time) as update_time,
+               case
+                   when sum(case when p.sku_pairing_id is not null then 1 else 0 end) = 0 then 'UNASSIGNED'
+                   when sum(case when p.sku_pairing_id is not null then 1 else 0 end) = count(1) then 'PAIRED'
+                   else 'PARTIAL'
+               end as pairing_status,
+               max(p.sku_pairing_id) as sku_pairing_id,
+               group_concat(distinct nullif(p.system_sku, '') order by p.system_sku separator ' / ') as system_sku,
+               group_concat(distinct nullif(p.system_sku_name, '') order by p.system_sku_name separator ' / ') as system_sku_name,
+               group_concat(distinct nullif(p.customer_name, '') order by p.customer_name separator ' / ') as customer_name
         from upstream_system_sku_candidate c
         inner join upstream_system_connection conn
                 on conn.connection_code = c.connection_code
@@ -748,8 +898,19 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                on p.connection_code = c.connection_code
               and p.master_sku = c.master_sku
         where 1 = 1
+        <choose>
+            <when test="repositoryScope == 'THIRD_PARTY_MASTER'">
+                and 1 = 0
+            </when>
+            <otherwise>
+                and (conn.system_kind = 'lingxing-wms' or conn.system_kind = 'LINGXING_WMS')
+            </otherwise>
+        </choose>
         <if test="connectionCode != null and connectionCode != ''">
             and c.connection_code = #{connectionCode}
+        </if>
+        <if test="sourceSkuGroupKey != null and sourceSkuGroupKey != ''">
+            and <include refid="SourceProductSkuGroupKeyExpression" /> = #{sourceSkuGroupKey}
         </if>
         <if test="systemKind != null and systemKind != ''">
             and (
@@ -815,7 +976,276 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                 or p.customer_name like concat('%', #{keyword}, '%')
             )
         </if>
-        order by c.update_time desc, c.master_sku asc
+        group by c.master_sku,
+                 c.master_product_name,
+                 c.product_length,
+                 c.product_width,
+                 c.product_height,
+                 c.product_weight,
+                 c.wms_length,
+                 c.wms_width,
+                 c.wms_height,
+                 c.wms_weight
+        order by max(c.update_time) desc, c.master_sku asc
+    </select>
+
+    <select id="selectSourceProductGroupSummary" parameterType="SourceProductQuery" resultMap="SourceProductResult">
+        select min(c.connection_code) as connection_code,
+               <include refid="SourceProductSkuGroupKeyExpression" /> as source_sku_group_key,
+               <include refid="SourceProductSkuGroupKeyExpression" /> as source_dimension_group_key,
+               <include refid="SourceProductSkuGroupKeyExpression" /> as source_group_key,
+               max(case when conn.system_kind = 'LINGXING_WMS' then 'lingxing-wms' else conn.system_kind end) as system_kind,
+               group_concat(distinct conn.master_warehouse_name order by conn.master_warehouse_name separator ' / ') as master_warehouse_name,
+               group_concat(distinct c.connection_code order by c.connection_code separator ',') as source_connection_codes,
+               group_concat(distinct conn.master_warehouse_name order by conn.master_warehouse_name separator ' / ') as source_warehouse_names,
+               count(distinct c.connection_code) as warehouse_count,
+               count(1) as source_row_count,
+               c.master_sku,
+               c.master_product_name,
+               max(c.product_alias_name) as product_alias_name,
+               max(c.approve_status) as approve_status,
+               max(c.product_type) as product_type,
+               max(c.product_description) as product_description,
+               max(c.image_url) as image_url,
+               max(c.main_code) as main_code,
+               max(c.other_code) as other_code,
+               max(c.fnsku) as fnsku,
+               max(c.country_of_origin_name) as country_of_origin_name,
+               max(c.currency_code) as currency_code,
+               max(c.customhouse_code) as customhouse_code,
+               max(c.dangerous_cargo) as dangerous_cargo,
+               max(c.declare_name_cn) as declare_name_cn,
+               max(c.declare_name_en) as declare_name_en,
+               max(c.declare_price) as declare_price,
+               max(c.product_height) as product_height,
+               max(c.product_height_bs) as product_height_bs,
+               max(c.product_length) as product_length,
+               max(c.product_length_bs) as product_length_bs,
+               max(c.product_weight) as product_weight,
+               max(c.product_weight_bs) as product_weight_bs,
+               max(c.product_width) as product_width,
+               max(c.product_width_bs) as product_width_bs,
+               max(c.wms_height) as wms_height,
+               max(c.wms_height_bs) as wms_height_bs,
+               max(c.wms_length) as wms_length,
+               max(c.wms_length_bs) as wms_length_bs,
+               max(c.wms_weight) as wms_weight,
+               max(c.wms_weight_bs) as wms_weight_bs,
+               max(c.wms_width) as wms_width,
+               max(c.wms_width_bs) as wms_width_bs,
+               max(c.cat1_name) as cat1_name,
+               max(c.cat2_name) as cat2_name,
+               max(c.cat3_name) as cat3_name,
+               max(c.platform_sku_info_json) as platform_sku_info_json,
+               max(c.brazil_tax_info_json) as brazil_tax_info_json,
+               max(c.source_payload_hash) as source_payload_hash,
+               case when count(distinct c.status) = 1 then max(c.status) else 'MIXED' end as status,
+               max(c.search_text) as search_text,
+               max(c.sync_batch_id) as sync_batch_id,
+               min(c.first_seen_time) as first_seen_time,
+               max(c.last_seen_time) as last_seen_time,
+               max(c.update_time) as update_time,
+               case
+                   when sum(case when p.sku_pairing_id is not null then 1 else 0 end) = 0 then 'UNASSIGNED'
+                   when sum(case when p.sku_pairing_id is not null then 1 else 0 end) = count(1) then 'PAIRED'
+                   else 'PARTIAL'
+               end as pairing_status,
+               max(p.sku_pairing_id) as sku_pairing_id,
+               group_concat(distinct nullif(p.system_sku, '') order by p.system_sku separator ' / ') as system_sku,
+               group_concat(distinct nullif(p.system_sku_name, '') order by p.system_sku_name separator ' / ') as system_sku_name,
+               group_concat(distinct nullif(p.customer_name, '') order by p.customer_name separator ' / ') as customer_name
+        from upstream_system_sku_candidate c
+        inner join upstream_system_connection conn
+                on conn.connection_code = c.connection_code
+        left join upstream_system_sku_pairing p
+               on p.connection_code = c.connection_code
+              and p.master_sku = c.master_sku
+        where 1 = 1
+        <choose>
+            <when test="repositoryScope == 'THIRD_PARTY_MASTER'">
+                and 1 = 0
+            </when>
+            <otherwise>
+                and (conn.system_kind = 'lingxing-wms' or conn.system_kind = 'LINGXING_WMS')
+            </otherwise>
+        </choose>
+        and <include refid="SourceProductSkuGroupKeyExpression" /> = #{sourceSkuGroupKey}
+        group by c.master_sku,
+                 c.master_product_name
+        limit 1
+    </select>
+
+    <select id="selectSourceProductWarehouseDetailList" parameterType="SourceProductQuery" resultMap="SourceProductResult">
+        select c.*,
+               <include refid="SourceProductSkuGroupKeyExpression" /> as source_sku_group_key,
+               <include refid="SourceProductDimensionGroupKeyExpression" /> as source_dimension_group_key,
+               <include refid="SourceProductDimensionGroupKeyExpression" /> as source_group_key,
+               case when conn.system_kind = 'LINGXING_WMS' then 'lingxing-wms' else conn.system_kind end as system_kind,
+               conn.master_warehouse_name,
+               c.connection_code as source_connection_codes,
+               conn.master_warehouse_name as source_warehouse_names,
+               1 as warehouse_count,
+               1 as source_row_count,
+               case when p.sku_pairing_id is null then 'UNASSIGNED' else 'PAIRED' end as pairing_status,
+               p.sku_pairing_id,
+               p.system_sku,
+               p.system_sku_name,
+               p.customer_name
+        from upstream_system_sku_candidate c
+        inner join upstream_system_connection conn
+                on conn.connection_code = c.connection_code
+        left join upstream_system_sku_pairing p
+               on p.connection_code = c.connection_code
+              and p.master_sku = c.master_sku
+        where 1 = 1
+        <choose>
+            <when test="repositoryScope == 'THIRD_PARTY_MASTER'">
+                and 1 = 0
+            </when>
+            <otherwise>
+                and (conn.system_kind = 'lingxing-wms' or conn.system_kind = 'LINGXING_WMS')
+            </otherwise>
+        </choose>
+        and <include refid="SourceProductSkuGroupKeyExpression" /> = #{sourceSkuGroupKey}
+        order by conn.master_warehouse_name asc, c.connection_code asc
+    </select>
+
+    <insert id="upsertSourceWarehouseStock" parameterType="SourceWarehouseStockItem">
+        insert into upstream_system_sku_inventory_snapshot(
+            connection_code, upstream_warehouse_code, upstream_warehouse_name, master_sku, master_product_name,
+            inventory_scope, inventory_attribute, batch_no, location_code,
+            total_quantity, available_quantity, locked_quantity, in_transit_quantity, boxed_quantity, unboxed_quantity,
+            system_warehouse_code, system_warehouse_name, system_sku, system_sku_name, customer_name,
+            status, sync_batch_id, source_payload_json, source_payload_hash,
+            first_seen_time, last_seen_time, update_time
+        ) values (
+            #{connectionCode}, #{upstreamWarehouseCode}, #{upstreamWarehouseName}, #{masterSku}, #{masterProductName},
+            #{inventoryScope}, #{inventoryAttribute}, #{batchNo}, #{locationCode},
+            #{totalQuantity}, #{availableQuantity}, #{lockedQuantity}, #{inTransitQuantity}, #{boxedQuantity}, #{unboxedQuantity},
+            #{systemWarehouseCode}, #{systemWarehouseName}, #{systemSku}, #{systemSkuName}, #{customerName},
+            #{status}, #{syncBatchId}, #{sourcePayloadJson}, #{sourcePayloadHash},
+            sysdate(), sysdate(), sysdate()
+        )
+        on duplicate key update
+            upstream_warehouse_name = values(upstream_warehouse_name),
+            master_product_name = values(master_product_name),
+            total_quantity = values(total_quantity),
+            available_quantity = values(available_quantity),
+            locked_quantity = values(locked_quantity),
+            in_transit_quantity = values(in_transit_quantity),
+            boxed_quantity = values(boxed_quantity),
+            unboxed_quantity = values(unboxed_quantity),
+            system_warehouse_code = values(system_warehouse_code),
+            system_warehouse_name = values(system_warehouse_name),
+            system_sku = values(system_sku),
+            system_sku_name = values(system_sku_name),
+            customer_name = values(customer_name),
+            status = values(status),
+            sync_batch_id = values(sync_batch_id),
+            source_payload_json = values(source_payload_json),
+            source_payload_hash = values(source_payload_hash),
+            last_seen_time = sysdate(),
+            update_time = sysdate()
+    </insert>
+
+    <update id="markMissingSourceWarehouseStocks">
+        update upstream_system_sku_inventory_snapshot
+        set status = 'MISSING',
+            update_time = sysdate()
+        where connection_code = #{connectionCode}
+          and sync_batch_id &lt;&gt; #{syncBatchId}
+    </update>
+
+    <select id="selectSourceWarehouseStockList" parameterType="SourceWarehouseStockQuery" resultMap="SourceWarehouseStockResult">
+        select s.*,
+               c.system_kind,
+               c.master_warehouse_name,
+               case when nullif(s.system_warehouse_code, '') is null then 'UNASSIGNED' else 'PAIRED' end as warehouse_pairing_status,
+               case when nullif(s.system_sku, '') is null then 'UNASSIGNED' else 'PAIRED' end as sku_pairing_status
+        from upstream_system_sku_inventory_snapshot s
+        left join upstream_system_connection c on c.connection_code = s.connection_code
+        where 1 = 1
+        <if test="connectionCode != null and connectionCode != ''">
+            and s.connection_code = #{connectionCode}
+        </if>
+        <if test="status != null and status != ''">
+            and s.status = #{status}
+        </if>
+        <if test="inventoryScope != null and inventoryScope != ''">
+            and s.inventory_scope = #{inventoryScope}
+        </if>
+        <if test="inventoryAttribute != null and inventoryAttribute != ''">
+            and s.inventory_attribute = #{inventoryAttribute}
+        </if>
+        <if test="warehouseKeyword != null and warehouseKeyword != ''">
+            and (
+                s.upstream_warehouse_code like concat('%', #{warehouseKeyword}, '%')
+                or s.upstream_warehouse_name like concat('%', #{warehouseKeyword}, '%')
+                or s.system_warehouse_code like concat('%', #{warehouseKeyword}, '%')
+                or s.system_warehouse_name like concat('%', #{warehouseKeyword}, '%')
+            )
+        </if>
+        <if test="warehousePairingStatus != null and warehousePairingStatus != ''">
+            <choose>
+                <when test="warehousePairingStatus == 'PAIRED'">
+                    and nullif(s.system_warehouse_code, '') is not null
+                </when>
+                <when test="warehousePairingStatus == 'UNASSIGNED'">
+                    and nullif(s.system_warehouse_code, '') is null
+                </when>
+            </choose>
+        </if>
+        <if test="skuPairingStatus != null and skuPairingStatus != ''">
+            <choose>
+                <when test="skuPairingStatus == 'PAIRED'">
+                    and nullif(s.system_sku, '') is not null
+                </when>
+                <when test="skuPairingStatus == 'UNASSIGNED'">
+                    and nullif(s.system_sku, '') is null
+                </when>
+            </choose>
+        </if>
+        <if test="keyword != null and keyword != ''">
+            and (
+                s.master_sku like concat('%', #{keyword}, '%')
+                or s.master_product_name like concat('%', #{keyword}, '%')
+                or s.system_sku like concat('%', #{keyword}, '%')
+                or s.system_sku_name like concat('%', #{keyword}, '%')
+                or s.customer_name like concat('%', #{keyword}, '%')
+            )
+        </if>
+        order by s.update_time desc, s.upstream_warehouse_code asc, s.master_sku asc
+    </select>
+
+    <insert id="upsertInventorySyncState" parameterType="UpstreamInventorySyncState">
+        insert into upstream_system_inventory_sync_state(
+            connection_code, status, sync_batch_id, last_started_time, last_finished_time,
+            last_success_time, next_sync_time, total_count, active_count, missing_count,
+            last_error_message, update_time
+        ) values (
+            #{connectionCode}, #{status}, #{syncBatchId}, #{lastStartedTime}, #{lastFinishedTime},
+            #{lastSuccessTime}, #{nextSyncTime}, coalesce(#{totalCount}, 0), coalesce(#{activeCount}, 0),
+            coalesce(#{missingCount}, 0), coalesce(#{lastErrorMessage}, ''), sysdate()
+        )
+        on duplicate key update
+            status = values(status),
+            sync_batch_id = values(sync_batch_id),
+            last_started_time = values(last_started_time),
+            last_finished_time = values(last_finished_time),
+            last_success_time = values(last_success_time),
+            next_sync_time = values(next_sync_time),
+            total_count = coalesce(values(total_count), total_count),
+            active_count = coalesce(values(active_count), active_count),
+            missing_count = coalesce(values(missing_count), missing_count),
+            last_error_message = coalesce(values(last_error_message), ''),
+            update_time = sysdate()
+    </insert>
+
+    <select id="selectInventorySyncState" resultMap="InventorySyncStateResult">
+        select *
+        from upstream_system_inventory_sync_state
+        where connection_code = #{connectionCode}
+        limit 1
     </select>
 
     <select id="selectSkuSyncItem" resultMap="SkuSyncResult">

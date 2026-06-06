@@ -3,7 +3,6 @@ package com.ruoyi.system.domain;
 import java.io.Serializable;
 import java.util.Date;
 import com.fasterxml.jackson.annotation.JsonFormat;
-import com.fasterxml.jackson.annotation.JsonIgnore;
 
 /**
  * Seller/buyer terminal visible session profile.
@@ -12,7 +11,6 @@ public class PortalSessionProfile implements Serializable
 {
     private static final long serialVersionUID = 1L;
 
-    @JsonIgnore
     private String tokenId;
 
     private String terminal;
@@ -37,6 +35,16 @@ public class PortalSessionProfile implements Serializable
     private String status;
 
     private Boolean current;
+
+    private Boolean directLogin;
+
+    private Long directLoginTicketId;
+
+    private Long actingAdminId;
+
+    private String actingAdminName;
+
+    private String directLoginReason;
 
     public String getTokenId()
     {
@@ -146,5 +154,55 @@ public class PortalSessionProfile implements Serializable
     public void setCurrent(Boolean current)
     {
         this.current = current;
+    }
+
+    public Boolean getDirectLogin()
+    {
+        return directLogin;
+    }
+
+    public void setDirectLogin(Boolean directLogin)
+    {
+        this.directLogin = directLogin;
+    }
+
+    public Long getDirectLoginTicketId()
+    {
+        return directLoginTicketId;
+    }
+
+    public void setDirectLoginTicketId(Long directLoginTicketId)
+    {
+        this.directLoginTicketId = directLoginTicketId;
+    }
+
+    public Long getActingAdminId()
+    {
+        return actingAdminId;
+    }
+
+    public void setActingAdminId(Long actingAdminId)
+    {
+        this.actingAdminId = actingAdminId;
+    }
+
+    public String getActingAdminName()
+    {
+        return actingAdminName;
+    }
+
+    public void setActingAdminName(String actingAdminName)
+    {
+        this.actingAdminName = actingAdminName;
+    }
+
+    public String getDirectLoginReason()
+    {
+        return directLoginReason;
+    }
+
+    public void setDirectLoginReason(String directLoginReason)
+    {
+        this.directLoginReason = directLoginReason;
     }
 }

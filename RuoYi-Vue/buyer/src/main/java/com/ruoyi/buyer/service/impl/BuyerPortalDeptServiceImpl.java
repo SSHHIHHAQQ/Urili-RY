@@ -68,9 +68,9 @@ public class BuyerPortalDeptServiceImpl implements IBuyerPortalDeptService
     }
 
     @Override
-    public boolean checkDeptExistAccount(Long deptId)
+    public boolean checkDeptExistAccount(Long buyerId, Long deptId)
     {
-        return deptMapper.checkDeptExistAccount(deptId) > 0;
+        return deptMapper.checkDeptExistAccount(buyerId, deptId) > 0;
     }
 
     @Override
@@ -117,7 +117,7 @@ public class BuyerPortalDeptServiceImpl implements IBuyerPortalDeptService
         {
             throw new ServiceException("存在子部门，不允许删除");
         }
-        if (checkDeptExistAccount(deptId))
+        if (checkDeptExistAccount(buyerId, deptId))
         {
             throw new ServiceException("部门存在账号，不允许删除");
         }

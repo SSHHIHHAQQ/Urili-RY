@@ -5,6 +5,10 @@ package com.ruoyi.integration.domain.query;
  */
 public class SourceProductQuery
 {
+    private String repositoryScope;
+
+    private String sourceSkuGroupKey;
+
     private String connectionCode;
 
     private String systemKind;
@@ -28,6 +32,26 @@ public class SourceProductQuery
     private String pairingStatus;
 
     private String keyword;
+
+    public String getRepositoryScope()
+    {
+        return repositoryScope;
+    }
+
+    public void setRepositoryScope(String repositoryScope)
+    {
+        this.repositoryScope = repositoryScope;
+    }
+
+    public String getSourceSkuGroupKey()
+    {
+        return sourceSkuGroupKey;
+    }
+
+    public void setSourceSkuGroupKey(String sourceSkuGroupKey)
+    {
+        this.sourceSkuGroupKey = sourceSkuGroupKey;
+    }
 
     public String getConnectionCode()
     {

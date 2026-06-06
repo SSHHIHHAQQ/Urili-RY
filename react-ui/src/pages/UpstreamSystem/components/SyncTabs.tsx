@@ -4,7 +4,7 @@ import {
   ProTable,
 } from '@ant-design/pro-components';
 import { Button, Popconfirm, Space, Tabs, Tag, Typography } from 'antd';
-import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
+import { useRef, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
 import {
   deleteLogisticsChannelPairing,
   deleteWarehousePairing,
@@ -21,6 +21,8 @@ import {
 import { resultOk, statusTag } from '../helpers';
 import styles from '../style.module.css';
 import type { LogisticsRow, PairingModalState, WarehouseRow } from '../types';
+import SkuDimensionPanel from './SkuDimensionPanel';
+import SkuInventoryPanel from './SkuInventoryPanel';
 import SkuSyncPanel from './SkuSyncPanel';
 
 type ActionRef = MutableRefObject<ActionType | null>;
@@ -47,6 +49,8 @@ export default function SyncTabs({
   warehouseActionRef,
 }: SyncTabsProps) {
   const selectedCode = selectedConnection.connectionCode;
+  const dimensionActionRef = useRef<ActionType | null>(null);
+  const inventoryActionRef = useRef<ActionType | null>(null);
 
   const warehouseColumns: ProColumns<WarehouseRow>[] = [
     { title: '领星仓库代码', dataIndex: 'warehouseCode', width: 150 },
@@ -322,6 +326,28 @@ export default function SyncTabs({
                 onSynced={onSkuSynced}
                 selectedCode={selectedCode}
                 setPairingModal={setPairingModal}
+              />
+            ),
+          },
+          {
+            key: 'dimensions',
+            label: '仓库尺寸重量',
+            children: (
+              <SkuDimensionPanel
+                access={access}
+                actionRef={dimensionActionRef}
+                selectedCode={selectedCode}
+              />
+            ),
+          },
+          {
+            key: 'inventory',
+            label: 'SKU库存同步清单',
+            children: (
+              <SkuInventoryPanel
+                access={access}
+                actionRef={inventoryActionRef}
+                selectedCode={selectedCode}
               />
             ),
           },

@@ -8,12 +8,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class PortalDirectLoginResultTest
 {
     @Test
-    public void tokenMustNotBeSerializedToAdminDirectLoginResponse() throws Exception
+    public void tokenMustBeSerializedSeparatelyFromCleanLoginUrlWithoutTargetAccount() throws Exception
     {
         PortalDirectLoginResult result = new PortalDirectLoginResult();
         result.setToken("seller_plain_direct_login_token");
         result.setTicketId(10L);
-        result.setLoginUrl("http://127.0.0.1:8001/seller/direct-login?directLoginToken=seller_plain_direct_login_token");
+        result.setLoginUrl("https://seller.example/direct-login");
         result.setExpireMinutes(30);
         result.setAccountId(20L);
         result.setUsername("seller-owner");
@@ -23,6 +23,9 @@ public class PortalDirectLoginResultTest
         assertTrue(json.contains("\"ticketId\":10"));
         assertTrue(json.contains("\"loginUrl\""));
         assertTrue(json.contains("\"expireMinutes\":30"));
-        assertFalse(json.contains("\"token\""));
+        assertTrue(json.contains("\"token\":\"seller_plain_direct_login_token\""));
+        assertFalse(json.contains("\"accountId\""));
+        assertFalse(json.contains("\"username\""));
+        assertFalse(json.contains("directLoginToken="));
     }
 }

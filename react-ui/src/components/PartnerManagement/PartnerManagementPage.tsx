@@ -36,6 +36,7 @@ import type { DictValueEnumObj } from '@/components/DictTag';
 import { uploadCommonFile } from '@/services/common/file';
 import { getDictSelectOption, getDictValueEnum } from '@/services/system/dict';
 import { getPersistedProTableSearch, getProTableScroll } from '@/utils/proTableSearch';
+import { openPortalDirectLoginWindow } from '@/utils/portalDirectLoginMessage';
 import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 import PartnerAccountModal from './PartnerAccountModal';
 import PartnerAuditModal from './PartnerAuditModal';
@@ -123,6 +124,7 @@ export type PartnerModuleConfig = {
   levelDictType: string;
   listTemplate?: 'standard';
   searchStorageKey?: string;
+  searchFieldCount?: number;
   accountPermissions?: {
     list: string;
     add: string;
@@ -535,12 +537,12 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
 
   const permPrefix = `${config.moduleKey}:admin`;
   const accountPermissions = config.accountPermissions ?? {
-    list: `${permPrefix}:query`,
-    add: `${permPrefix}:add`,
-    edit: `${permPrefix}:edit`,
-    resetPwd: `${permPrefix}:resetPwd`,
-    roleQuery: `${permPrefix}:role:query`,
-    roleEdit: `${permPrefix}:role:edit`,
+    list: `${permPrefix}:account:list`,
+    add: `${permPrefix}:account:add`,
+    edit: `${permPrefix}:account:edit`,
+    resetPwd: `${permPrefix}:account:resetPwd`,
+    roleQuery: `${permPrefix}:account:role:query`,
+    roleEdit: `${permPrefix}:account:role:edit`,
   };
   const hasAuditPermission = access.hasPerms(`${permPrefix}:loginLog:list`)
     || access.hasPerms(`${permPrefix}:operLog:list`)
@@ -688,8 +690,7 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
         const hide = message.loading('正在生成免密登录链接');
         try {
           const resp = await config.services.directLogin(partnerId, values.reason?.trim() || '');
-          if (resp.code === 200 && resp.data?.loginUrl) {
-            window.open(resp.data.loginUrl, '_blank', 'noopener,noreferrer');
+          if (resp.code === 200 && openPortalDirectLoginWindow(resp.data, config.moduleKey)) {
             message.success(`免密登录链接已生成，有效期 ${resp.data.expireMinutes || 30} 分钟`);
             return;
           }
@@ -1064,7 +1065,10 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
         actionRef={actionRef}
         rowKey={config.idField}
         headerTitle={config.title}
-        search={getPersistedProTableSearch({ labelWidth: 112 }, config.searchStorageKey)}
+        search={getPersistedProTableSearch(
+          { labelWidth: 112, fieldCount: config.searchFieldCount },
+          config.searchStorageKey,
+        )}
         columns={columns}
         scroll={getProTableScroll(useStandardListTemplate ? 1420 : 1500)}
         tableLayout="fixed"

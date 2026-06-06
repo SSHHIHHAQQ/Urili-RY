@@ -42,6 +42,10 @@ public class TerminalSeedPermissionContractTest
         assertContains(sql, "insert into buyer_account_role", seed, violations);
         assertContains(sql, "insert into seller_role_menu", seed, violations);
         assertContains(sql, "insert into buyer_role_menu", seed, violations);
+        assertContains(sql, "set @confirm_seller_buyer_management_seed", seed, violations);
+        assertContains(sql, "call assert_seller_buyer_management_seed_confirmed();", seed, violations);
+        assertContains(sql, "call assert_seller_buyer_sys_menu_seed_guard();", seed, violations);
+        assertContains(sql, "tmp_seller_buyer_sys_menu_guard", seed, violations);
 
         if (!violations.isEmpty())
         {

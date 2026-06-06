@@ -8,7 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class PortalSessionProfileTest
 {
     @Test
-    public void tokenIdMustNotBeSerializedToPortalSessionResponses() throws Exception
+    public void tokenIdMustSerializeForAdminSessionAuditRows() throws Exception
     {
         PortalSessionProfile profile = new PortalSessionProfile();
         profile.setTerminal("seller");
@@ -26,7 +26,6 @@ public class PortalSessionProfileTest
         assertTrue(json.contains("\"subjectId\":9"));
         assertTrue(json.contains("\"accountId\":8"));
         assertTrue(json.contains("\"current\":true"));
-        assertFalse(json.contains("tokenId"));
-        assertFalse(json.contains("portal-login-token-id-for-internal-use-only"));
+        assertTrue(json.contains("\"tokenId\":\"portal-login-token-id-for-internal-use-only\""));
     }
 }

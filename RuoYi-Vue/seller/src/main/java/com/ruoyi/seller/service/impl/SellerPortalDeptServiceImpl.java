@@ -68,9 +68,9 @@ public class SellerPortalDeptServiceImpl implements ISellerPortalDeptService
     }
 
     @Override
-    public boolean checkDeptExistAccount(Long deptId)
+    public boolean checkDeptExistAccount(Long sellerId, Long deptId)
     {
-        return deptMapper.checkDeptExistAccount(deptId) > 0;
+        return deptMapper.checkDeptExistAccount(sellerId, deptId) > 0;
     }
 
     @Override
@@ -117,7 +117,7 @@ public class SellerPortalDeptServiceImpl implements ISellerPortalDeptService
         {
             throw new ServiceException("存在子部门，不允许删除");
         }
-        if (checkDeptExistAccount(deptId))
+        if (checkDeptExistAccount(sellerId, deptId))
         {
             throw new ServiceException("部门存在账号，不允许删除");
         }

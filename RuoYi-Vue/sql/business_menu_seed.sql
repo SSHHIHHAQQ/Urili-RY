@@ -35,9 +35,9 @@ values
     (2420, '库存总览', 2080, 5, 'overview', 'Common/PlannedPage/index', '', 'InventoryOverview',
      1, 0, 'C', '0', '0', 'inventory:overview:list', 'DashboardOutlined', 'admin',
      sysdate(), '', null, '库存管理菜单：库存总览，占位入口'),
-    (2421, '关联仓库库存', 2080, 10, 'warehouse-overview', 'Common/PlannedPage/index', '', 'WarehouseInventoryOverview',
-     1, 0, 'C', '0', '0', 'inventory:warehouse:list', 'StockOutlined', 'admin',
-     sysdate(), '', null, '库存管理菜单：关联仓库库存，占位入口'),
+    (2421, '来源仓库库存', 2080, 10, 'source-warehouse-stock', 'Inventory/SourceWarehouseStock/index', '', 'SourceWarehouseStock',
+     1, 0, 'C', '0', '0', 'inventory:sourceWarehouse:list', 'StockOutlined', 'admin',
+     sysdate(), '', null, '库存管理菜单：来源仓库库存，读取上游系统SKU库存同步快照'),
     (2422, '库存流水', 2080, 15, 'flow', 'Common/PlannedPage/index', '', 'InventoryFlow',
      1, 0, 'C', '0', '0', 'inventory:flow:list', 'UnorderedListOutlined', 'admin',
      sysdate(), '', null, '库存管理菜单：库存流水，占位入口'),
@@ -95,3 +95,12 @@ on duplicate key update
     update_by = 'admin',
     update_time = sysdate(),
     remark = values(remark);
+
+-- Keep the source warehouse stock entry as a placeholder until the inventory
+-- snapshot schema, sync job, and permission rollout are explicitly confirmed.
+update sys_menu
+set component = 'Common/PlannedPage/index',
+    update_by = 'admin',
+    update_time = sysdate()
+where menu_id = 2421
+  and perms = 'inventory:sourceWarehouse:list';

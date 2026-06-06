@@ -20,6 +20,7 @@ import com.ruoyi.common.utils.ip.AddressUtils;
 import com.ruoyi.common.utils.ip.IpUtils;
 import com.ruoyi.common.utils.uuid.IdUtils;
 import com.ruoyi.system.domain.PortalAccount;
+import com.ruoyi.system.domain.PortalDirectLoginToken;
 import com.ruoyi.system.domain.PortalLoginIssue;
 import com.ruoyi.system.domain.PortalLoginLog;
 import com.ruoyi.system.domain.PortalLoginResult;
@@ -54,11 +55,18 @@ public class PortalTokenSupport
 
     public PortalLoginIssue createLogin(String terminal, Long subjectId, String subjectNo, PortalAccount account)
     {
+        return createLogin(terminal, subjectId, subjectNo, account, null);
+    }
+
+    public PortalLoginIssue createLogin(String terminal, Long subjectId, String subjectNo, PortalAccount account,
+            PortalDirectLoginToken directLoginToken)
+    {
         Date loginTime = new Date();
         Date expireAt = new Date(loginTime.getTime() + expireTime * 60L * 1000L);
         String tokenId = terminal + "_" + IdUtils.fastSimpleUUID();
 
         PortalLoginSession session = buildSession(terminal, subjectId, subjectNo, account, tokenId, loginTime, expireAt);
+        applyDirectLoginAudit(session, directLoginToken);
         redisCache.setCacheObject(getTokenKey(terminal, tokenId), session, expireTime, TimeUnit.MINUTES);
 
         Map<String, Object> claims = new HashMap<>();
@@ -140,6 +148,19 @@ public class PortalTokenSupport
             throw new ServiceException("登录状态已失效", HttpStatus.UNAUTHORIZED);
         }
         return session;
+    }
+
+    private void applyDirectLoginAudit(PortalLoginSession session, PortalDirectLoginToken directLoginToken)
+    {
+        if (directLoginToken == null)
+        {
+            return;
+        }
+        session.setDirectLogin(Boolean.TRUE);
+        session.setDirectLoginTicketId(directLoginToken.getTicketId());
+        session.setActingAdminId(directLoginToken.getActingAdminId());
+        session.setActingAdminName(directLoginToken.getActingAdminName());
+        session.setDirectLoginReason(directLoginToken.getDirectLoginReason());
     }
 
     public void deleteLoginTokens(String terminal, List<String> tokenIds)

@@ -1,4 +1,4 @@
-export { pairingStatusText, skuPairingStatusSearchOptions as skuPairingStatusOptions, skuSyncItemStatusSearchOptions as skuSyncItemStatusOptions, syncItemStatusText, systemKindOptions, systemKindText, } from '@/services/integration/constants';
+export { inventoryPairingStatusOptions, inventoryScopeSearchOptions as inventoryScopeOptions, inventoryScopeText, pairingStatusText, skuPairingStatusSearchOptions as skuPairingStatusOptions, skuSyncItemStatusSearchOptions as skuSyncItemStatusOptions, syncItemStatusText, systemKindOptions, systemKindText, } from '@/services/integration/constants';
 export const connectionStatusText = {
     ENABLED: '启用',
     DISABLED: '停用',
@@ -39,4 +39,15 @@ export const skuSearchFieldOptions = [
     { label: '领星产品名', value: 'masterProductName' },
     { label: '系统SKU', value: 'systemSku' },
     { label: '客户名称', value: 'customerName' },
+];
+export const dimensionStatusText = {
+    COMPLETE: '已完整',
+    PARTIAL: '部分缺失',
+    MISSING: '未获取',
+};
+export const dimensionStatusOptions = [
+    { label: '全部尺寸状态', value: '' },
+    { label: '已完整', value: 'COMPLETE' },
+    { label: '部分缺失', value: 'PARTIAL' },
+    { label: '未获取', value: 'MISSING' },
 ];

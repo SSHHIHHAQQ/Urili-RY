@@ -1,6 +1,7 @@
 import { createIcon } from '@/utils/IconUtil';
 import { MenuDataItem } from '@ant-design/pro-components';
-import { request } from '@umijs/max';
+import { request, useAccess } from '@umijs/max';
+import { Result } from 'antd';
 import React, { lazy } from 'react';
 
 
@@ -82,6 +83,40 @@ function loadMenuPage(pagePath: string) {
   });
 }
 
+function normalizeAuthority(authority: unknown): string[] {
+  if (!authority) {
+    return [];
+  }
+  if (Array.isArray(authority)) {
+    return authority.filter((item): item is string => typeof item === 'string' && item.length > 0);
+  }
+  return typeof authority === 'string' && authority.length > 0 ? [authority] : [];
+}
+
+function RemoteMenuRouteGuard({ authority, children }: { authority?: unknown; children?: React.ReactNode }) {
+  const permissions = normalizeAuthority(authority);
+  const access = useAccess();
+  const allowed = permissions.length === 0 || permissions.some((permission) => access.hasPerms(permission));
+
+  if (!allowed) {
+    return React.createElement(Result, {
+      status: '403',
+      title: '403',
+      subTitle: 'Forbidden',
+    });
+  }
+
+  return React.createElement(React.Fragment, null, children);
+}
+
+function createGuardedMenuElement(pagePath: string, authority: unknown) {
+  return React.createElement(
+    RemoteMenuRouteGuard,
+    { authority },
+    React.createElement(lazy(() => loadMenuPage(pagePath))),
+  );
+}
+
 function patchRouteItems(route: any, menu: any, parentPath: string) {
   for (const menuItem of menu) {
     if (menuItem.component === 'Layout' || menuItem.component === 'ParentView') {
@@ -132,7 +167,7 @@ function patchRouteItems(route: any, menu: any, parentPath: string) {
         route.children = [];
       }
       const newRoute = {
-        element: React.createElement(lazy(() => loadMenuPage(pagePath))),
+        element: createGuardedMenuElement(pagePath, menuItem.authority),
         path: parentPath + menuItem.path,
         name: menuItem.name,
         icon: menuItem.icon,

@@ -2,14 +2,11 @@ import { getIntl, history } from '@umijs/max';
 import { clearSessionToken, clearTerminalSessionToken } from '@/access';
 import { PageEnum } from '@/enums/pagesEnums';
 import { message, notification } from '@/utils/feedback';
+import { getPortalLoginPath, isPortalRoute } from '@/utils/portalPaths';
 import { getPortalTerminalFromApiUrl } from '@/utils/portalRequest';
-const PORTAL_ROUTE_PREFIXES = ['/seller/direct-login', '/buyer/direct-login', '/seller/portal', '/buyer/portal'];
-function isPortalRoute(pathname) {
-    return PORTAL_ROUTE_PREFIXES.some((prefix) => pathname === prefix || pathname?.startsWith(`${prefix}/`));
-}
-function redirectToLogin() {
+function redirectToLogin(includePortal = false) {
     const { pathname, search, hash } = history.location;
-    if (pathname === PageEnum.LOGIN || isPortalRoute(pathname)) {
+    if (pathname === PageEnum.LOGIN || (!includePortal && isPortalRoute(pathname))) {
         return;
     }
     const redirect = `${pathname}${search || ''}${hash || ''}`;
@@ -22,6 +19,7 @@ function handleUnauthorized(requestUrl) {
     const portalTerminal = getPortalTerminalFromApiUrl(requestUrl);
     if (portalTerminal) {
         clearTerminalSessionToken(portalTerminal);
+        history.replace(getPortalLoginPath(portalTerminal));
         return;
     }
     clearSessionToken();
@@ -118,9 +116,7 @@ export const errorConfig = {
     // 请求拦截器
     requestInterceptors: [
         (config) => {
-            // 拦截请求配置，进行个性化处理。
-            const url = config?.url?.concat('?token=123');
-            return { ...config, url };
+            return config;
         },
     ],
     // 响应拦截器

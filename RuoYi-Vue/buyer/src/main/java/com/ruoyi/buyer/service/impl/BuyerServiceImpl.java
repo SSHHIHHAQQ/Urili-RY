@@ -226,7 +226,7 @@ public class BuyerServiceImpl implements IBuyerService
             throw new ServiceException("新密码不能为空");
         }
         BuyerAccount current = selectBuyerAccountById(buyerId, buyerAccountId);
-        int rows = buyerMapper.resetBuyerAccountPassword(current.getBuyerAccountId(),
+        int rows = buyerMapper.resetBuyerAccountPassword(current.getBuyerId(), current.getBuyerAccountId(),
             SecurityUtils.encryptPassword(password), SecurityUtils.getUsername());
         forceLogoutBuyerAccountSessionsAfterPasswordReset(rows, current.getBuyerId(), current.getBuyerAccountId());
         return rows;
@@ -237,7 +237,7 @@ public class BuyerServiceImpl implements IBuyerService
     public int resetBuyerAccountDefaultPassword(Long buyerId, Long buyerAccountId)
     {
         BuyerAccount current = selectBuyerAccountById(buyerId, buyerAccountId);
-        int rows = buyerMapper.resetBuyerAccountPassword(current.getBuyerAccountId(),
+        int rows = buyerMapper.resetBuyerAccountPassword(current.getBuyerId(), current.getBuyerAccountId(),
             SecurityUtils.encryptPassword(PartnerSupport.DEFAULT_OWNER_PASSWORD), SecurityUtils.getUsername());
         forceLogoutBuyerAccountSessionsAfterPasswordReset(rows, current.getBuyerId(), current.getBuyerAccountId());
         return rows;
@@ -253,7 +253,7 @@ public class BuyerServiceImpl implements IBuyerService
         {
             throw new ServiceException("买家主账号不存在");
         }
-        int rows = buyerMapper.resetBuyerAccountPassword(owner.getBuyerAccountId(),
+        int rows = buyerMapper.resetBuyerAccountPassword(buyerId, owner.getBuyerAccountId(),
             SecurityUtils.encryptPassword(PartnerSupport.DEFAULT_OWNER_PASSWORD), SecurityUtils.getUsername());
         forceLogoutBuyerAccountSessionsAfterPasswordReset(rows, buyerId, owner.getBuyerAccountId());
         return rows;
@@ -262,12 +262,14 @@ public class BuyerServiceImpl implements IBuyerService
     @Override
     public List<PortalSessionProfile> selectBuyerSessionList(Long buyerId)
     {
+        selectBuyerById(buyerId);
         return buyerMapper.selectBuyerSessionProfileList(buyerId, null);
     }
 
     @Override
     public List<PortalSessionProfile> selectBuyerAccountSessionList(Long buyerId, Long buyerAccountId)
     {
+        selectBuyerAccountById(buyerId, buyerAccountId);
         return buyerMapper.selectBuyerSessionProfileList(buyerId, buyerAccountId);
     }
 
@@ -302,8 +304,7 @@ public class BuyerServiceImpl implements IBuyerService
         }
         assertBuyerAccountCanDirectLogin(owner);
         return directLoginSupport.createToken("buyer", buyerId, buyer.getBuyerNo(), owner, reason,
-            PortalDirectLoginSupport.BUYER_WEB_URL_CONFIG_KEY,
-            "http://127.0.0.1:8001/buyer/direct-login");
+            PortalDirectLoginSupport.BUYER_WEB_URL_CONFIG_KEY, null);
     }
 
     @Override
@@ -321,19 +322,20 @@ public class BuyerServiceImpl implements IBuyerService
         }
         assertBuyerAccountCanDirectLogin(account);
         return directLoginSupport.createToken("buyer", buyerId, buyer.getBuyerNo(), account, reason,
-            PortalDirectLoginSupport.BUYER_WEB_URL_CONFIG_KEY,
-            "http://127.0.0.1:8001/buyer/direct-login");
+            PortalDirectLoginSupport.BUYER_WEB_URL_CONFIG_KEY, null);
     }
 
     @Override
     public List<PortalLoginLog> selectBuyerLoginLogList(PortalLoginLog log)
     {
+        normalizeBuyerAdminLoginLogScope(log);
         return buyerMapper.selectBuyerLoginLogList(log);
     }
 
     @Override
     public List<PortalOperLog> selectBuyerOperLogList(PortalOperLog log)
     {
+        normalizeBuyerAdminOperLogScope(log);
         return buyerMapper.selectBuyerOperLogList(log);
     }
 
@@ -362,6 +364,46 @@ public class BuyerServiceImpl implements IBuyerService
             profile.setCurrent(Objects.equals(session.getTokenId(), profile.getTokenId()));
         }
         return sessions;
+    }
+
+    private void normalizeBuyerAdminLoginLogScope(PortalLoginLog log)
+    {
+        if (log == null)
+        {
+            return;
+        }
+        log.setSubjectId(resolveBuyerAdminLogSubjectId(log.getSubjectId(), log.getAccountId()));
+    }
+
+    private void normalizeBuyerAdminOperLogScope(PortalOperLog log)
+    {
+        if (log == null)
+        {
+            return;
+        }
+        log.setSubjectId(resolveBuyerAdminLogSubjectId(log.getSubjectId(), log.getAccountId()));
+    }
+
+    private Long resolveBuyerAdminLogSubjectId(Long buyerId, Long buyerAccountId)
+    {
+        if (buyerAccountId != null)
+        {
+            BuyerAccount account = buyerMapper.selectBuyerAccountById(buyerAccountId);
+            if (account == null)
+            {
+                throw new ServiceException("Buyer account does not exist");
+            }
+            if (buyerId != null && !buyerId.equals(account.getBuyerId()))
+            {
+                throw new ServiceException("Buyer log account does not belong to this buyer");
+            }
+            return account.getBuyerId();
+        }
+        if (buyerId != null)
+        {
+            selectBuyerById(buyerId);
+        }
+        return buyerId;
     }
 
     private void assertBuyerSessionAccount(PortalLoginSession session)
@@ -459,8 +501,7 @@ public class BuyerServiceImpl implements IBuyerService
     @Override
     public PortalLoginResult directLoginBuyer(String directLoginToken)
     {
-        PortalDirectLoginToken token = directLoginSupport.consumeToken("buyer", directLoginToken,
-            this::assertBuyerDirectLoginTokenCanLogin);
+        PortalDirectLoginToken token = consumeBuyerDirectLoginToken(directLoginToken);
         Buyer buyer = buyerMapper.selectBuyerById(token.getPartnerId());
         BuyerAccount account = buyerMapper.selectBuyerAccountById(token.getAccountId());
         if (account == null || !token.getPartnerId().equals(account.getBuyerId()))
@@ -470,9 +511,27 @@ public class BuyerServiceImpl implements IBuyerService
         }
 
         assertBuyerCanLogin(buyer, account, token.getUsername());
-        PortalLoginIssue issue = portalTokenSupport.createLogin("buyer", buyer.getBuyerId(), buyer.getBuyerNo(), account);
-        recordBuyerLoginSuccess(account, issue, "免密登录成功");
+        PortalLoginIssue issue = portalTokenSupport.createLogin("buyer", buyer.getBuyerId(), buyer.getBuyerNo(),
+            account, token);
+        recordBuyerLoginSuccess(account, issue, buildDirectLoginSuccessMessage(token));
         return issue.getResult();
+    }
+
+    private PortalDirectLoginToken consumeBuyerDirectLoginToken(String directLoginToken)
+    {
+        try
+        {
+            return directLoginSupport.consumeToken("buyer", directLoginToken,
+                this::assertBuyerDirectLoginTokenCanLogin);
+        }
+        catch (ServiceException e)
+        {
+            if (isDirectLoginTokenFailureWithoutAccountContext(e))
+            {
+                recordBuyerLoginFailure(null, null, null, e.getMessage());
+            }
+            throw e;
+        }
     }
 
     private void assertBuyerDirectLoginTokenCanLogin(PortalDirectLoginToken token)
@@ -485,6 +544,13 @@ public class BuyerServiceImpl implements IBuyerService
             throw new ServiceException("免密登录目标账号不存在");
         }
         assertBuyerCanLogin(buyer, account, token.getUsername());
+    }
+
+    private boolean isDirectLoginTokenFailureWithoutAccountContext(ServiceException e)
+    {
+        String message = e.getMessage();
+        return message != null && message.startsWith("免密登录")
+            && !StringUtils.equals(message, "免密登录目标账号不存在");
     }
 
     @Override
@@ -535,8 +601,10 @@ public class BuyerServiceImpl implements IBuyerService
         {
             throw new ServiceException("新密码不能与旧密码相同");
         }
-        return buyerMapper.resetBuyerAccountPassword(account.getBuyerAccountId(),
+        int rows = buyerMapper.resetBuyerAccountPassword(account.getBuyerId(), account.getBuyerAccountId(),
             SecurityUtils.encryptPassword(newPassword), session.getUserName());
+        forceLogoutBuyerAccountSessionsAfterPasswordReset(rows, account.getBuyerId(), account.getBuyerAccountId());
+        return rows;
     }
 
     private void normalizeBuyer(Buyer buyer)
@@ -643,8 +711,17 @@ public class BuyerServiceImpl implements IBuyerService
 
     private int forceLogoutBuyerSessionScope(Long buyerId, Long buyerAccountId)
     {
+        return forceLogoutBuyerSessionScope(buyerId, buyerAccountId, "FORCE_LOGOUT");
+    }
+
+    private int forceLogoutBuyerSessionScope(Long buyerId, Long buyerAccountId, String reason)
+    {
         List<String> tokenIds = buyerMapper.selectOnlineBuyerSessionTokenIds(buyerId, buyerAccountId);
         int rows = buyerMapper.forceLogoutBuyerSessions(buyerId, buyerAccountId);
+        if (rows > 0)
+        {
+            recordBuyerForceLogoutAudit(buyerId, buyerAccountId, reason);
+        }
         portalTokenSupport.deleteLoginTokens("buyer", tokenIds);
         return rows;
     }
@@ -653,8 +730,16 @@ public class BuyerServiceImpl implements IBuyerService
     {
         if (resetRows > 0)
         {
-            forceLogoutBuyerSessionScope(buyerId, buyerAccountId);
+            forceLogoutBuyerSessionScope(buyerId, buyerAccountId, "PASSWORD_RESET_FORCE_LOGOUT");
         }
+    }
+
+    private void recordBuyerForceLogoutAudit(Long buyerId, Long buyerAccountId, String reason)
+    {
+        BuyerAccount account = buyerAccountId == null ? null : buyerMapper.selectBuyerAccountById(buyerAccountId);
+        String userName = account == null ? null : account.getUserName();
+        buyerMapper.insertBuyerLoginLog(portalTokenSupport.buildLoginLog(
+            buyerId, buyerAccountId, userName, Constants.SUCCESS, reason));
     }
 
     private BuyerAccount selectBuyerAccountByPayload(BuyerAccount account)
@@ -710,10 +795,24 @@ public class BuyerServiceImpl implements IBuyerService
     private void recordBuyerLoginSuccess(BuyerAccount account, PortalLoginIssue issue, String message)
     {
         PortalLoginSession session = issue.getSession();
-        buyerMapper.updateBuyerAccountLoginInfo(account.getBuyerAccountId(), session.getLoginIp(), session.getLoginTime());
+        buyerMapper.updateBuyerAccountLoginInfo(account.getBuyerId(), account.getBuyerAccountId(),
+            session.getLoginIp(), session.getLoginTime());
         buyerMapper.insertBuyerLoginLog(portalTokenSupport.buildLoginLog(
             account.getBuyerId(), account.getBuyerAccountId(), account.getUserName(), Constants.SUCCESS, message));
         buyerMapper.insertBuyerSession(session);
+    }
+
+    private String buildDirectLoginSuccessMessage(PortalDirectLoginToken token)
+    {
+        return "免密登录成功; ticketId=" + token.getTicketId()
+            + "; actingAdminId=" + token.getActingAdminId()
+            + "; actingAdminName=" + safeAuditValue(token.getActingAdminName())
+            + "; reason=" + safeAuditValue(token.getDirectLoginReason());
+    }
+
+    private String safeAuditValue(String value)
+    {
+        return StringUtils.isBlank(value) ? "" : value;
     }
 
     private void recordBuyerLoginFailure(Long buyerId, BuyerAccount account, String username, String message)

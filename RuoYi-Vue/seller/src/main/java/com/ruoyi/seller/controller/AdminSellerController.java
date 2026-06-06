@@ -167,6 +167,7 @@ public class AdminSellerController extends BaseController
     }
 
     @PreAuthorize("@ss.hasPermi('seller:admin:forceLogout')")
+    @Log(title = "Seller session list", businessType = BusinessType.OTHER, isSaveResponseData = false)
     @GetMapping("/{sellerId}/sessions/list")
     public TableDataInfo sessions(@PathVariable("sellerId") Long sellerId)
     {
@@ -176,6 +177,7 @@ public class AdminSellerController extends BaseController
     }
 
     @PreAuthorize("@ss.hasPermi('seller:admin:forceLogout')")
+    @Log(title = "Seller account session list", businessType = BusinessType.OTHER, isSaveResponseData = false)
     @GetMapping("/{sellerId}/accounts/{accountId}/sessions/list")
     public TableDataInfo accountSessions(@PathVariable("sellerId") Long sellerId, @PathVariable("accountId") Long accountId)
     {
@@ -220,6 +222,7 @@ public class AdminSellerController extends BaseController
     }
 
     @PreAuthorize("@ss.hasPermi('seller:admin:loginLog:list')")
+    @Log(title = "Seller login log list", businessType = BusinessType.OTHER, isSaveResponseData = false)
     @GetMapping("/loginLogs/list")
     public TableDataInfo loginLogs(PortalLoginLog log)
     {
@@ -229,6 +232,7 @@ public class AdminSellerController extends BaseController
     }
 
     @PreAuthorize("@ss.hasPermi('seller:admin:operLog:list')")
+    @Log(title = "Seller operation log list", businessType = BusinessType.OTHER, isSaveResponseData = false)
     @GetMapping("/operLogs/list")
     public TableDataInfo operLogs(PortalOperLog log)
     {
@@ -238,6 +242,7 @@ public class AdminSellerController extends BaseController
     }
 
     @PreAuthorize("@ss.hasPermi('seller:admin:ticket:list')")
+    @Log(title = "Seller direct-login ticket list", businessType = BusinessType.OTHER, isSaveResponseData = false)
     @GetMapping("/directLoginTickets/list")
     public TableDataInfo directLoginTickets(PortalDirectLoginTicket ticket)
     {

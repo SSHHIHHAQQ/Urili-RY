@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import com.alibaba.fastjson2.JSON;
@@ -132,7 +133,159 @@ public class LingxingOpenApiClient
         Map<String, Object> dataRequest = new LinkedHashMap<>();
         dataRequest.put("page", safeCurrent);
         dataRequest.put("pageSize", safeSize);
-        Object data = post("/product/pagelist", dataRequest, "SKU_SYNC", traceId);
+        return listProductSkuPage(dataRequest, safeCurrent, safeSize, "SKU_SYNC", traceId);
+    }
+
+    public LingxingProductPage listProductSkuPageBySkuList(List<String> skuList, String traceId)
+    {
+        List<String> safeSkuList = skuList == null ? Collections.emptyList() : skuList.stream()
+            .map(StringUtils::trimToEmpty)
+            .filter(StringUtils::isNotBlank)
+            .distinct()
+            .limit(100)
+            .collect(Collectors.toList());
+        if (safeSkuList.isEmpty())
+        {
+            LingxingProductPage empty = new LingxingProductPage();
+            empty.setCurrent(1);
+            empty.setSize(0);
+            empty.setTotal(0);
+            empty.setRecords(Collections.emptyList());
+            return empty;
+        }
+        Map<String, Object> dataRequest = new LinkedHashMap<>();
+        dataRequest.put("page", 1);
+        dataRequest.put("pageSize", safeSkuList.size());
+        dataRequest.put("skuList", safeSkuList);
+        return listProductSkuPage(dataRequest, 1, safeSkuList.size(), "SKU_DIMENSION_SYNC", traceId);
+    }
+
+    public LingxingInventoryProductPage listInventoryProductPage(int current, int size, String traceId)
+    {
+        return listInventoryProductPage(current, size, null, null, traceId);
+    }
+
+    public LingxingInventoryProductPage listInventoryProductPage(int current, int size, String startTime,
+        String endTime, String traceId)
+    {
+        int safeCurrent = Math.max(1, current);
+        int safeSize = Math.max(1, Math.min(100, size));
+        Map<String, Object> dataRequest = new LinkedHashMap<>();
+        dataRequest.put("page", safeCurrent);
+        dataRequest.put("pageSize", safeSize);
+        if (StringUtils.isNotBlank(startTime) && StringUtils.isNotBlank(endTime))
+        {
+            dataRequest.put("timeType", "operateTime");
+            dataRequest.put("startTime", startTime);
+            dataRequest.put("endTime", endTime);
+        }
+        Object data = post("/integratedInventory/pageOpen", dataRequest, "INVENTORY_SYNC", traceId);
+        if (!(data instanceof JSONObject object))
+        {
+            throw new LingxingClientException("LINGXING_RESPONSE_ERROR", "领星库存响应不是对象", false);
+        }
+        LingxingInventoryProductPage page = new LingxingInventoryProductPage();
+        page.setCurrent(firstInt(object, safeCurrent, "page", "current"));
+        page.setSize(firstInt(object, safeSize, "pageSize", "size"));
+        JSONArray records = firstArray(object, "records", "list", "rows");
+        page.setTotal(firstInt(object, records.size(), "total", "totalCount", "count"));
+        List<LingxingInventoryProductStock> stocks = new ArrayList<>();
+        for (Object item : records)
+        {
+            if (item instanceof JSONObject row)
+            {
+                parseIntegratedInventoryStocks(row, stocks);
+            }
+        }
+        page.setRecords(stocks);
+        return page;
+    }
+
+    private void parseIntegratedInventoryStocks(JSONObject row, List<LingxingInventoryProductStock> stocks)
+    {
+        appendIntegratedInventoryStock(stocks, row, "COMPREHENSIVE", firstLong(row, "totalAmount"),
+            combinedStockDetail(row), firstLong(row, "boxTotalAmount"), firstLong(row, "productTotalAmount"));
+        appendIntegratedInventoryStock(stocks, row, "PRODUCT", firstLong(row, "productTotalAmount"),
+            row.getJSONObject("productStockDtl"), null, firstLong(row, "productTotalAmount"));
+        appendIntegratedInventoryStock(stocks, row, "BOX", firstLong(row, "boxTotalAmount"),
+            row.getJSONObject("boxStockDtl"), firstLong(row, "boxTotalAmount"), null);
+        appendIntegratedInventoryStock(stocks, row, "RETURN", firstLong(row, "fbaReturnTotalAmount"),
+            row.getJSONObject("fbaReturnStockDtl"), null, null);
+    }
+
+    private JSONObject combinedStockDetail(JSONObject row)
+    {
+        JSONObject detail = new JSONObject();
+        detail.put("availableAmount", sumNullableOrNull(
+            stockDetailLong(row.getJSONObject("productStockDtl"), "availableAmount"),
+            stockDetailLong(row.getJSONObject("boxStockDtl"), "availableAmount"),
+            stockDetailLong(row.getJSONObject("fbaReturnStockDtl"), "availableAmount")));
+        detail.put("lockAmount", sumNullableOrNull(
+            stockDetailLong(row.getJSONObject("productStockDtl"), "lockAmount"),
+            stockDetailLong(row.getJSONObject("boxStockDtl"), "lockAmount"),
+            stockDetailLong(row.getJSONObject("fbaReturnStockDtl"), "lockAmount")));
+        detail.put("transportAmount", sumNullableOrNull(
+            stockDetailLong(row.getJSONObject("productStockDtl"), "transportAmount"),
+            stockDetailLong(row.getJSONObject("boxStockDtl"), "transportAmount"),
+            stockDetailLong(row.getJSONObject("fbaReturnStockDtl"), "transportAmount")));
+        return detail;
+    }
+
+    private void appendIntegratedInventoryStock(List<LingxingInventoryProductStock> stocks, JSONObject row, String scope,
+        Long totalQuantity, JSONObject detail, Long boxedQuantity, Long unboxedQuantity)
+    {
+        String warehouseCode = firstString(row, "whCode", "warehouseCode", "warehouse_code", "wmsWarehouseCode");
+        String sku = firstString(row, "sku", "masterSku", "productSku", "productSkuCode", "productCode");
+        if (StringUtils.isBlank(warehouseCode) || StringUtils.isBlank(sku))
+        {
+            return;
+        }
+        if (totalQuantity == null && !hasStockDetail(detail))
+        {
+            return;
+        }
+        LingxingInventoryProductStock stock = new LingxingInventoryProductStock();
+        stock.setWarehouseCode(warehouseCode);
+        stock.setWarehouseName(firstString(row, "whNameCn", "warehouseName", "warehouse_name", "whName"));
+        stock.setSku(sku);
+        stock.setProductName(firstString(row, "productName", "productNameCn", "skuName", "name"));
+        stock.setInventoryScope(scope);
+        stock.setInventoryAttribute(firstString(row, "stockType"));
+        stock.setBatchNo("");
+        stock.setLocationCode("");
+        stock.setAvailableQuantity(stockDetailLong(detail, "availableAmount"));
+        stock.setLockedQuantity(stockDetailLong(detail, "lockAmount"));
+        stock.setInTransitQuantity(stockDetailLong(detail, "transportAmount"));
+        stock.setBoxedQuantity(boxedQuantity);
+        stock.setUnboxedQuantity(unboxedQuantity);
+        stock.setTotalQuantity(totalQuantity);
+        if (stock.getTotalQuantity() == null)
+        {
+            stock.setTotalQuantity(sumNullable(stock.getAvailableQuantity(), stock.getLockedQuantity(),
+                stock.getInTransitQuantity()));
+        }
+        String sourcePayload = JSON.toJSONString(row);
+        stock.setSourcePayloadJson(sourcePayload);
+        stock.setSourcePayloadHash(sha256Hex(sourcePayload));
+        stocks.add(stock);
+    }
+
+    private boolean hasStockDetail(JSONObject detail)
+    {
+        return detail != null && (stockDetailLong(detail, "availableAmount") != null
+            || stockDetailLong(detail, "lockAmount") != null
+            || stockDetailLong(detail, "transportAmount") != null);
+    }
+
+    private Long stockDetailLong(JSONObject detail, String key)
+    {
+        return detail == null ? null : firstLong(detail, key);
+    }
+
+    private LingxingProductPage listProductSkuPage(Map<String, Object> dataRequest, int safeCurrent, int safeSize,
+        String operation, String traceId)
+    {
+        Object data = post("/product/pagelist", dataRequest, operation, traceId);
         if (!(data instanceof JSONObject object))
         {
             throw new LingxingClientException("LINGXING_RESPONSE_ERROR", "领星SKU响应不是对象", false);
@@ -203,10 +356,15 @@ public class LingxingOpenApiClient
 
     private Object post(String path, Object data, String operation, String traceId)
     {
+        return postToBase(baseUrl, path, data, operation, traceId);
+    }
+
+    private Object postToBase(String targetBaseUrl, String path, Object data, String operation, String traceId)
+    {
         String safeTraceId = StringUtils.defaultIfBlank(traceId, UUID.randomUUID().toString());
         String reqTime = String.valueOf(System.currentTimeMillis() / 1000L);
         String authcode = sign(data, reqTime);
-        String endpoint = baseUrl + path;
+        String endpoint = targetBaseUrl + path;
         String requestUrl = endpoint + "?authcode=" + URLEncoder.encode(authcode, StandardCharsets.UTF_8);
         Map<String, Object> requestBody = new LinkedHashMap<>();
         requestBody.put("appKey", credentials.getAppKey());
@@ -466,6 +624,57 @@ public class LingxingOpenApiClient
             }
         }
         return null;
+    }
+
+    private static Long firstLong(JSONObject object, String... keys)
+    {
+        for (String key : keys)
+        {
+            Object value = object.get(key);
+            if (value instanceof Number number)
+            {
+                return number.longValue();
+            }
+            if (value instanceof String string && StringUtils.isNotBlank(string))
+            {
+                try
+                {
+                    return Long.parseLong(string.trim());
+                }
+                catch (NumberFormatException ignored)
+                {
+                }
+            }
+        }
+        return null;
+    }
+
+    private static long sumNullable(Long... values)
+    {
+        long sum = 0L;
+        for (Long value : values)
+        {
+            if (value != null)
+            {
+                sum += value;
+            }
+        }
+        return sum;
+    }
+
+    private static Long sumNullableOrNull(Long... values)
+    {
+        long sum = 0L;
+        boolean hasValue = false;
+        for (Long value : values)
+        {
+            if (value != null)
+            {
+                sum += value;
+                hasValue = true;
+            }
+        }
+        return hasValue ? sum : null;
     }
 
     private static String arrayJson(JSONObject object, String key)

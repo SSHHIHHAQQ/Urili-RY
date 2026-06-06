@@ -3,6 +3,25 @@
 -- 1. Add seller:product:category:list and buyer:product:category:list as hidden button permissions.
 -- 2. Grant the permissions to current active seller/buyer roles.
 
+set names utf8mb4;
+set @confirm_portal_product_category_permission_seed := coalesce(@confirm_portal_product_category_permission_seed, '');
+
+delimiter //
+
+drop procedure if exists assert_portal_product_category_permission_seed_confirmed//
+create procedure assert_portal_product_category_permission_seed_confirmed()
+begin
+  if coalesce(@confirm_portal_product_category_permission_seed, '')
+      <> 'APPLY_PORTAL_PRODUCT_CATEGORY_PERMISSION_SEED' then
+    signal sqlstate '45000' set message_text = 'set @confirm_portal_product_category_permission_seed = APPLY_PORTAL_PRODUCT_CATEGORY_PERMISSION_SEED before running this seed';
+  end if;
+end//
+
+delimiter ;
+
+call assert_portal_product_category_permission_seed_confirmed();
+drop procedure if exists assert_portal_product_category_permission_seed_confirmed;
+
 insert into seller_menu
     (menu_name, parent_id, order_num, path, component, query, route_name,
      is_frame, is_cache, menu_type, visible, status, perms, icon, create_by,

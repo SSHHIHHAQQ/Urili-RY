@@ -1,4 +1,5 @@
-import { Descriptions, Drawer, Image, Space, Tag, Typography } from 'antd';
+import { Descriptions, Drawer, Image, Space, Table, Tag, Typography } from 'antd';
+import { pairingStatusText, syncItemStatusText } from '@/services/integration/constants';
 import {
   approveStatusText,
   dangerousCargoText,
@@ -10,12 +11,16 @@ import {
   jsonArrayCount,
   productTypeText,
   weightText,
+  wmsDimensionText,
+  wmsWeightText,
 } from './constants';
 import styles from './style.module.css';
 
 type SourceProductDetailDrawerProps = {
   open: boolean;
   record?: API.Integration.SourceProductItem;
+  groupDetail?: API.Integration.SourceProductGroupDetail;
+  loading?: boolean;
   onClose: () => void;
 };
 
@@ -26,8 +31,8 @@ function sourceTag(record?: API.Integration.SourceProductItem) {
   return (
     <Space size={4} wrap>
       <Tag color="blue">{record.systemKindLabel || record.systemKind || '-'}</Tag>
-      <Typography.Text>{record.masterWarehouseName || '-'}</Typography.Text>
-      <Typography.Text type="secondary">{record.connectionCode}</Typography.Text>
+      <Typography.Text>{record.sourceWarehouseNames || record.masterWarehouseName || '-'}</Typography.Text>
+      <Typography.Text type="secondary">{record.sourceConnectionCodes || record.connectionCode}</Typography.Text>
     </Space>
   );
 }
@@ -35,8 +40,12 @@ function sourceTag(record?: API.Integration.SourceProductItem) {
 export default function SourceProductDetailDrawer({
   open,
   record,
+  groupDetail,
+  loading,
   onClose,
 }: SourceProductDetailDrawerProps) {
+  const warehouses = groupDetail?.warehouses || [];
+
   return (
     <Drawer
       size={760}
@@ -61,6 +70,9 @@ export default function SourceProductDetailDrawer({
           <Descriptions.Item label="来源">{sourceTag(record)}</Descriptions.Item>
           <Descriptions.Item label="来源 SKU">
             <Typography.Text copyable>{displayText(record?.masterSku)}</Typography.Text>
+          </Descriptions.Item>
+          <Descriptions.Item label="来源 SKU 组">
+            <Typography.Text copyable>{displayText(record?.sourceSkuGroupKey)}</Typography.Text>
           </Descriptions.Item>
           <Descriptions.Item label="商品名称">
             {displayText(record?.masterProductName)}
@@ -140,6 +152,65 @@ export default function SourceProductDetailDrawer({
           {displayNumber(record?.wmsWeight, ' kg')}
         </Descriptions.Item>
       </Descriptions>
+
+      <Typography.Title level={5} className={styles.sectionTitle}>
+        官方仓明细
+      </Typography.Title>
+      <Table<API.Integration.SourceProductItem>
+        size="small"
+        rowKey={(item) => `${item.connectionCode}:${item.sourceDimensionGroupKey || item.masterSku}:${item.updateTime || ''}`}
+        loading={loading}
+        pagination={false}
+        dataSource={warehouses}
+        scroll={{ x: 760 }}
+        columns={[
+          {
+            title: '官方仓',
+            dataIndex: 'masterWarehouseName',
+            width: 180,
+            render: (_, item) => (
+              <Space orientation="vertical" size={0}>
+                <Typography.Text>{displayText(item.masterWarehouseName)}</Typography.Text>
+                <Typography.Text className={styles.subText}>{displayText(item.connectionCode)}</Typography.Text>
+              </Space>
+            ),
+          },
+          {
+            title: '客户尺寸',
+            key: 'customerDimension',
+            width: 190,
+            render: (_, item) => (
+              <Space orientation="vertical" size={0}>
+                <Typography.Text>{dimensionText(item)}</Typography.Text>
+                <Typography.Text className={styles.subText}>{weightText(item)}</Typography.Text>
+              </Space>
+            ),
+          },
+          {
+            title: '仓库尺寸',
+            key: 'warehouseDimension',
+            width: 190,
+            render: (_, item) => (
+              <Space orientation="vertical" size={0}>
+                <Typography.Text>{wmsDimensionText(item)}</Typography.Text>
+                <Typography.Text className={styles.subText}>{wmsWeightText(item)}</Typography.Text>
+              </Space>
+            ),
+          },
+          {
+            title: '同步状态',
+            dataIndex: 'status',
+            width: 110,
+            render: (value) => displayText(syncItemStatusText[value as string] || value),
+          },
+          {
+            title: '配对状态',
+            dataIndex: 'pairingStatus',
+            width: 110,
+            render: (value) => displayText(pairingStatusText[value as string] || value),
+          },
+        ]}
+      />
 
       <Descriptions title="申报信息" size="small" column={2}>
         <Descriptions.Item label="申报中文名">

@@ -203,7 +203,7 @@ const PartnerSessionModal: React.FC<PartnerSessionModalProps> = ({
       onCancel={() => onOpenChange(false)}
     >
       <Table<API.Partner.PortalSessionProfile>
-        rowKey={(record) => [
+        rowKey={(record) => record.tokenId || [
           record.terminal || config.moduleKey,
           record.subjectId || 0,
           record.accountId || 0,

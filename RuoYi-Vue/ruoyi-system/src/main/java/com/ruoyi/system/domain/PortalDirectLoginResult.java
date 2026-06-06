@@ -23,11 +23,12 @@ public class PortalDirectLoginResult implements Serializable
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private Date expireTime;
 
+    @JsonIgnore
     private Long accountId;
 
+    @JsonIgnore
     private String username;
 
-    @JsonIgnore
     public String getToken()
     {
         return token;

@@ -18,6 +18,7 @@ const sellerConfig = {
     levelDictType: 'seller_level',
     listTemplate: 'standard',
     searchStorageKey: 'admin-seller-management',
+    searchFieldCount: 8,
     accountPermissions: {
         list: 'seller:admin:account:list',
         add: 'seller:admin:account:add',

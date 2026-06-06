@@ -5,6 +5,25 @@
 -- 3. Add buyer:product:schema:query as a hidden button permission.
 -- 4. Grant the permission to current active buyer roles.
 
+set names utf8mb4;
+set @confirm_buyer_product_schema_permission_seed := coalesce(@confirm_buyer_product_schema_permission_seed, '');
+
+delimiter //
+
+drop procedure if exists assert_buyer_product_schema_permission_seed_confirmed//
+create procedure assert_buyer_product_schema_permission_seed_confirmed()
+begin
+  if coalesce(@confirm_buyer_product_schema_permission_seed, '')
+      <> 'APPLY_BUYER_PRODUCT_SCHEMA_PERMISSION_SEED' then
+    signal sqlstate '45000' set message_text = 'set @confirm_buyer_product_schema_permission_seed = APPLY_BUYER_PRODUCT_SCHEMA_PERMISSION_SEED before running this seed';
+  end if;
+end//
+
+delimiter ;
+
+call assert_buyer_product_schema_permission_seed_confirmed();
+drop procedure if exists assert_buyer_product_schema_permission_seed_confirmed;
+
 insert into buyer_role
     (buyer_id, role_name, role_key, role_sort, status, del_flag,
      create_by, create_time, update_by, update_time, remark)

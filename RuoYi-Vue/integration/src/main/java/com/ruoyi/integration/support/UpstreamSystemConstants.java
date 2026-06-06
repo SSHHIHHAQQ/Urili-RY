@@ -34,7 +34,7 @@ public final class UpstreamSystemConstants
     public static final String SYNC_STATUS_FAILED = "FAILED";
 
     public static final String DEFAULT_CAPABILITIES =
-        "[\"WAREHOUSE_SYNC\",\"LOGISTICS_CHANNEL_SYNC\",\"SKU_SYNC\"]";
+        "[\"WAREHOUSE_SYNC\",\"LOGISTICS_CHANNEL_SYNC\",\"SKU_SYNC\",\"SKU_DIMENSION_SYNC\",\"INVENTORY_SYNC\"]";
 
     private UpstreamSystemConstants()
     {

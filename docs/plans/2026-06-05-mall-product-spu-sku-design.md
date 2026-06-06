@@ -724,8 +724,8 @@ SKU 固定规格：
 
 - 生成结果建议进入 `DRAFT`。
 - `source_type` 使用 `SOURCE_PRODUCT`。
-- `source_ref_type` 可填 `UPSTREAM_SKU`。
-- `source_ref_id` 可用 `connection_code + master_sku`。
+- `source_ref_type` 应使用 `SOURCE_SKU_GROUP`。
+- `source_ref_id` 应保存稳定 `sourceSkuGroupKey`，不使用单条 `connection_code + master_sku`。
 - 来源快照只作为默认值，不反向覆盖商城商品事实。
 
 该能力不在首版实现。

@@ -58,6 +58,8 @@ declare namespace API.Integration {
     warehouseCount: number;
     logisticsChannelCount: number;
     skuCount: number;
+    skuDimensionCount: number;
+    warehouseStockCount: number;
     syncBatchId: string;
   }
 
@@ -127,6 +129,14 @@ declare namespace API.Integration {
     connectionCode: string;
     masterSku: string;
     masterProductName: string;
+    length?: number;
+    width?: number;
+    height?: number;
+    weight?: number;
+    wmsLength?: number;
+    wmsWidth?: number;
+    wmsHeight?: number;
+    wmsWeight?: number;
     status?: string;
     pairingStatus?: string;
     skuPairingId?: number;
@@ -147,6 +157,21 @@ declare namespace API.Integration {
     lastSuccessTime?: string;
     lastErrorMessage?: string;
     nextSyncTime?: string;
+    updateTime?: string;
+  }
+
+  export interface InventorySyncState {
+    connectionCode: string;
+    status?: string;
+    syncBatchId?: string;
+    lastStartedTime?: string;
+    lastFinishedTime?: string;
+    lastSuccessTime?: string;
+    nextSyncTime?: string;
+    totalCount?: number;
+    activeCount?: number;
+    missingCount?: number;
+    lastErrorMessage?: string;
     updateTime?: string;
   }
 
@@ -174,6 +199,47 @@ declare namespace API.Integration {
     systemSkuName: string;
     customerName?: string;
     remark?: string;
+  }
+
+  export interface SourceWarehouseStockItem {
+    inventorySnapshotId: number;
+    connectionCode: string;
+    systemKind?: string;
+    systemKindLabel?: string;
+    masterWarehouseName?: string;
+    upstreamWarehouseCode: string;
+    upstreamWarehouseName?: string;
+    masterSku: string;
+    masterProductName?: string;
+    inventoryScope?: string;
+    inventoryAttribute?: string;
+    batchNo?: string;
+    locationCode?: string;
+    totalQuantity?: number;
+    availableQuantity?: number;
+    lockedQuantity?: number;
+    inTransitQuantity?: number;
+    boxedQuantity?: number;
+    unboxedQuantity?: number;
+    systemWarehouseCode?: string;
+    systemWarehouseName?: string;
+    systemSku?: string;
+    systemSkuName?: string;
+    customerName?: string;
+    warehousePairingStatus?: string;
+    skuPairingStatus?: string;
+    status?: string;
+    syncBatchId?: string;
+    firstSeenTime?: string;
+    lastSeenTime?: string;
+    updateTime?: string;
+  }
+
+  export interface SourceWarehouseStockPageResult {
+    code: number;
+    msg: string;
+    total: number;
+    rows: SourceWarehouseStockItem[];
   }
 
   export interface RequestLog {

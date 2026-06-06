@@ -2,6 +2,11 @@ import { Button, Result, Spin } from 'antd';
 import { history, useLocation } from '@umijs/max';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  PORTAL_DIRECT_LOGIN_READY_MESSAGE,
+  PORTAL_DIRECT_LOGIN_TOKEN_MESSAGE,
+  type PortalDirectLoginTokenMessage,
+} from '@/utils/portalDirectLoginMessage';
+import {
   clearPortalLogin,
   getPortalTerminal,
   persistPortalLogin,
@@ -23,6 +28,28 @@ const pageStyle: React.CSSProperties = {
   background: '#f5f7fb',
 };
 
+function isDirectLoginTokenMessage(
+  data: unknown,
+  terminal: API.Partner.PortalTerminal,
+): data is PortalDirectLoginTokenMessage {
+  return Boolean(
+    data
+      && typeof data === 'object'
+      && (data as PortalDirectLoginTokenMessage).type === PORTAL_DIRECT_LOGIN_TOKEN_MESSAGE
+      && (data as PortalDirectLoginTokenMessage).terminal === terminal
+      && typeof (data as PortalDirectLoginTokenMessage).token === 'string'
+      && (data as PortalDirectLoginTokenMessage).token,
+  );
+}
+
+function resolveOpenerOrigin() {
+  try {
+    return document.referrer ? new URL(document.referrer).origin : window.location.origin;
+  } catch {
+    return window.location.origin;
+  }
+}
+
 const DirectLoginPage: React.FC = () => {
   const location = useLocation();
   const terminal = useMemo(() => getPortalTerminal(location.pathname), [location.pathname]);
@@ -30,23 +57,23 @@ const DirectLoginPage: React.FC = () => {
 
   useEffect(() => {
     let mounted = true;
-    const run = async () => {
-      if (!terminal) {
-        setState({ status: 'error', message: '端类型无效' });
-        return;
-      }
+    let consumed = false;
 
-      const directLoginToken = new URLSearchParams(location.search).get('directLoginToken');
-      if (!directLoginToken) {
-        clearPortalLogin(terminal);
-        setState({ status: 'error', message: '免密登录 token 不能为空' });
-        return;
-      }
+    if (!terminal) {
+      setState({ status: 'error', message: 'Invalid terminal' });
+      return () => {
+        mounted = false;
+      };
+    }
 
+    clearPortalLogin(terminal);
+    const openerOrigin = resolveOpenerOrigin();
+
+    const consumeToken = async (token: string) => {
       try {
-        const response = await PORTAL_SERVICE[terminal].directLogin(directLoginToken);
+        const response = await PORTAL_SERVICE[terminal].directLogin(token);
         if (response.code !== 200 || !persistPortalLogin(response.data, terminal)) {
-          setState({ status: 'error', message: response.msg || '免密登录端类型不匹配' });
+          setState({ status: 'error', message: response.msg || 'Direct login terminal mismatch' });
           return;
         }
         if (mounted) {
@@ -57,21 +84,44 @@ const DirectLoginPage: React.FC = () => {
         console.log(error);
         clearPortalLogin(terminal);
         if (mounted) {
-          setState({ status: 'error', message: '免密登录失败' });
+          setState({ status: 'error', message: 'Direct login failed' });
         }
       }
     };
 
-    run();
+    const handleTokenMessage = (event: MessageEvent) => {
+      if (
+        event.source !== window.opener
+        || event.origin !== openerOrigin
+        || !isDirectLoginTokenMessage(event.data, terminal)
+        || consumed
+      ) {
+        return;
+      }
+      consumed = true;
+      void consumeToken(event.data.token);
+    };
+
+    window.addEventListener('message', handleTokenMessage);
+    window.opener?.postMessage({ type: PORTAL_DIRECT_LOGIN_READY_MESSAGE, terminal }, openerOrigin);
+    const timeoutTimer = window.setTimeout(() => {
+      if (!consumed && mounted) {
+        clearPortalLogin(terminal);
+        setState({ status: 'error', message: 'Direct login token was not received' });
+      }
+    }, 5000);
+
     return () => {
       mounted = false;
+      window.removeEventListener('message', handleTokenMessage);
+      window.clearTimeout(timeoutTimer);
     };
-  }, [location.search, terminal]);
+  }, [terminal]);
 
   if (state.status === 'loading') {
     return (
       <div style={pageStyle}>
-        <Spin description={terminal ? `正在进入${PORTAL_META[terminal].label}` : '正在进入'} />
+        <Spin description="Entering portal" />
       </div>
     );
   }
@@ -79,7 +129,7 @@ const DirectLoginPage: React.FC = () => {
   if (state.status === 'success') {
     return (
       <div style={pageStyle}>
-        <Result status="success" title="登录成功" />
+        <Result status="success" title="Login succeeded" />
       </div>
     );
   }
@@ -88,11 +138,11 @@ const DirectLoginPage: React.FC = () => {
     <div style={pageStyle}>
       <Result
         status="error"
-        title="免密登录失败"
+        title="Direct login failed"
         subTitle={state.message}
         extra={[
-          <Button key="login" type="primary" onClick={() => history.replace('/user/login')}>
-            返回管理端登录
+          <Button key="login" type="primary" onClick={() => history.replace(terminal ? PORTAL_META[terminal].loginPath : '/seller/login')}>
+            Back to portal login
           </Button>,
         ]}
       />

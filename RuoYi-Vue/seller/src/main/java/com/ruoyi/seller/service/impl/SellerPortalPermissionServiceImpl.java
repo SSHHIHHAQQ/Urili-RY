@@ -69,7 +69,7 @@ public class SellerPortalPermissionServiceImpl implements ISellerPortalPermissio
     public List<Long> selectMenuIdsByRoleId(Long sellerId, Long roleId)
     {
         selectRoleById(sellerId, roleId);
-        return permissionMapper.selectSellerMenuIdsByRoleId(roleId);
+        return permissionMapper.selectSellerMenuIdsByRoleId(sellerId, roleId);
     }
 
     @Override
@@ -182,7 +182,7 @@ public class SellerPortalPermissionServiceImpl implements ISellerPortalPermissio
         checkRoleUnique(role);
         role.setUpdateBy(SecurityUtils.getUsername());
         int rows = permissionMapper.updateSellerRole(role);
-        permissionMapper.deleteSellerRoleMenuByRoleId(role.getRoleId());
+        permissionMapper.deleteSellerRoleMenuByRoleId(sellerId, role.getRoleId());
         insertRoleMenus(role);
         return rows;
     }
@@ -209,11 +209,11 @@ public class SellerPortalPermissionServiceImpl implements ISellerPortalPermissio
         for (Long roleId : ids)
         {
             selectRoleById(sellerId, roleId);
-            if (permissionMapper.countSellerAccountRoleByRoleId(roleId) > 0)
+            if (permissionMapper.countSellerAccountRoleByRoleId(sellerId, roleId) > 0)
             {
                 throw new ServiceException("角色已分配账号，不允许删除");
             }
-            permissionMapper.deleteSellerRoleMenuByRoleId(roleId);
+            permissionMapper.deleteSellerRoleMenuByRoleId(sellerId, roleId);
             rows += permissionMapper.deleteSellerRoleById(sellerId, roleId, SecurityUtils.getUsername());
         }
         return rows;
@@ -236,12 +236,12 @@ public class SellerPortalPermissionServiceImpl implements ISellerPortalPermissio
         {
             throw new ServiceException("存在不属于该卖家的角色");
         }
-        permissionMapper.deleteSellerAccountRoles(accountId);
+        permissionMapper.deleteSellerAccountRoles(sellerId, accountId);
         if (ids.length == 0)
         {
             return 1;
         }
-        return permissionMapper.batchSellerAccountRoles(accountId, ids);
+        return permissionMapper.batchSellerAccountRoles(sellerId, accountId, ids);
     }
 
     @Override
@@ -284,7 +284,7 @@ public class SellerPortalPermissionServiceImpl implements ISellerPortalPermissio
         Long[] menuIds = PortalPermissionSupport.sanitizeIds(role.getMenuIds());
         if (menuIds.length > 0)
         {
-            permissionMapper.batchSellerRoleMenu(role.getRoleId(), menuIds);
+            permissionMapper.batchSellerRoleMenu(role.getSubjectId(), role.getRoleId(), menuIds);
         }
     }
 

@@ -26,7 +26,7 @@ public interface BuyerPortalPermissionMapper
 
     public int deleteBuyerMenuById(Long menuId);
 
-    public List<Long> selectBuyerMenuIdsByRoleId(Long roleId);
+    public List<Long> selectBuyerMenuIdsByRoleId(@Param("buyerId") Long buyerId, @Param("roleId") Long roleId);
 
     public List<PortalRole> selectBuyerRoleList(PortalRole role);
 
@@ -46,7 +46,7 @@ public interface BuyerPortalPermissionMapper
     public int deleteBuyerRoleById(@Param("buyerId") Long buyerId, @Param("roleId") Long roleId,
             @Param("updateBy") String updateBy);
 
-    public int countBuyerAccountRoleByRoleId(Long roleId);
+    public int countBuyerAccountRoleByRoleId(@Param("buyerId") Long buyerId, @Param("roleId") Long roleId);
 
     public List<Long> selectBuyerAccountRoleIds(@Param("buyerId") Long buyerId, @Param("accountId") Long accountId);
 
@@ -58,11 +58,13 @@ public interface BuyerPortalPermissionMapper
 
     public int countBuyerRolesByIds(@Param("buyerId") Long buyerId, @Param("roleIds") Long[] roleIds);
 
-    public int deleteBuyerAccountRoles(@Param("accountId") Long accountId);
+    public int deleteBuyerAccountRoles(@Param("buyerId") Long buyerId, @Param("accountId") Long accountId);
 
-    public int batchBuyerAccountRoles(@Param("accountId") Long accountId, @Param("roleIds") Long[] roleIds);
+    public int batchBuyerAccountRoles(@Param("buyerId") Long buyerId, @Param("accountId") Long accountId,
+            @Param("roleIds") Long[] roleIds);
 
-    public int deleteBuyerRoleMenuByRoleId(Long roleId);
+    public int deleteBuyerRoleMenuByRoleId(@Param("buyerId") Long buyerId, @Param("roleId") Long roleId);
 
-    public int batchBuyerRoleMenu(@Param("roleId") Long roleId, @Param("menuIds") Long[] menuIds);
+    public int batchBuyerRoleMenu(@Param("buyerId") Long buyerId, @Param("roleId") Long roleId,
+            @Param("menuIds") Long[] menuIds);
 }

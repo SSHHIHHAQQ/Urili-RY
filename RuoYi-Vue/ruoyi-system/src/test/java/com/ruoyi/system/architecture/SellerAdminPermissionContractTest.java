@@ -76,6 +76,11 @@ public class SellerAdminPermissionContractTest
         assertHandlerPermission(handlers, "loginLogs", "seller:admin:loginLog:list", violations);
         assertHandlerPermission(handlers, "operLogs", "seller:admin:operLog:list", violations);
         assertHandlerPermission(handlers, "directLoginTickets", "seller:admin:ticket:list", violations);
+        assertSensitiveReadLog(handlers, "sessions", violations);
+        assertSensitiveReadLog(handlers, "accountSessions", violations);
+        assertSensitiveReadLog(handlers, "loginLogs", violations);
+        assertSensitiveReadLog(handlers, "operLogs", violations);
+        assertSensitiveReadLog(handlers, "directLoginTickets", violations);
         assertHandlerRouteContains(handlers, "accounts", "@GetMapping(\"/{sellerId}/accounts\")", violations);
         assertHandlerRouteContains(handlers, "accountRoles",
                 "@GetMapping(\"/{sellerId}/accounts/{accountId}/roles\")", violations);
@@ -224,6 +229,27 @@ public class SellerAdminPermissionContractTest
         {
             violations.add("AdminSellerController#" + methodName + " must keep subject/account scoped route "
                     + expectedRoute);
+        }
+    }
+
+    private void assertSensitiveReadLog(List<HandlerMethod> handlers, String methodName, List<String> violations)
+    {
+        HandlerMethod target = handlers.stream()
+                .filter(handler -> methodName.equals(handler.name))
+                .findFirst()
+                .orElse(null);
+        if (target == null)
+        {
+            violations.add("AdminSellerController#" + methodName + " must exist");
+            return;
+        }
+        if (!target.annotations.contains("@Log"))
+        {
+            violations.add("AdminSellerController#" + methodName + " must write admin operation log");
+        }
+        if (!target.annotations.contains("isSaveResponseData = false"))
+        {
+            violations.add("AdminSellerController#" + methodName + " must not save sensitive response data");
         }
     }
 

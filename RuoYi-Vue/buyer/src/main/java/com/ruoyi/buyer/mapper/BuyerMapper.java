@@ -45,10 +45,12 @@ public interface BuyerMapper
             @Param("lockStatus") String lockStatus, @Param("lockReason") String lockReason,
             @Param("updateBy") String updateBy);
 
-    public int resetBuyerAccountPassword(@Param("buyerAccountId") Long buyerAccountId, @Param("password") String password,
+    public int resetBuyerAccountPassword(@Param("buyerId") Long buyerId,
+            @Param("buyerAccountId") Long buyerAccountId, @Param("password") String password,
             @Param("updateBy") String updateBy);
 
-    public int updateBuyerAccountLoginInfo(@Param("buyerAccountId") Long buyerAccountId,
+    public int updateBuyerAccountLoginInfo(@Param("buyerId") Long buyerId,
+            @Param("buyerAccountId") Long buyerAccountId,
             @Param("lastLoginIp") String lastLoginIp, @Param("lastLoginTime") Date lastLoginTime);
 
     public int insertBuyerLoginLog(PortalLoginLog log);

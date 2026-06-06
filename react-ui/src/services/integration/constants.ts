@@ -8,10 +8,12 @@ export const systemKindText: Record<string, string> = {
 export const syncItemStatusText: Record<string, string> = {
   ACTIVE: '正常',
   MISSING: '上游缺失',
+  MIXED: '多状态',
 };
 
 export const pairingStatusText: Record<string, string> = {
   PAIRED: '已配对',
+  PARTIAL: '部分配对',
   UNASSIGNED: '未配对',
 };
 
@@ -34,3 +36,22 @@ export const skuSyncItemStatusSearchOptions = [
   { label: '全部同步状态', value: '' },
   ...skuSyncItemStatusOptions,
 ];
+
+export const inventoryScopeText: Record<string, string> = {
+  PRODUCT: '产品库存',
+  BOX: '箱库存',
+  RETURN: '退货库存',
+  COMPREHENSIVE: '综合库存',
+};
+
+export const inventoryScopeOptions = Object.entries(inventoryScopeText).map(([value, label]) => ({
+  label,
+  value,
+}));
+
+export const inventoryScopeSearchOptions = [
+  { label: '全部库存口径', value: '' },
+  ...inventoryScopeOptions,
+];
+
+export const inventoryPairingStatusOptions = skuPairingStatusSearchOptions;

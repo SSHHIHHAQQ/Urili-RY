@@ -15,7 +15,7 @@ import {
   systemKindOptions,
   systemKindText,
 } from '@/services/integration/constants';
-import { getSourceProductList } from '@/services/integration/sourceProduct';
+import { getSourceProductGroupDetail, getSourceProductList } from '@/services/integration/sourceProduct';
 import {
   getProTableColumnsState,
   getPersistedProTableSearch,
@@ -36,6 +36,11 @@ import SourceProductDetailDrawer from './SourceProductDetailDrawer';
 import styles from './style.module.css';
 
 const SOURCE_PRODUCT_SEARCH_FIELD_COUNT = 8;
+
+const repositoryTabs = [
+  { key: 'OFFICIAL_MASTER', label: '官方主仓' },
+  { key: 'THIRD_PARTY_MASTER', label: '三方主仓' },
+];
 
 function cleanParams(params: Record<string, any>) {
   return Object.fromEntries(
@@ -66,6 +71,18 @@ function sourceLabel(record: API.Integration.SourceProductItem) {
   return record.systemKindLabel || systemKindText[record.systemKind || ''] || record.systemKind || '-';
 }
 
+function warehouseSummary(record: API.Integration.SourceProductItem) {
+  const warehouseCount = record.warehouseCount || 0;
+  const sourceRowCount = record.sourceRowCount || 0;
+  if (!warehouseCount && !sourceRowCount) {
+    return '-';
+  }
+  if (sourceRowCount > warehouseCount) {
+    return `${warehouseCount || '-'} 个仓 / ${sourceRowCount} 条明细`;
+  }
+  return `${warehouseCount || '-'} 个仓`;
+}
+
 function renderProduct(record: API.Integration.SourceProductItem) {
   return (
     <div className={styles.productCell}>
@@ -90,12 +107,34 @@ function renderProduct(record: API.Integration.SourceProductItem) {
 
 export default function SourceProductLibraryPage() {
   const actionRef = useRef<ActionType>(null);
+  const [repositoryScope, setRepositoryScope] = useState('OFFICIAL_MASTER');
   const [detailOpen, setDetailOpen] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [groupDetail, setGroupDetail] = useState<API.Integration.SourceProductGroupDetail>();
   const [currentRecord, setCurrentRecord] = useState<API.Integration.SourceProductItem>();
 
   const openDetail = (record: API.Integration.SourceProductItem) => {
     setCurrentRecord(record);
+    setGroupDetail(undefined);
+    setDetailLoading(false);
     setDetailOpen(true);
+    if (!record.sourceSkuGroupKey) {
+      return;
+    }
+    setDetailLoading(true);
+    getSourceProductGroupDetail({
+      repositoryScope,
+      sourceSkuGroupKey: record.sourceSkuGroupKey,
+    })
+      .then((resp) => {
+        setGroupDetail(resp.data);
+      })
+      .catch(() => {
+        setGroupDetail(undefined);
+      })
+      .finally(() => {
+        setDetailLoading(false);
+      });
   };
 
   const columns: ProColumns<API.Integration.SourceProductItem>[] = [
@@ -123,7 +162,10 @@ export default function SourceProductLibraryPage() {
       render: (_, record) => (
         <Space orientation="vertical" size={0}>
           <Tag color="blue">{sourceLabel(record)}</Tag>
-          <Typography.Text>{displayText(record.masterWarehouseName)}</Typography.Text>
+          <Typography.Text ellipsis={{ tooltip: record.sourceWarehouseNames || record.masterWarehouseName }}>
+            {displayText(record.sourceWarehouseNames || record.masterWarehouseName)}
+          </Typography.Text>
+          <Typography.Text className={styles.subText}>{warehouseSummary(record)}</Typography.Text>
         </Space>
       ),
     },
@@ -285,19 +327,21 @@ export default function SourceProductLibraryPage() {
       <ProTable<API.Integration.SourceProductItem>
         actionRef={actionRef}
         className="urili-fill-table"
-        rowKey={(record) => `${record.connectionCode}:${record.masterSku}`}
+        rowKey={(record) => record.sourceDimensionGroupKey || record.sourceGroupKey || `${record.connectionCode}:${record.masterSku}`}
         columns={columns}
         columnsState={getProTableColumnsState('source-product-library-columns')}
+        params={{ repositoryScope }}
         search={getPersistedProTableSearch(
           { labelWidth: 96, fieldCount: SOURCE_PRODUCT_SEARCH_FIELD_COUNT },
           'source-product-library',
         )}
         request={async (params) => {
-          const { current, pageSize, ...filters } = params;
+          const { current, pageSize, repositoryScope: scope, ...filters } = params;
           const resp = await getSourceProductList(
             cleanParams({
               pageNum: current,
               pageSize,
+              repositoryScope: scope,
               ...filters,
             }),
           );
@@ -310,12 +354,22 @@ export default function SourceProductLibraryPage() {
         pagination={getProTablePagination(20)}
         options={{ density: true, reload: true, setting: true }}
         scroll={getProTableScroll(2050)}
+        toolbar={{
+          menu: {
+            type: 'tab',
+            activeKey: repositoryScope,
+            items: repositoryTabs,
+            onChange: (key) => setRepositoryScope(String(key)),
+          },
+        }}
         toolBarRender={() => []}
       />
 
       <SourceProductDetailDrawer
         open={detailOpen}
         record={currentRecord}
+        groupDetail={groupDetail}
+        loading={detailLoading}
         onClose={() => setDetailOpen(false)}
       />
     </PageContainer>

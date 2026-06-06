@@ -1,5 +1,65 @@
 # 复用台账
 
+## 三端认证入口审计、免密 acting admin 链路与 Guard 覆盖规则
+
+- 位置：
+  - `RuoYi-Vue/ruoyi-common/src/main/java/com/ruoyi/common/annotation/PortalLog.java`
+  - `RuoYi-Vue/ruoyi-framework/src/main/java/com/ruoyi/framework/aspectj/PortalLogAspect.java`
+  - `RuoYi-Vue/seller/src/main/java/com/ruoyi/seller/controller/SellerPortalAuthController.java`
+  - `RuoYi-Vue/buyer/src/main/java/com/ruoyi/buyer/controller/BuyerPortalAuthController.java`
+  - `RuoYi-Vue/ruoyi-system/src/main/java/com/ruoyi/system/domain/PortalDirectLoginToken.java`
+  - `RuoYi-Vue/ruoyi-system/src/main/java/com/ruoyi/system/domain/PortalLoginSession.java`
+  - `RuoYi-Vue/ruoyi-system/src/main/java/com/ruoyi/system/service/support/PortalDirectLoginSupport.java`
+  - `RuoYi-Vue/ruoyi-system/src/main/java/com/ruoyi/system/service/support/PortalTokenSupport.java`
+  - `RuoYi-Vue/ruoyi-system/src/test/java/com/ruoyi/system/architecture/PortalAnonymousEndpointContractTest.java`
+  - `RuoYi-Vue/ruoyi-system/src/test/java/com/ruoyi/system/architecture/PortalDirectLoginAuthContractTest.java`
+  - `RuoYi-Vue/ruoyi-system/src/test/java/com/ruoyi/system/architecture/TerminalRouteOwnershipTest.java`
+  - `RuoYi-Vue/ruoyi-system/src/test/java/com/ruoyi/system/architecture/SqlExecutionGuardContractTest.java`
+  - `react-ui/scripts/check-portal-token-isolation.mjs`
+  - `react-ui/scripts/check-partner-management-template.mjs`
+  - `react-ui/scripts/check-seller-portal-product-template.mjs`
+  - `react-ui/scripts/check-buyer-portal-product-template.mjs`
+  - `docs/plans/2026-06-06-three-terminal-p0p1-auth-audit-guard-hardening-record.md`
+- 当前用途：
+  - 固定 seller/buyer 登录、免密登录这类认证入口的匿名例外和审计边界。
+  - 固定管理端免密代入后 acting admin 从 ticket payload 进入 portal session，并进入后续端内操作日志审计前缀。
+  - 固定 React portal、partner 管理和 seller/buyer 商品模板 guard 同时覆盖 TypeScript 源与当前并存的 JavaScript 副本。
+  - 固定三端身份相关高影响 SQL helper 必须在第一个高影响 DDL/DML 前完成显式确认。
+- 复用规则：
+  - seller/buyer 登录和免密登录接口不得加 `@PortalPreAuthorize`；必须使用 `@PortalLog(... allowAnonymous = true, isSaveResponseData = false)`，并显式写入正确 terminal。
+  - 普通端内业务接口不得设置 `allowAnonymous = true`；缺少 portal session 时继续 fail-closed。
+  - 免密 ticket payload 必须携带 `actingAdminId`、`actingAdminName` 和 `reason`；`PortalTokenSupport.createLogin(..., PortalDirectLoginToken)` 必须把这些字段复制到 `PortalLoginSession`。
+  - 后续端内操作日志应复用 `PortalLogAspect` 的 `directLoginAudit{ticketId, actingAdminId, actingAdminName, reason}` 前缀，不在业务 controller 中手写审计拼接。
+  - 如果需要把 acting admin 长期落到 `seller_session` / `buyer_session` 表，必须先走单独 DDL 方案确认；当前快速模式只保证 Redis session、登录日志和操作日志链路。
+  - `PortalLoginResultData` 等端内登录响应必须保持白名单字段，不得回流 `sellerId`、`buyerId`、`sellerAccountId`、`buyerAccountId`、`subjectId` 或 `accountId`。
+  - partner 管理读模型不得暴露 `password`、`token`、`refreshToken`、`directLoginToken`、`loginUrl`、`tokenHash`、`authorization`、`accessToken`。
+  - seller/buyer portal 商品和认证相关 guard 必须检查 `.ts/.tsx` 与 `.js`；只有明确 `export { default } from './index.tsx';` 这类纯 re-export 才可视为跟随 TypeScript 源。
+  - 新增影响三端身份、权限、日志、会话、legacy `sys_user` / `sys_role` 清理的 SQL helper 时，必须纳入 `SqlExecutionGuardContractTest` 或相邻 SQL 合同测试，且确认调用必须位于执行区第一个高影响 DDL/DML 前。
+
+## 三端免密登录与 SQL Guard 收口规则
+
+- 位置：
+  - `RuoYi-Vue/ruoyi-system/src/main/java/com/ruoyi/system/service/support/PortalDirectLoginSupport.java`
+  - `RuoYi-Vue/ruoyi-system/src/test/java/com/ruoyi/system/service/support/PortalDirectLoginSupportTest.java`
+  - `RuoYi-Vue/ruoyi-system/src/test/java/com/ruoyi/system/architecture/PortalDirectLoginAuthContractTest.java`
+  - `RuoYi-Vue/ruoyi-system/src/test/java/com/ruoyi/system/architecture/SqlExecutionGuardContractTest.java`
+  - `react-ui/src/utils/portalDirectLoginMessage.ts`
+  - `react-ui/src/utils/portalDirectLoginMessage.js`
+  - `react-ui/scripts/check-portal-token-isolation.mjs`
+  - `react-ui/scripts/verify-three-terminal.mjs`
+  - `react-ui/tests/portal-direct-login-message.test.ts`
+  - `docs/plans/2026-06-06-three-terminal-p0p1-direct-login-guard-followup-record.md`
+- 当前用途：
+  - 固定管理端免密代入 seller/buyer 端时的 token 生成、投递、消费和审计边界。
+  - 固定三端身份相关远程 DDL/DML 脚本必须 fail-closed，需要显式 `@confirm_*` 和确认 token。
+- 复用规则：
+  - `PortalDirectLoginSupport.consumeToken(...)` 必须使用带 validator 的重载；不得新增无 validator 的消费入口。
+  - 创建免密票据前必须解析并校验 acting admin；缺失时不得写 `portal_direct_login_ticket`，不得写 Redis。
+  - 免密登录前端桥接只能在目标 popup、目标 origin、目标 terminal 的 READY 消息通过后发送 token；不得通过 timer 在 READY 前主动发送。
+  - `portalDirectLoginMessage.ts` 和当前并存的 `.js` 副本必须同步维护；`check-portal-token-isolation.mjs` 必须同时检查两者。
+  - 端内权限、日志、会话、OWNER 约束等会影响三端身份或远程库的 SQL 脚本必须带显式确认 guard，并纳入 `SqlExecutionGuardContractTest` 或相邻 SQL 契约测试。
+  - `verify-three-terminal` 必须包含 portal token/session 相关 Jest 单测，避免前端 bridge 回归在只跑 typecheck 和后端合约时漏过。
+
 ## 买家端商城商品浏览只读后端模板
 
 - 位置：
@@ -1249,6 +1309,27 @@
   - integration 相关来源系统、同步状态和配对状态选项复用 `react-ui/src/services/integration/constants.ts`，不要在上游系统页和来源商品库页分别维护。
   - 领星 `dangerousCargo` 保存来源 code；展示时 `1` 表示「普货」，`2-8` 才表示电池、液体、粉末、带磁等特殊属性。
 
+### 来源仓库库存占位
+
+- 位置：
+  - `RuoYi-Vue/integration/src/main/java/com/ruoyi/integration/controller/AdminSourceWarehouseStockController.java`
+  - `RuoYi-Vue/integration/src/main/java/com/ruoyi/integration/domain/SourceWarehouseStockItem.java`
+  - `RuoYi-Vue/integration/src/main/java/com/ruoyi/integration/domain/query/SourceWarehouseStockQuery.java`
+  - `RuoYi-Vue/integration/src/main/resources/mapper/integration/UpstreamSystemMapper.xml`
+  - `react-ui/src/pages/Inventory/SourceWarehouseStock/index.tsx`
+  - `react-ui/src/services/integration/sourceWarehouseStock.ts`
+  - `react-ui/src/types/integration/upstream-system.d.ts`
+  - `react-ui/src/services/integration/constants.ts`
+- 当前用途：
+  - 当前仅作为来源仓库库存方向的占位记录，不开放真实 HTTP Controller、真实库存请求、前端路由或 Quartz 任务入口；上游系统库存 Tab 仅保留静态占位。
+  - `AdminSourceWarehouseStockController` 只保留不可路由占位类；`sourceWarehouseStock.ts` 只返回空占位结果。
+  - `UpstreamSystemTask.syncInventory()` 保留原 Quartz 方法名但立即抛出禁用错误；`20260606_upstream_inventory_dimension_sync.sql` 只做库存权限清理和旧 job 禁用，不建库存表、不启库存 job。
+  - `business_menu_seed.sql` 中「来源仓库库存」指向 `Common/PlannedPage/index`，不是实际库存列表页面。
+- 复用规则：
+  - 恢复来源仓库库存同步、快照落库、只读列表、导出、详情或批量操作前，必须先确认 schema、同步落库方案、权限点、审计日志和数据边界。
+  - 不允许只恢复前端入口或 Controller；后端表结构、同步任务、菜单权限和验证脚本必须一起按确认方案落地。
+  - integration 相关来源系统、同步状态、配对状态和库存口径选项复用 `react-ui/src/services/integration/constants.ts`，不要在页面内复制状态映射。
+
 ### SecretCipherSupport
 
 - 位置：`RuoYi-Vue/ruoyi-system/src/main/java/com/ruoyi/system/service/support/SecretCipherSupport.java`
@@ -1363,3 +1444,40 @@
   - 第三方仓归属卖家校验必须通过 seller 模块或稳定 facade，不要直接信任前端传入的 seller 展示字段。
   - 地址组件继续复用 `WarehouseFields` 的国家/美国州城市联动口径，不要在官方仓和第三方仓页面分别维护两套逻辑。
   - 美国完整城市数据来自 U.S. Census Gazetteer Places seed，后续更新必须记录来源 URL、数据年份和导入脚本。
+### 来源仓库库存占位最新约束（2026-06-06）
+
+- 位置：
+  - `RuoYi-Vue/integration/src/main/java/com/ruoyi/integration/controller/AdminSourceWarehouseStockController.java`
+  - `RuoYi-Vue/integration/src/main/java/com/ruoyi/integration/task/UpstreamSystemTask.java`
+  - `RuoYi-Vue/sql/upstream_system_management_seed.sql`
+  - `RuoYi-Vue/sql/20260606_upstream_inventory_dimension_sync.sql`
+  - `react-ui/src/pages/UpstreamSystem/components/SkuInventoryPanel.tsx`
+  - `react-ui/src/services/integration/sourceWarehouseStock.ts`
+- 当前用途：
+  - 来源仓库库存当前只保留方向占位，不开放真实 HTTP Controller、不发真实库存请求、不启用库存 job、不建库存快照表；上游系统库存 Tab 仅为静态占位。
+  - `UpstreamSystemTask.syncInventory()` 保留旧 Quartz 方法名但立即抛出禁用错误，防止历史 job 命中后继续落库。
+  - `20260606_upstream_inventory_dimension_sync.sql` 只做库存权限 cleanup/disable 和旧 job 禁用；库存权限字符串出现在该脚本中仅用于清理，不代表开放能力。
+- 复用规则：
+  - 恢复来源仓库库存前，必须先确认 schema、同步落库方案、权限点、审计日志和数据边界。
+  - 不允许只恢复前端 tab、Controller、service 请求函数或 Quartz job。
+  - 库存相关状态、口径、配对状态选项如需恢复，优先复用 `react-ui/src/services/integration/constants.ts`，不要在页面内复制映射。
+## 三端 P0/P1 验证入口与 SQL Guard 模板
+
+- 位置：
+  - `react-ui/scripts/verify-three-terminal.mjs`
+  - `react-ui/package.json`
+  - `RuoYi-Vue/ruoyi-system/src/test/java/com/ruoyi/system/architecture/SqlExecutionGuardContractTest.java`
+  - `react-ui/tests/portal-session-request.test.ts`
+  - `react-ui/tests/portal-direct-login-message.test.ts`
+  - `docs/plans/2026-06-06-three-terminal-p0p1-sql-guard-jest-final-record.md`
+- 当前用途：
+  - 固定三端验证入口：公开测试入口必须先跑 `verify:three-terminal`，再跑前端 Jest。
+  - 固定后端三端测试清单：新增测试类必须被 `verify-three-terminal.mjs` 收录，且必须产出 surefire report。
+  - 固定高影响 SQL 默认拒绝执行：会改远端结构、菜单、权限、任务或端内账号控制面的脚本，必须设置显式 `@confirm_*` 令牌后才能运行。
+  - 固定 portal 前端请求边界：seller/buyer 请求必须使用对应端 token，并过滤 `sellerId`、`buyerId`、`subjectId`、`accountId`、`sellerAccountId`、`buyerAccountId`、`terminal` 等前端可控范围参数。
+  - 固定 direct-login 消息边界：一次性 token 只允许发送给匹配 popup、origin 和 terminal 的 ready 消息。
+- 复用规则：
+  - 后续新增三端合约测试时，必须同步加入 `backendTestClasses`；如果未加入，`verify-three-terminal.mjs` 应失败。
+  - 后续新增高影响 SQL 脚本时，必须补 `set @confirm_*`、确认过程、`signal sqlstate '45000'` 和执行前 `call assert_*_confirmed();`，并在 `SqlExecutionGuardContractTest` 中登记。
+  - `test:coverage`、`test:update`、`jest` 等入口不得绕过三端验证；需要只跑前端单测时使用显式 `npm run test:unit -- ...`。
+  - portal 页面或 service 不得自行拼接端 token、端内 API URL 或主体范围参数；继续通过 `services/portal/session.ts` 统一发起请求。

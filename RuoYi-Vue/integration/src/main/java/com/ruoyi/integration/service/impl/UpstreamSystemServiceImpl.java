@@ -2,8 +2,10 @@ package com.ruoyi.integration.service.impl;
 
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -16,8 +18,10 @@ import com.alibaba.fastjson2.JSON;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.integration.domain.SourceProductItem;
+import com.ruoyi.integration.domain.SourceWarehouseStockItem;
 import com.ruoyi.integration.domain.UpstreamLogisticsChannelPairing;
 import com.ruoyi.integration.domain.UpstreamLogisticsChannelSyncItem;
+import com.ruoyi.integration.domain.UpstreamInventorySyncState;
 import com.ruoyi.integration.domain.UpstreamRequestLog;
 import com.ruoyi.integration.domain.UpstreamSkuPairing;
 import com.ruoyi.integration.domain.UpstreamSkuPairingAuditEvent;
@@ -27,15 +31,19 @@ import com.ruoyi.integration.domain.UpstreamSystemConnection;
 import com.ruoyi.integration.domain.UpstreamWarehousePairing;
 import com.ruoyi.integration.domain.UpstreamWarehouseSyncItem;
 import com.ruoyi.integration.domain.query.SourceProductQuery;
+import com.ruoyi.integration.domain.query.SourceWarehouseStockQuery;
 import com.ruoyi.integration.domain.request.LogisticsChannelPairingRequest;
 import com.ruoyi.integration.domain.request.SkuPairingRequest;
 import com.ruoyi.integration.domain.request.UpstreamConnectionInfoRequest;
 import com.ruoyi.integration.domain.request.UpstreamConnectionRequest;
 import com.ruoyi.integration.domain.request.UpstreamCredentialRequest;
 import com.ruoyi.integration.domain.request.WarehousePairingRequest;
+import com.ruoyi.integration.domain.response.SourceProductGroupDetail;
 import com.ruoyi.integration.domain.response.UpstreamSyncResult;
 import com.ruoyi.integration.lingxing.LingxingClientException;
 import com.ruoyi.integration.lingxing.LingxingCredentials;
+import com.ruoyi.integration.lingxing.LingxingInventoryProductPage;
+import com.ruoyi.integration.lingxing.LingxingInventoryProductStock;
 import com.ruoyi.integration.lingxing.LingxingLogisticsChannel;
 import com.ruoyi.integration.lingxing.LingxingOpenApiClient;
 import com.ruoyi.integration.lingxing.LingxingProductPage;
@@ -56,7 +64,10 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
 {
     private static final int SKU_PAGE_SIZE = 100;
 
+    private static final long INVENTORY_SYNC_OVERLAP_MS = 5 * 60 * 1000L;
+
     private final Set<String> syncingSkuConnectionCodes = ConcurrentHashMap.newKeySet();
+    private final Set<String> syncingInventoryConnectionCodes = ConcurrentHashMap.newKeySet();
 
     @Autowired
     private UpstreamSystemMapper upstreamSystemMapper;
@@ -268,7 +279,7 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
             }
             upstreamSystemMapper.markMissingLogisticsChannels(connectionCode, syncBatchId);
 
-            int skuCount = syncSkus(client, connectionCode, syncBatchId);
+            UpstreamSyncResult skuResult = syncSkus(client, connectionCode, syncBatchId);
             UpstreamSkuSyncState fresh = new UpstreamSkuSyncState();
             fresh.setConnectionCode(connectionCode);
             fresh.setStatus(UpstreamSystemConstants.SYNC_STATUS_FRESH);
@@ -284,7 +295,8 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
             result.setSyncBatchId(syncBatchId);
             result.setWarehouseCount(warehouses.size());
             result.setLogisticsChannelCount(channelCount);
-            result.setSkuCount(skuCount);
+            result.setSkuCount(skuResult.getSkuCount());
+            result.setSkuDimensionCount(skuResult.getSkuDimensionCount());
             return result;
         }
         catch (RuntimeException ex)
@@ -331,7 +343,7 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
         try
         {
             LingxingOpenApiClient client = createClient(connection);
-            int skuCount = syncSkus(client, connectionCode, syncBatchId);
+            UpstreamSyncResult skuResult = syncSkus(client, connectionCode, syncBatchId);
             Date finishedTime = new Date();
             UpstreamSkuSyncState fresh = new UpstreamSkuSyncState();
             fresh.setConnectionCode(connectionCode);
@@ -346,7 +358,8 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
 
             UpstreamSyncResult result = new UpstreamSyncResult();
             result.setSyncBatchId(syncBatchId);
-            result.setSkuCount(skuCount);
+            result.setSkuCount(skuResult.getSkuCount());
+            result.setSkuDimensionCount(skuResult.getSkuDimensionCount());
             return result;
         }
         catch (RuntimeException ex)
@@ -369,15 +382,178 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
     }
 
     @Override
+    public UpstreamSyncResult syncSkuDimensionsOnly(String connectionCode)
+    {
+        UpstreamSystemConnection connection = selectConnectionByCode(connectionCode);
+        if (!UpstreamSystemConstants.STATUS_ENABLED.equals(connection.getStatus()))
+        {
+            throw new ServiceException("主仓接入已停用，不能同步仓库尺寸重量");
+        }
+        if (!syncingSkuConnectionCodes.add(connectionCode))
+        {
+            throw new ServiceException("该主仓SKU正在同步，请稍后再试");
+        }
+
+        try
+        {
+            LingxingOpenApiClient client = createClient(connection);
+            List<UpstreamSkuSyncItem> existingSkus = upstreamSystemMapper.selectSkuSyncList(connectionCode,
+                UpstreamSystemConstants.STATUS_ACTIVE, null, null, null, null);
+            int dimensionCount = syncSkuDimensions(client, connectionCode, existingSkus);
+            upstreamSystemMapper.updateConnectionSyncSummary(connectionCode);
+
+            UpstreamSyncResult result = new UpstreamSyncResult();
+            result.setSyncBatchId(UUID.randomUUID().toString());
+            result.setSkuDimensionCount(dimensionCount);
+            return result;
+        }
+        catch (RuntimeException ex)
+        {
+            upstreamSystemMapper.updateConnectionSyncSummary(connectionCode);
+            throw toServiceException(ex);
+        }
+        finally
+        {
+            syncingSkuConnectionCodes.remove(connectionCode);
+        }
+    }
+
+    @Override
+    public UpstreamSyncResult syncWarehouseStocksOnly(String connectionCode)
+    {
+        UpstreamSystemConnection connection = selectConnectionByCode(connectionCode);
+        if (!UpstreamSystemConstants.STATUS_ENABLED.equals(connection.getStatus()))
+        {
+            throw new ServiceException("主仓接入已停用，不能同步库存");
+        }
+        if (!syncingInventoryConnectionCodes.add(connectionCode))
+        {
+            throw new ServiceException("该主仓库存正在同步，请稍后再试");
+        }
+
+        UpstreamInventorySyncState previousState = upstreamSystemMapper.selectInventorySyncState(connectionCode);
+        String syncBatchId = UUID.randomUUID().toString();
+        Date startedTime = new Date();
+        UpstreamInventorySyncState syncing = new UpstreamInventorySyncState();
+        syncing.setConnectionCode(connectionCode);
+        syncing.setStatus(UpstreamSystemConstants.SYNC_STATUS_SYNCING);
+        syncing.setSyncBatchId(syncBatchId);
+        syncing.setLastStartedTime(startedTime);
+        syncing.setTotalCount(0);
+        syncing.setActiveCount(0);
+        syncing.setMissingCount(0);
+        syncing.setLastErrorMessage("");
+        upstreamSystemMapper.upsertInventorySyncState(syncing);
+
+        try
+        {
+            LingxingOpenApiClient client = createClient(connection);
+            int stockCount = syncWarehouseStocks(client, connectionCode, syncBatchId, previousState, startedTime);
+            Date finishedTime = new Date();
+            UpstreamInventorySyncState fresh = new UpstreamInventorySyncState();
+            fresh.setConnectionCode(connectionCode);
+            fresh.setStatus(UpstreamSystemConstants.SYNC_STATUS_FRESH);
+            fresh.setSyncBatchId(syncBatchId);
+            fresh.setLastStartedTime(startedTime);
+            fresh.setLastFinishedTime(finishedTime);
+            fresh.setLastSuccessTime(finishedTime);
+            fresh.setNextSyncTime(new Date(System.currentTimeMillis() + 10 * 60 * 1000L));
+            fresh.setTotalCount(stockCount);
+            fresh.setActiveCount(stockCount);
+            fresh.setMissingCount(0);
+            fresh.setLastErrorMessage("");
+            upstreamSystemMapper.upsertInventorySyncState(fresh);
+            upstreamSystemMapper.updateConnectionSyncSummary(connectionCode);
+
+            UpstreamSyncResult result = new UpstreamSyncResult();
+            result.setSyncBatchId(syncBatchId);
+            result.setWarehouseStockCount(stockCount);
+            return result;
+        }
+        catch (RuntimeException ex)
+        {
+            UpstreamInventorySyncState failed = new UpstreamInventorySyncState();
+            failed.setConnectionCode(connectionCode);
+            failed.setStatus(UpstreamSystemConstants.SYNC_STATUS_FAILED);
+            failed.setSyncBatchId(syncBatchId);
+            failed.setLastStartedTime(startedTime);
+            failed.setLastFinishedTime(new Date());
+            failed.setTotalCount(0);
+            failed.setActiveCount(0);
+            failed.setMissingCount(0);
+            failed.setLastErrorMessage(StringUtils.left(ex.getMessage(), 500));
+            upstreamSystemMapper.upsertInventorySyncState(failed);
+            upstreamSystemMapper.updateConnectionSyncSummary(connectionCode);
+            throw toServiceException(ex);
+        }
+        finally
+        {
+            syncingInventoryConnectionCodes.remove(connectionCode);
+        }
+    }
+
+    @Override
     public List<SourceProductItem> selectSourceProductList(SourceProductQuery query)
     {
         SourceProductQuery normalized = normalizeSourceProductQuery(query);
         List<SourceProductItem> list = upstreamSystemMapper.selectSourceProductList(normalized);
-        for (SourceProductItem item : list)
-        {
-            item.setSystemKindLabel(systemKindLabel(item.getSystemKind()));
-        }
+        fillSourceProductLabels(list);
         return list;
+    }
+
+    @Override
+    public SourceProductGroupDetail selectSourceProductGroupDetail(SourceProductQuery query)
+    {
+        SourceProductQuery normalized = normalizeSourceProductQuery(query);
+        normalized.setSourceSkuGroupKey(trimRequired(normalized.getSourceSkuGroupKey(), "来源SKU组不能为空"));
+        SourceProductItem group = upstreamSystemMapper.selectSourceProductGroupSummary(normalized);
+        if (group == null)
+        {
+            throw new ServiceException("来源SKU组不存在或已失效");
+        }
+        group.setSystemKindLabel(systemKindLabel(group.getSystemKind()));
+
+        List<SourceProductItem> dimensionGroups = upstreamSystemMapper.selectSourceProductList(normalized);
+        List<SourceProductItem> warehouses = upstreamSystemMapper.selectSourceProductWarehouseDetailList(normalized);
+        fillSourceProductLabels(dimensionGroups);
+        fillSourceProductLabels(warehouses);
+
+        SourceProductGroupDetail detail = new SourceProductGroupDetail();
+        detail.setGroup(group);
+        detail.setDimensionGroups(dimensionGroups);
+        detail.setWarehouses(warehouses);
+        return detail;
+    }
+
+    @Override
+    public List<SourceWarehouseStockItem> selectSourceWarehouseStockList(SourceWarehouseStockQuery query)
+    {
+        SourceWarehouseStockQuery normalized = normalizeSourceWarehouseStockQuery(query);
+        if (StringUtils.isNotBlank(normalized.getConnectionCode()))
+        {
+            selectConnectionByCode(normalized.getConnectionCode());
+        }
+        List<SourceWarehouseStockItem> list = upstreamSystemMapper.selectSourceWarehouseStockList(normalized);
+        fillSourceWarehouseStockLabels(list);
+        return list;
+    }
+
+    @Override
+    public UpstreamInventorySyncState selectInventorySyncState(String connectionCode)
+    {
+        selectConnectionByCode(connectionCode);
+        UpstreamInventorySyncState state = upstreamSystemMapper.selectInventorySyncState(connectionCode);
+        if (state != null)
+        {
+            return state;
+        }
+        UpstreamInventorySyncState never = new UpstreamInventorySyncState();
+        never.setConnectionCode(connectionCode);
+        never.setStatus(UpstreamSystemConstants.SYNC_STATUS_NEVER);
+        never.setTotalCount(0);
+        never.setActiveCount(0);
+        never.setMissingCount(0);
+        return never;
     }
 
     @Override
@@ -482,10 +658,10 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
 
     @Override
     public List<UpstreamSkuSyncItem> selectSkuSyncList(String connectionCode, String status, String pairingStatus,
-        String field, String keyword)
+        String dimensionStatus, String field, String keyword)
     {
         return upstreamSystemMapper.selectSkuSyncList(connectionCode, trimOptional(status),
-            trimOptional(pairingStatus), trimOptional(field), trimOptional(keyword));
+            trimOptional(pairingStatus), trimOptional(dimensionStatus), trimOptional(field), trimOptional(keyword));
     }
 
     @Override
@@ -553,11 +729,12 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
         return upstreamSystemMapper.selectRequestLogList(connectionCode);
     }
 
-    private int syncSkus(LingxingOpenApiClient client, String connectionCode, String syncBatchId)
+    private UpstreamSyncResult syncSkus(LingxingOpenApiClient client, String connectionCode, String syncBatchId)
     {
         int current = 1;
         int total = Integer.MAX_VALUE;
         int synced = 0;
+        int dimensionSynced = 0;
         while ((current - 1) * SKU_PAGE_SIZE < total)
         {
             LingxingProductPage page = client.listProductSkuPage(current, SKU_PAGE_SIZE, UUID.randomUUID().toString());
@@ -582,15 +759,198 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
                 synced++;
             }
             upstreamSystemMapper.batchUpsertSkuSyncItems(items);
+            dimensionSynced += syncSkuDimensions(client, connectionCode, items);
             current++;
         }
         upstreamSystemMapper.markMissingSkus(connectionCode, syncBatchId);
+        UpstreamSyncResult result = new UpstreamSyncResult();
+        result.setSkuCount(synced);
+        result.setSkuDimensionCount(dimensionSynced);
+        return result;
+    }
+
+    private int syncSkuDimensions(LingxingOpenApiClient client, String connectionCode, List<UpstreamSkuSyncItem> skus)
+    {
+        if (skus == null || skus.isEmpty())
+        {
+            return 0;
+        }
+        int updated = 0;
+        int start = 0;
+        while (start < skus.size())
+        {
+            int end = Math.min(start + SKU_PAGE_SIZE, skus.size());
+            List<String> skuCodes = new ArrayList<>();
+            for (int i = start; i < end; i++)
+            {
+                String masterSku = skus.get(i).getMasterSku();
+                if (StringUtils.isNotBlank(masterSku))
+                {
+                    skuCodes.add(masterSku);
+                }
+            }
+            if (!skuCodes.isEmpty())
+            {
+                LingxingProductPage page = client.listProductSkuPageBySkuList(skuCodes, UUID.randomUUID().toString());
+                List<LingxingProductSku> records = page.getRecords();
+                if (records != null)
+                {
+                    for (LingxingProductSku sku : records)
+                    {
+                        if (!hasAnyWmsDimension(sku))
+                        {
+                            continue;
+                        }
+                        UpstreamSkuSyncItem item = new UpstreamSkuSyncItem();
+                        item.setConnectionCode(connectionCode);
+                        item.setMasterSku(sku.getSku());
+                        copyLingxingSkuFields(item, sku);
+                        updated += upstreamSystemMapper.updateSkuWmsDimensions(item);
+                    }
+                }
+            }
+            start = end;
+        }
+        return updated;
+    }
+
+    private int syncWarehouseStocks(LingxingOpenApiClient client, String connectionCode, String syncBatchId,
+        UpstreamInventorySyncState previousState, Date startedTime)
+    {
+        Map<String, UpstreamWarehousePairing> warehousePairingMap = buildWarehousePairingMap(connectionCode);
+        Map<String, UpstreamWarehouseSyncItem> warehouseSyncMap = buildWarehouseSyncMap(connectionCode);
+        Map<String, UpstreamSkuPairing> skuPairingMap = buildSkuPairingMap(connectionCode);
+        String startTime = inventorySyncStartTime(previousState);
+        String endTime = StringUtils.isBlank(startTime) ? "" : formatLingxingDateTime(startedTime);
+        int current = 1;
+        int total = Integer.MAX_VALUE;
+        int synced = 0;
+        while ((current - 1) * SKU_PAGE_SIZE < total)
+        {
+            LingxingInventoryProductPage page = client.listInventoryProductPage(current, SKU_PAGE_SIZE,
+                startTime, endTime, UUID.randomUUID().toString());
+            total = page.getTotal();
+            List<LingxingInventoryProductStock> records = page.getRecords();
+            if (records == null || records.isEmpty())
+            {
+                break;
+            }
+            for (LingxingInventoryProductStock stock : records)
+            {
+                SourceWarehouseStockItem item = new SourceWarehouseStockItem();
+                item.setConnectionCode(connectionCode);
+                copyLingxingInventoryStockFields(item, stock);
+                UpstreamWarehouseSyncItem warehouse = warehouseSyncMap.get(item.getUpstreamWarehouseCode());
+                if (StringUtils.isBlank(item.getUpstreamWarehouseName()) && warehouse != null)
+                {
+                    item.setUpstreamWarehouseName(warehouse.getWarehouseName());
+                }
+                UpstreamWarehousePairing warehousePairing = warehousePairingMap.get(item.getUpstreamWarehouseCode());
+                if (warehousePairing != null)
+                {
+                    item.setSystemWarehouseCode(warehousePairing.getSystemWarehouseCode());
+                    item.setSystemWarehouseName(warehousePairing.getSystemWarehouseName());
+                }
+                UpstreamSkuPairing skuPairing = skuPairingMap.get(item.getMasterSku());
+                if (skuPairing != null)
+                {
+                    item.setSystemSku(skuPairing.getSystemSku());
+                    item.setSystemSkuName(skuPairing.getSystemSkuName());
+                    item.setCustomerName(skuPairing.getCustomerName());
+                }
+                item.setStatus(UpstreamSystemConstants.STATUS_ACTIVE);
+                item.setSyncBatchId(syncBatchId);
+                upstreamSystemMapper.upsertSourceWarehouseStock(item);
+                synced++;
+            }
+            current++;
+        }
         return synced;
+    }
+
+    private String inventorySyncStartTime(UpstreamInventorySyncState previousState)
+    {
+        if (previousState == null || previousState.getLastSuccessTime() == null)
+        {
+            return "";
+        }
+        long startAt = Math.max(0L, previousState.getLastSuccessTime().getTime() - INVENTORY_SYNC_OVERLAP_MS);
+        return formatLingxingDateTime(new Date(startAt));
+    }
+
+    private String formatLingxingDateTime(Date value)
+    {
+        return new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(value);
+    }
+
+    private Map<String, UpstreamWarehousePairing> buildWarehousePairingMap(String connectionCode)
+    {
+        Map<String, UpstreamWarehousePairing> result = new HashMap<>();
+        List<UpstreamWarehousePairing> pairings = upstreamSystemMapper.selectWarehousePairingList(connectionCode);
+        for (UpstreamWarehousePairing pairing : pairings)
+        {
+            if (StringUtils.isNotBlank(pairing.getUpstreamWarehouseCode()))
+            {
+                result.put(pairing.getUpstreamWarehouseCode(), pairing);
+            }
+        }
+        return result;
+    }
+
+    private Map<String, UpstreamWarehouseSyncItem> buildWarehouseSyncMap(String connectionCode)
+    {
+        Map<String, UpstreamWarehouseSyncItem> result = new HashMap<>();
+        List<UpstreamWarehouseSyncItem> warehouses = upstreamSystemMapper.selectWarehouseSyncList(connectionCode, null);
+        for (UpstreamWarehouseSyncItem warehouse : warehouses)
+        {
+            if (StringUtils.isNotBlank(warehouse.getWarehouseCode()))
+            {
+                result.put(warehouse.getWarehouseCode(), warehouse);
+            }
+        }
+        return result;
+    }
+
+    private Map<String, UpstreamSkuPairing> buildSkuPairingMap(String connectionCode)
+    {
+        Map<String, UpstreamSkuPairing> result = new HashMap<>();
+        List<UpstreamSkuPairing> pairings = upstreamSystemMapper.selectSkuPairingList(connectionCode);
+        for (UpstreamSkuPairing pairing : pairings)
+        {
+            if (StringUtils.isNotBlank(pairing.getMasterSku()))
+            {
+                result.put(pairing.getMasterSku(), pairing);
+            }
+        }
+        return result;
+    }
+
+    private void copyLingxingInventoryStockFields(SourceWarehouseStockItem item, LingxingInventoryProductStock stock)
+    {
+        item.setUpstreamWarehouseCode(StringUtils.trimToEmpty(stock.getWarehouseCode()));
+        item.setUpstreamWarehouseName(StringUtils.trimToEmpty(stock.getWarehouseName()));
+        item.setMasterSku(StringUtils.trimToEmpty(stock.getSku()));
+        item.setMasterProductName(StringUtils.trimToEmpty(stock.getProductName()));
+        item.setInventoryScope(StringUtils.defaultIfBlank(StringUtils.trimToEmpty(stock.getInventoryScope()),
+            "COMPREHENSIVE"));
+        item.setInventoryAttribute(StringUtils.trimToEmpty(stock.getInventoryAttribute()));
+        item.setBatchNo(StringUtils.trimToEmpty(stock.getBatchNo()));
+        item.setLocationCode(StringUtils.trimToEmpty(stock.getLocationCode()));
+        item.setTotalQuantity(zeroIfNull(stock.getTotalQuantity()));
+        item.setAvailableQuantity(zeroIfNull(stock.getAvailableQuantity()));
+        item.setLockedQuantity(zeroIfNull(stock.getLockedQuantity()));
+        item.setInTransitQuantity(zeroIfNull(stock.getInTransitQuantity()));
+        item.setBoxedQuantity(stock.getBoxedQuantity());
+        item.setUnboxedQuantity(stock.getUnboxedQuantity());
+        item.setSourcePayloadJson(stock.getSourcePayloadJson());
+        item.setSourcePayloadHash(stock.getSourcePayloadHash());
     }
 
     private SourceProductQuery normalizeSourceProductQuery(SourceProductQuery query)
     {
         SourceProductQuery normalized = query == null ? new SourceProductQuery() : query;
+        normalized.setRepositoryScope(trimOptional(normalized.getRepositoryScope()));
+        normalized.setSourceSkuGroupKey(trimOptional(normalized.getSourceSkuGroupKey()));
         normalized.setConnectionCode(trimOptional(normalized.getConnectionCode()));
         normalized.setSystemKind(normalizeSystemKindOptional(normalized.getSystemKind()));
         normalized.setMasterWarehouseName(trimOptional(normalized.getMasterWarehouseName()));
@@ -602,6 +962,36 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
         normalized.setStatus(trimOptional(normalized.getStatus()));
         normalized.setPairingStatus(trimOptional(normalized.getPairingStatus()));
         normalized.setKeyword(trimOptional(normalized.getKeyword()));
+        return normalized;
+    }
+
+    private void fillSourceProductLabels(List<SourceProductItem> list)
+    {
+        for (SourceProductItem item : list)
+        {
+            item.setSystemKindLabel(systemKindLabel(item.getSystemKind()));
+        }
+    }
+
+    private void fillSourceWarehouseStockLabels(List<SourceWarehouseStockItem> list)
+    {
+        for (SourceWarehouseStockItem item : list)
+        {
+            item.setSystemKindLabel(systemKindLabel(item.getSystemKind()));
+        }
+    }
+
+    private SourceWarehouseStockQuery normalizeSourceWarehouseStockQuery(SourceWarehouseStockQuery query)
+    {
+        SourceWarehouseStockQuery normalized = query == null ? new SourceWarehouseStockQuery() : query;
+        normalized.setConnectionCode(trimOptional(normalized.getConnectionCode()));
+        normalized.setKeyword(trimOptional(normalized.getKeyword()));
+        normalized.setStatus(trimOptional(normalized.getStatus()));
+        normalized.setWarehousePairingStatus(trimOptional(normalized.getWarehousePairingStatus()));
+        normalized.setSkuPairingStatus(trimOptional(normalized.getSkuPairingStatus()));
+        normalized.setInventoryScope(trimOptional(normalized.getInventoryScope()));
+        normalized.setInventoryAttribute(trimOptional(normalized.getInventoryAttribute()));
+        normalized.setWarehouseKeyword(trimOptional(normalized.getWarehouseKeyword()));
         return normalized;
     }
 
@@ -688,6 +1078,13 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
         addSearchPart(parts, sku.getCat2Name());
         addSearchPart(parts, sku.getCat3Name());
         return String.join(" ", parts);
+    }
+
+    private boolean hasAnyWmsDimension(LingxingProductSku sku)
+    {
+        return sku.getWmsHeight() != null || sku.getWmsLength() != null || sku.getWmsWidth() != null
+            || sku.getWmsWeight() != null || sku.getWmsHeightBs() != null || sku.getWmsLengthBs() != null
+            || sku.getWmsWidthBs() != null || sku.getWmsWeightBs() != null;
     }
 
     private void addSearchPart(List<String> parts, String value)
@@ -821,5 +1218,10 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
     private String trimOptional(String value)
     {
         return StringUtils.trimToEmpty(value);
+    }
+
+    private Long zeroIfNull(Long value)
+    {
+        return value == null ? 0L : value;
     }
 }

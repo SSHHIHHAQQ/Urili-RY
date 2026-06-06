@@ -40,6 +40,37 @@ public class TerminalAccountIsolationTest
         }
     }
 
+    @Test
+    public void terminalPermissionMappersMustKeepSubjectScopeAtSqlBoundary() throws IOException
+    {
+        Path backendRoot = findBackendRoot();
+        List<String> violations = new ArrayList<>();
+
+        assertContains(backendRoot.resolve("seller/src/main/java/com/ruoyi/seller/mapper/SellerPortalPermissionMapper.java"),
+                "selectSellerMenuIdsByRoleId(@Param(\"sellerId\") Long sellerId", violations);
+        assertContains(backendRoot.resolve("seller/src/main/java/com/ruoyi/seller/mapper/SellerPortalPermissionMapper.java"),
+                "countSellerAccountRoleByRoleId(@Param(\"sellerId\") Long sellerId", violations);
+        assertContains(backendRoot.resolve("seller/src/main/resources/mapper/seller/SellerPortalPermissionMapper.xml"),
+                "and r.seller_id = #{sellerId}", violations);
+        assertContains(backendRoot.resolve("seller/src/main/resources/mapper/seller/SellerPortalPermissionMapper.xml"),
+                "and a.seller_id = #{sellerId}", violations);
+
+        assertContains(backendRoot.resolve("buyer/src/main/java/com/ruoyi/buyer/mapper/BuyerPortalPermissionMapper.java"),
+                "selectBuyerMenuIdsByRoleId(@Param(\"buyerId\") Long buyerId", violations);
+        assertContains(backendRoot.resolve("buyer/src/main/java/com/ruoyi/buyer/mapper/BuyerPortalPermissionMapper.java"),
+                "countBuyerAccountRoleByRoleId(@Param(\"buyerId\") Long buyerId", violations);
+        assertContains(backendRoot.resolve("buyer/src/main/resources/mapper/buyer/BuyerPortalPermissionMapper.xml"),
+                "and r.buyer_id = #{buyerId}", violations);
+        assertContains(backendRoot.resolve("buyer/src/main/resources/mapper/buyer/BuyerPortalPermissionMapper.xml"),
+                "and a.buyer_id = #{buyerId}", violations);
+
+        if (!violations.isEmpty())
+        {
+            fail("terminal permission mappers must keep subject scope in mapper signatures and SQL:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
     private void collectForbiddenReferences(Path backendRoot, String module, String sourceDirectory,
             List<String> violations) throws IOException
     {
@@ -60,6 +91,15 @@ public class TerminalAccountIsolationTest
     {
         String name = path.toString();
         return name.endsWith(".java") || name.endsWith(".xml");
+    }
+
+    private void assertContains(Path path, String expected, List<String> violations) throws IOException
+    {
+        String source = Files.readString(path, StandardCharsets.UTF_8);
+        if (!source.contains(expected))
+        {
+            violations.add(findBackendRoot().relativize(path) + " must contain " + expected);
+        }
     }
 
     private void collectForbiddenReference(Path backendRoot, Path path, List<String> violations)

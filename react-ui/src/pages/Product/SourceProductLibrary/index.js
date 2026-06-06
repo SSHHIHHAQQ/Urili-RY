@@ -4,13 +4,17 @@ import { PageContainer, ProTable, } from '@ant-design/pro-components';
 import { Button, Space, Tag, Typography } from 'antd';
 import { useRef, useState } from 'react';
 import { pairingStatusText, skuPairingStatusSearchOptions, skuSyncItemStatusSearchOptions, syncItemStatusText, systemKindOptions, systemKindText, } from '@/services/integration/constants';
-import { getSourceProductList } from '@/services/integration/sourceProduct';
+import { getSourceProductGroupDetail, getSourceProductList } from '@/services/integration/sourceProduct';
 import { getProTableColumnsState, getPersistedProTableSearch, getProTablePagination, getProTableScroll, } from '@/utils/proTableSearch';
 import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 import { approveStatusOptions, approveStatusText, dimensionText, displayText, weightText, wmsDimensionText, wmsWeightText, } from './constants';
 import SourceProductDetailDrawer from './SourceProductDetailDrawer';
 import styles from './style.module.css';
 const SOURCE_PRODUCT_SEARCH_FIELD_COUNT = 8;
+const repositoryTabs = [
+    { key: 'OFFICIAL_MASTER', label: '官方主仓' },
+    { key: 'THIRD_PARTY_MASTER', label: '三方主仓' },
+];
 function cleanParams(params) {
     return Object.fromEntries(Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== ''));
 }
@@ -33,16 +37,49 @@ function approveTag(value) {
 function sourceLabel(record) {
     return record.systemKindLabel || systemKindText[record.systemKind || ''] || record.systemKind || '-';
 }
+function warehouseSummary(record) {
+    const warehouseCount = record.warehouseCount || 0;
+    const sourceRowCount = record.sourceRowCount || 0;
+    if (!warehouseCount && !sourceRowCount) {
+        return '-';
+    }
+    if (sourceRowCount > warehouseCount) {
+        return `${warehouseCount || '-'} 个仓 / ${sourceRowCount} 条明细`;
+    }
+    return `${warehouseCount || '-'} 个仓`;
+}
 function renderProduct(record) {
     return (_jsx("div", { className: styles.productCell, children: _jsxs(Space, { className: styles.productTextStack, orientation: "vertical", size: 0, children: [_jsx(Typography.Text, { className: styles.productText, strong: true, ellipsis: { tooltip: record.masterProductName }, children: record.masterProductName }), _jsx(Typography.Text, { className: `${styles.productText} ${styles.subText}`, ellipsis: { tooltip: record.productAliasName || record.productDescription }, children: record.productAliasName || record.productDescription || '-' })] }) }));
 }
 export default function SourceProductLibraryPage() {
     const actionRef = useRef(null);
+    const [repositoryScope, setRepositoryScope] = useState('OFFICIAL_MASTER');
     const [detailOpen, setDetailOpen] = useState(false);
+    const [detailLoading, setDetailLoading] = useState(false);
+    const [groupDetail, setGroupDetail] = useState();
     const [currentRecord, setCurrentRecord] = useState();
     const openDetail = (record) => {
         setCurrentRecord(record);
+        setGroupDetail(undefined);
+        setDetailLoading(false);
         setDetailOpen(true);
+        if (!record.sourceSkuGroupKey) {
+            return;
+        }
+        setDetailLoading(true);
+        getSourceProductGroupDetail({
+            repositoryScope,
+            sourceSkuGroupKey: record.sourceSkuGroupKey,
+        })
+            .then((resp) => {
+            setGroupDetail(resp.data);
+        })
+            .catch(() => {
+            setGroupDetail(undefined);
+        })
+            .finally(() => {
+            setDetailLoading(false);
+        });
     };
     const columns = [
         {
@@ -66,7 +103,7 @@ export default function SourceProductLibraryPage() {
             dataIndex: 'sourceWarehouse',
             width: 170,
             search: false,
-            render: (_, record) => (_jsxs(Space, { orientation: "vertical", size: 0, children: [_jsx(Tag, { color: "blue", children: sourceLabel(record) }), _jsx(Typography.Text, { children: displayText(record.masterWarehouseName) })] })),
+            render: (_, record) => (_jsxs(Space, { orientation: "vertical", size: 0, children: [_jsx(Tag, { color: "blue", children: sourceLabel(record) }), _jsx(Typography.Text, { ellipsis: { tooltip: record.sourceWarehouseNames || record.masterWarehouseName }, children: displayText(record.sourceWarehouseNames || record.masterWarehouseName) }), _jsx(Typography.Text, { className: styles.subText, children: warehouseSummary(record) })] })),
         },
         {
             title: '来源 SKU',
@@ -185,11 +222,12 @@ export default function SourceProductLibraryPage() {
             ],
         },
     ];
-    return (_jsxs(PageContainer, { title: false, children: [_jsx(ProTable, { actionRef: actionRef, className: "urili-fill-table", rowKey: (record) => `${record.connectionCode}:${record.masterSku}`, columns: columns, columnsState: getProTableColumnsState('source-product-library-columns'), search: getPersistedProTableSearch({ labelWidth: 96, fieldCount: SOURCE_PRODUCT_SEARCH_FIELD_COUNT }, 'source-product-library'), request: async (params) => {
-                    const { current, pageSize, ...filters } = params;
+    return (_jsxs(PageContainer, { title: false, children: [_jsx(ProTable, { actionRef: actionRef, className: "urili-fill-table", rowKey: (record) => record.sourceDimensionGroupKey || record.sourceGroupKey || `${record.connectionCode}:${record.masterSku}`, columns: columns, columnsState: getProTableColumnsState('source-product-library-columns'), params: { repositoryScope }, search: getPersistedProTableSearch({ labelWidth: 96, fieldCount: SOURCE_PRODUCT_SEARCH_FIELD_COUNT }, 'source-product-library'), request: async (params) => {
+                    const { current, pageSize, repositoryScope: scope, ...filters } = params;
                     const resp = await getSourceProductList(cleanParams({
                         pageNum: current,
                         pageSize,
+                        repositoryScope: scope,
                         ...filters,
                     }));
                     return {
@@ -197,5 +235,12 @@ export default function SourceProductLibraryPage() {
                         total: resp.total || 0,
                         success: resp.code === 200,
                     };
-                }, pagination: getProTablePagination(20), options: { density: true, reload: true, setting: true }, scroll: getProTableScroll(2050), toolBarRender: () => [] }), _jsx(SourceProductDetailDrawer, { open: detailOpen, record: currentRecord, onClose: () => setDetailOpen(false) })] }));
+                }, pagination: getProTablePagination(20), options: { density: true, reload: true, setting: true }, scroll: getProTableScroll(2050), toolbar: {
+                    menu: {
+                        type: 'tab',
+                        activeKey: repositoryScope,
+                        items: repositoryTabs,
+                        onChange: (key) => setRepositoryScope(String(key)),
+                    },
+                }, toolBarRender: () => [] }), _jsx(SourceProductDetailDrawer, { open: detailOpen, record: currentRecord, groupDetail: groupDetail, loading: detailLoading, onClose: () => setDetailOpen(false) })] }));
 }

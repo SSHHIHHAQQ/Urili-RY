@@ -61,6 +61,7 @@ const buyerConfig: PartnerModuleConfig = {
   levelDictType: 'buyer_level',
   listTemplate: 'standard',
   searchStorageKey: 'admin-buyer-management',
+  searchFieldCount: 8,
   accountPermissions: {
     list: 'buyer:admin:account:list',
     add: 'buyer:admin:account:add',

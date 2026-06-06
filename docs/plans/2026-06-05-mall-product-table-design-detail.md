@@ -68,8 +68,8 @@ SKU：黑色/L、黑色/M、白色/L
 | `main_image_url` | varchar(1000) | 否 | 空字符串 | SPU 主图资源路径。通过 `/common/upload` 上传后保存返回路径。列表优先读取该字段。 |
 | `spu_status` | varchar(32) | 是 | `DRAFT` | SPU 销售状态。建议值：`DRAFT` 草稿、`READY` 待上架、`ON_SALE` 已上架、`OFF_SALE` 已下架、`DISABLED` 停用。 |
 | `source_type` | varchar(32) | 是 | `ADMIN_MANUAL` | 商品创建来源。首版只使用 `ADMIN_MANUAL`，后续可扩展 `SELLER_SUBMIT`、`SOURCE_PRODUCT`。 |
-| `source_ref_type` | varchar(32) | 否 | 空字符串 | 来源对象类型，预留字段。例如后续从来源商品库生成，可填 `UPSTREAM_SKU`。管理端手工创建时为空。 |
-| `source_ref_id` | varchar(128) | 否 | 空字符串 | 来源对象 ID，预留字段。例如后续可保存 `connection_code + master_sku`。管理端手工创建时为空。 |
+| `source_ref_type` | varchar(32) | 否 | 空字符串 | 来源对象类型，预留字段。后续从来源商品库生成时应使用 `SOURCE_SKU_GROUP`。管理端手工创建时为空。 |
+| `source_ref_id` | varchar(128) | 否 | 空字符串 | 来源对象 ID，预留字段。后续从来源商品库生成时保存稳定 `sourceSkuGroupKey`，不保存单条 `connection_code + master_sku`。管理端手工创建时为空。 |
 | `del_flag` | char(1) | 是 | `0` | 逻辑删除标识。`0` 表示存在，`2` 表示删除。首版不建议开放删除操作，停用替代删除。 |
 | `remark` | varchar(500) | 否 | 空字符串 | 管理端备注，只用于内部查看，不作为前台商品描述。 |
 | `create_by` | varchar(64) | 否 | 空字符串 | 创建人账号，沿用若依审计字段。 |

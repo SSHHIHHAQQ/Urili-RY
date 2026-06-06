@@ -151,12 +151,11 @@ declare namespace API.Partner {
   }
 
   export interface DirectLoginResult {
+    token: string;
     ticketId?: number;
     loginUrl: string;
     expireMinutes: number;
     expireTime: string;
-    accountId: number;
-    username: string;
   }
 
   export interface DirectLoginApiResult {
@@ -335,6 +334,7 @@ declare namespace API.Partner {
   }
 
   export interface PortalSessionProfile {
+    tokenId?: string;
     terminal?: PortalTerminal;
     subjectId?: number;
     accountId?: number;

@@ -3,6 +3,24 @@
 
 set names utf8mb4;
 
+set @confirm_buyer_account_lock_control := coalesce(@confirm_buyer_account_lock_control, '');
+
+delimiter //
+
+drop procedure if exists assert_buyer_account_lock_control_confirmed//
+create procedure assert_buyer_account_lock_control_confirmed()
+begin
+  if coalesce(@confirm_buyer_account_lock_control, '')
+      <> 'APPLY_BUYER_ACCOUNT_LOCK_CONTROL' then
+    signal sqlstate '45000' set message_text = 'set @confirm_buyer_account_lock_control = APPLY_BUYER_ACCOUNT_LOCK_CONTROL before running this migration';
+  end if;
+end//
+
+delimiter ;
+
+call assert_buyer_account_lock_control_confirmed();
+drop procedure if exists assert_buyer_account_lock_control_confirmed;
+
 delimiter //
 
 drop procedure if exists add_column_if_missing//

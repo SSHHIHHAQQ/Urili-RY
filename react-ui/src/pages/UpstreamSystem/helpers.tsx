@@ -3,6 +3,7 @@ import { message } from '@/utils/feedback';
 import {
   connectionStatusText,
   credentialStatusText,
+  dimensionStatusText,
   pairingStatusText,
   skuSyncStateText,
   syncItemStatusText,
@@ -14,13 +15,14 @@ export const statusTag = (value?: string) => {
     value === 'ACTIVE' ||
     value === 'PAIRED' ||
     value === 'FRESH' ||
+    value === 'COMPLETE' ||
     value === 'CONFIGURED'
       ? 'green'
       : value === 'SYNCING'
         ? 'blue'
         : value === 'FAILED' || value === 'INVALID'
           ? 'red'
-          : value === 'MISSING'
+          : value === 'MISSING' || value === 'PARTIAL'
             ? 'orange'
             : 'default';
   return (
@@ -30,6 +32,7 @@ export const statusTag = (value?: string) => {
         syncItemStatusText[value || ''] ||
         pairingStatusText[value || ''] ||
         skuSyncStateText[value || ''] ||
+        dimensionStatusText[value || ''] ||
         value ||
         '-'}
     </Tag>

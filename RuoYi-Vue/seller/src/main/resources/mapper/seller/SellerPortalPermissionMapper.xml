@@ -126,11 +126,14 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         delete from seller_menu where seller_menu_id = #{menuId}
     </delete>
 
-    <select id="selectSellerMenuIdsByRoleId" parameterType="Long" resultType="Long">
+    <select id="selectSellerMenuIdsByRoleId" resultType="Long">
         select m.seller_menu_id
         from seller_menu m
         inner join seller_role_menu rm on rm.seller_menu_id = m.seller_menu_id
+        inner join seller_role r on r.seller_role_id = rm.seller_role_id
         where rm.seller_role_id = #{roleId}
+          and r.seller_id = #{sellerId}
+          and r.del_flag = '0'
         order by m.parent_id, m.order_num
     </select>
 
@@ -231,8 +234,15 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
           and seller_role_id = #{roleId}
     </update>
 
-    <select id="countSellerAccountRoleByRoleId" parameterType="Long" resultType="Integer">
-        select count(1) from seller_account_role where seller_role_id = #{roleId}
+    <select id="countSellerAccountRoleByRoleId" resultType="Integer">
+        select count(1)
+        from seller_account_role ar
+        inner join seller_account a on a.seller_account_id = ar.seller_account_id
+        inner join seller_role r on r.seller_role_id = ar.seller_role_id
+        where ar.seller_role_id = #{roleId}
+          and a.seller_id = #{sellerId}
+          and r.seller_id = #{sellerId}
+          and r.del_flag = '0'
     </select>
 
     <select id="selectSellerAccountRoleIds" resultType="Long">
@@ -262,10 +272,12 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <select id="selectSellerAccountPermissions" resultType="String">
         select distinct m.perms
         from seller_account_role ar
+        inner join seller_account a on a.seller_account_id = ar.seller_account_id
         inner join seller_role r on r.seller_role_id = ar.seller_role_id
         inner join seller_role_menu rm on rm.seller_role_id = r.seller_role_id
         inner join seller_menu m on m.seller_menu_id = rm.seller_menu_id
-        where ar.seller_account_id = #{accountId}
+        where a.seller_id = #{sellerId}
+          and a.seller_account_id = #{accountId}
           and r.seller_id = #{sellerId}
           and r.del_flag = '0'
           and r.status = '0'
@@ -281,11 +293,13 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                ifnull(m.perms, '') as perms, m.icon, m.create_by, m.create_time,
                m.update_by, m.update_time, m.remark
         from seller_account_role ar
+        inner join seller_account a on a.seller_account_id = ar.seller_account_id
         inner join seller_role r on r.seller_role_id = ar.seller_role_id
         inner join seller_role_menu rm on rm.seller_role_id = r.seller_role_id
         inner join seller_menu m on m.seller_menu_id = rm.seller_menu_id
         left join seller_menu p on p.seller_menu_id = m.parent_id
-        where ar.seller_account_id = #{accountId}
+        where a.seller_id = #{sellerId}
+          and a.seller_account_id = #{accountId}
           and r.seller_id = #{sellerId}
           and r.del_flag = '0'
           and r.status = '0'
@@ -305,27 +319,45 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         </foreach>
     </select>
 
-    <delete id="deleteSellerAccountRoles" parameterType="Long">
-        delete from seller_account_role where seller_account_id = #{accountId}
+    <delete id="deleteSellerAccountRoles">
+        delete ar
+        from seller_account_role ar
+        inner join seller_account a on a.seller_account_id = ar.seller_account_id
+        where a.seller_id = #{sellerId}
+          and ar.seller_account_id = #{accountId}
     </delete>
 
     <insert id="batchSellerAccountRoles">
         insert into seller_account_role(seller_account_id, seller_role_id)
-        values
-        <foreach collection="roleIds" item="roleId" separator=",">
-            (#{accountId}, #{roleId})
+        select a.seller_account_id, r.seller_role_id
+        from seller_account a
+        inner join seller_role r on r.seller_id = a.seller_id
+        where a.seller_id = #{sellerId}
+          and a.seller_account_id = #{accountId}
+          and r.del_flag = '0'
+          and r.seller_role_id in
+        <foreach collection="roleIds" item="roleId" open="(" separator="," close=")">
+            #{roleId}
         </foreach>
     </insert>
 
-    <delete id="deleteSellerRoleMenuByRoleId" parameterType="Long">
-        delete from seller_role_menu where seller_role_id = #{roleId}
+    <delete id="deleteSellerRoleMenuByRoleId">
+        delete rm
+        from seller_role_menu rm
+        inner join seller_role r on r.seller_role_id = rm.seller_role_id
+        where r.seller_id = #{sellerId}
+          and rm.seller_role_id = #{roleId}
     </delete>
 
     <insert id="batchSellerRoleMenu">
         insert into seller_role_menu(seller_role_id, seller_menu_id)
-        values
-        <foreach collection="menuIds" item="menuId" separator=",">
-            (#{roleId}, #{menuId})
+        select r.seller_role_id, m.seller_menu_id
+        from seller_role r
+        inner join seller_menu m on m.seller_menu_id in
+        <foreach collection="menuIds" item="menuId" open="(" separator="," close=")">
+            #{menuId}
         </foreach>
+        where r.seller_id = #{sellerId}
+          and r.seller_role_id = #{roleId}
     </insert>
 </mapper>

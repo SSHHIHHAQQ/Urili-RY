@@ -183,6 +183,66 @@ function buildMenuPayload(currentMenu: MenuRecord | undefined, values: MenuFormV
   };
 }
 
+function getOppositeModuleKey(moduleKey: PartnerModuleConfig['moduleKey']) {
+  return moduleKey === 'seller' ? 'buyer' : 'seller';
+}
+
+const forbiddenPathRoots = new Set(['admin', 'common', 'shared', 'system', 'account', 'monitor', 'tool']);
+const forbiddenComponentRoots = new Set(['Admin', 'Common', 'Shared', 'System', 'User', 'Monitor', 'Tool']);
+
+function getFirstSegment(value: string) {
+  return value.trim().replace(/^\/+/, '').split('/')[0] || '';
+}
+
+function validateMenuPathForTerminal(moduleKey: PartnerModuleConfig['moduleKey'], value?: string) {
+  const normalized = (value || '').trim().replace(/^\/+/, '').toLowerCase();
+  const opposite = getOppositeModuleKey(moduleKey);
+  const root = getFirstSegment(normalized);
+  if (!normalized || normalized === '#') {
+    return Promise.resolve();
+  }
+  if (root === opposite) {
+    return Promise.reject(new Error('menu path cannot point to the opposite terminal'));
+  }
+  if (forbiddenPathRoots.has(root)) {
+    return Promise.reject(new Error('menu path cannot point to admin or shared control roots'));
+  }
+  if (normalized === opposite || normalized.startsWith(`${opposite}/`)) {
+    return Promise.reject(new Error(`路由不能指向${opposite}端`));
+  }
+  return Promise.resolve();
+}
+
+function validateMenuComponentForTerminal(moduleKey: PartnerModuleConfig['moduleKey'], value?: string) {
+  const normalized = (value || '').trim();
+  const oppositeRoot = moduleKey === 'seller' ? 'Buyer' : 'Seller';
+  const root = getFirstSegment(normalized);
+  if (!normalized) {
+    return Promise.resolve();
+  }
+  if (root === oppositeRoot) {
+    return Promise.reject(new Error('menu component cannot point to the opposite terminal'));
+  }
+  if (forbiddenComponentRoots.has(root)) {
+    return Promise.reject(new Error('menu component cannot point to admin or shared control roots'));
+  }
+  if (normalized === oppositeRoot || normalized.startsWith(`${oppositeRoot}/`)) {
+    return Promise.reject(new Error(`组件不能指向${oppositeRoot}端页面`));
+  }
+  return Promise.resolve();
+}
+
+function validateMenuPermsForTerminal(moduleKey: PartnerModuleConfig['moduleKey'], value?: string) {
+  const normalized = (value || '').trim();
+  if (normalized && !normalized.startsWith(`${moduleKey}:`)) {
+    return Promise.reject(new Error(`权限标识必须以 ${moduleKey}: 开头`));
+  }
+  if (normalized === `${moduleKey}:admin` || normalized.startsWith(`${moduleKey}:admin:`)) {
+    return Promise.reject(new Error('terminal menu cannot use admin permission namespace'));
+  }
+  return Promise.resolve();
+}
+
 const PartnerMenuModal: React.FC<PartnerMenuModalProps> = ({ config, open, onOpenChange }) => {
   const { message, modal } = App.useApp();
   const access = useAccess();
@@ -462,11 +522,19 @@ const PartnerMenuModal: React.FC<PartnerMenuModalProps> = ({ config, open, onOpe
             label="路由地址"
             name="path"
             hidden={menuType === 'F'}
-            rules={[{ required: menuType !== 'F', message: '请输入路由地址' }]}
+            rules={[
+              { required: menuType !== 'F', message: '请输入路由地址' },
+              { validator: (_, value) => validateMenuPathForTerminal(config.moduleKey, value) },
+            ]}
           >
             <Input placeholder="请输入" />
           </Form.Item>
-          <Form.Item label="组件路径" name="component" hidden={menuType !== 'C'}>
+          <Form.Item
+            label="组件路径"
+            name="component"
+            hidden={menuType !== 'C'}
+            rules={[{ validator: (_, value) => validateMenuComponentForTerminal(config.moduleKey, value) }]}
+          >
             <Input placeholder="请输入" />
           </Form.Item>
           <Form.Item label="路由参数" name="query" hidden={menuType !== 'C'}>
@@ -475,7 +543,12 @@ const PartnerMenuModal: React.FC<PartnerMenuModalProps> = ({ config, open, onOpe
           <Form.Item label="路由名称" name="routeName" hidden={menuType !== 'C'}>
             <Input placeholder="请输入" />
           </Form.Item>
-          <Form.Item label="权限标识" name="perms" hidden={menuType === 'M'}>
+          <Form.Item
+            label="权限标识"
+            name="perms"
+            hidden={menuType === 'M'}
+            rules={[{ validator: (_, value) => validateMenuPermsForTerminal(config.moduleKey, value) }]}
+          >
             <Input placeholder="请输入" />
           </Form.Item>
           <Form.Item label="是否缓存" name="isCache" hidden={menuType !== 'C'}>

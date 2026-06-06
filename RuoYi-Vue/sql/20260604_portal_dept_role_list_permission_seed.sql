@@ -4,6 +4,25 @@
 -- 2. Bind these permissions to current active terminal roles.
 -- This script is idempotent and does not create or change table structures.
 
+set names utf8mb4;
+set @confirm_portal_dept_role_list_permission_seed := coalesce(@confirm_portal_dept_role_list_permission_seed, '');
+
+delimiter //
+
+drop procedure if exists assert_portal_dept_role_list_permission_seed_confirmed//
+create procedure assert_portal_dept_role_list_permission_seed_confirmed()
+begin
+  if coalesce(@confirm_portal_dept_role_list_permission_seed, '')
+      <> 'APPLY_PORTAL_DEPT_ROLE_LIST_PERMISSION_SEED' then
+    signal sqlstate '45000' set message_text = 'set @confirm_portal_dept_role_list_permission_seed = APPLY_PORTAL_DEPT_ROLE_LIST_PERMISSION_SEED before running this seed';
+  end if;
+end//
+
+delimiter ;
+
+call assert_portal_dept_role_list_permission_seed_confirmed();
+drop procedure if exists assert_portal_dept_role_list_permission_seed_confirmed;
+
 insert into seller_menu
     (menu_name, parent_id, order_num, path, component, query, route_name,
      is_frame, is_cache, menu_type, visible, status, perms, icon, create_by,
@@ -58,6 +77,7 @@ from seller_role r
 join seller_menu m on m.perms in ('seller:dept:list', 'seller:role:list')
 where r.del_flag = '0'
   and r.status = '0'
+  and r.role_key = 'owner'
   and not exists (
       select 1
       from seller_role_menu rm
@@ -71,6 +91,7 @@ from buyer_role r
 join buyer_menu m on m.perms in ('buyer:dept:list', 'buyer:role:list')
 where r.del_flag = '0'
   and r.status = '0'
+  and r.role_key = 'owner'
   and not exists (
       select 1
       from buyer_role_menu rm

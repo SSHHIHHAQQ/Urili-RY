@@ -1,118 +1,17 @@
--- Admin-side permission seed for seller/buyer terminal menu, role, and department control.
--- Scope: only sys_menu permission buttons used by the admin console.
+-- Deprecated split seed.
+-- Use seller_buyer_management_seed.sql plus guarded admin partner grant scripts instead.
 
 set names utf8mb4;
 
-insert into sys_menu
-    (menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
-     is_frame, is_cache, menu_type, visible, status, perms, icon, create_by,
-     create_time, update_by, update_time, remark)
-values
-    (2220, '卖家端菜单列表', 2011, 35, '#', '', '', '',
-     1, 0, 'F', '0', '0', 'seller:admin:menu:list', '#', 'admin',
-     sysdate(), '', null, ''),
-    (2221, '卖家端菜单查询', 2011, 40, '#', '', '', '',
-     1, 0, 'F', '0', '0', 'seller:admin:menu:query', '#', 'admin',
-     sysdate(), '', null, ''),
-    (2222, '卖家端菜单新增', 2011, 45, '#', '', '', '',
-     1, 0, 'F', '0', '0', 'seller:admin:menu:add', '#', 'admin',
-     sysdate(), '', null, ''),
-    (2223, '卖家端菜单修改', 2011, 50, '#', '', '', '',
-     1, 0, 'F', '0', '0', 'seller:admin:menu:edit', '#', 'admin',
-     sysdate(), '', null, ''),
-    (2224, '卖家端菜单删除', 2011, 55, '#', '', '', '',
-     1, 0, 'F', '0', '0', 'seller:admin:menu:remove', '#', 'admin',
-     sysdate(), '', null, ''),
-    (2225, '卖家端角色列表', 2011, 60, '#', '', '', '',
-     1, 0, 'F', '0', '0', 'seller:admin:role:list', '#', 'admin',
-     sysdate(), '', null, ''),
-    (2226, '卖家端角色查询', 2011, 65, '#', '', '', '',
-     1, 0, 'F', '0', '0', 'seller:admin:role:query', '#', 'admin',
-     sysdate(), '', null, ''),
-    (2227, '卖家端角色新增', 2011, 70, '#', '', '', '',
-     1, 0, 'F', '0', '0', 'seller:admin:role:add', '#', 'admin',
-     sysdate(), '', null, ''),
-    (2228, '卖家端角色修改', 2011, 75, '#', '', '', '',
-     1, 0, 'F', '0', '0', 'seller:admin:role:edit', '#', 'admin',
-     sysdate(), '', null, ''),
-    (2229, '卖家端角色删除', 2011, 80, '#', '', '', '',
-     1, 0, 'F', '0', '0', 'seller:admin:role:remove', '#', 'admin',
-     sysdate(), '', null, ''),
-    (2230, '买家端菜单列表', 2012, 35, '#', '', '', '',
-     1, 0, 'F', '0', '0', 'buyer:admin:menu:list', '#', 'admin',
-     sysdate(), '', null, ''),
-    (2231, '买家端菜单查询', 2012, 40, '#', '', '', '',
-     1, 0, 'F', '0', '0', 'buyer:admin:menu:query', '#', 'admin',
-     sysdate(), '', null, ''),
-    (2232, '买家端菜单新增', 2012, 45, '#', '', '', '',
-     1, 0, 'F', '0', '0', 'buyer:admin:menu:add', '#', 'admin',
-     sysdate(), '', null, ''),
-    (2233, '买家端菜单修改', 2012, 50, '#', '', '', '',
-     1, 0, 'F', '0', '0', 'buyer:admin:menu:edit', '#', 'admin',
-     sysdate(), '', null, ''),
-    (2234, '买家端菜单删除', 2012, 55, '#', '', '', '',
-     1, 0, 'F', '0', '0', 'buyer:admin:menu:remove', '#', 'admin',
-     sysdate(), '', null, ''),
-    (2235, '买家端角色列表', 2012, 60, '#', '', '', '',
-     1, 0, 'F', '0', '0', 'buyer:admin:role:list', '#', 'admin',
-     sysdate(), '', null, ''),
-    (2236, '买家端角色查询', 2012, 65, '#', '', '', '',
-     1, 0, 'F', '0', '0', 'buyer:admin:role:query', '#', 'admin',
-     sysdate(), '', null, ''),
-    (2237, '买家端角色新增', 2012, 70, '#', '', '', '',
-     1, 0, 'F', '0', '0', 'buyer:admin:role:add', '#', 'admin',
-     sysdate(), '', null, ''),
-    (2238, '买家端角色修改', 2012, 75, '#', '', '', '',
-     1, 0, 'F', '0', '0', 'buyer:admin:role:edit', '#', 'admin',
-     sysdate(), '', null, ''),
-    (2239, '买家端角色删除', 2012, 80, '#', '', '', '',
-     1, 0, 'F', '0', '0', 'buyer:admin:role:remove', '#', 'admin',
-     sysdate(), '', null, ''),
-    (2240, '卖家端部门列表', 2011, 85, '#', '', '', '',
-     1, 0, 'F', '0', '0', 'seller:admin:dept:list', '#', 'admin',
-     sysdate(), '', null, ''),
-    (2241, '卖家端部门查询', 2011, 90, '#', '', '', '',
-     1, 0, 'F', '0', '0', 'seller:admin:dept:query', '#', 'admin',
-     sysdate(), '', null, ''),
-    (2242, '卖家端部门新增', 2011, 95, '#', '', '', '',
-     1, 0, 'F', '0', '0', 'seller:admin:dept:add', '#', 'admin',
-     sysdate(), '', null, ''),
-    (2243, '卖家端部门修改', 2011, 100, '#', '', '', '',
-     1, 0, 'F', '0', '0', 'seller:admin:dept:edit', '#', 'admin',
-     sysdate(), '', null, ''),
-    (2244, '卖家端部门删除', 2011, 105, '#', '', '', '',
-     1, 0, 'F', '0', '0', 'seller:admin:dept:remove', '#', 'admin',
-     sysdate(), '', null, ''),
-    (2245, '买家端部门列表', 2012, 85, '#', '', '', '',
-     1, 0, 'F', '0', '0', 'buyer:admin:dept:list', '#', 'admin',
-     sysdate(), '', null, ''),
-    (2246, '买家端部门查询', 2012, 90, '#', '', '', '',
-     1, 0, 'F', '0', '0', 'buyer:admin:dept:query', '#', 'admin',
-     sysdate(), '', null, ''),
-    (2247, '买家端部门新增', 2012, 95, '#', '', '', '',
-     1, 0, 'F', '0', '0', 'buyer:admin:dept:add', '#', 'admin',
-     sysdate(), '', null, ''),
-    (2248, '买家端部门修改', 2012, 100, '#', '', '', '',
-     1, 0, 'F', '0', '0', 'buyer:admin:dept:edit', '#', 'admin',
-     sysdate(), '', null, ''),
-    (2249, '买家端部门删除', 2012, 105, '#', '', '', '',
-     1, 0, 'F', '0', '0', 'buyer:admin:dept:remove', '#', 'admin',
-     sysdate(), '', null, '')
-on duplicate key update
-    menu_name = values(menu_name),
-    parent_id = values(parent_id),
-    order_num = values(order_num),
-    path = values(path),
-    component = values(component),
-    query = values(query),
-    route_name = values(route_name),
-    is_frame = values(is_frame),
-    is_cache = values(is_cache),
-    menu_type = values(menu_type),
-    visible = values(visible),
-    status = values(status),
-    perms = values(perms),
-    icon = values(icon),
-    update_by = 'admin',
-    update_time = sysdate(),
-    remark = values(remark);
+delimiter //
+
+drop procedure if exists abort_deprecated_portal_permission_admin_menu_seed//
+create procedure abort_deprecated_portal_permission_admin_menu_seed()
+begin
+  signal sqlstate '45000'
+    set message_text = 'Deprecated split seed: use seller_buyer_management_seed.sql and guarded admin partner grant scripts';
+end//
+
+delimiter ;
+
+call abort_deprecated_portal_permission_admin_menu_seed();

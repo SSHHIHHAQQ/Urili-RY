@@ -6,3 +6,9 @@ export async function getSourceProductList(params) {
         params,
     });
 }
+export async function getSourceProductGroupDetail(params) {
+    return request(`${baseUrl}/group-detail`, {
+        method: 'GET',
+        params,
+    });
+}

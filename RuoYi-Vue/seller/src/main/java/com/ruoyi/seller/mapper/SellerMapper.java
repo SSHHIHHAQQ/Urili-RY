@@ -45,10 +45,12 @@ public interface SellerMapper
             @Param("lockStatus") String lockStatus, @Param("lockReason") String lockReason,
             @Param("updateBy") String updateBy);
 
-    public int resetSellerAccountPassword(@Param("sellerAccountId") Long sellerAccountId, @Param("password") String password,
+    public int resetSellerAccountPassword(@Param("sellerId") Long sellerId,
+            @Param("sellerAccountId") Long sellerAccountId, @Param("password") String password,
             @Param("updateBy") String updateBy);
 
-    public int updateSellerAccountLoginInfo(@Param("sellerAccountId") Long sellerAccountId,
+    public int updateSellerAccountLoginInfo(@Param("sellerId") Long sellerId,
+            @Param("sellerAccountId") Long sellerAccountId,
             @Param("lastLoginIp") String lastLoginIp, @Param("lastLoginTime") Date lastLoginTime);
 
     public int insertSellerLoginLog(PortalLoginLog log);

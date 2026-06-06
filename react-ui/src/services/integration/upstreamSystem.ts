@@ -62,6 +62,43 @@ export async function syncUpstreamSku(connectionCode: string) {
   });
 }
 
+export async function syncUpstreamSkuDimensions(connectionCode: string) {
+  return request<API.Result & { data: API.Integration.SyncResult }>(
+    `${baseUrl}/${connectionCode}/sku-dimensions/sync`,
+    {
+      method: 'POST',
+    },
+  );
+}
+
+export async function syncUpstreamInventory(connectionCode: string) {
+  return request<API.Result & { data: API.Integration.SyncResult }>(
+    `${baseUrl}/${connectionCode}/inventory/sync`,
+    {
+      method: 'POST',
+    },
+  );
+}
+
+export async function getUpstreamInventoryList(connectionCode: string, params?: Record<string, any>) {
+  return request<API.Integration.SourceWarehouseStockPageResult>(
+    `${baseUrl}/${connectionCode}/inventory/list`,
+    {
+      method: 'GET',
+      params,
+    },
+  );
+}
+
+export async function getInventorySyncState(connectionCode: string) {
+  return request<API.Result & { data: API.Integration.InventorySyncState }>(
+    `${baseUrl}/${connectionCode}/inventory-sync-state`,
+    {
+      method: 'GET',
+    },
+  );
+}
+
 export async function getWarehouseSyncList(connectionCode: string, params?: Record<string, any>) {
   return request<API.Result & { data: API.Integration.WarehouseSyncItem[] }>(`${baseUrl}/${connectionCode}/warehouses`, {
     method: 'GET',

@@ -35,8 +35,10 @@ public class SellerPortalPermissionServiceImplTest
         assertEquals(Long.valueOf(11L), permissionMapper.countedSellerId);
         assertArrayEquals(new Long[] { 101L, 102L }, permissionMapper.countedRoleIds);
         assertEquals(1, permissionMapper.deleteAccountRolesCallCount);
+        assertEquals(Long.valueOf(11L), permissionMapper.deletedSellerId);
         assertEquals(Long.valueOf(22L), permissionMapper.deletedAccountId);
         assertEquals(1, permissionMapper.batchAccountRolesCallCount);
+        assertEquals(Long.valueOf(11L), permissionMapper.batchedSellerId);
         assertEquals(Long.valueOf(22L), permissionMapper.batchedAccountId);
         assertArrayEquals(new Long[] { 101L, 102L }, permissionMapper.batchedRoleIds);
     }
@@ -55,6 +57,7 @@ public class SellerPortalPermissionServiceImplTest
         assertEquals(1, rows);
         assertEquals(0, permissionMapper.countRolesCallCount);
         assertEquals(1, permissionMapper.deleteAccountRolesCallCount);
+        assertEquals(Long.valueOf(11L), permissionMapper.deletedSellerId);
         assertEquals(Long.valueOf(22L), permissionMapper.deletedAccountId);
         assertEquals(0, permissionMapper.batchAccountRolesCallCount);
     }
@@ -262,9 +265,13 @@ public class SellerPortalPermissionServiceImplTest
 
         private int deleteAccountRolesCallCount;
 
+        private Long deletedSellerId;
+
         private Long deletedAccountId;
 
         private int batchAccountRolesCallCount;
+
+        private Long batchedSellerId;
 
         private Long batchedAccountId;
 
@@ -289,14 +296,16 @@ public class SellerPortalPermissionServiceImplTest
                 if ("deleteSellerAccountRoles".equals(methodName))
                 {
                     deleteAccountRolesCallCount++;
-                    deletedAccountId = (Long) args[0];
+                    deletedSellerId = (Long) args[0];
+                    deletedAccountId = (Long) args[1];
                     return 1;
                 }
                 if ("batchSellerAccountRoles".equals(methodName))
                 {
                     batchAccountRolesCallCount++;
-                    batchedAccountId = (Long) args[0];
-                    batchedRoleIds = (Long[]) args[1];
+                    batchedSellerId = (Long) args[0];
+                    batchedAccountId = (Long) args[1];
+                    batchedRoleIds = (Long[]) args[2];
                     return batchedRoleIds.length;
                 }
                 if ("toString".equals(methodName))

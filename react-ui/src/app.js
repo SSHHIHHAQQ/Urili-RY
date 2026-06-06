@@ -10,16 +10,13 @@ import { PageEnum } from './enums/pagesEnums';
 import { errorConfig } from './requestErrorConfig';
 import { getRemoteMenu, getRoutersInfo, getUserInfo, patchRouteWithRemoteMenus, setRemoteMenu } from './services/session';
 import { AntdFeedbackProvider } from './utils/feedback';
+import { getPortalLoginPath, isPortalRoute } from './utils/portalPaths';
 import { getPortalTerminalFromApiUrl } from './utils/portalRequest';
 import './global.css';
 const isDev = process.env.NODE_ENV === 'development';
-const PORTAL_ROUTE_PREFIXES = ['/seller/direct-login', '/buyer/direct-login', '/seller/portal', '/buyer/portal'];
-function isPortalRoute(pathname) {
-    return PORTAL_ROUTE_PREFIXES.some((prefix) => pathname === prefix || pathname?.startsWith(`${prefix}/`));
-}
-function redirectToLogin() {
+function redirectToLogin(includePortal = false) {
     const { pathname, search, hash } = history.location;
-    if (pathname === PageEnum.LOGIN || isPortalRoute(pathname)) {
+    if (pathname === PageEnum.LOGIN || (!includePortal && isPortalRoute(pathname))) {
         return;
     }
     const redirect = `${pathname}${search || ''}${hash || ''}`;
@@ -43,6 +40,7 @@ function handleUnauthorizedResponse(requestUrl) {
     const portalTerminal = getPortalTerminalFromApiUrl(requestUrl);
     if (portalTerminal) {
         clearTerminalSessionToken(portalTerminal);
+        history.replace(getPortalLoginPath(portalTerminal));
         return;
     }
     clearAdminSession();

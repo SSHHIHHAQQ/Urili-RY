@@ -19,7 +19,7 @@ public interface ISellerPortalDeptService
 
     public boolean hasChildByDeptId(Long sellerId, Long deptId);
 
-    public boolean checkDeptExistAccount(Long deptId);
+    public boolean checkDeptExistAccount(Long sellerId, Long deptId);
 
     public int insertDept(Long sellerId, PortalDept dept);
 

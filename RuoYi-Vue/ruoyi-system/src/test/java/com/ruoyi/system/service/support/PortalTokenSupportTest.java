@@ -26,6 +26,7 @@ import com.ruoyi.common.constant.HttpStatus;
 import com.ruoyi.common.core.redis.RedisCache;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.system.domain.PortalAccount;
+import com.ruoyi.system.domain.PortalDirectLoginToken;
 import com.ruoyi.system.domain.PortalLoginIssue;
 import com.ruoyi.system.domain.PortalLoginSession;
 
@@ -81,6 +82,30 @@ public class PortalTokenSupportTest
         issue.getSession().setTerminal("buyer");
 
         assertNull(support.getSession("seller"));
+    }
+
+    @Test
+    public void createLoginCopiesDirectLoginAuditIntoStoredSession()
+    {
+        RecordingRedisCache redisCache = new RecordingRedisCache();
+        PortalTokenSupport support = support(redisCache);
+        bindRequest(Map.of("User-Agent", "Mozilla/5.0 Chrome/120.0.0.0"), "127.0.0.1");
+
+        PortalDirectLoginToken directLoginToken = new PortalDirectLoginToken();
+        directLoginToken.setTicketId(100L);
+        directLoginToken.setActingAdminId(1L);
+        directLoginToken.setActingAdminName("admin");
+        directLoginToken.setDirectLoginReason("support check");
+
+        PortalLoginIssue issue = support.createLogin("seller", 11L, "SAA010001",
+                account(22L, "seller-owner"), directLoginToken);
+
+        assertEquals(Boolean.TRUE, issue.getSession().getDirectLogin());
+        assertEquals(Long.valueOf(100L), issue.getSession().getDirectLoginTicketId());
+        assertEquals(Long.valueOf(1L), issue.getSession().getActingAdminId());
+        assertEquals("admin", issue.getSession().getActingAdminName());
+        assertEquals("support check", issue.getSession().getDirectLoginReason());
+        assertSame(issue.getSession(), redisCache.store.get(redisCache.onlyStoredKey()));
     }
 
     @Test

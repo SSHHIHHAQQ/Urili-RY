@@ -22,6 +22,12 @@ public class PortalDirectLoginToken implements Serializable
 
     private String username;
 
+    private Long actingAdminId;
+
+    private String actingAdminName;
+
+    private String directLoginReason;
+
     private String createBy;
 
     private Date createTime;
@@ -86,6 +92,36 @@ public class PortalDirectLoginToken implements Serializable
     public void setUsername(String username)
     {
         this.username = username;
+    }
+
+    public Long getActingAdminId()
+    {
+        return actingAdminId;
+    }
+
+    public void setActingAdminId(Long actingAdminId)
+    {
+        this.actingAdminId = actingAdminId;
+    }
+
+    public String getActingAdminName()
+    {
+        return actingAdminName;
+    }
+
+    public void setActingAdminName(String actingAdminName)
+    {
+        this.actingAdminName = actingAdminName;
+    }
+
+    public String getDirectLoginReason()
+    {
+        return directLoginReason;
+    }
+
+    public void setDirectLoginReason(String directLoginReason)
+    {
+        this.directLoginReason = directLoginReason;
     }
 
     public String getCreateBy()

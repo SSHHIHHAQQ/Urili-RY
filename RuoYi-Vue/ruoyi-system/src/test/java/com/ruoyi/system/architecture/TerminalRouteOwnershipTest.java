@@ -206,10 +206,8 @@ public class TerminalRouteOwnershipTest
                 .resolve("src/main/java/com/ruoyi/" + terminal + "/controller");
         try (Stream<Path> paths = Files.walk(controllerRoot))
         {
-            return paths.filter(path -> path.toString().endsWith("PortalController.java")
-                    || path.toString().endsWith("PortalProductSchemaController.java")
-                    || (path.getFileName().toString().contains("Portal")
-                            && path.getFileName().toString().endsWith("Controller.java")))
+            return paths.filter(path -> path.getFileName().toString().endsWith("Controller.java"))
+                    .filter(path -> !path.getFileName().toString().startsWith("Admin"))
                     .filter(path -> !path.getFileName().toString().endsWith("PortalAuthController.java"))
                     .sorted()
                     .collect(Collectors.toList());

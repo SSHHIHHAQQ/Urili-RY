@@ -117,13 +117,61 @@ public class AdminDirectLoginPermissionContractTest
         assertContains(sql, "seller:admin:ticket:list", seed, violations);
         assertContains(sql, "buyer:admin:directLogin", seed, violations);
         assertContains(sql, "buyer:admin:ticket:list", seed, violations);
+        assertManagementSeedDoesNotGrantAdminRoles(seed, sql, violations);
 
         Path standaloneSeed = backendRoot.resolve("sql/20260606_admin_partner_page_direct_login_seed.sql");
         String standaloneSql = Files.readString(standaloneSeed, StandardCharsets.UTF_8);
+        assertContains(standaloneSql, "PartnerManagement", standaloneSeed, violations);
         assertContains(standaloneSql, "seller:admin:list", standaloneSeed, violations);
         assertContains(standaloneSql, "buyer:admin:list", standaloneSeed, violations);
         assertContains(standaloneSql, "seller:admin:directLogin", standaloneSeed, violations);
         assertContains(standaloneSql, "buyer:admin:directLogin", standaloneSeed, violations);
+
+        Path grantSeed = backendRoot.resolve("sql/20260606_admin_partner_role_menu_grant.sql");
+        String grantSql = Files.readString(grantSeed, StandardCharsets.UTF_8);
+        assertContains(grantSql, "set @confirm_admin_partner_role_menu_grant", grantSeed, violations);
+        assertContains(grantSql, "call assert_admin_partner_role_menu_grant_confirmed();", grantSeed, violations);
+        assertContains(grantSql, "call assert_admin_partner_menu_signature();", grantSeed, violations);
+        assertAdminButtonGrantsStayAdminOnly(grantSeed, grantSql, violations);
+
+        Path cleanupSeed = backendRoot.resolve("sql/20260606_admin_partner_non_admin_button_grant_cleanup.sql");
+        String cleanupSql = Files.readString(cleanupSeed, StandardCharsets.UTF_8);
+        assertContains(cleanupSql, "set @confirm_admin_partner_non_admin_button_cleanup", cleanupSeed, violations);
+        assertContains(cleanupSql, "set @admin_partner_button_cleanup_role_keys", cleanupSeed, violations);
+        assertContains(cleanupSql, "find_in_set(r.role_key collate utf8mb4_unicode_ci",
+                cleanupSeed, violations);
+        assertContains(cleanupSql,
+                "convert(@admin_partner_button_cleanup_role_keys using utf8mb4) collate utf8mb4_unicode_ci) > 0",
+                cleanupSeed, violations);
+        assertContains(cleanupSql, "delete child_grant", cleanupSeed, violations);
+        assertContains(cleanupSql, "and r.role_key <> 'admin'", cleanupSeed, violations);
+    }
+
+    private void assertAdminButtonGrantsStayAdminOnly(Path sqlFile, String sql, List<String> violations)
+    {
+        assertContains(sql, "select distinct r.role_id, child.menu_id", sqlFile, violations);
+        assertContains(sql, "join sys_role_menu page_grant on page_grant.role_id = r.role_id", sqlFile, violations);
+        assertContains(sql, "where r.role_key = 'admin'", sqlFile, violations);
+        assertContains(sql, "and r.del_flag = '0'", sqlFile, violations);
+        if (sql.contains("select distinct page_grant.role_id, child.menu_id"))
+        {
+            violations.add(sqlFile.getFileName()
+                    + " must not inherit child button grants for every role with page access");
+        }
+    }
+
+    private void assertManagementSeedDoesNotGrantAdminRoles(Path sqlFile, String sql, List<String> violations)
+    {
+        if (sql.contains("insert into sys_role_menu"))
+        {
+            violations.add(sqlFile.getFileName()
+                    + " must not grant sys_role_menu; use 20260606_admin_partner_role_menu_grant.sql");
+        }
+        if (sql.contains("where r.role_key = 'admin'"))
+        {
+            violations.add(sqlFile.getFileName()
+                    + " must not grant admin role menus inside the base seller/buyer management seed");
+        }
     }
 
     private void assertFrontendPermissionGates(Path workspaceRoot, List<String> violations) throws IOException

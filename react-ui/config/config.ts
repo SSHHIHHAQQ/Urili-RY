@@ -5,7 +5,7 @@ import defaultSettings from './defaultSettings';
 import proxy from './proxy';
 import routes from './routes';
 
-const { REACT_APP_ENV = 'dev' } = process.env;
+const { DISABLE_MFSU, REACT_APP_ENV = 'dev' } = process.env;
 
 /**
  * @name 使用公共路径
@@ -78,6 +78,7 @@ export default defineConfig({
    * @doc https://umijs.org/docs/api/config#routePrefetch
    */
   routePrefetch: {},
+  mfsu: DISABLE_MFSU === '1' ? false : undefined,
   /**
    * @name manifest 配置
    * @description 生成资源清单，配合 routePrefetch 使用

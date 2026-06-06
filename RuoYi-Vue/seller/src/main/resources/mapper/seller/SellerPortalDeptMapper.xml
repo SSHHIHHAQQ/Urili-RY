@@ -70,10 +70,11 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
           and parent_id = #{deptId}
     </select>
 
-    <select id="checkDeptExistAccount" parameterType="Long" resultType="Integer">
+    <select id="checkDeptExistAccount" resultType="Integer">
         select count(1)
         from seller_account
-        where dept_id = #{deptId}
+        where seller_id = #{sellerId}
+          and dept_id = #{deptId}
     </select>
 
     <insert id="insertSellerDept" parameterType="PortalDept" useGeneratedKeys="true" keyProperty="deptId">

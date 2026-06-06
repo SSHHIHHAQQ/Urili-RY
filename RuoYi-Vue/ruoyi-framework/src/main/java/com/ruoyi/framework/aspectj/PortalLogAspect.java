@@ -86,23 +86,30 @@ public class PortalLogAspect
             {
                 session = portalTokenSupport.getSession(controllerLog.terminal());
             }
-            if (session == null)
-            {
-                return;
-            }
 
             PortalOperLog operLog = new PortalOperLog();
-            operLog.setSubjectId(session.getSubjectId());
-            operLog.setAccountId(session.getAccountId());
-            operLog.setOperName(session.getUserName());
-            operLog.setStatus(BusinessStatus.SUCCESS.ordinal());
+            if (session != null)
+            {
+                operLog.setSubjectId(session.getSubjectId());
+                operLog.setAccountId(session.getAccountId());
+                operLog.setOperName(session.getUserName());
+            }
+            else
+            {
+                operLog.setOperName("anonymous");
+            }
+            boolean anonymousAllowed = controllerLog.allowAnonymous();
+            operLog.setStatus(e == null && (session != null || anonymousAllowed) ? BusinessStatus.SUCCESS.ordinal() : BusinessStatus.FAIL.ordinal());
             operLog.setOperIp(IpUtils.getIpAddr());
             operLog.setOperUrl(StringUtils.substring(ServletUtils.getRequest().getRequestURI(), 0, 255));
 
             if (e != null)
             {
-                operLog.setStatus(BusinessStatus.FAIL.ordinal());
                 operLog.setErrorMsg(StringUtils.substring(Convert.toStr(e.getMessage(), ExceptionUtil.getExceptionMessage(e)), 0, 2000));
+            }
+            else if (session == null && !anonymousAllowed)
+            {
+                operLog.setErrorMsg("端内会话不存在");
             }
 
             String className = joinPoint.getTarget().getClass().getName();
@@ -113,6 +120,7 @@ public class PortalLogAspect
 
             Long startTime = TIME_THREADLOCAL.get();
             operLog.setCostTime(startTime == null ? 0L : System.currentTimeMillis() - startTime);
+            appendDirectLoginAudit(operLog, session);
             AsyncManager.me().execute(AsyncFactory.recordPortalOper(controllerLog.terminal(), operLog));
         }
         catch (Exception exp)
@@ -154,6 +162,25 @@ public class PortalLogAspect
         {
             operLog.setOperParam(StringUtils.substring(JSON.toJSONString(paramsMap, excludePropertyPreFilter(excludeParamNames)), 0, PARAM_MAX_LENGTH));
         }
+    }
+
+    private void appendDirectLoginAudit(PortalOperLog operLog, PortalLoginSession session)
+    {
+        if (session == null || !Boolean.TRUE.equals(session.getDirectLogin()))
+        {
+            return;
+        }
+        String auditPrefix = "directLoginAudit{ticketId=" + session.getDirectLoginTicketId()
+                + ", actingAdminId=" + session.getActingAdminId()
+                + ", actingAdminName=" + safeAuditValue(session.getActingAdminName())
+                + ", reason=" + safeAuditValue(session.getDirectLoginReason()) + "} ";
+        operLog.setOperParam(StringUtils.substring(auditPrefix + safeAuditValue(operLog.getOperParam()), 0,
+                PARAM_MAX_LENGTH));
+    }
+
+    private String safeAuditValue(String value)
+    {
+        return StringUtils.isBlank(value) ? "" : value;
     }
 
     private String argsArrayToString(Object[] paramsArray, String[] excludeParamNames)

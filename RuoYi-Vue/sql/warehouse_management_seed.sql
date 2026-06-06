@@ -4,6 +4,24 @@
 
 set names utf8mb4;
 
+set @confirm_warehouse_management_seed := coalesce(@confirm_warehouse_management_seed, '');
+
+delimiter //
+
+drop procedure if exists assert_warehouse_management_seed_confirmed//
+create procedure assert_warehouse_management_seed_confirmed()
+begin
+  if coalesce(@confirm_warehouse_management_seed, '')
+      <> 'APPLY_WAREHOUSE_MANAGEMENT_SEED' then
+    signal sqlstate '45000' set message_text = 'set @confirm_warehouse_management_seed = APPLY_WAREHOUSE_MANAGEMENT_SEED before running this seed';
+  end if;
+end//
+
+delimiter ;
+
+call assert_warehouse_management_seed_confirmed();
+drop procedure if exists assert_warehouse_management_seed_confirmed;
+
 create table if not exists warehouse (
   warehouse_id          bigint(20)    not null auto_increment comment '仓库ID',
   warehouse_code        varchar(64)   not null                comment '系统仓库编码',

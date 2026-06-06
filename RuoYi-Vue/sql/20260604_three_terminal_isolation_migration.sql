@@ -4,6 +4,24 @@
 
 set names utf8mb4;
 
+set @confirm_three_terminal_isolation_migration := coalesce(@confirm_three_terminal_isolation_migration, '');
+
+delimiter //
+
+drop procedure if exists assert_three_terminal_isolation_migration_confirmed//
+create procedure assert_three_terminal_isolation_migration_confirmed()
+begin
+  if coalesce(@confirm_three_terminal_isolation_migration, '')
+      <> 'APPLY_THREE_TERMINAL_ISOLATION_MIGRATION' then
+    signal sqlstate '45000' set message_text = 'set @confirm_three_terminal_isolation_migration = APPLY_THREE_TERMINAL_ISOLATION_MIGRATION before running this migration';
+  end if;
+end//
+
+delimiter ;
+
+call assert_three_terminal_isolation_migration_confirmed();
+drop procedure if exists assert_three_terminal_isolation_migration_confirmed;
+
 delimiter //
 
 drop procedure if exists add_column_if_missing//
@@ -31,6 +49,25 @@ begin
     prepare stmt from @ddl;
     execute stmt;
     deallocate prepare stmt;
+  end if;
+end//
+
+drop procedure if exists assert_no_legacy_account_user_bindings//
+create procedure assert_no_legacy_account_user_bindings(in p_table varchar(64), in p_message varchar(128))
+begin
+  set @legacy_account_user_count := 0;
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = database() and table_name = p_table and column_name = 'user_id'
+  ) then
+    set @sql = concat('select count(1) into @legacy_account_user_count from ', p_table, ' where user_id is not null');
+    prepare stmt from @sql;
+    execute stmt;
+    deallocate prepare stmt;
+  end if;
+
+  if @legacy_account_user_count > 0 then
+    signal sqlstate '45000' set message_text = p_message;
   end if;
 end//
 
@@ -62,6 +99,70 @@ begin
   end if;
 end//
 
+drop procedure if exists recreate_index_if_mismatch//
+create procedure recreate_index_if_mismatch(
+  in p_table varchar(64),
+  in p_index varchar(64),
+  in p_expected_columns varchar(512),
+  in p_expected_non_unique int,
+  in p_definition text
+)
+begin
+  declare v_index_count int default 0;
+  declare v_actual_columns text default '';
+  declare v_actual_non_unique int default null;
+
+  select count(distinct index_name),
+         coalesce(group_concat(column_name order by seq_in_index separator ','), ''),
+         max(non_unique)
+    into v_index_count, v_actual_columns, v_actual_non_unique
+  from information_schema.statistics
+  where table_schema = database() and table_name = p_table and index_name = p_index;
+
+  if v_index_count > 0
+      and (v_actual_columns <> p_expected_columns or v_actual_non_unique <> p_expected_non_unique) then
+    set @ddl = concat('alter table `', p_table, '` drop index `', p_index, '`');
+    prepare stmt from @ddl;
+    execute stmt;
+    deallocate prepare stmt;
+    set v_index_count = 0;
+  end if;
+
+  if v_index_count = 0 then
+    set @ddl = concat('alter table `', p_table, '` add ', p_definition);
+    prepare stmt from @ddl;
+    execute stmt;
+    deallocate prepare stmt;
+  end if;
+end//
+
+drop procedure if exists assert_index_definition//
+create procedure assert_index_definition(
+  in p_table varchar(64),
+  in p_index varchar(64),
+  in p_expected_columns varchar(512),
+  in p_expected_non_unique int,
+  in p_message varchar(128)
+)
+begin
+  declare v_index_count int default 0;
+  declare v_actual_columns text default '';
+  declare v_actual_non_unique int default null;
+
+  select count(distinct index_name),
+         coalesce(group_concat(column_name order by seq_in_index separator ','), ''),
+         max(non_unique)
+    into v_index_count, v_actual_columns, v_actual_non_unique
+  from information_schema.statistics
+  where table_schema = database() and table_name = p_table and index_name = p_index;
+
+  if v_index_count <> 1
+      or v_actual_columns <> p_expected_columns
+      or v_actual_non_unique <> p_expected_non_unique then
+    signal sqlstate '45000' set message_text = p_message;
+  end if;
+end//
+
 drop procedure if exists assert_no_duplicate_owner_account//
 create procedure assert_no_duplicate_owner_account(in p_table varchar(64), in p_subject_column varchar(64), in p_message varchar(128))
 begin
@@ -72,6 +173,45 @@ begin
   execute stmt;
   deallocate prepare stmt;
   if @duplicate_owner_count > 0 then
+    signal sqlstate '45000' set message_text = p_message;
+  end if;
+end//
+
+drop procedure if exists assert_owner_generated_column//
+create procedure assert_owner_generated_column(
+  in p_table varchar(64),
+  in p_column varchar(64),
+  in p_subject_column varchar(64),
+  in p_message varchar(128)
+)
+begin
+  declare v_column_count int default 0;
+  declare v_extra text default '';
+  declare v_generation_expression text default '';
+  declare v_normalized_expression text default '';
+  declare v_expected_expression text default '';
+
+  select count(1), coalesce(max(extra), ''), coalesce(max(generation_expression), '')
+    into v_column_count, v_extra, v_generation_expression
+  from information_schema.columns
+  where table_schema = database() and table_name = p_table and column_name = p_column;
+
+  set v_normalized_expression = lower(v_generation_expression);
+  set v_normalized_expression = replace(v_normalized_expression, '`', '');
+  set v_normalized_expression = replace(v_normalized_expression, ' ', '');
+  set v_normalized_expression = replace(v_normalized_expression, '\n', '');
+  set v_normalized_expression = replace(v_normalized_expression, '\r', '');
+  set v_normalized_expression = replace(v_normalized_expression, '(', '');
+  set v_normalized_expression = replace(v_normalized_expression, ')', '');
+  set v_normalized_expression = replace(v_normalized_expression, '\\', '');
+  set v_normalized_expression = replace(v_normalized_expression, '_utf8mb3', '');
+  set v_normalized_expression = replace(v_normalized_expression, '_utf8mb4', '');
+  set v_normalized_expression = replace(v_normalized_expression, '''', '');
+  set v_expected_expression = concat('casewhenaccount_role=ownerthen', lower(p_subject_column), 'elsenullend');
+
+  if v_column_count <> 1
+      or upper(v_extra) not like '%STORED GENERATED%'
+      or v_normalized_expression <> v_expected_expression then
     signal sqlstate '45000' set message_text = p_message;
   end if;
 end//
@@ -162,6 +302,9 @@ call add_column_if_missing('buyer_account', 'last_login_time', 'datetime null');
 call add_column_if_missing('buyer_account', 'pwd_update_time', 'datetime null');
 call add_column_if_missing('buyer_account', 'owner_unique_buyer_id', 'bigint(20) generated always as (case when account_role = ''OWNER'' then buyer_id else null end) stored');
 
+call assert_owner_generated_column('seller_account', 'owner_unique_seller_id', 'seller_id', 'seller owner generated column definition is invalid');
+call assert_owner_generated_column('buyer_account', 'owner_unique_buyer_id', 'buyer_id', 'buyer owner generated column definition is invalid');
+
 update seller_account
 set user_name = coalesce(nullif(user_name, ''), concat('seller_', seller_account_id)),
     nick_name = coalesce(nullif(nick_name, ''), user_name),
@@ -188,6 +331,8 @@ call drop_index_if_exists('seller_account', 'uk_seller_account_user');
 call drop_index_if_exists('seller_account', 'uk_seller_account_seller_user');
 call drop_index_if_exists('buyer_account', 'uk_buyer_account_user');
 call drop_index_if_exists('buyer_account', 'uk_buyer_account_buyer_user');
+call assert_no_legacy_account_user_bindings('seller_account', 'seller_account.user_id still has bindings; run legacy sys_user backfill first');
+call assert_no_legacy_account_user_bindings('buyer_account', 'buyer_account.user_id still has bindings; run legacy sys_user backfill first');
 call drop_column_if_exists('seller_account', 'user_id');
 call drop_column_if_exists('buyer_account', 'user_id');
 
@@ -197,8 +342,14 @@ call add_index_if_missing('seller_account', 'uk_seller_account_username', 'uniqu
 call add_index_if_missing('buyer_account', 'uk_buyer_account_username', 'unique key uk_buyer_account_username (user_name)');
 call assert_no_duplicate_owner_account('seller_account', 'seller_id', 'seller_account has duplicate OWNER accounts');
 call assert_no_duplicate_owner_account('buyer_account', 'buyer_id', 'buyer_account has duplicate OWNER accounts');
-call add_index_if_missing('seller_account', 'uk_seller_account_owner', 'unique key uk_seller_account_owner (owner_unique_seller_id)');
-call add_index_if_missing('buyer_account', 'uk_buyer_account_owner', 'unique key uk_buyer_account_owner (owner_unique_buyer_id)');
+call recreate_index_if_mismatch('seller_account', 'uk_seller_account_owner',
+  'owner_unique_seller_id', 0, 'unique key uk_seller_account_owner (owner_unique_seller_id)');
+call recreate_index_if_mismatch('buyer_account', 'uk_buyer_account_owner',
+  'owner_unique_buyer_id', 0, 'unique key uk_buyer_account_owner (owner_unique_buyer_id)');
+call assert_index_definition('seller_account', 'uk_seller_account_owner',
+  'owner_unique_seller_id', 0, 'seller_account OWNER unique index is invalid');
+call assert_index_definition('buyer_account', 'uk_buyer_account_owner',
+  'owner_unique_buyer_id', 0, 'buyer_account OWNER unique index is invalid');
 call add_index_if_missing('seller_account', 'idx_seller_account_seller_lock', 'key idx_seller_account_seller_lock (seller_id, lock_status)');
 call add_index_if_missing('buyer_account', 'idx_buyer_account_buyer_lock', 'key idx_buyer_account_buyer_lock (buyer_id, lock_status)');
 
@@ -374,8 +525,14 @@ create table if not exists seller_login_log (
 ) engine=innodb auto_increment=1 comment = '卖家端登录日志表';
 call add_column_if_missing('seller_login_log', 'seller_id', 'bigint(20) default null');
 call add_column_if_missing('seller_login_log', 'seller_account_id', 'bigint(20) default null');
-call add_index_if_missing('seller_login_log', 'idx_seller_login_log_account_time', 'key idx_seller_login_log_account_time (seller_account_id, login_time)');
-call add_index_if_missing('seller_login_log', 'idx_seller_login_log_seller_time', 'key idx_seller_login_log_seller_time (seller_id, login_time)');
+call recreate_index_if_mismatch('seller_login_log', 'idx_seller_login_log_account_time',
+  'seller_account_id,login_time', 1, 'key idx_seller_login_log_account_time (seller_account_id, login_time)');
+call recreate_index_if_mismatch('seller_login_log', 'idx_seller_login_log_seller_time',
+  'seller_id,login_time', 1, 'key idx_seller_login_log_seller_time (seller_id, login_time)');
+call assert_index_definition('seller_login_log', 'idx_seller_login_log_account_time',
+  'seller_account_id,login_time', 1, 'seller_login_log account/time index is invalid');
+call assert_index_definition('seller_login_log', 'idx_seller_login_log_seller_time',
+  'seller_id,login_time', 1, 'seller_login_log seller/time index is invalid');
 
 create table if not exists buyer_login_log (
   info_id bigint(20) not null auto_increment,
@@ -395,8 +552,14 @@ create table if not exists buyer_login_log (
 ) engine=innodb auto_increment=1 comment = '买家端登录日志表';
 call add_column_if_missing('buyer_login_log', 'buyer_id', 'bigint(20) default null');
 call add_column_if_missing('buyer_login_log', 'buyer_account_id', 'bigint(20) default null');
-call add_index_if_missing('buyer_login_log', 'idx_buyer_login_log_account_time', 'key idx_buyer_login_log_account_time (buyer_account_id, login_time)');
-call add_index_if_missing('buyer_login_log', 'idx_buyer_login_log_buyer_time', 'key idx_buyer_login_log_buyer_time (buyer_id, login_time)');
+call recreate_index_if_mismatch('buyer_login_log', 'idx_buyer_login_log_account_time',
+  'buyer_account_id,login_time', 1, 'key idx_buyer_login_log_account_time (buyer_account_id, login_time)');
+call recreate_index_if_mismatch('buyer_login_log', 'idx_buyer_login_log_buyer_time',
+  'buyer_id,login_time', 1, 'key idx_buyer_login_log_buyer_time (buyer_id, login_time)');
+call assert_index_definition('buyer_login_log', 'idx_buyer_login_log_account_time',
+  'buyer_account_id,login_time', 1, 'buyer_login_log account/time index is invalid');
+call assert_index_definition('buyer_login_log', 'idx_buyer_login_log_buyer_time',
+  'buyer_id,login_time', 1, 'buyer_login_log buyer/time index is invalid');
 
 create table if not exists seller_oper_log (
   oper_id bigint(20) not null auto_increment,
@@ -422,8 +585,14 @@ create table if not exists seller_oper_log (
 ) engine=innodb auto_increment=1 comment = '卖家端操作日志表';
 call add_column_if_missing('seller_oper_log', 'seller_id', 'bigint(20) default null');
 call add_column_if_missing('seller_oper_log', 'seller_account_id', 'bigint(20) default null');
-call add_index_if_missing('seller_oper_log', 'idx_seller_oper_log_account_time', 'key idx_seller_oper_log_account_time (seller_account_id, oper_time)');
-call add_index_if_missing('seller_oper_log', 'idx_seller_oper_log_seller_time', 'key idx_seller_oper_log_seller_time (seller_id, oper_time)');
+call recreate_index_if_mismatch('seller_oper_log', 'idx_seller_oper_log_account_time',
+  'seller_account_id,oper_time', 1, 'key idx_seller_oper_log_account_time (seller_account_id, oper_time)');
+call recreate_index_if_mismatch('seller_oper_log', 'idx_seller_oper_log_seller_time',
+  'seller_id,oper_time', 1, 'key idx_seller_oper_log_seller_time (seller_id, oper_time)');
+call assert_index_definition('seller_oper_log', 'idx_seller_oper_log_account_time',
+  'seller_account_id,oper_time', 1, 'seller_oper_log account/time index is invalid');
+call assert_index_definition('seller_oper_log', 'idx_seller_oper_log_seller_time',
+  'seller_id,oper_time', 1, 'seller_oper_log seller/time index is invalid');
 
 create table if not exists buyer_oper_log (
   oper_id bigint(20) not null auto_increment,
@@ -449,8 +618,14 @@ create table if not exists buyer_oper_log (
 ) engine=innodb auto_increment=1 comment = '买家端操作日志表';
 call add_column_if_missing('buyer_oper_log', 'buyer_id', 'bigint(20) default null');
 call add_column_if_missing('buyer_oper_log', 'buyer_account_id', 'bigint(20) default null');
-call add_index_if_missing('buyer_oper_log', 'idx_buyer_oper_log_account_time', 'key idx_buyer_oper_log_account_time (buyer_account_id, oper_time)');
-call add_index_if_missing('buyer_oper_log', 'idx_buyer_oper_log_buyer_time', 'key idx_buyer_oper_log_buyer_time (buyer_id, oper_time)');
+call recreate_index_if_mismatch('buyer_oper_log', 'idx_buyer_oper_log_account_time',
+  'buyer_account_id,oper_time', 1, 'key idx_buyer_oper_log_account_time (buyer_account_id, oper_time)');
+call recreate_index_if_mismatch('buyer_oper_log', 'idx_buyer_oper_log_buyer_time',
+  'buyer_id,oper_time', 1, 'key idx_buyer_oper_log_buyer_time (buyer_id, oper_time)');
+call assert_index_definition('buyer_oper_log', 'idx_buyer_oper_log_account_time',
+  'buyer_account_id,oper_time', 1, 'buyer_oper_log account/time index is invalid');
+call assert_index_definition('buyer_oper_log', 'idx_buyer_oper_log_buyer_time',
+  'buyer_id,oper_time', 1, 'buyer_oper_log buyer/time index is invalid');
 
 create table if not exists seller_session (
   token_id varchar(64) not null,
@@ -462,6 +637,11 @@ create table if not exists seller_session (
   expire_time datetime,
   logout_time datetime,
   status char(1) not null default '0',
+  direct_login tinyint(1) not null default 0,
+  direct_login_ticket_id bigint(20) default null,
+  acting_admin_id bigint(20) default null,
+  acting_admin_name varchar(64) default '',
+  direct_login_reason varchar(255) default '',
   primary key (token_id),
   key idx_seller_session_account (seller_account_id),
   key idx_seller_session_expire (expire_time)
@@ -477,21 +657,37 @@ create table if not exists buyer_session (
   expire_time datetime,
   logout_time datetime,
   status char(1) not null default '0',
+  direct_login tinyint(1) not null default 0,
+  direct_login_ticket_id bigint(20) default null,
+  acting_admin_id bigint(20) default null,
+  acting_admin_name varchar(64) default '',
+  direct_login_reason varchar(255) default '',
   primary key (token_id),
   key idx_buyer_session_account (buyer_account_id),
   key idx_buyer_session_expire (expire_time)
 ) engine=innodb comment = '买家端会话表';
 
-update sys_role
-set status = '1',
-    del_flag = '2',
-    update_by = 'admin',
-    update_time = sysdate(),
-    remark = concat(coalesce(remark, ''), '；三端独立后端内角色已迁出，保留历史记录')
-where role_key in ('seller', 'buyer');
+call add_column_if_missing('seller_session', 'direct_login', 'tinyint(1) not null default 0');
+call add_column_if_missing('seller_session', 'direct_login_ticket_id', 'bigint(20) default null');
+call add_column_if_missing('seller_session', 'acting_admin_id', 'bigint(20) default null');
+call add_column_if_missing('seller_session', 'acting_admin_name', 'varchar(64) default ''''');
+call add_column_if_missing('seller_session', 'direct_login_reason', 'varchar(255) default ''''');
+call add_column_if_missing('buyer_session', 'direct_login', 'tinyint(1) not null default 0');
+call add_column_if_missing('buyer_session', 'direct_login_ticket_id', 'bigint(20) default null');
+call add_column_if_missing('buyer_session', 'acting_admin_id', 'bigint(20) default null');
+call add_column_if_missing('buyer_session', 'acting_admin_name', 'varchar(64) default ''''');
+call add_column_if_missing('buyer_session', 'direct_login_reason', 'varchar(255) default ''''');
+
+-- Legacy sys_role seller/buyer cleanup is intentionally not part of the current
+-- three-terminal isolation migration. Seller/buyer terminal roles are managed by
+-- seller_role/buyer_role; any old mixed-account sys_role cleanup must run through
+-- an explicit legacy helper after the target environment is confirmed.
 
 drop procedure if exists add_column_if_missing;
 drop procedure if exists drop_column_if_exists;
 drop procedure if exists drop_index_if_exists;
 drop procedure if exists add_index_if_missing;
+drop procedure if exists recreate_index_if_mismatch;
+drop procedure if exists assert_index_definition;
 drop procedure if exists assert_no_duplicate_owner_account;
+drop procedure if exists assert_owner_generated_column;

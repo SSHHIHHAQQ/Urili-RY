@@ -76,6 +76,11 @@ public class BuyerAdminPermissionContractTest
         assertHandlerPermission(handlers, "loginLogs", "buyer:admin:loginLog:list", violations);
         assertHandlerPermission(handlers, "operLogs", "buyer:admin:operLog:list", violations);
         assertHandlerPermission(handlers, "directLoginTickets", "buyer:admin:ticket:list", violations);
+        assertSensitiveReadLog(handlers, "sessions", violations);
+        assertSensitiveReadLog(handlers, "accountSessions", violations);
+        assertSensitiveReadLog(handlers, "loginLogs", violations);
+        assertSensitiveReadLog(handlers, "operLogs", violations);
+        assertSensitiveReadLog(handlers, "directLoginTickets", violations);
         assertHandlerRouteContains(handlers, "accounts", "@GetMapping(\"/{buyerId}/accounts\")", violations);
         assertHandlerRouteContains(handlers, "accountRoles",
                 "@GetMapping(\"/{buyerId}/accounts/{accountId}/roles\")", violations);
@@ -224,6 +229,27 @@ public class BuyerAdminPermissionContractTest
         {
             violations.add("AdminBuyerController#" + methodName + " must keep subject/account scoped route "
                     + expectedRoute);
+        }
+    }
+
+    private void assertSensitiveReadLog(List<HandlerMethod> handlers, String methodName, List<String> violations)
+    {
+        HandlerMethod target = handlers.stream()
+                .filter(handler -> methodName.equals(handler.name))
+                .findFirst()
+                .orElse(null);
+        if (target == null)
+        {
+            violations.add("AdminBuyerController#" + methodName + " must exist");
+            return;
+        }
+        if (!target.annotations.contains("@Log"))
+        {
+            violations.add("AdminBuyerController#" + methodName + " must write admin operation log");
+        }
+        if (!target.annotations.contains("isSaveResponseData = false"))
+        {
+            violations.add("AdminBuyerController#" + methodName + " must not save sensitive response data");
         }
     }
 

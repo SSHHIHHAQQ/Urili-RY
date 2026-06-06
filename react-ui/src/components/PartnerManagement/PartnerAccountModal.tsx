@@ -19,6 +19,7 @@ import type { MenuProps } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { DownOutlined, PlusOutlined } from '@ant-design/icons';
 import { getDictSelectOption } from '@/services/system/dict';
+import { openPortalDirectLoginWindow } from '@/utils/portalDirectLoginMessage';
 import { SEARCHABLE_SELECT_PROPS, SEARCHABLE_TREE_SELECT_PROPS } from '@/utils/selectSearch';
 import type { PartnerModuleConfig } from './PartnerManagementPage';
 import PartnerAccountRoleModal from './PartnerAccountRoleModal';
@@ -211,12 +212,12 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
   const partnerName = getValue(partner, config.nameField) || getValue(partner, config.codeField) || '';
   const permPrefix = `${config.moduleKey}:admin`;
   const accountPermissions = config.accountPermissions ?? {
-    list: `${permPrefix}:query`,
-    add: `${permPrefix}:add`,
-    edit: `${permPrefix}:edit`,
-    resetPwd: `${permPrefix}:resetPwd`,
-    roleQuery: `${permPrefix}:role:query`,
-    roleEdit: `${permPrefix}:role:edit`,
+    list: `${permPrefix}:account:list`,
+    add: `${permPrefix}:account:add`,
+    edit: `${permPrefix}:account:edit`,
+    resetPwd: `${permPrefix}:account:resetPwd`,
+    roleQuery: `${permPrefix}:account:role:query`,
+    roleEdit: `${permPrefix}:account:role:edit`,
   };
   const canAssignAccountRoles = access.hasPerms(accountPermissions.roleQuery)
     && access.hasPerms(accountPermissions.roleEdit);
@@ -473,8 +474,7 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
             accountId,
             normalizedReason,
           );
-          if (resp?.code === 200 && resp.data?.loginUrl) {
-            window.open(resp.data.loginUrl, '_blank', 'noopener,noreferrer');
+          if (resp?.code === 200 && openPortalDirectLoginWindow(resp.data, config.moduleKey)) {
             message.success(`免密登录链接已生成，有效期 ${resp.data.expireMinutes || 30} 分钟`);
             return;
           }

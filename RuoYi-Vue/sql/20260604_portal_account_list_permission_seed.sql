@@ -4,6 +4,25 @@
 -- 2. 将现有 OWNER 账号绑定到默认端内 Owner 角色。
 -- 3. 补齐 /seller/accounts 与 /buyer/accounts 所需端内权限，并授予当前已有启用端内角色。
 
+set names utf8mb4;
+set @confirm_portal_account_list_permission_seed := coalesce(@confirm_portal_account_list_permission_seed, '');
+
+delimiter //
+
+drop procedure if exists assert_portal_account_list_permission_seed_confirmed//
+create procedure assert_portal_account_list_permission_seed_confirmed()
+begin
+  if coalesce(@confirm_portal_account_list_permission_seed, '')
+      <> 'APPLY_PORTAL_ACCOUNT_LIST_PERMISSION_SEED' then
+    signal sqlstate '45000' set message_text = 'set @confirm_portal_account_list_permission_seed = APPLY_PORTAL_ACCOUNT_LIST_PERMISSION_SEED before running this seed';
+  end if;
+end//
+
+delimiter ;
+
+call assert_portal_account_list_permission_seed_confirmed();
+drop procedure if exists assert_portal_account_list_permission_seed_confirmed;
+
 insert into seller_role
     (seller_id, role_name, role_key, role_sort, status, del_flag,
      create_by, create_time, update_by, update_time, remark)
@@ -92,6 +111,7 @@ from seller_role r
 join seller_menu m on m.perms = 'seller:account:list'
 where r.del_flag = '0'
   and r.status = '0'
+  and r.role_key = 'owner'
   and not exists (
       select 1
       from seller_role_menu rm
@@ -105,6 +125,7 @@ from buyer_role r
 join buyer_menu m on m.perms = 'buyer:account:list'
 where r.del_flag = '0'
   and r.status = '0'
+  and r.role_key = 'owner'
   and not exists (
       select 1
       from buyer_role_menu rm

@@ -336,6 +336,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             update_time = sysdate(),
             remark = #{remark}
         where buyer_account_id = #{buyerAccountId}
+          and buyer_id = #{buyerId}
     </update>
 
     <update id="updateBuyerAccountLockStatus">
@@ -355,6 +356,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             update_by = #{updateBy},
             update_time = sysdate()
         where buyer_account_id = #{buyerAccountId}
+          and buyer_id = #{buyerId}
     </update>
 
     <update id="updateBuyerAccountLoginInfo">
@@ -363,6 +365,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             last_login_time = #{lastLoginTime},
             update_time = sysdate()
         where buyer_account_id = #{buyerAccountId}
+          and buyer_id = #{buyerId}
     </update>
 
     <insert id="insertBuyerLoginLog" parameterType="PortalLoginLog">
@@ -438,10 +441,14 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <insert id="insertBuyerSession" parameterType="PortalLoginSession">
         insert into buyer_session(
             token_id, buyer_id, buyer_account_id, user_name,
-            login_ip, login_time, expire_time, status
+            login_ip, login_time, expire_time, status,
+            direct_login, direct_login_ticket_id, acting_admin_id,
+            acting_admin_name, direct_login_reason
         ) values (
             #{tokenId}, #{subjectId}, #{accountId}, #{userName},
-            #{loginIp}, #{loginTime}, #{expireTime}, #{status}
+            #{loginIp}, #{loginTime}, #{expireTime}, #{status},
+            #{directLogin}, #{directLoginTicketId}, #{actingAdminId},
+            #{actingAdminName}, #{directLoginReason}
         )
     </insert>
 
@@ -455,7 +462,12 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                login_time as loginTime,
                expire_time as expireTime,
                logout_time as logoutTime,
-               status
+               status,
+               direct_login as directLogin,
+               direct_login_ticket_id as directLoginTicketId,
+               acting_admin_id as actingAdminId,
+               acting_admin_name as actingAdminName,
+               direct_login_reason as directLoginReason
         from buyer_session
         where buyer_id = #{buyerId}
         <if test="buyerAccountId != null">

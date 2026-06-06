@@ -173,6 +173,9 @@ export default function ProductDistributionEditPage() {
     [selectedWarehouseKind, warehouseOptions],
   );
 
+  const persistedWarehouseKind = product?.warehouses?.find((item) => item.warehouseKind)?.warehouseKind;
+  const canChangeWarehouseKind = !isEdit || product?.spuStatus === 'DRAFT' || !persistedWarehouseKind;
+
   useEffect(() => {
     Promise.all([
       getCategoryList({ status: '0' }),
@@ -268,6 +271,10 @@ export default function ProductDistributionEditPage() {
   };
 
   const handleWarehouseKindChange = (kind: string) => {
+    if (!canChangeWarehouseKind && kind !== selectedWarehouseKind) {
+      message.warning('仅草稿商品允许修改仓库类型');
+      return;
+    }
     setSelectedWarehouseKind(kind);
     setSelectedWarehouseIds([]);
   };
@@ -518,7 +525,11 @@ export default function ProductDistributionEditPage() {
                 />
               </Form.Item>
               <Form.Item label="仓库类型" required>
-                <Radio.Group value={selectedWarehouseKind} onChange={(event) => handleWarehouseKindChange(event.target.value)}>
+                <Radio.Group
+                  value={selectedWarehouseKind}
+                  disabled={!canChangeWarehouseKind}
+                  onChange={(event) => handleWarehouseKindChange(event.target.value)}
+                >
                   <Radio.Button value="official">官方仓</Radio.Button>
                   <Radio.Button value="third_party">三方仓</Radio.Button>
                 </Radio.Group>

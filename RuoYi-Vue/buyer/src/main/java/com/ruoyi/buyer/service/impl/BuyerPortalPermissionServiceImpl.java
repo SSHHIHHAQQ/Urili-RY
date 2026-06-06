@@ -69,7 +69,7 @@ public class BuyerPortalPermissionServiceImpl implements IBuyerPortalPermissionS
     public List<Long> selectMenuIdsByRoleId(Long buyerId, Long roleId)
     {
         selectRoleById(buyerId, roleId);
-        return permissionMapper.selectBuyerMenuIdsByRoleId(roleId);
+        return permissionMapper.selectBuyerMenuIdsByRoleId(buyerId, roleId);
     }
 
     @Override
@@ -182,7 +182,7 @@ public class BuyerPortalPermissionServiceImpl implements IBuyerPortalPermissionS
         checkRoleUnique(role);
         role.setUpdateBy(SecurityUtils.getUsername());
         int rows = permissionMapper.updateBuyerRole(role);
-        permissionMapper.deleteBuyerRoleMenuByRoleId(role.getRoleId());
+        permissionMapper.deleteBuyerRoleMenuByRoleId(buyerId, role.getRoleId());
         insertRoleMenus(role);
         return rows;
     }
@@ -209,11 +209,11 @@ public class BuyerPortalPermissionServiceImpl implements IBuyerPortalPermissionS
         for (Long roleId : ids)
         {
             selectRoleById(buyerId, roleId);
-            if (permissionMapper.countBuyerAccountRoleByRoleId(roleId) > 0)
+            if (permissionMapper.countBuyerAccountRoleByRoleId(buyerId, roleId) > 0)
             {
                 throw new ServiceException("角色已分配账号，不允许删除");
             }
-            permissionMapper.deleteBuyerRoleMenuByRoleId(roleId);
+            permissionMapper.deleteBuyerRoleMenuByRoleId(buyerId, roleId);
             rows += permissionMapper.deleteBuyerRoleById(buyerId, roleId, SecurityUtils.getUsername());
         }
         return rows;
@@ -236,12 +236,12 @@ public class BuyerPortalPermissionServiceImpl implements IBuyerPortalPermissionS
         {
             throw new ServiceException("存在不属于该买家的角色");
         }
-        permissionMapper.deleteBuyerAccountRoles(accountId);
+        permissionMapper.deleteBuyerAccountRoles(buyerId, accountId);
         if (ids.length == 0)
         {
             return 1;
         }
-        return permissionMapper.batchBuyerAccountRoles(accountId, ids);
+        return permissionMapper.batchBuyerAccountRoles(buyerId, accountId, ids);
     }
 
     @Override
@@ -284,7 +284,7 @@ public class BuyerPortalPermissionServiceImpl implements IBuyerPortalPermissionS
         Long[] menuIds = PortalPermissionSupport.sanitizeIds(role.getMenuIds());
         if (menuIds.length > 0)
         {
-            permissionMapper.batchBuyerRoleMenu(role.getRoleId(), menuIds);
+            permissionMapper.batchBuyerRoleMenu(role.getSubjectId(), role.getRoleId(), menuIds);
         }
     }
 

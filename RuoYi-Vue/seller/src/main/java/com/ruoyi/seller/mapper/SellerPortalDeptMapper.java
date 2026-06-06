@@ -18,7 +18,7 @@ public interface SellerPortalDeptMapper
 
     public int hasChildByDeptId(@Param("sellerId") Long sellerId, @Param("deptId") Long deptId);
 
-    public int checkDeptExistAccount(Long deptId);
+    public int checkDeptExistAccount(@Param("sellerId") Long sellerId, @Param("deptId") Long deptId);
 
     public int insertSellerDept(PortalDept dept);
 

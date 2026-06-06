@@ -3,8 +3,10 @@ package com.ruoyi.integration.mapper;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 import com.ruoyi.integration.domain.SourceProductItem;
+import com.ruoyi.integration.domain.SourceWarehouseStockItem;
 import com.ruoyi.integration.domain.UpstreamLogisticsChannelPairing;
 import com.ruoyi.integration.domain.UpstreamLogisticsChannelSyncItem;
+import com.ruoyi.integration.domain.UpstreamInventorySyncState;
 import com.ruoyi.integration.domain.UpstreamRequestLog;
 import com.ruoyi.integration.domain.UpstreamSkuPairing;
 import com.ruoyi.integration.domain.UpstreamSkuPairingAuditEvent;
@@ -14,6 +16,7 @@ import com.ruoyi.integration.domain.UpstreamSystemConnection;
 import com.ruoyi.integration.domain.UpstreamWarehousePairing;
 import com.ruoyi.integration.domain.UpstreamWarehouseSyncItem;
 import com.ruoyi.integration.domain.query.SourceProductQuery;
+import com.ruoyi.integration.domain.query.SourceWarehouseStockQuery;
 
 /**
  * 上游系统管理 Mapper。
@@ -80,13 +83,31 @@ public interface UpstreamSystemMapper
 
     int batchUpsertSkuSyncItems(@Param("items") List<UpstreamSkuSyncItem> items);
 
+    int updateSkuWmsDimensions(UpstreamSkuSyncItem item);
+
     int markMissingSkus(@Param("connectionCode") String connectionCode, @Param("syncBatchId") String syncBatchId);
 
     List<UpstreamSkuSyncItem> selectSkuSyncList(@Param("connectionCode") String connectionCode,
         @Param("status") String status, @Param("pairingStatus") String pairingStatus,
-        @Param("field") String field, @Param("keyword") String keyword);
+        @Param("dimensionStatus") String dimensionStatus, @Param("field") String field,
+        @Param("keyword") String keyword);
 
     List<SourceProductItem> selectSourceProductList(SourceProductQuery query);
+
+    SourceProductItem selectSourceProductGroupSummary(SourceProductQuery query);
+
+    List<SourceProductItem> selectSourceProductWarehouseDetailList(SourceProductQuery query);
+
+    int upsertSourceWarehouseStock(SourceWarehouseStockItem item);
+
+    int markMissingSourceWarehouseStocks(@Param("connectionCode") String connectionCode,
+        @Param("syncBatchId") String syncBatchId);
+
+    List<SourceWarehouseStockItem> selectSourceWarehouseStockList(SourceWarehouseStockQuery query);
+
+    int upsertInventorySyncState(UpstreamInventorySyncState state);
+
+    UpstreamInventorySyncState selectInventorySyncState(@Param("connectionCode") String connectionCode);
 
     UpstreamSkuSyncItem selectSkuSyncItem(@Param("connectionCode") String connectionCode, @Param("masterSku") String masterSku);
 

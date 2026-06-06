@@ -226,7 +226,7 @@ public class SellerServiceImpl implements ISellerService
             throw new ServiceException("新密码不能为空");
         }
         SellerAccount current = selectSellerAccountById(sellerId, sellerAccountId);
-        int rows = sellerMapper.resetSellerAccountPassword(current.getSellerAccountId(),
+        int rows = sellerMapper.resetSellerAccountPassword(current.getSellerId(), current.getSellerAccountId(),
             SecurityUtils.encryptPassword(password), SecurityUtils.getUsername());
         forceLogoutSellerAccountSessionsAfterPasswordReset(rows, current.getSellerId(), current.getSellerAccountId());
         return rows;
@@ -237,7 +237,7 @@ public class SellerServiceImpl implements ISellerService
     public int resetSellerAccountDefaultPassword(Long sellerId, Long sellerAccountId)
     {
         SellerAccount current = selectSellerAccountById(sellerId, sellerAccountId);
-        int rows = sellerMapper.resetSellerAccountPassword(current.getSellerAccountId(),
+        int rows = sellerMapper.resetSellerAccountPassword(current.getSellerId(), current.getSellerAccountId(),
             SecurityUtils.encryptPassword(PartnerSupport.DEFAULT_OWNER_PASSWORD), SecurityUtils.getUsername());
         forceLogoutSellerAccountSessionsAfterPasswordReset(rows, current.getSellerId(), current.getSellerAccountId());
         return rows;
@@ -253,7 +253,7 @@ public class SellerServiceImpl implements ISellerService
         {
             throw new ServiceException("卖家主账号不存在");
         }
-        int rows = sellerMapper.resetSellerAccountPassword(owner.getSellerAccountId(),
+        int rows = sellerMapper.resetSellerAccountPassword(sellerId, owner.getSellerAccountId(),
             SecurityUtils.encryptPassword(PartnerSupport.DEFAULT_OWNER_PASSWORD), SecurityUtils.getUsername());
         forceLogoutSellerAccountSessionsAfterPasswordReset(rows, sellerId, owner.getSellerAccountId());
         return rows;
@@ -262,12 +262,14 @@ public class SellerServiceImpl implements ISellerService
     @Override
     public List<PortalSessionProfile> selectSellerSessionList(Long sellerId)
     {
+        selectSellerById(sellerId);
         return sellerMapper.selectSellerSessionProfileList(sellerId, null);
     }
 
     @Override
     public List<PortalSessionProfile> selectSellerAccountSessionList(Long sellerId, Long sellerAccountId)
     {
+        selectSellerAccountById(sellerId, sellerAccountId);
         return sellerMapper.selectSellerSessionProfileList(sellerId, sellerAccountId);
     }
 
@@ -302,8 +304,7 @@ public class SellerServiceImpl implements ISellerService
         }
         assertSellerAccountCanDirectLogin(owner);
         return directLoginSupport.createToken("seller", sellerId, seller.getSellerNo(), owner, reason,
-            PortalDirectLoginSupport.SELLER_WEB_URL_CONFIG_KEY,
-            "http://127.0.0.1:8001/seller/direct-login");
+            PortalDirectLoginSupport.SELLER_WEB_URL_CONFIG_KEY, null);
     }
 
     @Override
@@ -321,19 +322,20 @@ public class SellerServiceImpl implements ISellerService
         }
         assertSellerAccountCanDirectLogin(account);
         return directLoginSupport.createToken("seller", sellerId, seller.getSellerNo(), account, reason,
-            PortalDirectLoginSupport.SELLER_WEB_URL_CONFIG_KEY,
-            "http://127.0.0.1:8001/seller/direct-login");
+            PortalDirectLoginSupport.SELLER_WEB_URL_CONFIG_KEY, null);
     }
 
     @Override
     public List<PortalLoginLog> selectSellerLoginLogList(PortalLoginLog log)
     {
+        normalizeSellerAdminLoginLogScope(log);
         return sellerMapper.selectSellerLoginLogList(log);
     }
 
     @Override
     public List<PortalOperLog> selectSellerOperLogList(PortalOperLog log)
     {
+        normalizeSellerAdminOperLogScope(log);
         return sellerMapper.selectSellerOperLogList(log);
     }
 
@@ -362,6 +364,46 @@ public class SellerServiceImpl implements ISellerService
             profile.setCurrent(Objects.equals(session.getTokenId(), profile.getTokenId()));
         }
         return sessions;
+    }
+
+    private void normalizeSellerAdminLoginLogScope(PortalLoginLog log)
+    {
+        if (log == null)
+        {
+            return;
+        }
+        log.setSubjectId(resolveSellerAdminLogSubjectId(log.getSubjectId(), log.getAccountId()));
+    }
+
+    private void normalizeSellerAdminOperLogScope(PortalOperLog log)
+    {
+        if (log == null)
+        {
+            return;
+        }
+        log.setSubjectId(resolveSellerAdminLogSubjectId(log.getSubjectId(), log.getAccountId()));
+    }
+
+    private Long resolveSellerAdminLogSubjectId(Long sellerId, Long sellerAccountId)
+    {
+        if (sellerAccountId != null)
+        {
+            SellerAccount account = sellerMapper.selectSellerAccountById(sellerAccountId);
+            if (account == null)
+            {
+                throw new ServiceException("Seller account does not exist");
+            }
+            if (sellerId != null && !sellerId.equals(account.getSellerId()))
+            {
+                throw new ServiceException("Seller log account does not belong to this seller");
+            }
+            return account.getSellerId();
+        }
+        if (sellerId != null)
+        {
+            selectSellerById(sellerId);
+        }
+        return sellerId;
     }
 
     private void assertSellerSessionAccount(PortalLoginSession session)
@@ -459,8 +501,7 @@ public class SellerServiceImpl implements ISellerService
     @Override
     public PortalLoginResult directLoginSeller(String directLoginToken)
     {
-        PortalDirectLoginToken token = directLoginSupport.consumeToken("seller", directLoginToken,
-            this::assertSellerDirectLoginTokenCanLogin);
+        PortalDirectLoginToken token = consumeSellerDirectLoginToken(directLoginToken);
         Seller seller = sellerMapper.selectSellerById(token.getPartnerId());
         SellerAccount account = sellerMapper.selectSellerAccountById(token.getAccountId());
         if (account == null || !token.getPartnerId().equals(account.getSellerId()))
@@ -470,9 +511,27 @@ public class SellerServiceImpl implements ISellerService
         }
 
         assertSellerCanLogin(seller, account, token.getUsername());
-        PortalLoginIssue issue = portalTokenSupport.createLogin("seller", seller.getSellerId(), seller.getSellerNo(), account);
-        recordSellerLoginSuccess(account, issue, "免密登录成功");
+        PortalLoginIssue issue = portalTokenSupport.createLogin("seller", seller.getSellerId(), seller.getSellerNo(),
+            account, token);
+        recordSellerLoginSuccess(account, issue, buildDirectLoginSuccessMessage(token));
         return issue.getResult();
+    }
+
+    private PortalDirectLoginToken consumeSellerDirectLoginToken(String directLoginToken)
+    {
+        try
+        {
+            return directLoginSupport.consumeToken("seller", directLoginToken,
+                this::assertSellerDirectLoginTokenCanLogin);
+        }
+        catch (ServiceException e)
+        {
+            if (isDirectLoginTokenFailureWithoutAccountContext(e))
+            {
+                recordSellerLoginFailure(null, null, null, e.getMessage());
+            }
+            throw e;
+        }
     }
 
     private void assertSellerDirectLoginTokenCanLogin(PortalDirectLoginToken token)
@@ -485,6 +544,13 @@ public class SellerServiceImpl implements ISellerService
             throw new ServiceException("免密登录目标账号不存在");
         }
         assertSellerCanLogin(seller, account, token.getUsername());
+    }
+
+    private boolean isDirectLoginTokenFailureWithoutAccountContext(ServiceException e)
+    {
+        String message = e.getMessage();
+        return message != null && message.startsWith("免密登录")
+            && !StringUtils.equals(message, "免密登录目标账号不存在");
     }
 
     @Override
@@ -535,8 +601,10 @@ public class SellerServiceImpl implements ISellerService
         {
             throw new ServiceException("新密码不能与旧密码相同");
         }
-        return sellerMapper.resetSellerAccountPassword(account.getSellerAccountId(),
+        int rows = sellerMapper.resetSellerAccountPassword(account.getSellerId(), account.getSellerAccountId(),
             SecurityUtils.encryptPassword(newPassword), session.getUserName());
+        forceLogoutSellerAccountSessionsAfterPasswordReset(rows, account.getSellerId(), account.getSellerAccountId());
+        return rows;
     }
 
     private void normalizeSeller(Seller seller)
@@ -643,8 +711,17 @@ public class SellerServiceImpl implements ISellerService
 
     private int forceLogoutSellerSessionScope(Long sellerId, Long sellerAccountId)
     {
+        return forceLogoutSellerSessionScope(sellerId, sellerAccountId, "FORCE_LOGOUT");
+    }
+
+    private int forceLogoutSellerSessionScope(Long sellerId, Long sellerAccountId, String reason)
+    {
         List<String> tokenIds = sellerMapper.selectOnlineSellerSessionTokenIds(sellerId, sellerAccountId);
         int rows = sellerMapper.forceLogoutSellerSessions(sellerId, sellerAccountId);
+        if (rows > 0)
+        {
+            recordSellerForceLogoutAudit(sellerId, sellerAccountId, reason);
+        }
         portalTokenSupport.deleteLoginTokens("seller", tokenIds);
         return rows;
     }
@@ -653,8 +730,16 @@ public class SellerServiceImpl implements ISellerService
     {
         if (resetRows > 0)
         {
-            forceLogoutSellerSessionScope(sellerId, sellerAccountId);
+            forceLogoutSellerSessionScope(sellerId, sellerAccountId, "PASSWORD_RESET_FORCE_LOGOUT");
         }
+    }
+
+    private void recordSellerForceLogoutAudit(Long sellerId, Long sellerAccountId, String reason)
+    {
+        SellerAccount account = sellerAccountId == null ? null : sellerMapper.selectSellerAccountById(sellerAccountId);
+        String userName = account == null ? null : account.getUserName();
+        sellerMapper.insertSellerLoginLog(portalTokenSupport.buildLoginLog(
+            sellerId, sellerAccountId, userName, Constants.SUCCESS, reason));
     }
 
     private SellerAccount selectSellerAccountByPayload(SellerAccount account)
@@ -710,10 +795,24 @@ public class SellerServiceImpl implements ISellerService
     private void recordSellerLoginSuccess(SellerAccount account, PortalLoginIssue issue, String message)
     {
         PortalLoginSession session = issue.getSession();
-        sellerMapper.updateSellerAccountLoginInfo(account.getSellerAccountId(), session.getLoginIp(), session.getLoginTime());
+        sellerMapper.updateSellerAccountLoginInfo(account.getSellerId(), account.getSellerAccountId(),
+            session.getLoginIp(), session.getLoginTime());
         sellerMapper.insertSellerLoginLog(portalTokenSupport.buildLoginLog(
             account.getSellerId(), account.getSellerAccountId(), account.getUserName(), Constants.SUCCESS, message));
         sellerMapper.insertSellerSession(session);
+    }
+
+    private String buildDirectLoginSuccessMessage(PortalDirectLoginToken token)
+    {
+        return "免密登录成功; ticketId=" + token.getTicketId()
+            + "; actingAdminId=" + token.getActingAdminId()
+            + "; actingAdminName=" + safeAuditValue(token.getActingAdminName())
+            + "; reason=" + safeAuditValue(token.getDirectLoginReason());
+    }
+
+    private String safeAuditValue(String value)
+    {
+        return StringUtils.isBlank(value) ? "" : value;
     }
 
     private void recordSellerLoginFailure(Long sellerId, SellerAccount account, String username, String message)

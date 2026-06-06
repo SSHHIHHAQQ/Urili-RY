@@ -3,6 +3,51 @@
 
 set names utf8mb4;
 
+set @confirm_seller_buyer_management_seed := coalesce(@confirm_seller_buyer_management_seed, '');
+
+delimiter //
+
+drop procedure if exists assert_seller_buyer_management_seed_confirmed//
+create procedure assert_seller_buyer_management_seed_confirmed()
+begin
+  if coalesce(@confirm_seller_buyer_management_seed, '') <> 'APPLY_SELLER_BUYER_MANAGEMENT_SEED' then
+    signal sqlstate '45000' set message_text = 'set @confirm_seller_buyer_management_seed = APPLY_SELLER_BUYER_MANAGEMENT_SEED before running this seed';
+  end if;
+end//
+
+drop procedure if exists assert_seller_buyer_sys_menu_seed_guard//
+create procedure assert_seller_buyer_sys_menu_seed_guard()
+begin
+  if exists (
+    select 1
+    from sys_menu m
+    join tmp_seller_buyer_sys_menu_guard seed on seed.menu_id = m.menu_id
+    where coalesce(m.path, '') <> coalesce(seed.path, '')
+       or coalesce(m.component, '') <> coalesce(seed.component, '')
+       or coalesce(m.route_name, '') <> coalesce(seed.route_name, '')
+       or coalesce(m.perms, '') <> coalesce(seed.perms, '')
+  ) then
+    signal sqlstate '45000' set message_text = 'seller/buyer sys_menu id slot is occupied by another menu';
+  end if;
+
+  if exists (
+    select 1
+    from sys_menu m
+    join tmp_seller_buyer_sys_menu_guard seed
+      on m.menu_id <> seed.menu_id
+     and coalesce(m.path, '') = coalesce(seed.path, '')
+     and coalesce(m.component, '') = coalesce(seed.component, '')
+     and coalesce(m.route_name, '') = coalesce(seed.route_name, '')
+     and coalesce(m.perms, '') = coalesce(seed.perms, '')
+  ) then
+    signal sqlstate '45000' set message_text = 'seller/buyer sys_menu signature is already used by another menu';
+  end if;
+end//
+
+delimiter ;
+
+call assert_seller_buyer_management_seed_confirmed();
+
 create table if not exists seller (
   seller_id             bigint(20)      not null auto_increment    comment '卖家ID',
   seller_no             varchar(64)     not null                   comment '系统内部卖家编号',
@@ -381,6 +426,11 @@ create table if not exists seller_session (
   expire_time           datetime                                   comment '过期时间',
   logout_time           datetime                                   comment '登出时间',
   status                char(1)         not null default '0'       comment '状态：0有效 1失效',
+  direct_login          tinyint(1)      not null default 0         comment '是否免密代入',
+  direct_login_ticket_id bigint(20)     default null               comment '免密代入票据ID',
+  acting_admin_id       bigint(20)      default null               comment '代入管理员ID',
+  acting_admin_name     varchar(64)     default ''                 comment '代入管理员账号',
+  direct_login_reason   varchar(255)    default ''                 comment '免密代入原因',
   primary key (token_id),
   key idx_seller_session_account (seller_account_id),
   key idx_seller_session_expire (expire_time)
@@ -396,6 +446,11 @@ create table if not exists buyer_session (
   expire_time           datetime                                   comment '过期时间',
   logout_time           datetime                                   comment '登出时间',
   status                char(1)         not null default '0'       comment '状态：0有效 1失效',
+  direct_login          tinyint(1)      not null default 0         comment '是否免密代入',
+  direct_login_ticket_id bigint(20)     default null               comment '免密代入票据ID',
+  acting_admin_id       bigint(20)      default null               comment '代入管理员ID',
+  acting_admin_name     varchar(64)     default ''                 comment '代入管理员账号',
+  direct_login_reason   varchar(255)    default ''                 comment '免密代入原因',
   primary key (token_id),
   key idx_buyer_session_account (buyer_account_id),
   key idx_buyer_session_expire (expire_time)
@@ -569,6 +624,87 @@ from (
 where not exists (
     select 1 from sys_dict_data d where d.dict_type = 'country_region' and d.dict_value = seed.dict_value
 );
+
+drop temporary table if exists tmp_seller_buyer_sys_menu_guard;
+create temporary table tmp_seller_buyer_sys_menu_guard (
+  menu_id bigint not null primary key,
+  path varchar(200) not null default '',
+  component varchar(255) not null default '',
+  route_name varchar(50) not null default '',
+  perms varchar(100) not null default ''
+) engine=memory;
+
+insert into tmp_seller_buyer_sys_menu_guard (menu_id, path, component, route_name, perms)
+values
+    (2010, 'partner', '', 'PartnerManagement', ''),
+    (2011, 'seller', 'Seller/index', 'Seller', 'seller:admin:list'),
+    (2012, 'buyer', 'Buyer/index', 'Buyer', 'buyer:admin:list'),
+    (2200, '#', '', '', 'seller:admin:query'),
+    (2201, '#', '', '', 'seller:admin:add'),
+    (2202, '#', '', '', 'seller:admin:edit'),
+    (2203, '#', '', '', 'seller:admin:changeStatus'),
+    (2204, '#', '', '', 'seller:admin:resetPwd'),
+    (2205, '#', '', '', 'seller:admin:directLogin'),
+    (2206, '#', '', '', 'seller:admin:forceLogout'),
+    (2210, '#', '', '', 'buyer:admin:query'),
+    (2211, '#', '', '', 'buyer:admin:add'),
+    (2212, '#', '', '', 'buyer:admin:edit'),
+    (2213, '#', '', '', 'buyer:admin:changeStatus'),
+    (2214, '#', '', '', 'buyer:admin:resetPwd'),
+    (2215, '#', '', '', 'buyer:admin:directLogin'),
+    (2216, '#', '', '', 'buyer:admin:forceLogout'),
+    (2220, '#', '', '', 'seller:admin:menu:list'),
+    (2221, '#', '', '', 'seller:admin:menu:query'),
+    (2222, '#', '', '', 'seller:admin:menu:add'),
+    (2223, '#', '', '', 'seller:admin:menu:edit'),
+    (2224, '#', '', '', 'seller:admin:menu:remove'),
+    (2225, '#', '', '', 'seller:admin:role:list'),
+    (2226, '#', '', '', 'seller:admin:role:query'),
+    (2227, '#', '', '', 'seller:admin:role:add'),
+    (2228, '#', '', '', 'seller:admin:role:edit'),
+    (2229, '#', '', '', 'seller:admin:role:remove'),
+    (2230, '#', '', '', 'buyer:admin:menu:list'),
+    (2231, '#', '', '', 'buyer:admin:menu:query'),
+    (2232, '#', '', '', 'buyer:admin:menu:add'),
+    (2233, '#', '', '', 'buyer:admin:menu:edit'),
+    (2234, '#', '', '', 'buyer:admin:menu:remove'),
+    (2235, '#', '', '', 'buyer:admin:role:list'),
+    (2236, '#', '', '', 'buyer:admin:role:query'),
+    (2237, '#', '', '', 'buyer:admin:role:add'),
+    (2238, '#', '', '', 'buyer:admin:role:edit'),
+    (2239, '#', '', '', 'buyer:admin:role:remove'),
+    (2240, '#', '', '', 'seller:admin:dept:list'),
+    (2241, '#', '', '', 'seller:admin:dept:query'),
+    (2242, '#', '', '', 'seller:admin:dept:add'),
+    (2243, '#', '', '', 'seller:admin:dept:edit'),
+    (2244, '#', '', '', 'seller:admin:dept:remove'),
+    (2245, '#', '', '', 'buyer:admin:dept:list'),
+    (2246, '#', '', '', 'buyer:admin:dept:query'),
+    (2247, '#', '', '', 'buyer:admin:dept:add'),
+    (2248, '#', '', '', 'buyer:admin:dept:edit'),
+    (2249, '#', '', '', 'buyer:admin:dept:remove'),
+    (2250, '#', '', '', 'seller:admin:loginLog:list'),
+    (2251, '#', '', '', 'seller:admin:operLog:list'),
+    (2252, '#', '', '', 'seller:admin:ticket:list'),
+    (2310, '#', '', '', 'seller:admin:account:list'),
+    (2311, '#', '', '', 'seller:admin:account:add'),
+    (2312, '#', '', '', 'seller:admin:account:edit'),
+    (2322, '#', '', '', 'seller:admin:account:lock'),
+    (2313, '#', '', '', 'seller:admin:account:resetPwd'),
+    (2314, '#', '', '', 'seller:admin:account:role:query'),
+    (2315, '#', '', '', 'seller:admin:account:role:edit'),
+    (2253, '#', '', '', 'buyer:admin:loginLog:list'),
+    (2254, '#', '', '', 'buyer:admin:operLog:list'),
+    (2255, '#', '', '', 'buyer:admin:ticket:list'),
+    (2316, '#', '', '', 'buyer:admin:account:list'),
+    (2317, '#', '', '', 'buyer:admin:account:add'),
+    (2318, '#', '', '', 'buyer:admin:account:edit'),
+    (2323, '#', '', '', 'buyer:admin:account:lock'),
+    (2319, '#', '', '', 'buyer:admin:account:resetPwd'),
+    (2320, '#', '', '', 'buyer:admin:account:role:query'),
+    (2321, '#', '', '', 'buyer:admin:account:role:edit');
+
+call assert_seller_buyer_sys_menu_seed_guard();
 
 insert into sys_menu
     (menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
@@ -922,6 +1058,7 @@ join seller_menu m on m.perms in (
 )
 where r.del_flag = '0'
   and r.status = '0'
+  and r.role_key = 'owner'
   and not exists (
       select 1
       from seller_role_menu rm
@@ -943,9 +1080,14 @@ join buyer_menu m on m.perms in (
 )
 where r.del_flag = '0'
   and r.status = '0'
+  and r.role_key = 'owner'
   and not exists (
       select 1
       from buyer_role_menu rm
       where rm.buyer_role_id = r.buyer_role_id
         and rm.buyer_menu_id = m.buyer_menu_id
   );
+
+drop temporary table if exists tmp_seller_buyer_sys_menu_guard;
+drop procedure if exists assert_seller_buyer_management_seed_confirmed;
+drop procedure if exists assert_seller_buyer_sys_menu_seed_guard;
