@@ -167,6 +167,74 @@ begin
   end if;
 end//
 
+drop procedure if exists assert_terminal_menu_ids_are_in_final_ranges//
+create procedure assert_terminal_menu_ids_are_in_final_ranges()
+begin
+  if exists (
+    select 1
+    from seller_menu
+    where seller_menu_id > 0
+      and (seller_menu_id < 100000 or seller_menu_id >= 200000)
+    limit 1
+  ) then
+    signal sqlstate '45000' set message_text = 'seller_menu final IDs must be inside seller range 100000-199999';
+  end if;
+
+  if exists (
+    select 1
+    from seller_menu
+    where parent_id > 0
+      and (parent_id < 100000 or parent_id >= 200000)
+    limit 1
+  ) then
+    signal sqlstate '45000' set message_text = 'seller_menu final parent IDs must be inside seller range 100000-199999';
+  end if;
+
+  if exists (
+    select 1
+    from buyer_menu
+    where buyer_menu_id > 0
+      and (buyer_menu_id < 200000 or buyer_menu_id >= 300000)
+    limit 1
+  ) then
+    signal sqlstate '45000' set message_text = 'buyer_menu final IDs must be inside buyer range 200000-299999';
+  end if;
+
+  if exists (
+    select 1
+    from buyer_menu
+    where parent_id > 0
+      and (parent_id < 200000 or parent_id >= 300000)
+    limit 1
+  ) then
+    signal sqlstate '45000' set message_text = 'buyer_menu final parent IDs must be inside buyer range 200000-299999';
+  end if;
+end//
+
+drop procedure if exists assert_terminal_role_menu_ids_are_in_final_ranges//
+create procedure assert_terminal_role_menu_ids_are_in_final_ranges()
+begin
+  if exists (
+    select 1
+    from seller_role_menu
+    where seller_menu_id > 0
+      and (seller_menu_id < 100000 or seller_menu_id >= 200000)
+    limit 1
+  ) then
+    signal sqlstate '45000' set message_text = 'seller_role_menu final menu IDs must be inside seller range 100000-199999';
+  end if;
+
+  if exists (
+    select 1
+    from buyer_role_menu
+    where buyer_menu_id > 0
+      and (buyer_menu_id < 200000 or buyer_menu_id >= 300000)
+    limit 1
+  ) then
+    signal sqlstate '45000' set message_text = 'buyer_role_menu final menu IDs must be inside buyer range 200000-299999';
+  end if;
+end//
+
 drop procedure if exists reset_terminal_menu_auto_increment//
 create procedure reset_terminal_menu_auto_increment(
   in p_table varchar(64),
@@ -232,16 +300,27 @@ set buyer_menu_id = buyer_menu_id + 200000
 where buyer_menu_id > 0
   and buyer_menu_id < 100000;
 
-commit;
+call assert_no_terminal_menu_orphans();
+call assert_terminal_menu_ids_are_in_final_ranges();
+call assert_terminal_role_menu_ids_are_in_final_ranges();
 
+-- MySQL ALTER TABLE causes an implicit commit; keep the explicit commit after
+-- auto_increment reset and final guards so this script cannot manually commit
+-- before the terminal menu range is fully validated.
 call reset_terminal_menu_auto_increment('seller_menu', 'seller_menu_id', 100000);
 call reset_terminal_menu_auto_increment('buyer_menu', 'buyer_menu_id', 200000);
 
 call assert_no_terminal_menu_orphans();
+call assert_terminal_menu_ids_are_in_final_ranges();
+call assert_terminal_role_menu_ids_are_in_final_ranges();
+
+commit;
 
 drop procedure if exists assert_terminal_menu_id_range_isolation_confirmed;
 drop procedure if exists assert_table_exists;
 drop procedure if exists assert_no_terminal_menu_orphans;
 drop procedure if exists assert_terminal_menu_ids_are_migratable;
 drop procedure if exists assert_terminal_role_menu_ids_are_migratable;
+drop procedure if exists assert_terminal_menu_ids_are_in_final_ranges;
+drop procedure if exists assert_terminal_role_menu_ids_are_in_final_ranges;
 drop procedure if exists reset_terminal_menu_auto_increment;

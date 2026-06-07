@@ -8902,6 +8902,121 @@ P2 记录：
 - `ProductDistributionMapper` 跨模块表访问仍需按来源快照、SKU pairing 投影和事实归属方案继续收口。
 - 商品库存聚合字段仍需库存事实源与汇总规则设计确认后再接通。
 
+## 2026-06-07 P0/P1 快速推进：商品侧上游 SKU 配对投影删除作用域检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为参考方向，只处理 P0/P1：编译、guard、接口、权限、串端、service/字段缺失。不做浏览器运行态验收、截图、DOM 检测或 UI 细调。
+
+子 Agent 执行情况：
+- 先按用户最新要求尝试 6 个 `gpt-5.3-codex-spark` 只读子 Agent；平台返回用量限制，需等到 2026-06-08 01:14/01:15 后再试。
+- 按 fallback 规则使用 6 个 `gpt-5.4` 只读子 Agent。
+- 6 个 fallback 子 Agent 已关闭。
+- 采纳的 P0：`product` 侧维护 `upstream_system_sku_pairing` 投影时按裸 `system_sku` 删除，可能误删其他 `connection_code` 下的同平台 SKU 配对。
+
+已完成：
+- `ProductDistributionMapper` 删除方法改为 `deleteUpstreamSkuPairingsBySystemSkuAndConnectionCodes(systemSku, connectionCodes)`。
+- `ProductDistributionMapper.xml` 删除条件改为 `system_sku + connection_code in (...)`。
+- `selectSourceConnectionCodesByDimensionGroup` 不再只过滤 `ACTIVE`，保证删除旧投影时覆盖历史来源维度下的 connection。
+- `ProductDistributionServiceImpl` 在解绑、换绑和系统 SKU 变化时先清理旧作用域投影，再写入新投影。
+- `ProductDistributionMapperContractTest` 新增合同，禁止回退裸 `system_sku` 删除，并固定 connection 作用域删除。
+- `react-ui/config/routes.ts` 和 `react-ui/config/routes.js` 补齐商品分销创建/编辑静态 fallback 路由权限 guard，避免直达编辑页绕过 `RemoteMenuRouteGuard`。
+- 已更新记录：`docs/plans/2026-06-07-three-terminal-p0p1-product-upstream-sku-pairing-scope-record.md`。
+- 已更新 `docs/architecture/reuse-ledger.md`。
+
+验证结果：
+- `cd E:\Urili-Ruoyi\react-ui; node scripts\verify-three-terminal.mjs --check-manifest`：通过。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl product -am "-Dtest=ProductDistributionMapperContractTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`ProductDistributionMapperContractTest` 4 个测试通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run verify:three-terminal`：首次发现 `product-distribution-permission-guard.test.ts` 失败，补齐商品分销创建/编辑静态 fallback 路由权限 guard 后重跑通过；前端 7 个 Jest suite / 33 个测试通过；后端 `ruoyi-system` 151、`ruoyi-framework` 15、`integration` 5、`product` 6、`seller` 94、`buyer` 95 个测试通过；`ruoyi-admin -am -DskipTests test-compile` reactor 编译通过。
+- `cd E:\Urili-Ruoyi; git diff --check`：通过；仅有 LF/CRLF 工作区换行提示，无 whitespace 错误。
+- `cd E:\Urili-Ruoyi; rg -n "[ \t]+$" ...`：无输出，本轮触碰文件未发现尾随空白。
+- `cd E:\Urili-Ruoyi; codegraph sync .`：通过；首次同步 2 个变更文件，Modified 2，共 2 个节点；写入记录后复跑结果为 `Already up to date`。
+
+边界说明：
+- 本轮未执行远程 MySQL DDL/DML，未读取或写入 Redis。
+- 本轮未启动或重启后端。
+- 本轮未做浏览器、截图、DOM 或 UI 细调验收。
+
+当前残留项：
+- `product` 侧仍存在 mapper 直接读写 integration/source 表的债务；本轮只修跨 connection 删除 P0，长期仍建议将 `upstream_system_sku_pairing` 写入下沉到 integration 公开 facade。
+- 前端 seller/buyer JS/TS 镜像等强校验、service 函数级 URL 合同和 guard manifest source-of-truth 可作为后续 P1 加固。
+- direct-login 跨端失败审计和后台强退 actingAdmin 归属已有源码合同，后续可补运行态回归测试。
+
+## 2026-06-07 P0/P1 快速推进：前端 Guard Manifest 与端内菜单段位收口检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为参考方向，只处理 P0/P1：编译、guard、接口、权限、串端、service/字段缺失。不做浏览器运行态验收、截图、DOM 检测或 UI 细调。
+
+子 Agent 执行情况：
+- 先按用户最新要求尝试 6 个 `gpt-5.3-codex-spark` 只读子 Agent；平台返回用量限制，失败 Agent 已关闭。
+- 按 fallback 规则使用 6 个 `gpt-5.4` 只读子 Agent。
+- 已返回结论中，前端 service URL、JS/TS 镜像、direct-login/session/audit、seller/buyer 后端账号权限、自助/管理端审计 DTO 未发现 P0/P1。
+- SQL/seed guard 子 Agent 发现 2 个 P1：端内菜单 `AUTO_INCREMENT` 缺上界、菜单 ID 重排脚本显式 `commit` 早于 reset/最终校验；已采纳。
+
+已完成：
+- `three-terminal.manifest.json` 新增 `frontendGuardScripts`。
+- `verify-three-terminal.mjs` 改为从 manifest 读取前端 guard，并校验 package script 存在。
+- `check-partner-management-template.mjs` 增强为 seller/buyer 管理端 service 函数级 URL 合同。
+- 7 份端内菜单 seed 的 `assert_terminal_menu_range_ready()` 增加 `AUTO_INCREMENT` 上界校验。
+- `20260607_terminal_menu_id_range_isolation.sql` 增加迁移后最终段位校验，并把显式 `commit` 放到自增 reset 和最终 guard 之后。
+- `TerminalSqlIsolationContractTest` 补充上述 SQL guard 合同。
+- 新增记录：`docs/plans/2026-06-07-three-terminal-p0p1-frontend-guard-terminal-menu-range-record.md`。
+- 已更新 `docs/architecture/reuse-ledger.md`。
+
+验证结果：
+- `cd E:\Urili-Ruoyi\react-ui; node --check scripts\verify-three-terminal.mjs`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; node scripts\verify-three-terminal.mjs --check-manifest`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run guard:partner-management`：通过。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system -am "-Dtest=TerminalSqlIsolationContractTest,SqlExecutionGuardContractTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，47 个测试通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run verify:three-terminal`：通过；前端 7 个 Jest suite / 33 个测试通过；后端 `ruoyi-system` 151、`ruoyi-framework` 15、`integration` 5、`product` 6、`seller` 94、`buyer` 95 个测试通过；`ruoyi-admin -am -DskipTests test-compile` reactor 编译通过。
+- `cd E:\Urili-Ruoyi; git diff --check`：通过；仅有 LF/CRLF 工作区换行提示，无 whitespace 错误。
+- `cd E:\Urili-Ruoyi; rg -n "[ \t]+$" ...`：无输出，本轮触碰文件未发现尾随空白。
+
+边界说明：
+- 本轮未执行远程 MySQL DDL/DML，未读取或写入 Redis。
+- 本轮未启动或重启后端。
+- 本轮未做浏览器、截图、DOM 或 UI 细调验收。
+
+当前残留项：
+- MySQL `ALTER TABLE ... AUTO_INCREMENT` 存在隐式提交，当前脚本已把显式 `commit` 后移并补最终校验；更强 DDL 原子性需要外部迁移器或人工维护窗口。
+- direct-login 跨端失败审计和后台强退 actingAdmin 归属可补运行态回归测试，但当前无 P0/P1 证据。
+
+## 2026-06-07 P0/P1 快速推进：Guard 命令绑定与显式强退运行时证明检查点
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为参考方向，只处理 P0/P1：编译、guard、接口、权限、串端、service/字段缺失。不做浏览器运行态验收、截图、DOM 检测或 UI 细调。
+
+子 Agent 执行情况：
+- 本轮开始时已有 6 个 `gpt-5.4` 只读子 Agent 在跑 P0/P1 扫描；已全部关闭。
+- SQL/seed、portal 自助接口、token/session、模块边界未发现可落地 P0/P1。
+- 采纳的 P1：
+  - 前端 guard manifest 只绑定脚本名，未绑定 package script 命令文本，也未反向发现漏登记的 `guard:*`。
+  - seller/buyer 显式强退成功路径缺少正向运行时测试。
+- 用户补充模型要求后，新开 1 个 `gpt-5.3-codex-spark` 只读 fixture 子 Agent；平台返回用量限制，提示需等到 `2026-06-08 01:14` 后再试，已关闭。
+- 按 fallback 规则降级新开 1 个 `gpt-5.4` 只读 fixture 子 Agent；已关闭，结论与本轮补测试方式一致。
+
+已完成：
+- `react-ui/tests/three-terminal.manifest.json` 的 `frontendGuardScripts` 升级为 `{ name, expectedCommand }`。
+- `react-ui/scripts/verify-three-terminal.mjs` 校验 guard script 命令文本完全等于 manifest，并反向要求所有 `package.json` 的 `guard:*` 都登记到 manifest。
+- `SellerServiceImplTest` 新增显式强退主体范围和账号范围正向测试，固定 direct-login session 的 `ticketId/reason` 保留、`actingAdmin*` 归当前后台管理员、Redis token 只删 `seller` 端。
+- `BuyerServiceImplTest` 按卖家模板机械复制同构测试。
+- 新增记录：`docs/plans/2026-06-07-three-terminal-p0p1-guard-command-force-logout-runtime-record.md`。
+- 已更新 `docs/architecture/reuse-ledger.md`。
+
+验证结果：
+- `cd E:\Urili-Ruoyi\react-ui; node --check scripts\verify-three-terminal.mjs`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; node scripts\verify-three-terminal.mjs --check-manifest`：通过。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl seller,buyer -am "-Dtest=SellerServiceImplTest,BuyerServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过；seller/buyer 两个 service 测试类各 54 个测试通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run verify:three-terminal`：通过；前端 7 个 Jest suite / 33 个测试通过；后端 `ruoyi-system` 151、`ruoyi-framework` 15、`integration` 5、`product` 6、`seller` 96、`buyer` 97 个测试通过；`ruoyi-admin -am -DskipTests test-compile` reactor 编译通过。
+- `cd E:\Urili-Ruoyi; git diff --check`：通过；仅有 LF/CRLF 工作区换行提示，无 whitespace 错误。
+- `cd E:\Urili-Ruoyi; rg -n "[ \t]+$" ...`：无输出，本轮触碰文件未发现尾随空白。
+- `cd E:\Urili-Ruoyi; codegraph sync .`：通过；同步 3 个变更文件，Modified 3，共 475 个节点。
+
+边界说明：
+- 本轮未执行远程 MySQL DDL/DML，未读取或写入 Redis。
+- 本轮未启动或重启后端。
+- 本轮未做浏览器、截图、DOM 或 UI 细调验收。
+
+当前残留项：
+- seller/buyer 模块级依赖整个 `ruoyi-system` 仍是长期结构债务；当前未发现生产代码引入 `sys_user/sys_role/sys_menu/sys_dept` 控制面，后续可补 import-level contract 作为 P2 加固。
+- 后续新增 `guard:*` 脚本必须同步登记 `name + expectedCommand`，否则 manifest 自检会失败。
+
 ## 2026-06-07 P0/P1 快速推进：三端验证入口 Manifest 化检查点
 
 本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为参考方向，只处理 P0/P1：编译、guard、接口、权限、串端、service/字段缺失。不做浏览器运行态验收、截图、DOM 检测或 UI 细调。

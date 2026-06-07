@@ -34,6 +34,12 @@ public class SqlExecutionGuardContractTest
     private static final Pattern CONFIRM_CALL = Pattern.compile(
             "(?i)call\\s+assert_[a-z0-9_]+_confirmed\\s*\\(\\s*\\)\\s*;");
 
+    private static final Pattern TERMINAL_MENU_INSERT = Pattern.compile(
+            "(?is)insert\\s+into\\s+(seller_menu|buyer_menu)\\b.*?;");
+
+    private static final Pattern TERMINAL_PAGE_MENU_WITH_BLANK_COMPONENT = Pattern.compile(
+            "(?is)(?:\\bnull\\b|'')\\s*,\\s*''\\s*,\\s*''\\s*,\\s*1\\s*,\\s*0\\s*,\\s*'C'");
+
     @Test
     public void highImpactSqlScriptsMustRequireExplicitConfirmToken() throws IOException
     {
@@ -630,6 +636,105 @@ public class SqlExecutionGuardContractTest
         if (!violations.isEmpty())
         {
             fail("terminal permission seeds must fail-closed guard seller_menu/buyer_menu signatures:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    @Test
+    public void terminalMenuIdRangeIsolationMustKeepScopedMigrationSequence() throws IOException
+    {
+        Path backendRoot = findWorkspaceRoot().resolve("RuoYi-Vue");
+        Path sqlFile = backendRoot.resolve("sql/20260607_terminal_menu_id_range_isolation.sql");
+        String source = Files.readString(sqlFile, StandardCharsets.UTF_8);
+        String fileName = sqlFile.getFileName().toString();
+        List<String> violations = new ArrayList<>();
+
+        for (String expected : new String[] {
+                "create procedure assert_terminal_menu_ids_are_migratable",
+                "create procedure assert_terminal_role_menu_ids_are_migratable",
+                "create procedure assert_terminal_menu_ids_are_in_final_ranges",
+                "create procedure assert_terminal_role_menu_ids_are_in_final_ranges",
+                "create procedure reset_terminal_menu_auto_increment",
+                "call assert_no_terminal_menu_orphans();",
+                "call assert_terminal_menu_ids_are_migratable();",
+                "call assert_terminal_role_menu_ids_are_migratable();",
+                "update seller_role_menu\nset seller_menu_id = seller_menu_id + 100000",
+                "update seller_menu\nset parent_id = parent_id + 100000",
+                "update seller_menu\nset seller_menu_id = seller_menu_id + 100000",
+                "update buyer_role_menu\nset buyer_menu_id = buyer_menu_id + 200000",
+                "update buyer_menu\nset parent_id = parent_id + 200000",
+                "update buyer_menu\nset buyer_menu_id = buyer_menu_id + 200000",
+                "call assert_terminal_menu_ids_are_in_final_ranges();",
+                "call assert_terminal_role_menu_ids_are_in_final_ranges();",
+                "call reset_terminal_menu_auto_increment('seller_menu', 'seller_menu_id', 100000);",
+                "call reset_terminal_menu_auto_increment('buyer_menu', 'buyer_menu_id', 200000);"
+        })
+        {
+            requireContains(violations, fileName, source, expected);
+        }
+
+        assertAppearsBefore(violations, fileName, source,
+                "call assert_terminal_menu_ids_are_migratable();",
+                "call assert_terminal_role_menu_ids_are_migratable();");
+        assertAppearsBefore(violations, fileName, source,
+                "call assert_terminal_role_menu_ids_are_migratable();", "start transaction;");
+        assertAppearsBefore(violations, fileName, source, "start transaction;",
+                "update seller_role_menu\nset seller_menu_id = seller_menu_id + 100000");
+        assertAppearsBefore(violations, fileName, source,
+                "update seller_role_menu\nset seller_menu_id = seller_menu_id + 100000",
+                "update seller_menu\nset parent_id = parent_id + 100000");
+        assertAppearsBefore(violations, fileName, source,
+                "update seller_menu\nset parent_id = parent_id + 100000",
+                "update seller_menu\nset seller_menu_id = seller_menu_id + 100000");
+        assertAppearsBefore(violations, fileName, source,
+                "update seller_menu\nset seller_menu_id = seller_menu_id + 100000",
+                "update buyer_role_menu\nset buyer_menu_id = buyer_menu_id + 200000");
+        assertAppearsBefore(violations, fileName, source,
+                "update buyer_role_menu\nset buyer_menu_id = buyer_menu_id + 200000",
+                "update buyer_menu\nset parent_id = parent_id + 200000");
+        assertAppearsBefore(violations, fileName, source,
+                "update buyer_menu\nset parent_id = parent_id + 200000",
+                "update buyer_menu\nset buyer_menu_id = buyer_menu_id + 200000");
+        assertAppearsBefore(violations, fileName, source,
+                "update buyer_menu\nset buyer_menu_id = buyer_menu_id + 200000",
+                "call assert_terminal_menu_ids_are_in_final_ranges();");
+        assertAppearsBefore(violations, fileName, source,
+                "call assert_terminal_role_menu_ids_are_in_final_ranges();",
+                "call reset_terminal_menu_auto_increment('seller_menu', 'seller_menu_id', 100000);");
+        assertAppearsBefore(violations, fileName, source,
+                "call reset_terminal_menu_auto_increment('buyer_menu', 'buyer_menu_id', 200000);",
+                "\ncommit;");
+
+        if (!violations.isEmpty())
+        {
+            fail("terminal menu ID range isolation must preserve scoped role-menu, parent, ID, and auto-increment migration order:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    @Test
+    public void terminalMenuSeedsMustBeAutoDiscoveredAndStayTerminalScoped() throws IOException
+    {
+        Path sqlDir = findWorkspaceRoot().resolve("RuoYi-Vue/sql");
+        List<String> violations = new ArrayList<>();
+
+        try (java.util.stream.Stream<Path> sqlFiles = Files.list(sqlDir))
+        {
+            for (Path sqlFile : sqlFiles
+                    .filter(path -> path.getFileName().toString().endsWith(".sql"))
+                    .sorted()
+                    .toList())
+            {
+                String source = Files.readString(sqlFile, StandardCharsets.UTF_8);
+                String fileName = sqlFile.getFileName().toString();
+                assertAutoDiscoveredTerminalMenuSeed(source, fileName, "seller", violations);
+                assertAutoDiscoveredTerminalMenuSeed(source, fileName, "buyer", violations);
+            }
+        }
+
+        if (!violations.isEmpty())
+        {
+            fail("terminal menu SQL seeds must be auto-discovered and stay terminal-scoped:\n"
                     + String.join("\n", violations));
         }
     }
@@ -2158,6 +2263,58 @@ public class SqlExecutionGuardContractTest
                 "call " + assertProcedure + "('" + perms[0] + "'", "insert into " + menuTable);
         assertAppearsBefore(violations, fileName, source,
                 "call " + assertProcedure + "('" + perms[0] + "'", "insert into " + roleMenuTable);
+    }
+
+    private void assertAutoDiscoveredTerminalMenuSeed(String source, String fileName, String terminal,
+            List<String> violations)
+    {
+        String menuTable = terminal + "_menu";
+        String roleMenuTable = terminal + "_role_menu";
+        String assertProcedure = "assert_" + terminal + "_menu_permission_slot";
+        String otherTerminal = "seller".equals(terminal) ? "buyer" : "seller";
+        Matcher matcher = TERMINAL_MENU_INSERT.matcher(source);
+        boolean hasMenuInsert = false;
+
+        while (matcher.find())
+        {
+            if (!menuTable.equals(matcher.group(1)))
+            {
+                continue;
+            }
+            hasMenuInsert = true;
+            String statement = matcher.group();
+            String statementName = fileName + " " + menuTable + " insert";
+            requireContains(violations, statementName, statement, "menu_type");
+            requireContains(violations, statementName, statement, "perms");
+            requireContains(violations, statementName, statement, "'" + terminal + ":");
+            requireNotContains(violations, statementName, statement, "'" + terminal + ":admin:");
+            requireNotContains(violations, statementName, statement, "'" + otherTerminal + ":");
+            requireNotContains(violations, statementName, statement, "'*'");
+            if (TERMINAL_PAGE_MENU_WITH_BLANK_COMPONENT.matcher(statement).find())
+            {
+                violations.add(statementName + " must not insert a C menu with blank component");
+            }
+        }
+
+        if (!hasMenuInsert)
+        {
+            return;
+        }
+
+        requireContains(violations, fileName, source, "create procedure " + assertProcedure);
+        requireContains(violations, fileName, source, "call " + assertProcedure + "('" + terminal + ":");
+        assertAppearsBefore(violations, fileName, source, "call " + assertProcedure + "('" + terminal + ":",
+                "insert into " + menuTable);
+
+        if (source.contains("insert into " + roleMenuTable))
+        {
+            requireContains(violations, fileName, source, "join " + menuTable + " m on m.perms");
+            requireContains(violations, fileName, source, "and m.parent_id =");
+            requireContains(violations, fileName, source, "and coalesce(m.menu_type, '')");
+            requireContains(violations, fileName, source, "and coalesce(m.component, '')");
+            assertAppearsBefore(violations, fileName, source, "call " + assertProcedure + "('" + terminal + ":",
+                    "insert into " + roleMenuTable);
+        }
     }
 
     private void assertAppearsBefore(List<String> violations, String fileName, String source, String first,

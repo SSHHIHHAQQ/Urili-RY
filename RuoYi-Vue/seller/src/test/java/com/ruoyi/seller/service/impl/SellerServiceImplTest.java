@@ -461,6 +461,82 @@ public class SellerServiceImplTest
     }
 
     @Test
+    public void forceLogoutSellerSessionsAuditsDirectLoginSessionsWithCurrentAdminAndDeletesSellerTokens()
+    {
+        authenticateAdmin();
+        Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
+        SellerAccount account = account(22L, 11L, "seller-staff", PartnerSupport.STATUS_NORMAL);
+        RecordingSellerMapper mapper = recordingMapper(seller, account);
+        mapper.onlineSessions.add(onlineSession(11L, 22L, "seller-staff", "token-a", false));
+        PortalLoginSession directLoginSession = onlineSession(11L, 22L, "seller-staff", "token-b", true);
+        directLoginSession.setActingAdminId(99L);
+        directLoginSession.setActingAdminName("issuer-admin");
+        mapper.onlineSessions.add(directLoginSession);
+        RecordingPortalTokenSupport tokenSupport = new RecordingPortalTokenSupport();
+        SellerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper().proxy(),
+            tokenSupport);
+
+        int rows = service.forceLogoutSellerSessions(11L);
+
+        assertEquals(2, rows);
+        assertEquals(1, mapper.forceLogoutCallCount);
+        assertEquals(Long.valueOf(11L), mapper.forceLogoutSellerId);
+        assertEquals(null, mapper.forceLogoutAccountId);
+        assertEquals(2, mapper.insertedLoginLogs.size());
+        assertEquals(Boolean.FALSE, mapper.insertedLoginLogs.get(0).getDirectLogin());
+        assertEquals(Constants.SUCCESS, mapper.insertedLoginLogs.get(0).getStatus());
+        assertEquals("FORCE_LOGOUT", mapper.insertedLoginLogs.get(0).getMsg());
+        assertEquals(Long.valueOf(11L), mapper.insertedLoginLogs.get(0).getSubjectId());
+        assertEquals(Long.valueOf(22L), mapper.insertedLoginLogs.get(0).getAccountId());
+        assertCurrentAdminAudit(mapper.insertedLoginLogs.get(0));
+        assertEquals(Boolean.TRUE, mapper.insertedLoginLogs.get(1).getDirectLogin());
+        assertEquals(Long.valueOf(100L), mapper.insertedLoginLogs.get(1).getDirectLoginTicketId());
+        assertEquals("support check", mapper.insertedLoginLogs.get(1).getDirectLoginReason());
+        assertCurrentAdminAudit(mapper.insertedLoginLogs.get(1));
+        assertEquals("seller", tokenSupport.deletedTerminal);
+        assertEquals(List.of("token-a", "token-b"), tokenSupport.deletedTokenIds);
+        assertEquals(1, tokenSupport.deleteLoginTokensCallCount);
+    }
+
+    @Test
+    public void forceLogoutSellerAccountSessionsAuditsDirectLoginSessionsWithCurrentAdminAndDeletesSellerTokens()
+    {
+        authenticateAdmin();
+        Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
+        SellerAccount account = account(22L, 11L, "seller-staff", PartnerSupport.STATUS_NORMAL);
+        RecordingSellerMapper mapper = recordingMapper(seller, account);
+        mapper.onlineSessions.add(onlineSession(11L, 22L, "seller-staff", "token-a", false));
+        PortalLoginSession directLoginSession = onlineSession(11L, 22L, "seller-staff", "token-b", true);
+        directLoginSession.setActingAdminId(99L);
+        directLoginSession.setActingAdminName("issuer-admin");
+        mapper.onlineSessions.add(directLoginSession);
+        RecordingPortalTokenSupport tokenSupport = new RecordingPortalTokenSupport();
+        SellerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper().proxy(),
+            tokenSupport);
+
+        int rows = service.forceLogoutSellerAccountSessions(11L, 22L);
+
+        assertEquals(2, rows);
+        assertEquals(1, mapper.forceLogoutCallCount);
+        assertEquals(Long.valueOf(11L), mapper.forceLogoutSellerId);
+        assertEquals(Long.valueOf(22L), mapper.forceLogoutAccountId);
+        assertEquals(2, mapper.insertedLoginLogs.size());
+        assertEquals(Boolean.FALSE, mapper.insertedLoginLogs.get(0).getDirectLogin());
+        assertEquals(Constants.SUCCESS, mapper.insertedLoginLogs.get(0).getStatus());
+        assertEquals("FORCE_LOGOUT", mapper.insertedLoginLogs.get(0).getMsg());
+        assertEquals(Long.valueOf(11L), mapper.insertedLoginLogs.get(0).getSubjectId());
+        assertEquals(Long.valueOf(22L), mapper.insertedLoginLogs.get(0).getAccountId());
+        assertCurrentAdminAudit(mapper.insertedLoginLogs.get(0));
+        assertEquals(Boolean.TRUE, mapper.insertedLoginLogs.get(1).getDirectLogin());
+        assertEquals(Long.valueOf(100L), mapper.insertedLoginLogs.get(1).getDirectLoginTicketId());
+        assertEquals("support check", mapper.insertedLoginLogs.get(1).getDirectLoginReason());
+        assertCurrentAdminAudit(mapper.insertedLoginLogs.get(1));
+        assertEquals("seller", tokenSupport.deletedTerminal);
+        assertEquals(List.of("token-a", "token-b"), tokenSupport.deletedTokenIds);
+        assertEquals(1, tokenSupport.deleteLoginTokensCallCount);
+    }
+
+    @Test
     public void forceLogoutSellerAccountSessionsRejectsAccountOutsideSeller()
     {
         Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);

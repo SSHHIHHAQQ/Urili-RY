@@ -308,6 +308,67 @@ function capitalize(value) {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
+function partnerPath(module) {
+  return module.key === 'seller' ? 'sellers' : 'buyers';
+}
+
+function buildExpectedServiceCalls(module) {
+  const cap = capitalize(module.key);
+  const subjectPath = partnerPath(module);
+  const adminBase = `/api/${module.key}/admin`;
+  const subjectBase = `${adminBase}/${subjectPath}`;
+  const subjectId = templatePlaceholder(module.idField);
+  const accountId = templatePlaceholder(module.accountIdField);
+  const menuId = templatePlaceholder('menuId');
+  const roleId = templatePlaceholder('roleId');
+  const roleIds = templatePlaceholder("roleIds.join(',')");
+  const deptId = templatePlaceholder('deptId');
+
+  return {
+    [`getAdmin${cap}List`]: `${subjectBase}/list`,
+    [`getAdmin${cap}`]: `${subjectBase}/${subjectId}`,
+    [`addAdmin${cap}`]: subjectBase,
+    [`updateAdmin${cap}`]: subjectBase,
+    [`changeAdmin${cap}Status`]: `${subjectBase}/changeStatus`,
+    [`getAdmin${cap}Accounts`]: `${subjectBase}/${subjectId}/accounts`,
+    [`addAdmin${cap}Account`]: `${subjectBase}/${subjectId}/accounts`,
+    [`updateAdmin${cap}Account`]: `${subjectBase}/${subjectId}/accounts`,
+    [`lockAdmin${cap}Account`]: `${subjectBase}/${subjectId}/accounts/${accountId}/lock`,
+    [`unlockAdmin${cap}Account`]: `${subjectBase}/${subjectId}/accounts/${accountId}/unlock`,
+    [`getAdmin${cap}AccountRoles`]: `${subjectBase}/${subjectId}/accounts/${accountId}/roles`,
+    [`assignAdmin${cap}AccountRoles`]: `${subjectBase}/${subjectId}/accounts/${accountId}/roles`,
+    [`getAdmin${cap}MenuTree`]: `${adminBase}/menus/treeselect`,
+    [`getAdmin${cap}Menus`]: `${adminBase}/menus/list`,
+    [`getAdmin${cap}Menu`]: `${adminBase}/menus/${menuId}`,
+    [`addAdmin${cap}Menu`]: `${adminBase}/menus`,
+    [`updateAdmin${cap}Menu`]: `${adminBase}/menus`,
+    [`removeAdmin${cap}Menu`]: `${adminBase}/menus/${menuId}`,
+    [`getAdmin${cap}RoleMenuTree`]: `${adminBase}/menus/roleMenuTreeselect/${subjectId}/${roleId}`,
+    [`getAdmin${cap}Roles`]: `${subjectBase}/${subjectId}/roles/list`,
+    [`getAdmin${cap}Role`]: `${subjectBase}/${subjectId}/roles/${roleId}`,
+    [`addAdmin${cap}Role`]: `${subjectBase}/${subjectId}/roles`,
+    [`updateAdmin${cap}Role`]: `${subjectBase}/${subjectId}/roles`,
+    [`changeAdmin${cap}RoleStatus`]: `${subjectBase}/${subjectId}/roles/changeStatus`,
+    [`removeAdmin${cap}Roles`]: `${subjectBase}/${subjectId}/roles/${roleIds}`,
+    [`getAdmin${cap}Depts`]: `${subjectBase}/${subjectId}/depts/list`,
+    [`getAdmin${cap}Dept`]: `${subjectBase}/${subjectId}/depts/${deptId}`,
+    [`getAdmin${cap}DeptTree`]: `${subjectBase}/${subjectId}/depts/treeselect`,
+    [`addAdmin${cap}Dept`]: `${subjectBase}/${subjectId}/depts`,
+    [`updateAdmin${cap}Dept`]: `${subjectBase}/${subjectId}/depts`,
+    [`removeAdmin${cap}Dept`]: `${subjectBase}/${subjectId}/depts/${deptId}`,
+    [`resetAdmin${cap}AccountPassword`]: `${subjectBase}/${subjectId}/accounts/${accountId}/resetPwd`,
+    [`forceLogoutAdmin${cap}Sessions`]: `${subjectBase}/${subjectId}/sessions`,
+    [`getAdmin${cap}Sessions`]: `${subjectBase}/${subjectId}/sessions/list`,
+    [`forceLogoutAdmin${cap}AccountSessions`]: `${subjectBase}/${subjectId}/accounts/${accountId}/sessions`,
+    [`getAdmin${cap}AccountSessions`]: `${subjectBase}/${subjectId}/accounts/${accountId}/sessions/list`,
+    [`createAdmin${cap}DirectLogin`]: `${subjectBase}/${subjectId}/directLogin`,
+    [`createAdmin${cap}AccountDirectLogin`]: `${subjectBase}/${subjectId}/accounts/${accountId}/directLogin`,
+    [`getAdmin${cap}LoginLogs`]: `${subjectBase}/loginLogs/list`,
+    [`getAdmin${cap}OperLogs`]: `${subjectBase}/operLogs/list`,
+    [`getAdmin${cap}DirectLoginTickets`]: `${subjectBase}/directLoginTickets/list`,
+  };
+}
+
 function readRequired(file) {
   if (!fs.existsSync(file)) {
     violations.push(`${toRelative(file)} is missing`);
@@ -421,6 +482,16 @@ function extractRouteBlock(source, routePath) {
     }
   }
   return '';
+}
+
+function extractExportedAsyncFunctionBlock(source, functionName) {
+  const marker = `export async function ${functionName}(`;
+  const start = source.indexOf(marker);
+  if (start < 0) {
+    return '';
+  }
+  const nextStart = source.indexOf('\nexport async function ', start + marker.length);
+  return source.slice(start, nextStart < 0 ? source.length : nextStart);
 }
 
 function checkPage(module) {
@@ -630,6 +701,7 @@ function checkServiceSource(module, source, relativePath) {
     return;
   }
 
+  const expectedServiceCalls = buildExpectedServiceCalls(module);
   for (const serviceName of module.requiredServices) {
     assertIncludes(
       source,
@@ -637,6 +709,20 @@ function checkServiceSource(module, source, relativePath) {
       `function ${serviceName}`,
       `must export ${serviceName}`,
     );
+    const expectedUrl = expectedServiceCalls[serviceName];
+    if (!expectedUrl) {
+      violations.push(`${relativePath} must define a function-level URL contract for ${serviceName}`);
+      continue;
+    }
+    const functionBlock = extractExportedAsyncFunctionBlock(source, serviceName);
+    if (functionBlock) {
+      assertIncludes(
+        functionBlock,
+        relativePath,
+        expectedUrl,
+        `must call ${expectedUrl} inside ${serviceName}`,
+      );
+    }
   }
   for (const url of module.requiredServiceUrls) {
     assertIncludes(source, relativePath, url, `must call ${url}`);

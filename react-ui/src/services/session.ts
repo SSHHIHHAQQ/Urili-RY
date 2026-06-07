@@ -126,6 +126,55 @@ function createGuardedMenuElement(pagePath: string, authority: unknown) {
   );
 }
 
+const STATIC_GUARDED_LAYOUT_ROUTES = [
+  {
+    path: '/product/distribution/create',
+    pagePath: 'Product/Distribution/EditPage.tsx',
+    authority: ['product:distribution:add'],
+    name: '新增商城商品',
+  },
+  {
+    path: '/product/distribution/edit/:spuId',
+    pagePath: 'Product/Distribution/EditPage.tsx',
+    authority: ['product:distribution:edit'],
+    name: '编辑商城商品',
+  },
+];
+
+function upsertLayoutRoute(route: any, routeItem: any) {
+  if (route.routes === undefined) {
+    route.routes = [];
+  }
+  if (route.children === undefined) {
+    route.children = [];
+  }
+
+  const newRoute = {
+    element: createGuardedMenuElement(routeItem.pagePath, routeItem.authority),
+    path: routeItem.path,
+    name: routeItem.name,
+    hideChildrenInMenu: true,
+    hideInMenu: true,
+    authority: routeItem.authority,
+  };
+  const routeIndex = route.routes.findIndex((item: any) => item.path === newRoute.path);
+  if (routeIndex >= 0) {
+    Object.assign(route.routes[routeIndex], newRoute);
+  } else {
+    route.routes.push(newRoute);
+  }
+  const childIndex = route.children.findIndex((item: any) => item.path === newRoute.path);
+  if (childIndex >= 0) {
+    Object.assign(route.children[childIndex], newRoute);
+  } else {
+    route.children.push(newRoute);
+  }
+}
+
+function patchStaticGuardedLayoutRoutes(route: any) {
+  STATIC_GUARDED_LAYOUT_ROUTES.forEach((routeItem) => upsertLayoutRoute(route, routeItem));
+}
+
 function patchRouteItems(route: any, menu: any, parentPath: string) {
   for (const menuItem of menu) {
     if (menuItem.component === 'Layout' || menuItem.component === 'ParentView') {
@@ -213,6 +262,7 @@ export function patchRouteWithRemoteMenus(routes: any) {
     return;
   }
   patchRouteItems(proLayout, remoteMenu, '');
+  patchStaticGuardedLayoutRoutes(proLayout);
 }
 
 /** 获取当前的用户 GET /api/getUserInfo */

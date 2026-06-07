@@ -956,8 +956,15 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         select distinct connection_code
         from source_product_warehouse_detail
         where repository_scope = 'OFFICIAL_MASTER'
-          and status = 'ACTIVE'
           and source_dimension_group_key = #{sourceDimensionGroupKey}
+        order by connection_code asc
+    </select>
+
+    <select id="selectUpstreamSkuPairingConnectionCodesBySystemSkuAndMasterSku" resultType="string">
+        select distinct connection_code
+        from upstream_system_sku_pairing
+        where system_sku = #{systemSku}
+          and master_sku = #{masterSku}
         order by connection_code asc
     </select>
 
@@ -1050,9 +1057,13 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
           and lock_status &lt;&gt; 'LOCKED'
     </update>
 
-    <delete id="deleteUpstreamSkuPairingsBySystemSku">
+    <delete id="deleteUpstreamSkuPairingsBySystemSkuAndConnectionCodes">
         delete from upstream_system_sku_pairing
         where system_sku = #{systemSku}
+          and connection_code in
+          <foreach collection="connectionCodes" item="connectionCode" open="(" separator="," close=")">
+              #{connectionCode}
+          </foreach>
     </delete>
 
     <insert id="upsertUpstreamSkuPairingsForBinding" parameterType="ProductSkuSourceBinding">

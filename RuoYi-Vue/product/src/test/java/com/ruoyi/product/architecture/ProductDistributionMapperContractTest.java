@@ -185,6 +185,42 @@ public class ProductDistributionMapperContractTest
         }
     }
 
+    @Test
+    public void upstreamSkuPairingProjectionDeleteMustKeepConnectionScope() throws IOException
+    {
+        String source = readMapperSource();
+        String connectionLookup = extractStatement(source, "selectSourceConnectionCodesByDimensionGroup");
+        String pairingFallbackLookup = extractStatement(source,
+                "selectUpstreamSkuPairingConnectionCodesBySystemSkuAndMasterSku");
+        String deleteStatement = extractStatement(source, "deleteUpstreamSkuPairingsBySystemSkuAndConnectionCodes");
+        List<String> violations = new ArrayList<>();
+
+        if (source.contains("deleteUpstreamSkuPairingsBySystemSku\""))
+        {
+            violations.add("upstream SKU pairing projection delete must not use naked systemSku statement id");
+        }
+        requireContains(connectionLookup, "select distinct connection_code", violations);
+        requireContains(connectionLookup, "source_dimension_group_key = #{sourceDimensionGroupKey}", violations);
+        if (Pattern.compile("\\bstatus\\s*=\\s*'ACTIVE'", Pattern.CASE_INSENSITIVE).matcher(connectionLookup).find())
+        {
+            violations.add("connection lookup for projection cleanup must not filter inactive source rows");
+        }
+        requireContains(pairingFallbackLookup, "select distinct connection_code", violations);
+        requireContains(pairingFallbackLookup, "from upstream_system_sku_pairing", violations);
+        requireContains(pairingFallbackLookup, "system_sku = #{systemSku}", violations);
+        requireContains(pairingFallbackLookup, "master_sku = #{masterSku}", violations);
+        requireContains(deleteStatement, "delete from upstream_system_sku_pairing", violations);
+        requireContains(deleteStatement, "system_sku = #{systemSku}", violations);
+        requireContains(deleteStatement, "connection_code in", violations);
+        requireContains(deleteStatement, "collection=\"connectionCodes\"", violations);
+
+        if (!violations.isEmpty())
+        {
+            fail("ProductDistributionMapper must delete upstream SKU pairings by connection_code + system_sku:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
     private static Map<String, List<String>> createAllowedExternalTablesByStatement()
     {
         Map<String, List<String>> allowlist = new LinkedHashMap<>();
@@ -197,7 +233,9 @@ public class ProductDistributionMapperContractTest
                 "warehouse"));
         allowlist.put("selectSourceConnectionCodesByDimensionGroup", Arrays.asList(
                 "source_product_warehouse_detail"));
-        allowlist.put("deleteUpstreamSkuPairingsBySystemSku", Arrays.asList(
+        allowlist.put("selectUpstreamSkuPairingConnectionCodesBySystemSkuAndMasterSku", Arrays.asList(
+                "upstream_system_sku_pairing"));
+        allowlist.put("deleteUpstreamSkuPairingsBySystemSkuAndConnectionCodes", Arrays.asList(
                 "upstream_system_sku_pairing"));
         allowlist.put("upsertUpstreamSkuPairingsForBinding", Arrays.asList(
                 "source_product_warehouse_detail",
@@ -277,6 +315,27 @@ public class ProductDistributionMapperContractTest
             }
         }
         return count;
+    }
+
+    private String extractStatement(String source, String id)
+    {
+        Pattern statementPattern = Pattern.compile(
+                "<(select|insert|update|delete)\\s+[^>]*id=\"" + Pattern.quote(id) + "\"[^>]*>.*?</\\1>",
+                Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+        Matcher matcher = statementPattern.matcher(source);
+        if (!matcher.find())
+        {
+            return "";
+        }
+        return matcher.group();
+    }
+
+    private void requireContains(String source, String expected, List<String> violations)
+    {
+        if (!source.contains(expected))
+        {
+            violations.add("missing required SQL fragment: " + expected);
+        }
     }
 
     private String extractResultMap(String source, String id)

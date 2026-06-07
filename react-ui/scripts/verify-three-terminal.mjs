@@ -11,6 +11,7 @@ const manifest = readThreeTerminalManifest();
 const backendTestClasses = manifest.backendTestClasses;
 const backendTests = backendTestClasses.join(',');
 const frontendTestPaths = manifest.frontendTestPaths;
+const frontendGuardScripts = manifest.frontendGuardScripts;
 const backendReportModules = readBackendReactorModules();
 const frontendDiscoveryIgnoredDirs = new Set([
   'node_modules',
@@ -36,9 +37,13 @@ function readThreeTerminalManifest() {
   const backendTestClasses = readStringArray(manifest, 'backendTestClasses');
   const criticalBackendExplicitTestClasses = readStringArray(manifest, 'criticalBackendExplicitTestClasses');
   const frontendTestPaths = readStringArray(manifest, 'frontendTestPaths');
+  const frontendGuardScriptEntries = readFrontendGuardScriptEntries(manifest);
+  const frontendGuardScripts = frontendGuardScriptEntries.map((entry) => entry.name);
   assertUnique('backendTestClasses', backendTestClasses);
   assertUnique('criticalBackendExplicitTestClasses', criticalBackendExplicitTestClasses);
   assertUnique('frontendTestPaths', frontendTestPaths);
+  assertUnique('frontendGuardScripts', frontendGuardScripts);
+  assertFrontendGuardScriptsMatch(frontendGuardScriptEntries);
 
   const backendConfigured = new Set(backendTestClasses);
   const explicitMissing = criticalBackendExplicitTestClasses.filter((testClass) => !backendConfigured.has(testClass));
@@ -52,6 +57,7 @@ function readThreeTerminalManifest() {
     backendTestClasses,
     criticalBackendExplicitTestClasses,
     frontendTestPaths,
+    frontendGuardScripts,
   };
 }
 
@@ -67,6 +73,29 @@ function readStringArray(source, key) {
   return value.map((item) => item.trim());
 }
 
+function readFrontendGuardScriptEntries(source) {
+  const key = 'frontendGuardScripts';
+  const value = source[key];
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error(`three-terminal manifest field must be a non-empty array: ${key}`);
+  }
+  const invalid = value.filter((item) => {
+    return item === null
+      || typeof item !== 'object'
+      || typeof item.name !== 'string'
+      || item.name.trim() === ''
+      || typeof item.expectedCommand !== 'string'
+      || item.expectedCommand.trim() === '';
+  });
+  if (invalid.length > 0) {
+    throw new Error(`three-terminal manifest field contains invalid guard script entries: ${key}`);
+  }
+  return value.map((item) => ({
+    name: item.name.trim(),
+    expectedCommand: item.expectedCommand.trim(),
+  }));
+}
+
 function assertUnique(key, values) {
   const seen = new Set();
   const duplicates = values.filter((value) => {
@@ -78,6 +107,35 @@ function assertUnique(key, values) {
   });
   if (duplicates.length > 0) {
     throw new Error(`three-terminal manifest field contains duplicates: ${key}: ${duplicates.join(', ')}`);
+  }
+}
+
+function assertFrontendGuardScriptsMatch(guardScripts) {
+  const packageJson = JSON.parse(fs.readFileSync(path.join(uiRoot, 'package.json'), 'utf8'));
+  const scripts = packageJson.scripts ?? {};
+  const missing = guardScripts
+    .map((script) => script.name)
+    .filter((scriptName) => typeof scripts[scriptName] !== 'string');
+  if (missing.length > 0) {
+    throw new Error(`frontend guard scripts are missing from package.json: ${missing.join(', ')}`);
+  }
+
+  const mismatched = guardScripts.filter((script) => scripts[script.name] !== script.expectedCommand);
+  if (mismatched.length > 0) {
+    throw new Error(
+      `frontend guard script commands differ from three-terminal manifest:\n${mismatched
+        .map((script) => `${script.name}: expected "${script.expectedCommand}", actual "${scripts[script.name]}"`)
+        .join('\n')}`,
+    );
+  }
+
+  const configured = new Set(guardScripts.map((script) => script.name));
+  const unlisted = Object.keys(scripts)
+    .filter((scriptName) => scriptName.startsWith('guard:') && !configured.has(scriptName));
+  if (unlisted.length > 0) {
+    throw new Error(
+      `frontend guard scripts are not included in three-terminal manifest: ${unlisted.sort().join(', ')}`,
+    );
   }
 }
 
@@ -259,30 +317,12 @@ if (process.argv.includes('--check-manifest')) {
 }
 
 const steps = [
-  {
-    label: 'portal token guard',
+  ...frontendGuardScripts.map((scriptName) => ({
+    label: scriptName.replace(/^guard:/, '').replaceAll('-', ' ') + ' guard',
     cwd: uiRoot,
     command: 'npm',
-    args: ['run', 'guard:portal-token'],
-  },
-  {
-    label: 'partner management guard',
-    cwd: uiRoot,
-    command: 'npm',
-    args: ['run', 'guard:partner-management'],
-  },
-  {
-    label: 'seller portal product guard',
-    cwd: uiRoot,
-    command: 'npm',
-    args: ['run', 'guard:seller-portal-product'],
-  },
-  {
-    label: 'buyer portal product guard',
-    cwd: uiRoot,
-    command: 'npm',
-    args: ['run', 'guard:buyer-portal-product'],
-  },
+    args: ['run', scriptName],
+  })),
   {
     label: 'react typecheck',
     cwd: uiRoot,

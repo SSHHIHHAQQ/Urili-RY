@@ -923,6 +923,10 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
             recordSkuSourceLog(generateBatchNo(), OP_SOURCE_REBIND, product, sku, currentBinding.getMasterSku(),
                 binding.getMasterSku(), "草稿商品换绑来源 SKU");
         }
+        if (isSourcePairingProjectionScopeChanged(currentBinding, binding))
+        {
+            removeSourcePairingProjection(currentBinding);
+        }
         syncSourcePairingProjection(binding);
         if (!lockedBefore && BINDING_LOCKED.equals(binding.getLockStatus()))
         {
@@ -1005,17 +1009,68 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
             return;
         }
         productDistributionMapper.releaseActiveSourceBindingBySkuId(sku.getSkuId(), reason, currentUsername());
-        productDistributionMapper.deleteUpstreamSkuPairingsBySystemSku(binding.getSystemSkuCode());
-        refreshSourceReadModels(binding.getSourceDimensionGroupKey());
+        removeSourcePairingProjection(binding);
         recordSkuSourceLog(generateBatchNo(), OP_SOURCE_RELEASE, product, sku, binding.getMasterSku(), "-",
             reason);
     }
 
+    private boolean isSourcePairingProjectionScopeChanged(ProductSkuSourceBinding currentBinding,
+        ProductSkuSourceBinding binding)
+    {
+        if (currentBinding == null || binding == null)
+        {
+            return false;
+        }
+        return !StringUtils.equals(currentBinding.getSystemSkuCode(), binding.getSystemSkuCode())
+            || !StringUtils.equals(currentBinding.getSourceDimensionGroupKey(), binding.getSourceDimensionGroupKey());
+    }
+
+    private void removeSourcePairingProjection(ProductSkuSourceBinding binding)
+    {
+        if (binding == null)
+        {
+            return;
+        }
+        deleteUpstreamSkuPairings(binding);
+        refreshSourceReadModels(binding.getSourceDimensionGroupKey());
+    }
+
     private void syncSourcePairingProjection(ProductSkuSourceBinding binding)
     {
-        productDistributionMapper.deleteUpstreamSkuPairingsBySystemSku(binding.getSystemSkuCode());
+        deleteUpstreamSkuPairings(binding);
         productDistributionMapper.upsertUpstreamSkuPairingsForBinding(binding);
         refreshSourceReadModels(binding.getSourceDimensionGroupKey());
+    }
+
+    private void deleteUpstreamSkuPairings(ProductSkuSourceBinding binding)
+    {
+        if (binding == null || StringUtils.isBlank(binding.getSystemSkuCode()))
+        {
+            return;
+        }
+        List<String> connectionCodes = selectConnectionCodesForPairingProjectionCleanup(binding);
+        if (connectionCodes == null || connectionCodes.isEmpty())
+        {
+            return;
+        }
+        productDistributionMapper.deleteUpstreamSkuPairingsBySystemSkuAndConnectionCodes(binding.getSystemSkuCode(),
+            connectionCodes);
+    }
+
+    private List<String> selectConnectionCodesForPairingProjectionCleanup(ProductSkuSourceBinding binding)
+    {
+        List<String> connectionCodes = List.of();
+        if (StringUtils.isNotBlank(binding.getSourceDimensionGroupKey()))
+        {
+            connectionCodes =
+                productDistributionMapper.selectSourceConnectionCodesByDimensionGroup(binding.getSourceDimensionGroupKey());
+        }
+        if ((connectionCodes == null || connectionCodes.isEmpty()) && StringUtils.isNotBlank(binding.getMasterSku()))
+        {
+            connectionCodes = productDistributionMapper.selectUpstreamSkuPairingConnectionCodesBySystemSkuAndMasterSku(
+                binding.getSystemSkuCode(), binding.getMasterSku());
+        }
+        return connectionCodes;
     }
 
     private void refreshSourceReadModels(String sourceDimensionGroupKey)

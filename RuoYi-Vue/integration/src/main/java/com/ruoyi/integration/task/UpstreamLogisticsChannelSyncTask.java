@@ -2,7 +2,7 @@ package com.ruoyi.integration.task;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-import com.ruoyi.integration.service.IUpstreamSystemService;
+import com.ruoyi.integration.service.IUpstreamSyncService;
 import com.ruoyi.integration.support.UpstreamSystemConstants;
 
 /**
@@ -12,7 +12,7 @@ import com.ruoyi.integration.support.UpstreamSystemConstants;
 public class UpstreamLogisticsChannelSyncTask
 {
     @Autowired
-    private IUpstreamSystemService upstreamSystemService;
+    private IUpstreamSyncService upstreamSyncService;
 
     @Autowired
     private UpstreamScheduledSyncExecutor executor;
@@ -20,7 +20,7 @@ public class UpstreamLogisticsChannelSyncTask
     public void sync()
     {
         executor.runForLingxingConnections("logistics channel", connectionCode ->
-            upstreamSystemService.syncScheduled(connectionCode, UpstreamSystemConstants.SYNC_TYPE_LOGISTICS_CHANNEL)
+            upstreamSyncService.syncScheduled(connectionCode, UpstreamSystemConstants.SYNC_TYPE_LOGISTICS_CHANNEL)
                 .getLogisticsChannelCount());
     }
 }

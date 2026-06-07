@@ -138,6 +138,24 @@ public class TerminalSqlIsolationContractTest
                 "call reset_terminal_menu_auto_increment('buyer_menu', 'buyer_menu_id', 200000)");
         requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
                 "select greatest(', p_floor, ', coalesce(max(', p_id_column, '), 0) + 1)");
+        requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
+                "create procedure assert_terminal_menu_ids_are_in_final_ranges");
+        requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
+                "create procedure assert_terminal_role_menu_ids_are_in_final_ranges");
+        requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
+                "seller_menu final IDs must be inside seller range 100000-199999");
+        requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
+                "buyer_menu final IDs must be inside buyer range 200000-299999");
+        requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
+                "seller_role_menu final menu IDs must be inside seller range 100000-199999");
+        requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
+                "buyer_role_menu final menu IDs must be inside buyer range 200000-299999");
+        requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
+                "call assert_no_terminal_menu_orphans();\ncall assert_terminal_menu_ids_are_in_final_ranges();\ncall assert_terminal_role_menu_ids_are_in_final_ranges();\n\ncommit;");
+        requireOccursBefore(violations, rangeMigration.getFileName().toString(), rangeSql,
+                "call reset_terminal_menu_auto_increment('seller_menu', 'seller_menu_id', 100000)", "commit;");
+        requireOccursBefore(violations, rangeMigration.getFileName().toString(), rangeSql,
+                "call reset_terminal_menu_auto_increment('buyer_menu', 'buyer_menu_id', 200000)", "commit;");
 
         if (!violations.isEmpty())
         {
@@ -182,14 +200,18 @@ public class TerminalSqlIsolationContractTest
                 requireContains(violations, scriptName, sql,
                         "seller_menu contains IDs outside seller range 100000-199999");
                 requireContains(violations, scriptName, sql,
-                        "seller_menu auto_increment must be >= 100000 before terminal menu seed inserts");
+                        "seller_menu auto_increment must be between 100000 and 199999 before terminal menu seed inserts");
+                requireContains(violations, scriptName, sql,
+                        "or coalesce(v_auto_increment, 0) >= 200000");
             }
             if (insertsBuyerMenu)
             {
                 requireContains(violations, scriptName, sql,
                         "buyer_menu contains IDs outside buyer range 200000-299999");
                 requireContains(violations, scriptName, sql,
-                        "buyer_menu auto_increment must be >= 200000 before terminal menu seed inserts");
+                        "buyer_menu auto_increment must be between 200000 and 299999 before terminal menu seed inserts");
+                requireContains(violations, scriptName, sql,
+                        "or coalesce(v_auto_increment, 0) >= 300000");
             }
         }
 
@@ -542,6 +564,17 @@ public class TerminalSqlIsolationContractTest
         if (!source.contains(expected))
         {
             violations.add(fileName + " must contain: " + expected);
+        }
+    }
+
+    private void requireOccursBefore(List<String> violations, String fileName, String source, String first,
+            String second)
+    {
+        int firstIndex = source.indexOf(first);
+        int secondIndex = source.lastIndexOf(second);
+        if (firstIndex < 0 || secondIndex < 0 || firstIndex > secondIndex)
+        {
+            violations.add(fileName + " must place `" + first + "` before `" + second + "`");
         }
     }
 

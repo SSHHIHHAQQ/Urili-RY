@@ -1858,7 +1858,7 @@
   - 免密 token 一次性模板：拿到 DB ticket 和 Redis payload 后，首次提交无论业务校验成功还是失败，都必须删除 Redis payload，并将 DB ticket 收口为 `USED` 或 `EXPIRED`。
   - 免密失败上下文模板：DB ticket 已经查到但 Redis payload 丢失、过期、端类型不匹配、票据/目标不匹配时，`PortalDirectLoginSupport` 必须先从 DB ticket 恢复 `PortalDirectLoginToken` 审计上下文，再调用 seller/buyer failure auditor；只有空 token、ticket 不存在、校验器为空这类确实无 ticket 的场景才写普通失败日志。
   - 免密退出日志模板：端内 session 若带 `directLogin=true`，主动退出日志必须用 `PortalTokenSupport.buildDirectLoginLog(..., session)` 保留 `ticketId`、acting admin 和 reason；普通登录仍写 `directLogin=false`。
-  - 强制踢出逐 session 审计模板：seller/buyer 强制踢出前必须先读取在线 `PortalLoginSession` 列表，按每个 session 写登录日志，再按同一批 tokenId 删除 Redis token；direct-login session 必须保留 `ticketId`、acting admin 和 reason。
+  - 强制踢出逐 session 审计模板：seller/buyer 强制踢出前必须先读取在线 `PortalLoginSession` 列表，按每个 session 写登录日志，再按同一批 tokenId 删除 Redis token；direct-login session 必须保留 `directLogin`、`ticketId` 和 reason，但 `actingAdmin*` 必须覆盖为本次执行强退的后台管理员。
   - 角色绑定模板：seller/buyer 账号角色回显和绑定合法性校验都必须过滤停用角色，不能让停用角色静默挂到账户上等待后续重新启用。
   - 管理端弹窗权限模板：弹窗按钮可见性必须覆盖实际会调用的查询接口权限；例如角色编辑必须有 `role:edit + role:query + menu:query`，账号部门树必须有 `dept:query` 才请求。
   - 管理端授权脚本模板：`sys_role_menu` 首段授权只能授经过签名确认的菜单树入口，子按钮授权必须从已授页面向下扩展，不能对裸 `seller:admin:%` / `buyer:admin:%` 做全局通配授权。
@@ -1868,7 +1868,7 @@
 - 复用规则：
   - 后续新增 direct-login 失败分支时，不允许保留同一个 token 可在 30 分钟窗口内失败重放。
   - 后续新增 direct-login 失败日志时，若已有 ticket 或 payload 上下文，必须写 `buildDirectLoginLog(...)` 并保留 `ticketId`、acting admin、reason 和目标账号；若 ticket 端类型不是当前端，当前端日志只能写 direct-login 审计字段，不能把对方端的 `subjectId/accountId` 写入当前端日志表。
-  - 后续新增端内退出、踢出或 session 收口日志时，必须优先从 `PortalLoginSession` 复制 direct-login 审计字段；批量踢出不能只保留一条无法定位具体 session 的汇总日志。
+  - 后续新增端内退出、踢出或 session 收口日志时，必须优先从 `PortalLoginSession` 复制 direct-login 审计字段；批量踢出不能只保留一条无法定位具体 session 的汇总日志。管理端强制踢出、账号锁定或密码重置导致的强退必须同时用运行时测试固定 `directLogin/ticketId/reason` 保留、`actingAdmin*` 归当前后台管理员、Redis token 只按当前 terminal 删除。
   - 后续新增账号角色绑定能力时，必须同时考虑 role `del_flag` 和 `status`，并补 seller/buyer 对称测试。
   - 后续新增同构管理端弹窗时，先列出按钮触发后会调用的 service，再按 service 对应查询/写入权限闭合，不只看按钮本身的写权限。
   - 后续新增管理端授权 SQL 时，不允许用权限前缀全局授权；必须先确认菜单 ID、父子关系、`menu_type` 和 `perms` 签名，再授受控树。
@@ -2278,3 +2278,65 @@
   - 后续新增 seller/buyer portal 菜单、工作台导航、快捷入口或端内 role-menu 派生读模型时，优先复用 `PortalPermissionSupport.assertReadableTerminalMenu(...)`。
   - 写路径的 `normalizeTerminalMenu(...)` 不能替代读路径复核；任何从数据库、缓存、投影表或批量 join 读出的菜单，只要会下发给 portal 前端，就要在返回前重新复核。
   - 如果未来新增 `seller_menu` / `buyer_menu` 软删字段或扩展菜单类型，需要同步扩展 `assertReadableTerminalMenu(...)` 和 seller/buyer 菜单树测试。
+
+## 上游 SKU 配对投影删除作用域模板
+
+- 位置：
+  - `RuoYi-Vue/product/src/main/java/com/ruoyi/product/service/impl/ProductDistributionServiceImpl.java`
+  - `RuoYi-Vue/product/src/main/java/com/ruoyi/product/mapper/ProductDistributionMapper.java`
+  - `RuoYi-Vue/product/src/main/resources/mapper/product/ProductDistributionMapper.xml`
+  - `RuoYi-Vue/product/src/test/java/com/ruoyi/product/architecture/ProductDistributionMapperContractTest.java`
+  - `docs/plans/2026-06-07-three-terminal-p0p1-product-upstream-sku-pairing-scope-record.md`
+- 当前用途：
+  - 固定 `product` 侧临时维护 `upstream_system_sku_pairing` 投影时，不允许再按裸 `system_sku` 删除。
+  - 删除上游 SKU 配对投影必须先按 `sourceDimensionGroupKey` 解析 connection 集合，再使用 `connection_code in (...) + system_sku` 作为删除作用域。
+  - 解析删除作用域的 connection 集合不得只过滤 `status = 'ACTIVE'`；否则旧来源维度失效后，换绑或解绑时会留下旧 connection 下的投影。
+  - SKU 来源换绑或系统 SKU 变化时，必须先按旧绑定的来源维度删除旧投影，再按新绑定来源维度重新 upsert 投影，避免旧 connection 残留或新 connection 缺失。
+  - `ProductDistributionMapperContractTest` 必须固定该删除作用域，防止回退到 `deleteUpstreamSkuPairingsBySystemSku` 这类裸删除。
+- 复用规则：
+  - 后续如果继续保留 product -> integration/source 表的 mapper debt，新增任何写 `upstream_system_sku_pairing` 的语句都必须进入 statement 级 allowlist，并说明 connection 作用域。
+  - 更完整的长期方向仍是把 `upstream_system_sku_pairing` 写入下沉到 integration 公开 facade；在完成 facade 迁移前，product 侧只能做受合同约束的窄投影维护。
+
+## 三端前端 Guard Manifest 与 Service URL 合同模板
+
+- 位置：
+  - `react-ui/tests/three-terminal.manifest.json`
+  - `react-ui/scripts/verify-three-terminal.mjs`
+  - `react-ui/scripts/check-partner-management-template.mjs`
+  - `react-ui/src/services/seller/seller.ts`
+  - `react-ui/src/services/buyer/buyer.ts`
+  - `docs/plans/2026-06-07-three-terminal-p0p1-frontend-guard-terminal-menu-range-record.md`
+- 当前用途：
+  - 固定三端前端 guard 入口必须登记在 `frontendGuardScripts`，不能只硬编码在 `verify-three-terminal.mjs`。
+  - 固定 `verify-three-terminal` 必须从 manifest 读取 guard、前端测试和后端合同测试，并校验 package script 存在且命令文本等于 manifest 的 `expectedCommand`。
+  - 固定 `package.json` 中所有 `guard:*` 脚本都必须反向登记到 manifest，不能新增关键守门脚本后被 `verify-three-terminal` 静默跳过。
+  - 固定 seller/buyer 管理端 service 函数必须按函数名绑定对应 `/api/seller/admin/**` 或 `/api/buyer/admin/**` URL，不能只靠文件级路径扫描。
+  - 固定 seller/buyer 管理端页面不得直接 `request(...)`，不得导入对端 service 或 `/api/system/**`。
+- 复用规则：
+  - 后续新增三端关键前端 guard 时，必须先写入 `frontendGuardScripts`，同时填写 `name` 和 `expectedCommand`，再由 `verify-three-terminal` 统一执行。
+  - 后续修改 `guard:*` 的 package script 命令时，必须同步更新 manifest；如果命令漂移，manifest 自检必须失败。
+  - 后续新增 seller/buyer admin service 函数时，必须同步扩展 `check-partner-management-template.mjs` 的函数级 URL 合同，避免函数名和 URL 串端。
+  - 如果未来拆出 `seller-ui` / `buyer-ui`，管理端保留该函数级 URL 合同；portal 端应建立同等清单化 guard，而不是复制散落脚本。
+
+## 端内菜单 ID 与自增段位 Guard 模板
+
+- 位置：
+  - `RuoYi-Vue/sql/seller_buyer_management_seed.sql`
+  - `RuoYi-Vue/sql/20260604_portal_account_list_permission_seed.sql`
+  - `RuoYi-Vue/sql/20260604_portal_dept_role_list_permission_seed.sql`
+  - `RuoYi-Vue/sql/20260604_portal_product_category_permission_seed.sql`
+  - `RuoYi-Vue/sql/20260607_portal_self_audit_permission_seed.sql`
+  - `RuoYi-Vue/sql/20260604_seller_product_schema_permission_seed.sql`
+  - `RuoYi-Vue/sql/20260604_buyer_product_schema_permission_seed.sql`
+  - `RuoYi-Vue/sql/20260607_terminal_menu_id_range_isolation.sql`
+  - `RuoYi-Vue/ruoyi-system/src/test/java/com/ruoyi/system/architecture/TerminalSqlIsolationContractTest.java`
+  - `docs/plans/2026-06-07-three-terminal-p0p1-frontend-guard-terminal-menu-range-record.md`
+- 当前用途：
+  - 固定 `seller_menu` 数字 ID 和 `AUTO_INCREMENT` 只能位于 `100000-199999`。
+  - 固定 `buyer_menu` 数字 ID 和 `AUTO_INCREMENT` 只能位于 `200000-299999`。
+  - 固定端内菜单 seed 在插入前必须调用 `assert_terminal_menu_range_ready()`，并同时校验已有 ID 与下一次自增 ID 的上下界。
+  - 固定菜单 ID 重排脚本迁移后必须校验主键、`parent_id` 和 role-menu 绑定都进入最终端内 ID 段，再重置自增并复核。
+- 复用规则：
+  - 后续任何写入 `seller_menu` / `buyer_menu` 的 seed 都必须保留上下界 guard，不允许只写 `AUTO_INCREMENT >= floor`。
+  - 端内菜单 ID 重排、补 seed 或历史库修复脚本必须纳入 `TerminalSqlIsolationContractTest`，避免菜单 ID 段污染另一端。
+  - MySQL `ALTER TABLE ... AUTO_INCREMENT` 会隐式提交；涉及自增修复的脚本必须在记录和注释中说明事务边界，不能把普通事务当成 DDL 回滚保证。

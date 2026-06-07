@@ -39,6 +39,7 @@ import com.ruoyi.integration.domain.request.UpstreamOrderRequest;
 import com.ruoyi.integration.domain.request.UpstreamStatusRequest;
 import com.ruoyi.integration.domain.request.UpstreamSyncRequest;
 import com.ruoyi.integration.domain.request.WarehousePairingRequest;
+import com.ruoyi.integration.service.IUpstreamSyncService;
 import com.ruoyi.integration.service.IUpstreamSystemService;
 import com.ruoyi.integration.support.UpstreamSystemConstants;
 
@@ -51,6 +52,9 @@ public class AdminUpstreamSystemController extends BaseController
 {
     @Autowired
     private IUpstreamSystemService upstreamSystemService;
+
+    @Autowired
+    private IUpstreamSyncService upstreamSyncService;
 
     @PreAuthorize("@ss.hasPermi('integration:upstream:list')")
     @GetMapping("/list")
@@ -126,7 +130,7 @@ public class AdminUpstreamSystemController extends BaseController
         @RequestBody(required = false) UpstreamSyncRequest request)
     {
         checkSyncPermissions(request);
-        return success(upstreamSystemService.syncSelected(connectionCode, request));
+        return success(upstreamSyncService.syncSelected(connectionCode, request));
     }
 
     @PreAuthorize("@ss.hasPermi('integration:upstream:sync')")
@@ -134,7 +138,7 @@ public class AdminUpstreamSystemController extends BaseController
     @PostMapping("/{connectionCode}/skus/sync")
     public AjaxResult syncSkus(@PathVariable("connectionCode") String connectionCode)
     {
-        return success(upstreamSystemService.syncSkusOnly(connectionCode));
+        return success(upstreamSyncService.syncSkusOnly(connectionCode));
     }
 
     @PreAuthorize("@ss.hasPermi('integration:upstream:dimensionSync')")
@@ -142,7 +146,7 @@ public class AdminUpstreamSystemController extends BaseController
     @PostMapping("/{connectionCode}/sku-dimensions/sync")
     public AjaxResult syncSkuDimensions(@PathVariable("connectionCode") String connectionCode)
     {
-        return success(upstreamSystemService.syncSkuDimensionsOnly(connectionCode));
+        return success(upstreamSyncService.syncSkuDimensionsOnly(connectionCode));
     }
 
     @PreAuthorize("@ss.hasPermi('integration:upstream:dimensionSync')")
@@ -151,7 +155,7 @@ public class AdminUpstreamSystemController extends BaseController
     public AjaxResult syncSelectedSkuDimensions(@PathVariable("connectionCode") String connectionCode,
         @RequestBody SkuDimensionSelectedSyncRequest request)
     {
-        return success(upstreamSystemService.syncSkuDimensionsBySkuList(connectionCode, request));
+        return success(upstreamSyncService.syncSkuDimensionsBySkuList(connectionCode, request));
     }
 
     @PreAuthorize("@ss.hasPermi('integration:upstream:inventorySync')")
@@ -159,7 +163,7 @@ public class AdminUpstreamSystemController extends BaseController
     @PostMapping("/{connectionCode}/inventory/sync")
     public AjaxResult syncInventory(@PathVariable("connectionCode") String connectionCode)
     {
-        return success(upstreamSystemService.syncWarehouseStocksOnly(connectionCode));
+        return success(upstreamSyncService.syncWarehouseStocksOnly(connectionCode));
     }
 
     @PreAuthorize("@ss.hasPermi('integration:upstream:inventoryQuery')")

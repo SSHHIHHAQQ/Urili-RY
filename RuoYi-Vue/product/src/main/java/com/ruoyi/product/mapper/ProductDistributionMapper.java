@@ -96,6 +96,9 @@ public interface ProductDistributionMapper
     List<String> selectSourceConnectionCodesByDimensionGroup(
         @Param("sourceDimensionGroupKey") String sourceDimensionGroupKey);
 
+    List<String> selectUpstreamSkuPairingConnectionCodesBySystemSkuAndMasterSku(@Param("systemSku") String systemSku,
+        @Param("masterSku") String masterSku);
+
     int insertSourceBinding(ProductSkuSourceBinding binding);
 
     int updateActiveSourceBinding(ProductSkuSourceBinding binding);
@@ -108,7 +111,8 @@ public interface ProductDistributionMapper
 
     int lockActiveSourceBindingBySkuId(@Param("skuId") Long skuId, @Param("lockedBy") String lockedBy);
 
-    int deleteUpstreamSkuPairingsBySystemSku(@Param("systemSku") String systemSku);
+    int deleteUpstreamSkuPairingsBySystemSkuAndConnectionCodes(@Param("systemSku") String systemSku,
+        @Param("connectionCodes") List<String> connectionCodes);
 
     int upsertUpstreamSkuPairingsForBinding(ProductSkuSourceBinding binding);
 }

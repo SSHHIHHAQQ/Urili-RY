@@ -84,8 +84,9 @@ begin
   where table_schema = database()
     and table_name = 'seller_menu';
 
-  if coalesce(v_auto_increment, 0) < 100000 then
-    signal sqlstate '45000' set message_text = 'seller_menu auto_increment must be >= 100000 before terminal menu seed inserts';
+  if coalesce(v_auto_increment, 0) < 100000
+      or coalesce(v_auto_increment, 0) >= 200000 then
+    signal sqlstate '45000' set message_text = 'seller_menu auto_increment must be between 100000 and 199999 before terminal menu seed inserts';
   end if;
 end//
 
