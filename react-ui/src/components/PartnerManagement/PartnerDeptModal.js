@@ -69,29 +69,36 @@ const PartnerDeptModal = ({ config, open, partner, onOpenChange, }) => {
             children: deptTree,
         },
     ];
+    const loadDeptTree = async () => {
+        if (!partnerId || !canQueryDeptTree) {
+            setDeptTree([]);
+            return;
+        }
+        try {
+            const treeResp = await config.services.getDeptTree(partnerId);
+            if (treeResp.code === 200) {
+                setDeptTree(treeResp.data || []);
+                return;
+            }
+            setDeptTree([]);
+        }
+        catch {
+            setDeptTree([]);
+        }
+    };
     const loadDepts = async () => {
         if (!partnerId) {
             setDepts([]);
-            setDeptTree([]);
             return;
         }
         setLoading(true);
         try {
-            const [listResp, treeResp] = await Promise.all([
-                config.services.listDepts(partnerId),
-                canQueryDeptTree ? config.services.getDeptTree(partnerId) : Promise.resolve(undefined),
-            ]);
+            const listResp = await config.services.listDepts(partnerId);
             if (listResp.code === 200) {
                 setDepts((listResp.data || []));
             }
             else {
                 message.error(listResp.msg || '部门列表加载失败');
-            }
-            if (treeResp?.code === 200) {
-                setDeptTree(treeResp.data || []);
-            }
-            else {
-                setDeptTree([]);
             }
         }
         catch {
@@ -104,11 +111,12 @@ const PartnerDeptModal = ({ config, open, partner, onOpenChange, }) => {
     useEffect(() => {
         if (open) {
             void loadDepts();
+            void loadDeptTree();
             return;
         }
         setDepts([]);
         setDeptTree([]);
-    }, [open, partnerId]);
+    }, [open, partnerId, canQueryDeptTree]);
     const openDeptForm = (dept) => {
         setCurrentDept(dept);
         setFormOpen(true);
@@ -138,6 +146,7 @@ const PartnerDeptModal = ({ config, open, partner, onOpenChange, }) => {
                 message.success(currentDeptId ? '部门已更新' : '部门已新增');
                 closeDeptForm();
                 await loadDepts();
+                await loadDeptTree();
                 return;
             }
             message.error(resp.msg || '部门保存失败');
@@ -161,6 +170,7 @@ const PartnerDeptModal = ({ config, open, partner, onOpenChange, }) => {
                 if (resp.code === 200) {
                     message.success('部门已删除');
                     await loadDepts();
+                    await loadDeptTree();
                     return;
                 }
                 message.error(resp.msg || '部门删除失败');

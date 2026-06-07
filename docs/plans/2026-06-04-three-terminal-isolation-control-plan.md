@@ -194,7 +194,7 @@ platform_remark
 - 创建子账号。
 - 停用账号。
 - 解锁账号。
-- 重置默认密码。
+- 人工临时密码重置。
 - 查看最后登录。
 - 强制退出登录。
 - 查看账号所属部门、角色和菜单权限。
@@ -222,6 +222,8 @@ buyer_account_role
 ```
 
 管理端有配置权，卖家/买家端只有使用权。是否允许卖家或买家自定义子角色，可以后续再打开。
+
+管理端账号“分配角色”入口必须同时具备端角色查询、账号角色查询和账号角色编辑权限：`*:admin:role:query`、`*:admin:account:role:query`、`*:admin:account:role:edit`。因为账号角色回显接口会读取端内角色列表，前端按钮显隐不能只看账号角色权限。
 
 ### 免密代入
 
@@ -342,6 +344,7 @@ updated_by_account_id
 - `buyer_account.user_id` 已在远程库迁移中删除，不能再作为买家端账号主身份。
 - `PortalAccountSupport` / `PortalAccountMapper` 已删除，后续不要恢复为端账号公共支撑。
 - 重置密码已从更新 `sys_user.password` 改为更新 `seller_account.password` / `buyer_account.password`。
+- `seller_account.password` / `buyer_account.password` 列必须为 `varchar(100) not null` 且不允许 `default ''`；遗漏密码的写入必须失败或走明确重置流程，不能由数据库空串默认值兜底。
 - 最后登录时间已从 `sys_user.login_date` 改为读取 `seller_account.last_login_time` / `buyer_account.last_login_time`。
 - 免密登录从基于 `sys_user` 改为基于卖家/买家账号表。
 - 列表查询中 join `sys_user owner` 的地方要改为读取端内账号表。
@@ -468,9 +471,10 @@ buyer-ui/
 - 这是一次身份模型调整，不是简单字段调整，必须先方案确认再改表。
 - 现有 `seller_account` / `buyer_account` 已经有数据时，迁移要保留旧数据可回滚。
 - 密码字段只能存 BCrypt 密文，不能在备注、日志、SQL、前端响应里保存默认密码明文。
+- 端账号密码列不能设置空串默认值；任何 fresh seed、增量迁移或远端 DDL 修正都必须保留“无密码则失败”的 schema 语义。
 - 管理端免密代入必须审计，不能无痕冒充端内员工。
 - 卖家/买家端数据范围必须后端强制，不能只靠前端隐藏。
-- 卖家/买家账号查询在已有主体上下文时必须使用 SQL scoped Mapper，同时约束 `seller_id/buyer_id + account_id`；不能先裸按 `accountId` 查账号再在 Java 层补主体比对。裸 `select*AccountById(accountId)` 仅保留为管理端日志 account-only 反查主体 ID 的例外。
+- 卖家/买家账号查询必须使用 SQL scoped Mapper，同时约束 `seller_id/buyer_id + account_id`；不能先裸按 `accountId` 查账号再在 Java 层补主体比对。管理端登录日志、操作日志和免密票据审计列表按账号筛选时也必须显式提供对应主体 ID，不再保留 account-only 反查主体例外；裸 `select*AccountById(accountId)` Mapper 声明和生产代码调用都必须由静态契约拦截。
 - 公共字典和业务事实表不要盲目复制三份，否则后续维护成本会很高。
 
 ## 下一步建议

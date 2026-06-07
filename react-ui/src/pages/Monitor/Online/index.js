@@ -76,7 +76,6 @@ const OnlineUserTableList = () => {
         {
             title: _jsx(FormattedMessage, { id: "monitor.online.user.login_time", defaultMessage: "\u767B\u5F55\u65F6\u95F4" }),
             dataIndex: 'loginTime',
-            colSize: 2,
             valueType: 'dateRange',
             render: (_, record) => _jsx("span", { children: record.loginTime }),
             search: {

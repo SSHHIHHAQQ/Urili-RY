@@ -9,9 +9,27 @@ import { SEARCHABLE_SELECT_PROPS, SEARCHABLE_TREE_SELECT_PROPS } from '@/utils/s
 import PartnerAccountRoleModal from './PartnerAccountRoleModal';
 import PartnerAuditModal from './PartnerAuditModal';
 import PartnerSessionModal from './PartnerSessionModal';
-const DEFAULT_ACCOUNT_PASSWORD = 'U12346';
 const PASSWORD_MIN_LENGTH = 5;
 const PASSWORD_MAX_LENGTH = 20;
+function normalizePassword(value) {
+    const password = String(value ?? '').trim();
+    return password || undefined;
+}
+const passwordRules = [
+    { required: true, message: '请输入密码' },
+    {
+        validator: (_, value) => {
+            const password = normalizePassword(value);
+            if (!password) {
+                return Promise.reject(new Error('请输入密码'));
+            }
+            if (password.length < PASSWORD_MIN_LENGTH || password.length > PASSWORD_MAX_LENGTH) {
+                return Promise.reject(new Error('密码长度必须在5到20个字符之间'));
+            }
+            return Promise.resolve();
+        },
+    },
+];
 const fallbackAccountRoleOptions = [
     { label: '负责人', value: 'OWNER', searchText: 'owner 负责人' },
     { label: '管理员', value: 'ADMIN', searchText: 'admin 管理员' },
@@ -90,7 +108,7 @@ function buildAccountPayload(config, partnerId, currentAccount, values) {
         [config.idField]: partnerId,
         userName: values.userName,
         nickName: values.nickName,
-        password: currentAccountId ? undefined : values.password || DEFAULT_ACCOUNT_PASSWORD,
+        password: currentAccountId ? undefined : normalizePassword(values.password),
         deptId: values.deptId,
         accountRole: values.accountRole || 'STAFF',
         status: values.status || '0',
@@ -103,7 +121,7 @@ function mapAccountToForm(account) {
     return {
         userName: account?.userName,
         nickName: account?.nickName,
-        password: DEFAULT_ACCOUNT_PASSWORD,
+        password: undefined,
         deptId: account?.deptId,
         accountRole: account?.accountRole || 'STAFF',
         status: account?.status || '0',
@@ -142,7 +160,9 @@ const PartnerAccountModal = ({ config, open, partner, onOpenChange, }) => {
         roleQuery: `${permPrefix}:account:role:query`,
         roleEdit: `${permPrefix}:account:role:edit`,
     };
-    const canAssignAccountRoles = access.hasPerms(accountPermissions.roleQuery)
+    const canQueryRole = access.hasPerms(`${permPrefix}:role:query`);
+    const canAssignAccountRoles = canQueryRole
+        && access.hasPerms(accountPermissions.roleQuery)
         && access.hasPerms(accountPermissions.roleEdit);
     const canQueryDept = access.hasPerms(`${permPrefix}:dept:query`);
     const canViewAccountAudit = access.hasPerms(`${permPrefix}:loginLog:list`)
@@ -291,7 +311,7 @@ const PartnerAccountModal = ({ config, open, partner, onOpenChange, }) => {
                         ], children: _jsx(Input.Password, { placeholder: "\u8BF7\u518D\u6B21\u8F93\u5165\u4E34\u65F6\u5BC6\u7801" }) })] })),
             onOk: async () => {
                 const values = await resetPasswordForm.validateFields();
-                const resp = await config.services.resetAccountPassword(partnerId, accountId, values.password || '');
+                const resp = await config.services.resetAccountPassword(partnerId, accountId, normalizePassword(values.password) || '');
                 if (resp.code === 200) {
                     message.success('账号密码已重置');
                     return;
@@ -471,7 +491,7 @@ const PartnerAccountModal = ({ config, open, partner, onOpenChange, }) => {
                     access.hasPerms(accountPermissions.resetPwd)
                         ? { key: 'resetPwd', label: '重置密码' }
                         : null,
-                    access.hasPerms(`${permPrefix}:forceLogout`) && config.services.listAccountSessions
+                    access.hasPerms(`${permPrefix}:session:list`) && config.services.listAccountSessions
                         ? { key: 'sessions', label: '会话' }
                         : null,
                     canViewAccountAudit
@@ -528,6 +548,6 @@ const PartnerAccountModal = ({ config, open, partner, onOpenChange, }) => {
                         return;
                     }
                     closeAccountRoleModal();
-        } }), _jsx(Modal, { width: 640, title: currentAccountId ? '编辑账号' : '新增账号', open: accountFormOpen, destroyOnHidden: true, forceRender: true, confirmLoading: saving, onOk: handleAccountSubmit, onCancel: closeAccountForm, children: _jsxs(Form, { form: accountForm, layout: "vertical", children: [_jsx(Form.Item, { label: "\u767B\u5F55\u8D26\u53F7", name: "userName", rules: [{ required: true, message: '请输入登录账号' }], children: _jsx(Input, { disabled: Boolean(currentAccountId), placeholder: "\u8BF7\u8F93\u5165" }) }), _jsx(Form.Item, { label: "\u59D3\u540D", name: "nickName", rules: [{ required: true, message: '请输入姓名' }], children: _jsx(Input, { placeholder: "\u8BF7\u8F93\u5165" }) }), !currentAccountId ? (_jsx(Form.Item, { label: "\u521D\u59CB\u5BC6\u7801", name: "password", rules: [{ required: true, message: '请输入初始密码' }], children: _jsx(Input.Password, { placeholder: "\u8BF7\u8F93\u5165" }) })) : null, _jsx(Form.Item, { label: "\u90E8\u95E8", name: "deptId", children: _jsx(TreeSelect, { ...SEARCHABLE_TREE_SELECT_PROPS, allowClear: true, disabled: !canQueryDept, treeDefaultExpandAll: true, placeholder: canQueryDept ? '\u8BF7\u9009\u62E9' : '\u65E0\u90E8\u95E8\u67E5\u8BE2\u6743\u9650', treeData: deptTree, fieldNames: { label: 'label', value: 'id', children: 'children' } }) }), _jsx(Form.Item, { label: "\u8D26\u53F7\u89D2\u8272", name: "accountRole", rules: [{ required: true, message: '请选择账号角色' }], children: _jsx(Select, { ...SEARCHABLE_SELECT_PROPS, options: roleSelectOptions }) }), _jsx(Form.Item, { label: "\u72B6\u6001", name: "status", rules: [{ required: true, message: '请选择状态' }], children: _jsx(Select, { ...SEARCHABLE_SELECT_PROPS, options: statusOptions }) }), _jsx(Form.Item, { label: "\u624B\u673A", name: "phonenumber", children: _jsx(Input, { placeholder: "\u8BF7\u8F93\u5165" }) }), _jsx(Form.Item, { label: "\u90AE\u7BB1", name: "email", children: _jsx(Input, { placeholder: "\u8BF7\u8F93\u5165" }) }), _jsx(Form.Item, { label: "\u5907\u6CE8", name: "remark", children: _jsx(Input.TextArea, { rows: 3, placeholder: "\u8BF7\u8F93\u5165" }) })] }) })] }));
+        } }), _jsx(Modal, { width: 640, title: currentAccountId ? '编辑账号' : '新增账号', open: accountFormOpen, destroyOnHidden: true, forceRender: true, confirmLoading: saving, onOk: handleAccountSubmit, onCancel: closeAccountForm, children: _jsxs(Form, { form: accountForm, layout: "vertical", children: [_jsx(Form.Item, { label: "\u767B\u5F55\u8D26\u53F7", name: "userName", rules: [{ required: true, message: '请输入登录账号' }], children: _jsx(Input, { disabled: Boolean(currentAccountId), placeholder: "\u8BF7\u8F93\u5165" }) }), _jsx(Form.Item, { label: "\u59D3\u540D", name: "nickName", rules: [{ required: true, message: '请输入姓名' }], children: _jsx(Input, { placeholder: "\u8BF7\u8F93\u5165" }) }), !currentAccountId ? (_jsx(Form.Item, { label: "\u521D\u59CB\u5BC6\u7801", name: "password", rules: passwordRules, children: _jsx(Input.Password, { placeholder: "\u8BF7\u8F93\u5165" }) })) : null, _jsx(Form.Item, { label: "\u90E8\u95E8", name: "deptId", children: _jsx(TreeSelect, { ...SEARCHABLE_TREE_SELECT_PROPS, allowClear: true, disabled: !canQueryDept, treeDefaultExpandAll: true, placeholder: canQueryDept ? '\u8BF7\u9009\u62E9' : '\u65E0\u90E8\u95E8\u67E5\u8BE2\u6743\u9650', treeData: deptTree, fieldNames: { label: 'label', value: 'id', children: 'children' } }) }), _jsx(Form.Item, { label: "\u8D26\u53F7\u89D2\u8272", name: "accountRole", rules: [{ required: true, message: '请选择账号角色' }], children: _jsx(Select, { ...SEARCHABLE_SELECT_PROPS, options: roleSelectOptions }) }), _jsx(Form.Item, { label: "\u72B6\u6001", name: "status", rules: [{ required: true, message: '请选择状态' }], children: _jsx(Select, { ...SEARCHABLE_SELECT_PROPS, options: statusOptions }) }), _jsx(Form.Item, { label: "\u624B\u673A", name: "phonenumber", children: _jsx(Input, { placeholder: "\u8BF7\u8F93\u5165" }) }), _jsx(Form.Item, { label: "\u90AE\u7BB1", name: "email", children: _jsx(Input, { placeholder: "\u8BF7\u8F93\u5165" }) }), _jsx(Form.Item, { label: "\u5907\u6CE8", name: "remark", children: _jsx(Input.TextArea, { rows: 3, placeholder: "\u8BF7\u8F93\u5165" }) })] }) })] }));
 };
 export default PartnerAccountModal;

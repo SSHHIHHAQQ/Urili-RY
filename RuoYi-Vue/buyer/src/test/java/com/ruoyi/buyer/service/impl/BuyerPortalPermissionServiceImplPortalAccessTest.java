@@ -273,10 +273,6 @@ public class BuyerPortalPermissionServiceImplPortalAccessTest
         {
             InvocationHandler handler = (Object proxy, Method method, Object[] args) -> {
                 String methodName = method.getName();
-                if ("selectBuyerAccountById".equals(methodName))
-                {
-                    return accountById.get((Long) args[0]);
-                }
                 if ("selectBuyerAccountByIdAndBuyerId".equals(methodName))
                 {
                     Long buyerId = (Long) args[0];

@@ -1816,10 +1816,6 @@ public class BuyerServiceImplTest
                 }
                 return 1;
             }
-            if ("selectBuyerAccountById".equals(methodName))
-            {
-                return accountById.get((Long) args[0]);
-            }
             if ("selectBuyerAccountByIdAndBuyerId".equals(methodName))
             {
                 Long buyerId = (Long) args[0];

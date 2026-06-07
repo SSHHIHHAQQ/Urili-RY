@@ -1816,10 +1816,6 @@ public class SellerServiceImplTest
                 }
                 return 1;
             }
-            if ("selectSellerAccountById".equals(methodName))
-            {
-                return accountById.get((Long) args[0]);
-            }
             if ("selectSellerAccountByIdAndSellerId".equals(methodName))
             {
                 Long sellerId = (Long) args[0];

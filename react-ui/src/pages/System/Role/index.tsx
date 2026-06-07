@@ -221,7 +221,6 @@ const RoleTableList: React.FC = () => {
     {
       title: <FormattedMessage id="system.role.create_time" defaultMessage="创建时间" />,
       dataIndex: 'createTime',
-      colSize: 2,
       valueType: 'dateRange',
       render: (_, record) => {
         return (<span>{record.createTime.toString()} </span>);

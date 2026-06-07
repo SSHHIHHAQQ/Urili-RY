@@ -74,9 +74,10 @@ export default function SkuInventoryPanel({
   const [warehousePairingStatus, setWarehousePairingStatus] = useState('');
   const [skuPairingStatus, setSkuPairingStatus] = useState('');
   const [inventoryScope, setInventoryScope] = useState('COMPREHENSIVE');
+  const canQueryInventory = access.hasPerms('integration:upstream:inventoryQuery');
 
   const loadSyncState = async () => {
-    if (!selectedCode) {
+    if (!selectedCode || !canQueryInventory) {
       setSyncState(undefined);
       return;
     }
@@ -88,7 +89,7 @@ export default function SkuInventoryPanel({
 
   useEffect(() => {
     loadSyncState();
-  }, [selectedCode]);
+  }, [selectedCode, canQueryInventory]);
 
   const triggerInventorySync = async () => {
     setSyncing(true);
@@ -279,6 +280,9 @@ export default function SkuInventoryPanel({
         columns={columns}
         params={{ selectedCode, keyword, warehouseKeyword, inventoryScope, warehousePairingStatus, skuPairingStatus, syncStatus }}
         request={async (params) => {
+          if (!canQueryInventory) {
+            return { data: [], total: 0, success: true };
+          }
           const resp = await getUpstreamInventoryList(selectedCode, {
             pageNum: params.current,
             pageSize: params.pageSize,

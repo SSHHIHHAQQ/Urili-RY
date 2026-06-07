@@ -98,7 +98,7 @@ public class AdminBuyerController extends BaseController
         return ajax;
     }
 
-    @PreAuthorize("@ss.hasPermi('buyer:admin:account:role:edit')")
+    @PreAuthorize("@ss.hasPermi('buyer:admin:account:role:edit') and @ss.hasPermi('buyer:admin:account:role:query') and @ss.hasPermi('buyer:admin:role:query')")
     @Log(title = "买家端账号角色", businessType = BusinessType.GRANT)
     @PutMapping("/{buyerId}/accounts/{accountId}/roles")
     public AjaxResult assignAccountRoles(@PathVariable("buyerId") Long buyerId, @PathVariable("accountId") Long accountId,
@@ -149,7 +149,7 @@ public class AdminBuyerController extends BaseController
         return toAjax(buyerService.resetBuyerAccountPassword(buyerId, accountId, account == null ? null : account.getPassword()));
     }
 
-    @PreAuthorize("@ss.hasPermi('buyer:admin:forceLogout')")
+    @PreAuthorize("@ss.hasPermi('buyer:admin:session:list')")
     @Log(title = "Buyer session list", businessType = BusinessType.OTHER, isSaveResponseData = false)
     @GetMapping("/{buyerId}/sessions/list")
     public TableDataInfo sessions(@PathVariable("buyerId") Long buyerId)
@@ -159,7 +159,7 @@ public class AdminBuyerController extends BaseController
         return getDataTable(list);
     }
 
-    @PreAuthorize("@ss.hasPermi('buyer:admin:forceLogout')")
+    @PreAuthorize("@ss.hasPermi('buyer:admin:session:list')")
     @Log(title = "Buyer account session list", businessType = BusinessType.OTHER, isSaveResponseData = false)
     @GetMapping("/{buyerId}/accounts/{accountId}/sessions/list")
     public TableDataInfo accountSessions(@PathVariable("buyerId") Long buyerId, @PathVariable("accountId") Long accountId)

@@ -2,7 +2,7 @@
 
 日期：2026-06-07
 
-状态：方案稿，待确认。未执行 DDL，未执行 DML，未新增后端或前端代码。
+状态：已确认并完成基础版实现。2026-06-08 修正读模型生成边界：库存总览必须以商城 SKU 为基础行，来源 SKU 绑定和仓库绑定只影响库存明细状态和可售计算。
 
 ## 目标
 
@@ -42,6 +42,8 @@
 14. 第三方仓没有来源库存约束，用户手工输入的库存上限就是平台可售库存池。
 15. 在途转可售要自动完成，但只依据来源库存快照里的在途、可用、总库存数字变化，不分析 WMS 内部状态。
 16. 调整库存尽量走双击字段编辑，确认后由后端预计算风险提示，再二次确认落库。
+17. 库存总览不能因为缺少来源 SKU 绑定或发货仓绑定而隐藏商城 SKU；缺失关系必须显示为状态。
+18. SKU + 仓库明细仍是最小库存事实维度；多个官方来源主仓或多个三方仓都应生成多条明细行，SPU/SKU 主行只聚合。
 
 ## 当前代码事实
 
@@ -64,7 +66,8 @@
 
 - `product_sku_source_binding`
 - 表达商城 SKU 与官方来源 SKU 组的绑定。
-- 后续官方库存总览应通过该表找到来源 SKU，再从来源仓库库存读模型推导来源主仓库存。
+- 官方库存总览通过该表找到来源 SKU，再从来源仓库库存读模型推导来源主仓库存。
+- 该表不是库存总览展示前提；缺少绑定时，商城 SKU 仍进入库存总览并显示 `来源SKU未绑定`。
 
 ### 来源仓库库存侧
 
@@ -141,6 +144,16 @@ master_warehouse_name
 
 ## 官方仓明细行生成规则
 
+库存总览读模型必须从 `product_sku` 起步：
+
+1. 所有有效商城 SKU 先进入库存总览候选集。
+2. 左关联 `product_spu_warehouse` 判断三方仓或已有官方仓绑定。
+3. 左关联 `product_sku_source_binding` 判断官方来源 SKU 绑定。
+4. 左关联 `source_warehouse_stock_detail` 补充官方来源主仓库存。
+5. 不能命中任何仓库/来源关系时，生成 `仓库未配置` 占位行。
+
+这条规则优先级高于来源仓库库存聚合规则，避免页面空表隐藏商品库存配置问题。
+
 ### 有来源库存
 
 对每个已绑定官方来源 SKU 的商城 SKU：
@@ -173,6 +186,26 @@ LX-CA012
 - 来源总库存、来源可用库存、来源在途库存均为 0。
 - 平台可售库存为 0。
 - 平台总库存可以保存，但在来源库存为 0 时不生效。
+
+### 来源 SKU 未绑定
+
+如果商品已经是官方仓逻辑，但 SKU 没有 ACTIVE 来源 SKU 绑定：
+
+- 展示一条占位行。
+- 仓库显示为 `官方仓（来源SKU未绑定）`。
+- 状态为 `来源SKU未绑定`。
+- 来源总库存、来源可用库存、来源在途库存均为 0。
+- 平台总库存可以保存，但平台可售库存为 0，直到来源 SKU 绑定并匹配到来源库存。
+
+### 仓库未配置
+
+如果商城 SKU 没有三方仓绑定，也没有官方来源 SKU 绑定，且当前持久化数据无法判断官方仓/三方仓归属：
+
+- 展示一条占位行。
+- 仓库显示为 `发货仓库未配置`。
+- 仓库类型为 `未配置`。
+- 状态为 `仓库未配置`。
+- 不允许在该占位行上调整平台库存，因为没有履约路径。
 
 后续如果出现来源主仓：
 
@@ -690,11 +723,16 @@ SKU + 仓库维度的当前库存状态表。一个商城 SKU 在一个平台仓
 | --- | --- | --- | --- |
 | `warehouse_kind` | `official` | 官方仓 | 已存在，继续复用 |
 | `warehouse_kind` | `third_party` | 第三方仓库 | 已存在，继续复用 |
+| `warehouse_kind` | `unconfigured` | 未配置 | 库存总览占位展示，不代表真实仓库类型 |
 | `inventory_warehouse_ref_type` | `OFFICIAL_MASTER` | 来源主仓 | 官方仓实际库存行 |
 | `inventory_warehouse_ref_type` | `THIRD_PARTY_WAREHOUSE` | 三方仓 | 第三方仓库存行 |
 | `inventory_warehouse_ref_type` | `UNMATCHED_OFFICIAL` | 未匹配官方仓 | 官方仓无来源库存占位行 |
+| `inventory_warehouse_ref_type` | `SOURCE_UNBOUND` | 来源SKU未绑定 | 官方仓 SKU 尚未绑定来源 SKU |
+| `inventory_warehouse_ref_type` | `NO_WAREHOUSE` | 仓库未配置 | 商城 SKU 暂无可用履约仓或来源绑定 |
 | `inventory_status` | `IN_STOCK` | 有货 | 平台可售大于 0 |
 | `inventory_status` | `OUT_OF_STOCK` | 缺货 | 平台可售等于 0 |
+| `inventory_status` | `NO_WAREHOUSE` | 仓库未配置 | 没有可履约仓库关系 |
+| `inventory_status` | `SOURCE_UNBOUND` | 来源SKU未绑定 | 官方仓库存无法匹配来源 SKU |
 | `inventory_status` | `NO_SOURCE` | 无来源库存 | 官方仓未匹配来源库存 |
 | `inventory_status` | `SOURCE_ONLY_IN_TRANSIT` | 仅来源在途 | 来源可用为 0、来源在途大于 0 |
 | `inventory_operation_type` | `MANUAL_INCREASE` | 手工增加库存 | 管理端调高平台总库存 |

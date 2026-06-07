@@ -98,7 +98,7 @@ public class AdminSellerController extends BaseController
         return ajax;
     }
 
-    @PreAuthorize("@ss.hasPermi('seller:admin:account:role:edit')")
+    @PreAuthorize("@ss.hasPermi('seller:admin:account:role:edit') and @ss.hasPermi('seller:admin:account:role:query') and @ss.hasPermi('seller:admin:role:query')")
     @Log(title = "卖家端账号角色", businessType = BusinessType.GRANT)
     @PutMapping("/{sellerId}/accounts/{accountId}/roles")
     public AjaxResult assignAccountRoles(@PathVariable("sellerId") Long sellerId, @PathVariable("accountId") Long accountId,
@@ -149,7 +149,7 @@ public class AdminSellerController extends BaseController
         return toAjax(sellerService.resetSellerAccountPassword(sellerId, accountId, account == null ? null : account.getPassword()));
     }
 
-    @PreAuthorize("@ss.hasPermi('seller:admin:forceLogout')")
+    @PreAuthorize("@ss.hasPermi('seller:admin:session:list')")
     @Log(title = "Seller session list", businessType = BusinessType.OTHER, isSaveResponseData = false)
     @GetMapping("/{sellerId}/sessions/list")
     public TableDataInfo sessions(@PathVariable("sellerId") Long sellerId)
@@ -159,7 +159,7 @@ public class AdminSellerController extends BaseController
         return getDataTable(list);
     }
 
-    @PreAuthorize("@ss.hasPermi('seller:admin:forceLogout')")
+    @PreAuthorize("@ss.hasPermi('seller:admin:session:list')")
     @Log(title = "Seller account session list", businessType = BusinessType.OTHER, isSaveResponseData = false)
     @GetMapping("/{sellerId}/accounts/{accountId}/sessions/list")
     public TableDataInfo accountSessions(@PathVariable("sellerId") Long sellerId, @PathVariable("accountId") Long accountId)

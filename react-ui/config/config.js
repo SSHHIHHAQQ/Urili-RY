@@ -128,7 +128,7 @@ export default defineConfig({
     antd: {
         appConfig: {},
         configProvider: {
-            variant: 'filled',
+            variant: 'outlined',
         },
     },
     /**

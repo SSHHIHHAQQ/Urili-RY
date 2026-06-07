@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useIntl, FormattedMessage, useAccess } from '@umijs/max';
 import { Button, Modal } from 'antd';
 import { FooterToolbar, PageContainer, ProTable } from '@ant-design/pro-components';
-import { getPersistedProTableSearch } from '@/utils/proTableSearch';
+import { getPersistedProTableSearch, getProTableScroll } from '@/utils/proTableSearch';
 import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, PoweroffOutlined, StopOutlined, EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons';
@@ -293,6 +293,7 @@ const MenuTableList: React.FC = () => {
           rowKey="menuId"
           key="menuList"
           search={getPersistedProTableSearch({ labelWidth: 120 })}
+          scroll={getProTableScroll(1300)}
           tableAlertRender={false}
           tableAlertOptionRender={false}
           toolBarRender={() => [

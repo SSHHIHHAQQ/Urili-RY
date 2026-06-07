@@ -238,7 +238,6 @@ const DictDataTableList: React.FC = () => {
     {
       title: <FormattedMessage id="system.dict.data.create_time" defaultMessage="创建时间" />,
       dataIndex: 'createTime',
-      colSize: 2,
       valueType: 'dateRange',
       render: (_, record) => {
         return (<span>{record.createTime.toString()} </span>);

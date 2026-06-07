@@ -68,7 +68,14 @@ export default function SyncSettingsPanel({ access, onSynced, }) {
     const [syncModalOpen, setSyncModalOpen] = useState(false);
     const [testing, setTesting] = useState(false);
     const [syncing, setSyncing] = useState(false);
+    const canViewSyncConfig = access.hasPerms('finance:currency:syncConfig');
+    const canViewSyncLog = access.hasPerms('finance:currency:log');
+    const canSyncCurrency = access.hasPerms('finance:currency:sync');
     const reloadSyncConfig = async () => {
+        if (!canViewSyncConfig) {
+            setSyncConfig(undefined);
+            return;
+        }
         const resp = await getSyncConfig();
         if (resp.code === 200) {
             setSyncConfig({ ...resp.data, credential: undefined });
@@ -76,7 +83,7 @@ export default function SyncSettingsPanel({ access, onSynced, }) {
     };
     useEffect(() => {
         reloadSyncConfig();
-    }, []);
+    }, [canViewSyncConfig]);
     const handleSave = async (values) => {
         const ok = resultOk(await saveSyncConfig(normalizeSyncValues(values)), '同步设置已保存');
         if (ok) {
@@ -91,7 +98,9 @@ export default function SyncSettingsPanel({ access, onSynced, }) {
             const resp = await testSyncConfig(normalizeSyncValues(values));
             if (resp.code === 200) {
                 message.success(`测试成功，返回币种 ${resp.data.currencyCount}`);
-                syncLogActionRef.current?.reload();
+                if (canViewSyncLog) {
+                    syncLogActionRef.current?.reload();
+                }
                 await reloadSyncConfig();
             }
             else {
@@ -113,7 +122,9 @@ export default function SyncSettingsPanel({ access, onSynced, }) {
             if (resp.code === 200) {
                 message.success(`同步完成，更新币种 ${resp.data.updatedCount}`);
                 onSynced?.();
-                syncLogActionRef.current?.reload();
+                if (canViewSyncLog) {
+                    syncLogActionRef.current?.reload();
+                }
                 await reloadSyncConfig();
                 setSyncModalOpen(false);
             }
@@ -150,14 +161,14 @@ export default function SyncSettingsPanel({ access, onSynced, }) {
                                     width: '100%',
                                     justifyContent: 'space-between',
                                     marginBottom: 12,
-                                }, children: [_jsxs(Space, { direction: "vertical", size: 2, children: [_jsx(Typography.Text, { strong: true, children: syncConfig?.providerName || 'ShowAPI银行汇率查询' }), _jsx(Typography.Text, { type: "secondary", children: "\u5B98\u65B9\u6C47\u7387\u53D6\u73B0\u6C47\u5356\u51FA\u4EF7\uFF0C\u57FA\u51C6\u5E01\u79CD CNY" })] }), _jsx(Button, { icon: _jsx(SettingOutlined, {}), hidden: !access.hasPerms('finance:currency:syncConfig'), onClick: () => setSyncModalOpen(true), children: "\u540C\u6B65\u8BBE\u7F6E" })] }), _jsxs(Descriptions, { size: "small", column: { xs: 1, sm: 2, md: 3, xl: 4 }, children: [_jsx(Descriptions.Item, { label: "\u542F\u7528\u72B6\u6001", children: statusTag(syncConfig?.status) }), _jsx(Descriptions.Item, { label: "\u6C47\u7387\u57FA\u51C6\u65F6\u95F4", children: syncConfig?.rateAnchorTime || '09:30:00' }), _jsx(Descriptions.Item, { label: "\u63A5\u5165\u5BC6\u94A5", children: syncConfig?.credentialMasked || '-' }), _jsx(Descriptions.Item, { label: "\u6700\u8FD1\u540C\u6B65", children: syncConfig?.lastSyncTime || '-' }), _jsx(Descriptions.Item, { label: "\u6700\u8FD1\u72B6\u6001", children: syncStatusTag(syncConfig?.lastSyncStatus) }), _jsx(Descriptions.Item, { label: "\u5E94\u7528\u540D\u79F0", children: showApiApplicationName }), _jsx(Descriptions.Item, { label: "\u5E94\u7528 ID", children: showApiApplicationId }), _jsx(Descriptions.Item, { label: "\u57FA\u51C6\u5E01\u79CD", children: "\u4EBA\u6C11\u5E01 (CNY)" })] })] }), _jsx(ProTable, { actionRef: syncLogActionRef, rowKey: "syncLogId", columns: syncLogColumns, scroll: getProTableScroll(1200), search: getPersistedProTableSearch({ labelWidth: 100 }, 'finance-currency-sync-log'), request: async (params) => {
+                                }, children: [_jsxs(Space, { direction: "vertical", size: 2, children: [_jsx(Typography.Text, { strong: true, children: syncConfig?.providerName || 'ShowAPI银行汇率查询' }), _jsx(Typography.Text, { type: "secondary", children: "\u5B98\u65B9\u6C47\u7387\u53D6\u73B0\u6C47\u5356\u51FA\u4EF7\uFF0C\u57FA\u51C6\u5E01\u79CD CNY" })] }), _jsx(Button, { icon: _jsx(SettingOutlined, {}), hidden: !canViewSyncConfig, onClick: () => setSyncModalOpen(true), children: "\u540C\u6B65\u8BBE\u7F6E" })] }), _jsxs(Descriptions, { size: "small", column: { xs: 1, sm: 2, md: 3, xl: 4 }, children: [_jsx(Descriptions.Item, { label: "\u542F\u7528\u72B6\u6001", children: statusTag(syncConfig?.status) }), _jsx(Descriptions.Item, { label: "\u6C47\u7387\u57FA\u51C6\u65F6\u95F4", children: syncConfig?.rateAnchorTime || '09:30:00' }), _jsx(Descriptions.Item, { label: "\u63A5\u5165\u5BC6\u94A5", children: syncConfig?.credentialMasked || '-' }), _jsx(Descriptions.Item, { label: "\u6700\u8FD1\u540C\u6B65", children: syncConfig?.lastSyncTime || '-' }), _jsx(Descriptions.Item, { label: "\u6700\u8FD1\u72B6\u6001", children: syncStatusTag(syncConfig?.lastSyncStatus) }), _jsx(Descriptions.Item, { label: "\u5E94\u7528\u540D\u79F0", children: showApiApplicationName }), _jsx(Descriptions.Item, { label: "\u5E94\u7528 ID", children: showApiApplicationId }), _jsx(Descriptions.Item, { label: "\u57FA\u51C6\u5E01\u79CD", children: "\u4EBA\u6C11\u5E01 (CNY)" })] })] }), canViewSyncLog ? (_jsx(ProTable, { actionRef: syncLogActionRef, rowKey: "syncLogId", columns: syncLogColumns, scroll: getProTableScroll(1200), search: getPersistedProTableSearch({ labelWidth: 100 }, 'finance-currency-sync-log'), request: async (params) => {
                             const resp = await getSyncLogList(params);
                             return {
                                 data: resp.rows || [],
                                 success: resp.code === 200,
                                 total: resp.total || 0,
                             };
-                        } })] }), _jsxs(ModalForm, { formRef: syncFormRef, title: "\u540C\u6B65\u8BBE\u7F6E", open: syncModalOpen, width: 760, grid: true, modalProps: {
+                        } })) : null] }), _jsxs(ModalForm, { formRef: syncFormRef, title: "\u540C\u6B65\u8BBE\u7F6E", open: syncModalOpen, width: 760, grid: true, modalProps: {
                     destroyOnHidden: true,
                     onCancel: () => setSyncModalOpen(false),
                 }, initialValues: buildSyncInitialValues(syncConfig), onOpenChange: setSyncModalOpen, onFinish: handleSave, submitter: {
@@ -165,8 +176,8 @@ export default function SyncSettingsPanel({ access, onSynced, }) {
                         submitText: '保存设置',
                     },
                     render: (_, dom) => [
-                        _jsx(Button, { icon: _jsx(ReloadOutlined, {}), loading: testing, hidden: !access.hasPerms('finance:currency:sync'), onClick: handleTestConnection, children: "\u6D4B\u8BD5\u8FDE\u63A5" }, "test"),
-                        _jsx(Button, { icon: _jsx(SyncOutlined, {}), loading: syncing, hidden: !access.hasPerms('finance:currency:sync'), onClick: handleSyncNow, children: "\u7ACB\u5373\u540C\u6B65" }, "sync"),
+                        _jsx(Button, { icon: _jsx(ReloadOutlined, {}), loading: testing, hidden: !canSyncCurrency, onClick: handleTestConnection, children: "\u6D4B\u8BD5\u8FDE\u63A5" }, "test"),
+                        _jsx(Button, { icon: _jsx(SyncOutlined, {}), loading: syncing, hidden: !canSyncCurrency, onClick: handleSyncNow, children: "\u7ACB\u5373\u540C\u6B65" }, "sync"),
                         ...dom,
                     ],
                 }, children: [_jsx(ProFormText, { name: "providerName", label: "\u5B98\u65B9\u6C47\u7387\u670D\u52A1", colProps: { xs: 24, md: 12 }, readonly: true }), _jsx(ProFormSelect, { name: "baseCurrencyCode", label: "\u57FA\u51C6\u5E01\u79CD", colProps: { xs: 24, md: 12 }, options: [{ label: '人民币 (CNY)', value: 'CNY' }], readonly: true, fieldProps: SEARCHABLE_SELECT_PROPS }), _jsx(ProFormText, { name: "showApiApplicationName", label: "\u5E94\u7528\u540D\u79F0", colProps: { xs: 24, md: 12 }, readonly: true }), _jsx(ProFormText, { name: "showApiApplicationId", label: "\u5E94\u7528 ID", colProps: { xs: 24, md: 12 }, readonly: true }), _jsx(ProFormText.Password, { name: "credential", label: "\u63A5\u5165\u5BC6\u94A5", colProps: { xs: 24 }, placeholder: syncConfig?.credentialMasked || '保存后只展示脱敏值', fieldProps: { autoComplete: 'new-password' } }), _jsx(ProFormTimePicker, { name: "rateAnchorTime", label: "\u6C47\u7387\u57FA\u51C6\u65F6\u95F4", colProps: { xs: 24, md: 12 }, fieldProps: { format: 'HH:mm:ss' }, rules: [{ required: true }] }), _jsx(ProFormSelect, { name: "status", label: "\u542F\u7528\u72B6\u6001", colProps: { xs: 24, md: 12 }, valueEnum: statusValueEnum, fieldProps: SEARCHABLE_SELECT_PROPS }), _jsx(ProFormTextArea, { name: "remark", label: "\u5907\u6CE8", colProps: { xs: 24 } })] }, syncConfig?.syncConfigId || 'new-sync-config')] }));

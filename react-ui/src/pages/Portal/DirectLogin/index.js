@@ -3,7 +3,7 @@ import { Button, Result, Spin } from 'antd';
 import { history, useLocation } from '@umijs/max';
 import { useEffect, useMemo, useState } from 'react';
 import { PORTAL_DIRECT_LOGIN_READY_MESSAGE, PORTAL_DIRECT_LOGIN_RESULT_MESSAGE, PORTAL_DIRECT_LOGIN_TOKEN_MESSAGE, } from '@/utils/portalDirectLoginMessage';
-import { clearPortalLogin, getPortalTerminal, persistPortalLogin, PORTAL_META, PORTAL_SERVICE, } from '../terminal';
+import { getPortalTerminal, persistPortalLogin, PORTAL_META, PORTAL_SERVICE, } from '../terminal';
 const pageStyle = {
     minHeight: '100vh',
     display: 'flex',
@@ -41,7 +41,6 @@ const DirectLoginPage = () => {
                 mounted = false;
             };
         }
-        clearPortalLogin(terminal);
         const openerOrigin = resolveOpenerOrigin();
         const postConsumeResult = (status, ticketId, message) => {
             const payload = {
@@ -70,7 +69,6 @@ const DirectLoginPage = () => {
             }
             catch (error) {
                 console.log(error);
-                clearPortalLogin(terminal);
                 postConsumeResult('error', message.ticketId, 'Direct login failed');
                 if (mounted) {
                     setState({ status: 'error', message: 'Direct login failed' });
@@ -91,7 +89,6 @@ const DirectLoginPage = () => {
         window.opener?.postMessage({ type: PORTAL_DIRECT_LOGIN_READY_MESSAGE, terminal }, openerOrigin);
         const timeoutTimer = window.setTimeout(() => {
             if (!consumed && mounted) {
-                clearPortalLogin(terminal);
                 setState({ status: 'error', message: 'Direct login token was not received' });
             }
         }, 5000);

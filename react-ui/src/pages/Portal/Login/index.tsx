@@ -2,8 +2,8 @@ import { LockOutlined, UserOutlined } from '@ant-design/icons';
 import { Button, Form, Input, Typography, App } from 'antd';
 import { history, useLocation } from '@umijs/max';
 import React, { useMemo, useState } from 'react';
+import { isPortalTerminalPath } from '@/utils/portalPaths';
 import {
-  clearPortalLogin,
   getPortalTerminal,
   persistPortalLogin,
   PORTAL_META,
@@ -37,7 +37,13 @@ const panelStyle: React.CSSProperties = {
 
 function resolveRedirect(search: string, terminal: PortalTerminal) {
   const redirect = new URLSearchParams(search).get('redirect');
-  if (!redirect || getPortalTerminal(redirect) !== terminal || redirect === PORTAL_META[terminal].loginPath) {
+  const redirectPath = (redirect || '').split(/[?#]/, 1)[0];
+  if (
+    !redirect
+    || !isPortalTerminalPath(redirect, terminal)
+    || redirectPath === PORTAL_META[terminal].loginPath
+    || redirectPath === `/${terminal}/direct-login`
+  ) {
     return PORTAL_META[terminal].homePath;
   }
   return redirect;
@@ -58,7 +64,6 @@ const PortalLoginPage: React.FC = () => {
     const values = await form.validateFields();
     setSubmitting(true);
     try {
-      clearPortalLogin(terminal);
       const response = await PORTAL_SERVICE[terminal].login({
         username: values.username?.trim(),
         password: values.password,

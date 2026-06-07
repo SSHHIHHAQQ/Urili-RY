@@ -131,7 +131,6 @@ insert into tmp_business_menu_sys_menu_guard(menu_id, parent_id, menu_type, path
     (2403, 2060, 'C', 'warehouse-link', 'Common/PlannedPage/index', 'WarehouseProductLink', 'product:warehouseLink:list'),
     (2410, 2070, 'C', 'list', 'Common/PlannedPage/index', 'OrderList', 'order:list:list'),
     (2411, 2070, 'C', 'return', 'Common/PlannedPage/index', 'ReturnManagement', 'order:return:list'),
-    (2420, 2080, 'C', 'overview', 'Common/PlannedPage/index', 'InventoryOverview', 'inventory:overview:list'),
     (2422, 2080, 'C', 'flow', 'Common/PlannedPage/index', 'InventoryFlow', 'inventory:flow:list'),
     (2430, 2050, 'C', 'fund-account', 'Common/PlannedPage/index', 'FundAccount', 'finance:fundAccount:list'),
     (2431, 2050, 'C', 'collection-account', 'Common/PlannedPage/index', 'CollectionAccount', 'finance:collectionAccount:list'),
@@ -166,9 +165,6 @@ values
      1, 0, 'C', '0', '0', 'order:return:list', 'UndoOutlined', 'admin',
      sysdate(), '', null, '订单管理菜单：退件管理，占位入口'),
 
-    (2420, '库存总览', 2080, 5, 'overview', 'Common/PlannedPage/index', '', 'InventoryOverview',
-     1, 0, 'C', '0', '0', 'inventory:overview:list', 'DashboardOutlined', 'admin',
-     sysdate(), '', null, '库存管理菜单：库存总览，占位入口'),
     (2422, '库存流水', 2080, 15, 'flow', 'Common/PlannedPage/index', '', 'InventoryFlow',
      1, 0, 'C', '0', '0', 'inventory:flow:list', 'UnorderedListOutlined', 'admin',
      sysdate(), '', null, '库存管理菜单：库存流水，占位入口'),

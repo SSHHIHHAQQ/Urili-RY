@@ -17,7 +17,7 @@ import org.junit.Test;
 public class TerminalAccountIsolationTest
 {
     private static final Pattern FORBIDDEN_SYS_ACCOUNT_REFERENCE = Pattern.compile(
-            "\\b(?:sys_user|sys_role|sys_menu|sys_dept|sys_user_role|sys_role_menu|SysUser|SysRole|SysMenu|SysDept|PortalAccountSupport|PortalAccountMapper)\\b"
+            "\\b(?:sys_user|sys_role|sys_menu|sys_dept|sys_user_role|sys_role_menu|SysUser|SysRole|SysMenu|SysDept|LoginUser|PortalAccountSupport|PortalAccountMapper)\\b"
                     + "|\\b(?:seller_account|buyer_account)\\.user_id\\b",
             Pattern.CASE_INSENSITIVE);
 
@@ -36,6 +36,28 @@ public class TerminalAccountIsolationTest
         if (!violations.isEmpty())
         {
             fail("seller/buyer terminal account control planes must not reuse admin sys_* tables or Sys* objects:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    @Test
+    public void portalSharedAuthSupportMustNotReuseAdminLoginUserControlPlane() throws IOException
+    {
+        Path backendRoot = findBackendRoot();
+        List<String> violations = new ArrayList<>();
+
+        collectForbiddenReferences(backendRoot, "ruoyi-system", "src/main/java/com/ruoyi/system/service/support",
+                violations);
+        collectForbiddenReference(backendRoot, backendRoot.resolve(
+                "ruoyi-framework/src/main/java/com/ruoyi/framework/aspectj/PortalPreAuthorizeAspect.java"),
+                violations);
+        collectForbiddenReference(backendRoot, backendRoot.resolve(
+                "ruoyi-framework/src/main/java/com/ruoyi/framework/aspectj/PortalLogAspect.java"),
+                violations);
+
+        if (!violations.isEmpty())
+        {
+            fail("portal shared auth/log support must not reuse admin LoginUser or sys_* account control plane:\n"
                     + String.join("\n", violations));
         }
     }
@@ -81,6 +103,10 @@ public class TerminalAccountIsolationTest
                 "selectSellerAccountByIdAndSellerId(@Param(\"sellerId\") Long sellerId", violations);
         assertContains(backendRoot.resolve("seller/src/main/resources/mapper/seller/SellerMapper.xml"),
                 "where a.seller_id = #{sellerId}", violations);
+        assertContains(backendRoot.resolve("seller/src/main/java/com/ruoyi/seller/service/ISellerService.java"),
+                "selectSellerAccountById(Long sellerId, Long sellerAccountId)", violations);
+        assertContains(backendRoot.resolve("seller/src/main/java/com/ruoyi/seller/service/impl/SellerServiceImpl.java"),
+                "selectSellerAccountById(Long sellerId, Long sellerAccountId)", violations);
         assertNotContains(backendRoot.resolve("seller/src/main/java/com/ruoyi/seller/mapper/SellerMapper.java"),
                 "selectSellerAccountById(Long sellerAccountId)", violations);
         assertNotContains(backendRoot.resolve("seller/src/main/resources/mapper/seller/SellerMapper.xml"),
@@ -89,11 +115,23 @@ public class TerminalAccountIsolationTest
                 backendRoot.resolve("seller/src/main/java"),
                 "sellerMapper.selectSellerAccountById(",
                 backendRoot, violations);
+        scanForbiddenAccountOnlyServiceLookup(
+                backendRoot.resolve("seller/src/main/java"),
+                "selectSellerAccountById",
+                backendRoot, violations);
+        scanForbiddenText(
+                backendRoot.resolve("seller/src/test/java"),
+                "\"selectSellerAccountById\".equals(methodName)",
+                backendRoot, violations);
 
         assertContains(backendRoot.resolve("buyer/src/main/java/com/ruoyi/buyer/mapper/BuyerMapper.java"),
                 "selectBuyerAccountByIdAndBuyerId(@Param(\"buyerId\") Long buyerId", violations);
         assertContains(backendRoot.resolve("buyer/src/main/resources/mapper/buyer/BuyerMapper.xml"),
                 "where a.buyer_id = #{buyerId}", violations);
+        assertContains(backendRoot.resolve("buyer/src/main/java/com/ruoyi/buyer/service/IBuyerService.java"),
+                "selectBuyerAccountById(Long buyerId, Long buyerAccountId)", violations);
+        assertContains(backendRoot.resolve("buyer/src/main/java/com/ruoyi/buyer/service/impl/BuyerServiceImpl.java"),
+                "selectBuyerAccountById(Long buyerId, Long buyerAccountId)", violations);
         assertNotContains(backendRoot.resolve("buyer/src/main/java/com/ruoyi/buyer/mapper/BuyerMapper.java"),
                 "selectBuyerAccountById(Long buyerAccountId)", violations);
         assertNotContains(backendRoot.resolve("buyer/src/main/resources/mapper/buyer/BuyerMapper.xml"),
@@ -101,6 +139,14 @@ public class TerminalAccountIsolationTest
         scanForbiddenMapperCall(
                 backendRoot.resolve("buyer/src/main/java"),
                 "buyerMapper.selectBuyerAccountById(",
+                backendRoot, violations);
+        scanForbiddenAccountOnlyServiceLookup(
+                backendRoot.resolve("buyer/src/main/java"),
+                "selectBuyerAccountById",
+                backendRoot, violations);
+        scanForbiddenText(
+                backendRoot.resolve("buyer/src/test/java"),
+                "\"selectBuyerAccountById\".equals(methodName)",
                 backendRoot, violations);
 
         if (!violations.isEmpty())
@@ -173,6 +219,65 @@ public class TerminalAccountIsolationTest
                 continue;
             }
             violations.add(backendRoot.relativize(path) + ":" + (i + 1) + " -> " + mapperCall);
+        }
+    }
+
+    private void scanForbiddenAccountOnlyServiceLookup(Path sourceRoot, String methodName, Path backendRoot,
+            List<String> violations) throws IOException
+    {
+        try (Stream<Path> paths = Files.walk(sourceRoot))
+        {
+            for (Path path : paths.filter(path -> path.toString().endsWith(".java")).toList())
+            {
+                assertAccountOnlyServiceLookupAbsent(path, methodName, backendRoot, violations);
+            }
+        }
+    }
+
+    private void scanForbiddenText(Path sourceRoot, String forbidden, Path backendRoot, List<String> violations)
+            throws IOException
+    {
+        try (Stream<Path> paths = Files.walk(sourceRoot))
+        {
+            for (Path path : paths.filter(path -> path.toString().endsWith(".java")).toList())
+            {
+                assertTextAbsent(path, forbidden, backendRoot, violations);
+            }
+        }
+    }
+
+    private void assertTextAbsent(Path path, String forbidden, Path backendRoot, List<String> violations)
+            throws IOException
+    {
+        List<String> lines = Files.readAllLines(path, StandardCharsets.UTF_8);
+        for (int i = 0; i < lines.size(); i++)
+        {
+            if (!lines.get(i).contains(forbidden))
+            {
+                continue;
+            }
+            violations.add(backendRoot.relativize(path) + ":" + (i + 1) + " -> " + forbidden);
+        }
+    }
+
+    private void assertAccountOnlyServiceLookupAbsent(Path path, String methodName, Path backendRoot,
+            List<String> violations) throws IOException
+    {
+        List<String> lines = Files.readAllLines(path, StandardCharsets.UTF_8);
+        for (int i = 0; i < lines.size(); i++)
+        {
+            String line = lines.get(i);
+            int callIndex = line.indexOf(methodName + "(");
+            if (callIndex < 0)
+            {
+                continue;
+            }
+            String invocation = line.substring(callIndex);
+            if (invocation.contains(","))
+            {
+                continue;
+            }
+            violations.add(backendRoot.relativize(path) + ":" + (i + 1) + " -> " + methodName + "(accountId)");
         }
     }
 

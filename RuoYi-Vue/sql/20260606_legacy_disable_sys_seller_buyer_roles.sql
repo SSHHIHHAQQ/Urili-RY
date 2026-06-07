@@ -10,6 +10,7 @@ set @confirm_legacy_sys_role_cleanup_profile := coalesce(@confirm_legacy_sys_rol
 set @legacy_sys_role_cleanup_role_keys := coalesce(@legacy_sys_role_cleanup_role_keys, '');
 set @legacy_sys_role_cleanup_role_ids := coalesce(@legacy_sys_role_cleanup_role_ids, '');
 set @legacy_sys_role_cleanup_expected_count := coalesce(@legacy_sys_role_cleanup_expected_count, '');
+set @legacy_sys_role_cleanup_expected_signature := coalesce(@legacy_sys_role_cleanup_expected_signature, '');
 
 delimiter //
 
@@ -30,6 +31,9 @@ begin
   end if;
   if coalesce(@legacy_sys_role_cleanup_expected_count, '') = '' then
     signal sqlstate '45000' set message_text = 'set @legacy_sys_role_cleanup_expected_count after previewing exact sys_role candidates';
+  end if;
+  if coalesce(@legacy_sys_role_cleanup_expected_signature, '') = '' then
+    signal sqlstate '45000' set message_text = 'set @legacy_sys_role_cleanup_expected_signature after previewing exact sys_role candidates';
   end if;
 end//
 
@@ -68,11 +72,50 @@ begin
   end if;
 end//
 
+drop procedure if exists assert_terminal_owner_roles_ready//
+create procedure assert_terminal_owner_roles_ready()
+begin
+  declare v_missing_seller_owner_roles int default 0;
+  declare v_missing_buyer_owner_roles int default 0;
+
+  select count(1)
+    into v_missing_seller_owner_roles
+  from seller_account a
+  where a.account_role = 'OWNER'
+    and not exists (
+      select 1
+      from seller_role r
+      where r.seller_id = a.seller_id
+        and r.role_key = 'owner'
+        and r.del_flag = '0'
+    );
+
+  select count(1)
+    into v_missing_buyer_owner_roles
+  from buyer_account a
+  where a.account_role = 'OWNER'
+    and not exists (
+      select 1
+      from buyer_role r
+      where r.buyer_id = a.buyer_id
+        and r.role_key = 'owner'
+        and r.del_flag = '0'
+    );
+
+  if v_missing_seller_owner_roles > 0 then
+    signal sqlstate '45000' set message_text = 'seller owner terminal roles are not ready before legacy sys_role cleanup';
+  end if;
+  if v_missing_buyer_owner_roles > 0 then
+    signal sqlstate '45000' set message_text = 'buyer owner terminal roles are not ready before legacy sys_role cleanup';
+  end if;
+end//
+
 drop procedure if exists assert_legacy_sys_role_cleanup_targets//
 create procedure assert_legacy_sys_role_cleanup_targets()
 begin
   declare v_count int default 0;
   declare v_invalid_count int default 0;
+  declare v_signature varchar(64) default '';
 
   select count(1)
     into v_count
@@ -98,6 +141,24 @@ begin
   if v_count <> cast(@legacy_sys_role_cleanup_expected_count as unsigned) then
     signal sqlstate '45000' set message_text = 'legacy sys_role cleanup expected count does not match role_ids';
   end if;
+
+  select coalesce(sha2(group_concat(concat_ws(':',
+        cast(role_id as char),
+        coalesce(role_key, ''),
+        coalesce(role_name, ''),
+        coalesce(status, ''),
+        coalesce(del_flag, ''))
+      order by role_id separator '|'), 256), '')
+    into v_signature
+  from sys_role
+  where find_in_set(cast(role_id as char), @legacy_sys_role_cleanup_role_ids) > 0
+    and role_key in ('seller', 'buyer')
+    and find_in_set(role_key collate utf8mb4_unicode_ci,
+        convert(@legacy_sys_role_cleanup_role_keys using utf8mb4) collate utf8mb4_unicode_ci) > 0;
+
+  if v_signature <> @legacy_sys_role_cleanup_expected_signature then
+    signal sqlstate '45000' set message_text = 'legacy sys_role cleanup exact target signature mismatch';
+  end if;
 end//
 
 delimiter ;
@@ -108,6 +169,7 @@ call assert_table_exists('buyer_account', 'buyer_account is required before disa
 call assert_table_exists('seller_role', 'seller_role is required before disabling legacy sys_role seller');
 call assert_table_exists('buyer_role', 'buyer_role is required before disabling legacy sys_role buyer');
 call assert_no_active_terminal_sys_role_bindings();
+call assert_terminal_owner_roles_ready();
 call assert_legacy_sys_role_cleanup_targets();
 
 select role_id, role_name, role_key, status, del_flag
@@ -117,6 +179,19 @@ where role_key in ('seller', 'buyer')
       convert(@legacy_sys_role_cleanup_role_keys using utf8mb4) collate utf8mb4_unicode_ci) > 0
   and find_in_set(cast(role_id as char), @legacy_sys_role_cleanup_role_ids) > 0
 order by role_id;
+
+select sha2(group_concat(concat_ws(':',
+        cast(role_id as char),
+        coalesce(role_key, ''),
+        coalesce(role_name, ''),
+        coalesce(status, ''),
+        coalesce(del_flag, ''))
+    order by role_id separator '|'), 256) as legacy_sys_role_cleanup_expected_signature
+from sys_role
+where role_key in ('seller', 'buyer')
+  and find_in_set(role_key collate utf8mb4_unicode_ci,
+      convert(@legacy_sys_role_cleanup_role_keys using utf8mb4) collate utf8mb4_unicode_ci) > 0
+  and find_in_set(cast(role_id as char), @legacy_sys_role_cleanup_role_ids) > 0;
 
 update sys_role
 set status = '1',
@@ -136,4 +211,5 @@ where role_key in ('seller', 'buyer')
 drop procedure if exists assert_legacy_sys_role_cleanup_confirmed;
 drop procedure if exists assert_table_exists;
 drop procedure if exists assert_no_active_terminal_sys_role_bindings;
+drop procedure if exists assert_terminal_owner_roles_ready;
 drop procedure if exists assert_legacy_sys_role_cleanup_targets;

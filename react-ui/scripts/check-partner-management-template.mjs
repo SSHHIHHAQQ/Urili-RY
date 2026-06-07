@@ -986,11 +986,16 @@ function checkAccountModalSource(source, relativePath) {
     'PartnerSessionModal',
     'PartnerAuditModal',
     'accountPermissions',
+    'access.hasPerms(`${permPrefix}:session:list`)',
+    'const canQueryRole = access.hasPerms(`${permPrefix}:role:query`)',
+    'const canAssignAccountRoles = canQueryRole',
     'const canViewAccountAudit = access.hasPerms(`${permPrefix}:loginLog:list`)',
     '|| access.hasPerms(`${permPrefix}:operLog:list`)',
     '|| access.hasPerms(`${permPrefix}:ticket:list`)',
     'setAuditAccount(record)',
     'setAuditModalOpen(true)',
+    'normalizePassword',
+    'passwordRules',
   ]) {
     assertIncludes(
       source,
@@ -1009,6 +1014,24 @@ function checkAccountModalSource(source, relativePath) {
     'must expose account row audit action from the More menu');
   assertIncludesAny(source, relativePath, ['account={auditAccount}', 'account: auditAccount'],
     'must pass the selected account into PartnerAuditModal');
+  assertNotIncludes(
+    source,
+    relativePath,
+    'DEFAULT_ACCOUNT_PASSWORD',
+    'must not keep a default account password fallback',
+  );
+  assertNotIncludes(
+    source,
+    relativePath,
+    'U12346',
+    'must not hardcode the old default account password',
+  );
+  assertNoPattern(
+    source,
+    relativePath,
+    /values\.password\s*\|\|/,
+    'must not fall back when account password is blank',
+  );
   checkAccountModalFailSoft(source, relativePath);
 }
 
@@ -1045,7 +1068,9 @@ function checkDeptModalSource(source, relativePath) {
     'const permPrefix = `${config.moduleKey}:admin`',
     'config.services.listDepts(partnerId)',
     'config.services.getDeptTree(partnerId)',
-    'canQueryDeptTree ? config.services.getDeptTree(partnerId) : Promise.resolve(undefined)',
+    'const loadDeptTree = async () =>',
+    'const listResp = await config.services.listDepts(partnerId)',
+    'void loadDeptTree();',
     'config.services.updateDept(partnerId, payload)',
     'config.services.addDept(partnerId, payload)',
     'config.services.removeDept(partnerId, dept.deptId',
@@ -1065,6 +1090,12 @@ function checkDeptModalSource(source, relativePath) {
     'must gate department add by canAddDept');
   assertIncludesAny(source, relativePath, ['hidden={!canEditDept}', 'hidden: !canEditDept'],
     'must gate department edit by canEditDept');
+  assertNoPattern(
+    source,
+    relativePath,
+    /Promise\.all\(\s*\[\s*config\.services\.listDepts\(partnerId\),\s*(?:canQueryDeptTree\s*\?\s*)?config\.services\.getDeptTree\(partnerId\)/s,
+    'must not couple department list and tree requests in one Promise.all',
+  );
   assertNoPattern(
     source,
     relativePath,
@@ -1133,6 +1164,7 @@ function checkPageTemplateSource(source, relativePath, requireTypeExport) {
     'openPortalDirectLoginWindow',
     'config.services.directLogin',
     'config.services.forceLogoutSubject',
+    'access.hasPerms(`${permPrefix}:session:list`)',
     'const canEditPartner = access.hasPerms(`${permPrefix}:edit`) && access.hasPerms(`${permPrefix}:query`)',
   ];
   if (requireTypeExport) {

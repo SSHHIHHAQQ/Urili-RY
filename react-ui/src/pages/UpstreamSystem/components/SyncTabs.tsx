@@ -58,6 +58,9 @@ export default function SyncTabs({
   warehouseActionRef,
 }: SyncTabsProps) {
   const selectedCode = selectedConnection.connectionCode;
+  const canQueryUpstream = access.hasPerms('integration:upstream:query');
+  const canQueryInventory = access.hasPerms('integration:upstream:inventoryQuery');
+  const canViewLogs = access.hasPerms('integration:upstream:log');
   const currentPairingRole =
     selectedConnection.settlementType === 'self-operated-receivable'
       ? 'QUOTE'
@@ -271,6 +274,9 @@ export default function SyncTabs({
                   scroll={getProTableScroll(1100)}
                   params={{ selectedCode }}
                   request={async () => {
+                    if (!canQueryUpstream) {
+                      return { data: [], success: true };
+                    }
                     const requestCode = selectedCode;
                     const [syncResp, pairingResp] = await Promise.all([
                       getWarehouseSyncList(requestCode),
@@ -313,6 +319,9 @@ export default function SyncTabs({
                   scroll={getProTableScroll(1000)}
                   params={{ selectedCode }}
                   request={async () => {
+                    if (!canQueryUpstream) {
+                      return { data: [], success: true };
+                    }
                     const requestCode = selectedCode;
                     const [syncResp, pairingResp, warehousePairingResp] =
                       await Promise.all([
@@ -413,10 +422,12 @@ export default function SyncTabs({
                 selectedCode={selectedCode}
               />
             ),
+            disabled: !canQueryInventory,
           },
           {
             key: 'logs',
             label: '请求日志',
+            disabled: !canViewLogs,
             children: (
               <ProTable<API.Integration.RequestLog>
                 actionRef={logActionRef}
@@ -426,6 +437,9 @@ export default function SyncTabs({
                 columns={logColumns}
                 params={{ selectedCode }}
                 request={async (params) => {
+                  if (!canViewLogs) {
+                    return { data: [], total: 0, success: true };
+                  }
                   const requestCode = selectedCode;
                   const resp = await getRequestLogList(requestCode, params);
                   return {

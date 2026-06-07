@@ -11,11 +11,28 @@ export const PORTAL_ROUTE_PREFIXES = [
   '/buyer/portal',
 ];
 
+function normalizePathname(pathname?: string) {
+  return (pathname || '').split(/[?#]/, 1)[0];
+}
+
+function matchesPathPrefix(pathname: string | undefined, prefix: string) {
+  const normalizedPathname = normalizePathname(pathname);
+  return normalizedPathname === prefix || normalizedPathname.startsWith(`${prefix}/`);
+}
+
+export function isPortalTerminalPath(pathname: string | undefined, terminal: PortalTerminal) {
+  return [
+    `/${terminal}/login`,
+    `/${terminal}/direct-login`,
+    `/${terminal}/portal`,
+  ].some((prefix) => matchesPathPrefix(pathname, prefix));
+}
+
 export function getPortalTerminalFromPath(pathname: string): PortalTerminal | undefined {
-  if (pathname.startsWith('/seller/')) {
+  if (isPortalTerminalPath(pathname, 'seller')) {
     return 'seller';
   }
-  if (pathname.startsWith('/buyer/')) {
+  if (isPortalTerminalPath(pathname, 'buyer')) {
     return 'buyer';
   }
   return undefined;
@@ -26,5 +43,5 @@ export function getPortalLoginPath(terminal: PortalTerminal) {
 }
 
 export function isPortalRoute(pathname?: string) {
-  return PORTAL_ROUTE_PREFIXES.some((prefix) => pathname === prefix || pathname?.startsWith(`${prefix}/`));
+  return PORTAL_ROUTE_PREFIXES.some((prefix) => matchesPathPrefix(pathname, prefix));
 }

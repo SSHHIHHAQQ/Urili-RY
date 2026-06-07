@@ -1,7 +1,7 @@
-import { ArrowLeftOutlined, SaveOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, EyeOutlined, SaveOutlined } from '@ant-design/icons';
 import { PageContainer, ProTable, type ProColumns } from '@ant-design/pro-components';
 import { history, useAccess, useParams } from '@umijs/max';
-import { Affix, Button, Card, DatePicker, Form, Input, InputNumber, Modal, Radio, Select, Space, TreeSelect, Typography } from 'antd';
+import { Affix, Button, Card, DatePicker, Form, Input, InputNumber, Modal, Radio, Select, Space, Tag, TreeSelect, Typography } from 'antd';
 import dayjs from 'dayjs';
 import { useEffect, useMemo, useState } from 'react';
 import { getCategoryList, getCategorySchema } from '@/services/product/product';
@@ -23,6 +23,12 @@ import { yesNoOptions } from '../constants';
 import DetailContentBuilder from './components/DetailContentBuilder';
 import ProductImageSection from './components/ProductImageSection';
 import SkuMatrixEditor from './components/SkuMatrixEditor';
+import BuyerProductPreviewModal, {
+  type BuyerPreviewAttribute,
+  type BuyerPreviewSku,
+  type BuyerPreviewWarehouse,
+  type BuyerProductPreviewData,
+} from './components/BuyerProductPreviewModal';
 import {
   parseDetailContent,
   serializeDetailContent,
@@ -48,6 +54,11 @@ type WarehouseOption = {
 const warehouseKindLabels: Record<string, string> = {
   official: '官方仓',
   third_party: '三方仓',
+};
+
+const previewPriceSamples: Record<string, string[]> = {
+  CNY: ['¥199.00', '¥229.00', '¥259.00', '¥299.00'],
+  USD: ['$29.90', '$34.90', '$39.90', '$46.90'],
 };
 
 function parseAttributeJsonArray(value?: string) {
@@ -122,16 +133,12 @@ function toMeasurementText(value: number | undefined, unit: string) {
   return text ? `${text} ${unit}` : undefined;
 }
 
-function hasSkuContent(row?: API.ProductDistribution.Sku & { rowKey?: string }) {
-  if (!row) return false;
-  return !!(
-    row.skuId
-    || row.sourceDimensionGroupKey
-    || row.sellerSkuCode
-    || row.color
-    || row.size
-    || row.supplyPrice !== undefined
-  );
+function createEmptySkuRow(sortOrder = 0): API.ProductDistribution.Sku & { rowKey?: string } {
+  return {
+    rowKey: `sku-new-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    skuStatus: 'DRAFT',
+    sortOrder,
+  };
 }
 
 function toSourceSkuRow(
@@ -162,6 +169,60 @@ function toSourceSkuRow(
     weight: toMeasurementText(measurement.weight, 'kg'),
     currencyCode: item.currencyCode,
     skuImageUrl: item.imageUrl,
+  };
+}
+
+function getSourceSkuKey(item?: Pick<API.Integration.SourceProductItem, 'sourceDimensionGroupKey' | 'sourceSkuGroupKey' | 'masterSku'>) {
+  return item?.sourceDimensionGroupKey || item?.sourceSkuGroupKey || item?.masterSku || '';
+}
+
+function getSkuSourceKey(row?: Pick<API.ProductDistribution.Sku, 'sourceDimensionGroupKey' | 'sourceSkuGroupKey' | 'masterSku'>) {
+  return row?.sourceDimensionGroupKey || row?.sourceSkuGroupKey || row?.masterSku || '';
+}
+
+function toSourceItemFromSkuRow(row: API.ProductDistribution.Sku): API.Integration.SourceProductItem | undefined {
+  if (!row.sourceDimensionGroupKey && !row.sourceSkuGroupKey) return undefined;
+  return {
+    connectionCode: '',
+    sourceSkuGroupKey: row.sourceSkuGroupKey,
+    sourceDimensionGroupKey: row.sourceDimensionGroupKey,
+    masterSku: row.masterSku || '',
+    masterProductName: row.masterProductNameSnapshot || row.productName || '',
+    sourceWarehouseNames: row.sourceWarehouseNames,
+    warehouseCount: row.sourceWarehouseCount,
+    currencyCode: row.currencyCode,
+    imageUrl: row.skuImageUrl,
+    length: row.measureLengthCm,
+    width: row.measureWidthCm,
+    height: row.measureHeightCm,
+    weight: row.measureWeightKg,
+    sourcePayloadHash: row.sourcePayloadHash,
+  };
+}
+
+function mergeSourceSkuRow(
+  current: API.ProductDistribution.Sku & { rowKey?: string },
+  sourceRow: API.ProductDistribution.Sku & { rowKey?: string },
+  sortOrder: number,
+) {
+  return {
+    ...current,
+    ...sourceRow,
+    rowKey: current.rowKey || sourceRow.rowKey,
+    skuId: current.skuId,
+    sellerSkuCode: current.sellerSkuCode,
+    color: current.color,
+    size: current.size,
+    material: current.material,
+    style: current.style,
+    model: current.model,
+    packageQuantity: current.packageQuantity,
+    capacity: current.capacity,
+    skuImageUrl: current.skuImageUrl || sourceRow.skuImageUrl,
+    supplyPrice: current.supplyPrice,
+    salePrice: current.salePrice,
+    skuStatus: current.skuStatus || sourceRow.skuStatus,
+    sortOrder: current.sortOrder ?? sortOrder,
   };
 }
 
@@ -213,6 +274,113 @@ function mergeWarehouseOptions(options: WarehouseOption[], boundWarehouses?: API
   return Array.from(map.values());
 }
 
+function findCategoryName(categories: API.Product.Category[], categoryId?: number): string | undefined {
+  if (!categoryId) return undefined;
+  for (const item of categories) {
+    if (item.categoryId === categoryId) return item.categoryName;
+    const childName = findCategoryName(item.children || [], categoryId);
+    if (childName) return childName;
+  }
+  return undefined;
+}
+
+function formatPreviewAttributeValue(item: API.Product.CategoryAttribute, value: any) {
+  if (value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0)) {
+    return undefined;
+  }
+  if (item.attributeType === 'BOOLEAN') {
+    const option = yesNoOptions.find((entry) => entry.value === value);
+    return option?.label || String(value);
+  }
+  if (item.attributeType === 'SINGLE_SELECT') {
+    return item.options?.find((option) => option.optionCode === value)?.optionLabel || String(value);
+  }
+  if (item.attributeType === 'MULTI_SELECT') {
+    return (Array.isArray(value) ? value : [value])
+      .map((entry) => item.options?.find((option) => option.optionCode === entry)?.optionLabel || String(entry))
+      .join(' / ');
+  }
+  if (item.attributeType === 'DATE') {
+    return dayjs.isDayjs(value) ? value.format(ATTRIBUTE_DATE_FORMAT) : String(value);
+  }
+  return item.attributeType === 'NUMBER' && item.unit ? `${value} ${item.unit}` : String(value);
+}
+
+function buildPreviewAttributes(
+  values: ProductEditValues,
+  schema: API.Product.CategoryAttribute[],
+): BuyerPreviewAttribute[] {
+  return schema.flatMap((item) => {
+    const label = item.attributeName || item.attributeCode || '';
+    const value = formatPreviewAttributeValue(item, values.attributeValueMap?.[String(item.attributeId)]);
+    return label && value ? [{ label, value }] : [];
+  });
+}
+
+function buildPreviewPrice(currencyCode: string | undefined, index: number) {
+  const normalizedCurrency = currencyCode?.toUpperCase() || 'CNY';
+  const samples = previewPriceSamples[normalizedCurrency] || previewPriceSamples.CNY;
+  return samples[index % samples.length];
+}
+
+function buildPreviewSkus(
+  rows: (API.ProductDistribution.Sku & { rowKey?: string })[],
+  currencyCode?: string,
+): BuyerPreviewSku[] {
+  const sourceRows = rows.length ? rows : [{
+    rowKey: 'preview-sku',
+    color: '黑色',
+    size: 'M',
+    lengthValue: '42.00 cm',
+    widthValue: '42.00 cm',
+    heightValue: '17.00 cm',
+    weight: '920 g',
+  }];
+  return sourceRows.map((row, index) => {
+    const rowCurrency = row.currencyCode || currencyCode || 'CNY';
+    return {
+      ...row,
+      currencyCode: rowCurrency,
+      previewPrice: buildPreviewPrice(rowCurrency, index),
+      previewStock: `现货 ${128 + index * 37} 件`,
+    };
+  });
+}
+
+function buildPreviewWarehouses(
+  warehouseKind: string | undefined,
+  rows: (API.ProductDistribution.Sku & { rowKey?: string })[],
+  selectedWarehouses: WarehouseOption[],
+): BuyerPreviewWarehouse[] {
+  if (warehouseKind === 'official') {
+    const officialNames = Array.from(new Set(rows.flatMap((row) =>
+      (row.sourceWarehouseNames || '').split(/[,\uFF0C/]/).map((item) => item.trim()).filter(Boolean))));
+    const names = officialNames.length ? officialNames : ['平台官方仓'];
+    return names.map((name, index) => ({
+      key: `official-${name}-${index}`,
+      name,
+      kind: 'official',
+      stockText: `官方现货 ${186 + index * 42} 件`,
+      deliveryText: '平台官方仓现货发货 / 运费下单时计算',
+    }));
+  }
+  const warehouses = selectedWarehouses.length ? selectedWarehouses : [{
+    label: '默认发货仓',
+    value: 0,
+    currencyCode: 'CNY',
+    currencyLabel: 'CNY',
+    warehouseKind: warehouseKind || 'third_party',
+    warehouseKindLabel: '三方仓',
+  }];
+  return warehouses.map((warehouse, index) => ({
+    key: String(warehouse.value || index),
+    name: String(warehouse.label || `发货仓 ${index + 1}`).split('/')[0].trim(),
+    kind: warehouse.warehouseKind,
+    stockText: `现货 ${96 + index * 28} 件`,
+    deliveryText: '仓库现货发货 / 运费下单时计算',
+  }));
+}
+
 export default function ProductDistributionEditPage() {
   const access = useAccess();
   const params = useParams<{ spuId?: string }>();
@@ -238,8 +406,11 @@ export default function ProductDistributionEditPage() {
   const [selectedWarehouseKind, setSelectedWarehouseKind] = useState<string>();
   const [selectedWarehouseIds, setSelectedWarehouseIds] = useState<number[]>([]);
   const [sourceSelectorOpen, setSourceSelectorOpen] = useState(false);
+  const [selectedSourceSkuMap, setSelectedSourceSkuMap] = useState<Record<string, API.Integration.SourceProductItem>>({});
+  const [buyerPreviewOpen, setBuyerPreviewOpen] = useState(false);
+  const [buyerPreviewData, setBuyerPreviewData] = useState<BuyerProductPreviewData>();
   const [skuRows, setSkuRows] = useState<(API.ProductDistribution.Sku & { rowKey?: string })[]>([
-    { rowKey: 'sku-new-0', skuStatus: 'DRAFT', sortOrder: 0 },
+    createEmptySkuRow(),
   ]);
   const canQuerySourceProducts = access.hasPerms('product:list:list');
   const canQueryOfficialWarehouses = access.hasPerms('warehouse:official:list');
@@ -366,6 +537,15 @@ export default function ProductDistributionEditPage() {
     }
     setSelectedWarehouseKind(kind);
     setSelectedWarehouseIds([]);
+    setSkuRows((currentRows) => {
+      if (kind === 'official') {
+        return currentRows.filter((row) => !!row.sourceDimensionGroupKey || !!row.sourceSkuGroupKey);
+      }
+      if (selectedWarehouseKind === 'official') {
+        return [createEmptySkuRow()];
+      }
+      return currentRows.length ? currentRows : [createEmptySkuRow()];
+    });
   };
 
   const selectedWarehouses = useMemo(
@@ -378,6 +558,8 @@ export default function ProductDistributionEditPage() {
   const derivedCurrencyCode = selectedWarehouses[0]?.currencyCode;
   const derivedCurrencyLabel = selectedWarehouses[0]?.currencyLabel;
   const isOfficialWarehouse = selectedWarehouseKind === 'official';
+  const selectedSourceSkuItems = useMemo(() => Object.values(selectedSourceSkuMap), [selectedSourceSkuMap]);
+  const selectedSourceSkuKeys = useMemo(() => Object.keys(selectedSourceSkuMap), [selectedSourceSkuMap]);
 
   const handleWarehouseChange = (nextIds: number[]) => {
     const nextWarehouses = nextIds
@@ -413,27 +595,68 @@ export default function ProductDistributionEditPage() {
       message.warning('缺少来源 SKU 查询权限');
       return;
     }
+    const nextSelectedMap: Record<string, API.Integration.SourceProductItem> = {};
+    skuRows.forEach((row) => {
+      const sourceItem = toSourceItemFromSkuRow(row);
+      const sourceKey = getSourceSkuKey(sourceItem);
+      if (sourceItem && sourceKey) {
+        nextSelectedMap[sourceKey] = sourceItem;
+      }
+    });
+    setSelectedSourceSkuMap(nextSelectedMap);
     setSourceSelectorOpen(true);
   };
 
-  const handleSelectSourceSku = (item: API.Integration.SourceProductItem) => {
-    if (!canQuerySourceProducts) {
-      message.warning('缺少来源 SKU 查询权限');
-      setSourceSelectorOpen(false);
+  const updateSelectedSourceSku = (item: API.Integration.SourceProductItem, selected: boolean) => {
+    const sourceKey = getSourceSkuKey(item);
+    if (!sourceKey || !item.sourceSkuGroupKey || !item.sourceDimensionGroupKey) {
+      if (selected) {
+        message.warning('来源 SKU 缺少稳定绑定键，不能选择');
+      }
       return;
     }
-    const sourceSkuGroupKey = item.sourceSkuGroupKey;
-    const sourceDimensionGroupKey = item.sourceDimensionGroupKey;
-    if (!sourceSkuGroupKey || !sourceDimensionGroupKey) {
-      message.error('来源 SKU 缺少稳定绑定键');
+    setSelectedSourceSkuMap((current) => {
+      const next = { ...current };
+      if (selected) {
+        next[sourceKey] = item;
+      } else {
+        delete next[sourceKey];
+      }
+      return next;
+    });
+  };
+
+  const removeSelectedSourceSku = (sourceKey: string) => {
+    setSelectedSourceSkuMap((current) => {
+      const next = { ...current };
+      delete next[sourceKey];
+      return next;
+    });
+  };
+
+  const clearSelectedSourceSkus = () => {
+    setSelectedSourceSkuMap({});
+  };
+
+  const applySelectedSourceSkus = () => {
+    if (!selectedSourceSkuItems.length) {
+      message.warning('请选择来源 SKU');
       return;
     }
-    if (skuRows.some((row) => row.sourceSkuGroupKey === sourceSkuGroupKey)) {
-      message.warning('该来源 SKU 已在当前商品中选择');
-      return;
-    }
-    const baseRows = skuRows.length === 1 && !hasSkuContent(skuRows[0]) ? [] : skuRows;
-    setSkuRows([...baseRows, toSourceSkuRow(item, baseRows.length)]);
+    const currentSkuMap = new Map<string, API.ProductDistribution.Sku & { rowKey?: string }>();
+    skuRows.forEach((row) => {
+      const sourceKey = getSkuSourceKey(row);
+      if (sourceKey) {
+        currentSkuMap.set(sourceKey, row);
+      }
+    });
+    const nextRows = selectedSourceSkuItems.map((item, index) => {
+      const sourceKey = getSourceSkuKey(item);
+      const sourceRow = toSourceSkuRow(item, index);
+      const currentRow = currentSkuMap.get(sourceKey);
+      return currentRow ? mergeSourceSkuRow(currentRow, sourceRow, index) : sourceRow;
+    });
+    setSkuRows(nextRows);
     setSourceSelectorOpen(false);
   };
 
@@ -481,16 +704,6 @@ export default function ProductDistributionEditPage() {
       width: 90,
       search: false,
       renderText: (value) => (value === 'UNASSIGNED' ? '未配对' : value === 'PAIRED' ? '已配对' : value || '-'),
-    },
-    {
-      title: '操作',
-      width: 80,
-      search: false,
-      render: (_, record) => (
-        <Button type="link" size="small" onClick={() => handleSelectSourceSku(record)}>
-          选择
-        </Button>
-      ),
     },
   ];
 
@@ -659,6 +872,27 @@ export default function ProductDistributionEditPage() {
     message.error(resp.msg || '保存失败');
   };
 
+  const openBuyerPreview = () => {
+    const values = form.getFieldsValue(true) as ProductEditValues;
+    const currencyCode = isOfficialWarehouse
+      ? skuRows.find((row) => row.currencyCode)?.currencyCode
+      : derivedCurrencyCode;
+    setBuyerPreviewData({
+      productName: values.productName || product?.productName || '平台精选现货商品',
+      productNameEn: values.productNameEn || product?.productNameEn || 'Platform Ready Stock Product',
+      sellingPoint: values.sellingPoint || product?.sellingPoint || '适合分销现货履约，支持多规格快速下单。',
+      categoryName: findCategoryName(categories, values.categoryId) || product?.categoryName,
+      mainImageUrl: values.mainImageUrl || mainImageUrl,
+      galleryUrls: galleryUrls.filter(Boolean),
+      warehouseKind: selectedWarehouseKind,
+      warehouses: buildPreviewWarehouses(selectedWarehouseKind, skuRows, selectedWarehouses),
+      skus: buildPreviewSkus(skuRows, currencyCode),
+      attributes: buildPreviewAttributes(values, schema),
+      detailBlocks,
+    });
+    setBuyerPreviewOpen(true);
+  };
+
   return (
     <PageContainer title={false}>
       <div className={styles.editPage}>
@@ -799,6 +1033,7 @@ export default function ProductDistributionEditPage() {
           <Card size="small" className={styles.editActionCard}>
             <Space>
               <Button onClick={() => history.push('/product/distribution')}>取消</Button>
+              <Button icon={<EyeOutlined />} onClick={openBuyerPreview}>预览买家视图</Button>
               {isEdit ? (
                 <Button type="primary" loading={saving} icon={<SaveOutlined />} onClick={() => submit()}>
                   保存
@@ -817,17 +1052,62 @@ export default function ProductDistributionEditPage() {
           title="选择来源 SKU"
           open={sourceSelectorOpen}
           width={1120}
-          footer={null}
+          okText={`确认选择（${selectedSourceSkuItems.length}）`}
+          cancelText="取消"
+          okButtonProps={{ disabled: !selectedSourceSkuItems.length }}
           destroyOnClose
+          onOk={applySelectedSourceSkus}
           onCancel={() => setSourceSelectorOpen(false)}
         >
+          <div className={styles.sourceSkuSelectionBoard}>
+            <div className={styles.sourceSkuSelectionHeader}>
+              <Typography.Text strong>已选择 SKU（{selectedSourceSkuItems.length}）</Typography.Text>
+              <Button type="link" size="small" disabled={!selectedSourceSkuItems.length} onClick={clearSelectedSourceSkus}>
+                清空
+              </Button>
+            </div>
+            {selectedSourceSkuItems.length ? (
+              <Space wrap size={[8, 8]}>
+                {selectedSourceSkuItems.map((item) => {
+                  const sourceKey = getSourceSkuKey(item);
+                  return (
+                    <Tag
+                      key={sourceKey}
+                      closable
+                      className={styles.sourceSkuSelectionTag}
+                      onClose={() => removeSelectedSourceSku(sourceKey)}
+                    >
+                      {item.masterSku || '-'} / {item.masterProductName || '-'}
+                    </Tag>
+                  );
+                })}
+              </Space>
+            ) : (
+              <Typography.Text type="secondary">
+                跨页勾选会保留在这里，确认后写入 SKU 列表。
+              </Typography.Text>
+            )}
+          </div>
           <ProTable<API.Integration.SourceProductItem>
-            rowKey={(record) => record.sourceDimensionGroupKey || record.sourceSkuGroupKey || record.masterSku}
+            rowKey={(record) => getSourceSkuKey(record)}
             columns={sourceColumns}
             size="small"
             search={{ labelWidth: 70, span: 8 }}
             options={false}
             pagination={{ pageSize: 10 }}
+            tableAlertRender={false}
+            tableAlertOptionRender={false}
+            rowSelection={{
+              preserveSelectedRowKeys: true,
+              selectedRowKeys: selectedSourceSkuKeys,
+              onSelect: (record, selected) => updateSelectedSourceSku(record, selected),
+              onSelectAll: (selected, _selectedRows, changeRows) => {
+                changeRows.forEach((record) => updateSelectedSourceSku(record, selected));
+              },
+              getCheckboxProps: (record) => ({
+                disabled: !record.sourceSkuGroupKey || !record.sourceDimensionGroupKey,
+              }),
+            }}
             request={async (params) => {
               if (!canQuerySourceProducts) {
                 return {
@@ -852,6 +1132,11 @@ export default function ProductDistributionEditPage() {
             }}
           />
         </Modal>
+        <BuyerProductPreviewModal
+          open={buyerPreviewOpen}
+          data={buyerPreviewData}
+          onClose={() => setBuyerPreviewOpen(false)}
+        />
       </div>
     </PageContainer>
   );

@@ -176,6 +176,7 @@ function applyTailRule(value: number, rule: TailRule) {
 
 export default function ProductDistributionPage() {
   const access = useAccess();
+  const canViewDistributionDetail = access.hasPerms('product:distribution:query');
   const actionRef = useRef<ActionType>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [current, setCurrent] = useState<API.ProductDistribution.Spu>();
@@ -256,7 +257,7 @@ export default function ProductDistributionPage() {
   };
 
   const openDetail = async (record: API.ProductDistribution.Spu) => {
-    if (record.spuId == null) {
+    if (!canViewDistributionDetail || record.spuId == null) {
       return;
     }
     const resp = await getDistributionProduct(record.spuId);
@@ -681,7 +682,7 @@ export default function ProductDistributionPage() {
           ...(disabled ? [{ key: 'recover', label: '恢复' }] : []),
         ];
         return [
-          <Button key="view" type="link" size="small" onClick={() => openDetail(record)}>
+          <Button key="view" type="link" size="small" hidden={!canViewDistributionDetail} onClick={() => openDetail(record)}>
             查看
           </Button>,
           <Button
@@ -849,7 +850,7 @@ export default function ProductDistributionPage() {
             : []),
         ];
         return [
-          <Button key="view" type="link" size="small" onClick={() => openDetail({ spuId: record.spuId })}>
+          <Button key="view" type="link" size="small" hidden={!canViewDistributionDetail} onClick={() => openDetail({ spuId: record.spuId })}>
             查看SPU
           </Button>,
           <Button

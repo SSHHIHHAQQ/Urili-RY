@@ -3,11 +3,13 @@
 -- only for explicitly listed non-admin role_key values.
 
 set names utf8mb4;
+set session group_concat_max_len = greatest(@@session.group_concat_max_len, 1048576);
 
 set @confirm_admin_partner_non_admin_button_cleanup := coalesce(@confirm_admin_partner_non_admin_button_cleanup, '');
 set @admin_partner_button_cleanup_role_keys := coalesce(@admin_partner_button_cleanup_role_keys, '');
 set @admin_partner_button_cleanup_role_ids := coalesce(@admin_partner_button_cleanup_role_ids, '');
 set @admin_partner_button_cleanup_expected_delete_count := coalesce(@admin_partner_button_cleanup_expected_delete_count, '');
+set @admin_partner_button_cleanup_expected_signature := coalesce(@admin_partner_button_cleanup_expected_signature, '');
 
 delimiter //
 
@@ -29,6 +31,10 @@ begin
 
   if coalesce(@admin_partner_button_cleanup_expected_delete_count, '') = '' then
     signal sqlstate '45000' set message_text = 'set @admin_partner_button_cleanup_expected_delete_count after previewing exact sys_role_menu rows';
+  end if;
+
+  if coalesce(@admin_partner_button_cleanup_expected_signature, '') not regexp '^[0-9a-fA-F]{64}$' then
+    signal sqlstate '45000' set message_text = 'set @admin_partner_button_cleanup_expected_signature after previewing exact sys_role_menu rows';
   end if;
 end//
 
@@ -79,6 +85,7 @@ create procedure assert_admin_partner_button_cleanup_targets()
 begin
   declare v_delete_count int default 0;
   declare v_invalid_role_count int default 0;
+  declare v_signature varchar(64) default '';
 
   select count(1)
     into v_invalid_role_count
@@ -94,8 +101,12 @@ begin
     signal sqlstate '45000' set message_text = 'admin partner button cleanup role_ids include admin or unlisted role_key values';
   end if;
 
-  select count(1)
-    into v_delete_count
+  select count(1),
+         sha2(coalesce(group_concat(
+           concat_ws(':', child_grant.role_id, child_grant.menu_id, child.perms)
+           order by child_grant.role_id, child_grant.menu_id separator '|'
+         ), ''), 256)
+    into v_delete_count, v_signature
   from sys_role_menu child_grant
   join sys_role r on r.role_id = child_grant.role_id
   join sys_menu child on child.menu_id = child_grant.menu_id
@@ -114,8 +125,8 @@ begin
     and coalesce(child.route_name, '') = ''
     and substring_index(child.perms, ':', 1) = substring_index(page_menu.perms, ':', 1)
     and child.menu_id in (
-        2200, 2201, 2202, 2203, 2205, 2206,
-        2210, 2211, 2212, 2213, 2215, 2216,
+        2200, 2201, 2202, 2203, 2205, 2206, 2256,
+        2210, 2211, 2212, 2213, 2215, 2216, 2257,
         2220, 2221, 2222, 2223, 2224, 2225, 2226, 2227, 2228, 2229,
         2230, 2231, 2232, 2233, 2234, 2235, 2236, 2237, 2238, 2239,
         2240, 2241, 2242, 2243, 2244,
@@ -126,8 +137,10 @@ begin
     and child.perms in (
         'seller:admin:query', 'seller:admin:add', 'seller:admin:edit',
         'seller:admin:changeStatus', 'seller:admin:directLogin', 'seller:admin:forceLogout',
+        'seller:admin:session:list',
         'buyer:admin:query', 'buyer:admin:add', 'buyer:admin:edit',
         'buyer:admin:changeStatus', 'buyer:admin:directLogin', 'buyer:admin:forceLogout',
+        'buyer:admin:session:list',
         'seller:admin:menu:list', 'seller:admin:menu:query', 'seller:admin:menu:add',
         'seller:admin:menu:edit', 'seller:admin:menu:remove',
         'seller:admin:role:list', 'seller:admin:role:query', 'seller:admin:role:add',
@@ -152,6 +165,10 @@ begin
 
   if v_delete_count <> cast(@admin_partner_button_cleanup_expected_delete_count as unsigned) then
     signal sqlstate '45000' set message_text = 'admin partner button cleanup expected delete count does not match target rows';
+  end if;
+
+  if lower(v_signature) <> lower(@admin_partner_button_cleanup_expected_signature) then
+    signal sqlstate '45000' set message_text = 'admin partner button cleanup exact target signature mismatch';
   end if;
 end//
 
@@ -180,8 +197,8 @@ where r.del_flag = '0'
   and coalesce(child.route_name, '') = ''
   and substring_index(child.perms, ':', 1) = substring_index(page_menu.perms, ':', 1)
   and child.menu_id in (
-      2200, 2201, 2202, 2203, 2205, 2206,
-      2210, 2211, 2212, 2213, 2215, 2216,
+      2200, 2201, 2202, 2203, 2205, 2206, 2256,
+      2210, 2211, 2212, 2213, 2215, 2216, 2257,
       2220, 2221, 2222, 2223, 2224, 2225, 2226, 2227, 2228, 2229,
       2230, 2231, 2232, 2233, 2234, 2235, 2236, 2237, 2238, 2239,
       2240, 2241, 2242, 2243, 2244,
@@ -192,8 +209,10 @@ where r.del_flag = '0'
   and child.perms in (
       'seller:admin:query', 'seller:admin:add', 'seller:admin:edit',
       'seller:admin:changeStatus', 'seller:admin:directLogin', 'seller:admin:forceLogout',
+      'seller:admin:session:list',
       'buyer:admin:query', 'buyer:admin:add', 'buyer:admin:edit',
       'buyer:admin:changeStatus', 'buyer:admin:directLogin', 'buyer:admin:forceLogout',
+      'buyer:admin:session:list',
       'seller:admin:menu:list', 'seller:admin:menu:query', 'seller:admin:menu:add',
       'seller:admin:menu:edit', 'seller:admin:menu:remove',
       'seller:admin:role:list', 'seller:admin:role:query', 'seller:admin:role:add',
@@ -237,8 +256,8 @@ where r.del_flag = '0'
   and coalesce(child.route_name, '') = ''
   and substring_index(child.perms, ':', 1) = substring_index(page_menu.perms, ':', 1)
   and child.menu_id in (
-      2200, 2201, 2202, 2203, 2205, 2206,
-      2210, 2211, 2212, 2213, 2215, 2216,
+      2200, 2201, 2202, 2203, 2205, 2206, 2256,
+      2210, 2211, 2212, 2213, 2215, 2216, 2257,
       2220, 2221, 2222, 2223, 2224, 2225, 2226, 2227, 2228, 2229,
       2230, 2231, 2232, 2233, 2234, 2235, 2236, 2237, 2238, 2239,
       2240, 2241, 2242, 2243, 2244,
@@ -249,8 +268,10 @@ where r.del_flag = '0'
   and child.perms in (
       'seller:admin:query', 'seller:admin:add', 'seller:admin:edit',
       'seller:admin:changeStatus', 'seller:admin:directLogin', 'seller:admin:forceLogout',
+      'seller:admin:session:list',
       'buyer:admin:query', 'buyer:admin:add', 'buyer:admin:edit',
       'buyer:admin:changeStatus', 'buyer:admin:directLogin', 'buyer:admin:forceLogout',
+      'buyer:admin:session:list',
       'seller:admin:menu:list', 'seller:admin:menu:query', 'seller:admin:menu:add',
       'seller:admin:menu:edit', 'seller:admin:menu:remove',
       'seller:admin:role:list', 'seller:admin:role:query', 'seller:admin:role:add',

@@ -518,7 +518,6 @@ export default function SkuMatrixEditor({
   return (
     <div className={styles.skuEditor}>
       <div className={styles.sectionTitle}>SKU 信息</div>
-      {!sourceMode ? (
       <div className={styles.specPanel}>
         <div className={styles.specPanelTitle}>规格属性</div>
         <Checkbox.Group
@@ -526,38 +525,41 @@ export default function SkuMatrixEditor({
           options={specCheckboxOptions}
           onChange={(checked) => changeSelectedSpecs(checked as (keyof API.ProductDistribution.Sku)[])}
         />
-        <div className={styles.specValueGrid}>
-          {selectedSpecs.map((field) => (
-            <div className={styles.specValueItem} key={field}>
-              <div className={styles.specValueTitle}>
-                {skuSpecFields.find((item) => item.value === field)?.label}
-              </div>
-              <Space wrap>
-                {(specValues[field] || []).map((item) => (
-                  <Tag closable key={item} onClose={() => removeSpecValue(field, item)}>
-                    {item}
-                  </Tag>
-                ))}
-                <Input
-                  className={styles.specInput}
-                  value={draftValues[field]}
-                  placeholder="输入规格值"
-                  onChange={(event) => setDraftValues({ ...draftValues, [field]: event.target.value })}
-                  onPressEnter={() => addSpecValue(field)}
-                />
-                <Button size="small" type="primary" onClick={() => addSpecValue(field)}>
-                  添加
-                </Button>
-              </Space>
+        {!sourceMode ? (
+          <>
+            <div className={styles.specValueGrid}>
+              {selectedSpecs.map((field) => (
+                <div className={styles.specValueItem} key={field}>
+                  <div className={styles.specValueTitle}>
+                    {skuSpecFields.find((item) => item.value === field)?.label}
+                  </div>
+                  <Space wrap>
+                    {(specValues[field] || []).map((item) => (
+                      <Tag closable key={item} onClose={() => removeSpecValue(field, item)}>
+                        {item}
+                      </Tag>
+                    ))}
+                    <Input
+                      className={styles.specInput}
+                      value={draftValues[field]}
+                      placeholder="输入规格值"
+                      onChange={(event) => setDraftValues({ ...draftValues, [field]: event.target.value })}
+                      onPressEnter={() => addSpecValue(field)}
+                    />
+                    <Button size="small" type="primary" onClick={() => addSpecValue(field)}>
+                      添加
+                    </Button>
+                  </Space>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-        <Space>
-          <Button type="primary" onClick={generateSkus}>生成 SKU</Button>
-          <Button onClick={addManualSku} icon={<PlusOutlined />}>新增 SKU</Button>
-        </Space>
+            <Space>
+              <Button type="primary" onClick={generateSkus}>生成 SKU</Button>
+              <Button onClick={addManualSku} icon={<PlusOutlined />}>新增 SKU</Button>
+            </Space>
+          </>
+        ) : null}
       </div>
-      ) : null}
 
       <div className={styles.bulkPanel}>
         <Space size={8} wrap>

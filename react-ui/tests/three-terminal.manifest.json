@@ -5,6 +5,7 @@
     "PortalDirectLoginAuthContractTest",
     "PortalAnonymousEndpointContractTest",
     "PortalSelfServiceSurfaceContractTest",
+    "PortalPasswordChangeContractTest",
     "PortalProductEndpointPermissionContractTest",
     "PortalLogAspectContractTest",
     "AdminAccountPermissionUiContractTest",
@@ -12,7 +13,11 @@
     "SellerAdminPermissionContractTest",
     "BuyerAdminPermissionContractTest",
     "IntegrationAdminPermissionContractTest",
+    "IntegrationAdminRouteContractTest",
+    "FinanceAdminRouteContractTest",
+    "ProductAdminRouteContractTest",
     "WarehouseAdminRouteContractTest",
+    "InventoryAdminRouteContractTest",
     "TerminalRouteOwnershipTest",
     "TerminalAccountIsolationTest",
     "TerminalSeedPermissionContractTest",
@@ -60,7 +65,12 @@
     "BuyerPortalProductServiceImplTest"
   ],
   "criticalBackendExplicitTestClasses": [
+    "FinanceAdminRouteContractTest",
+    "IntegrationAdminRouteContractTest",
+    "ProductAdminRouteContractTest",
     "WarehouseAdminRouteContractTest",
+    "InventoryAdminRouteContractTest",
+    "PortalPasswordChangeContractTest",
     "ProductDistributionMapperContractTest",
     "ProductDistributionServiceImplTest",
     "ProductModuleBoundaryContractTest",
@@ -85,7 +95,8 @@
     "tests/partner-audit-modal.test.ts",
     "tests/remote-menu-route-guard.test.ts",
     "tests/portal-unauthorized-redirect.test.ts",
-    "tests/product-distribution-permission-guard.test.ts"
+    "tests/product-distribution-permission-guard.test.ts",
+    "tests/upstream-system-permission-guard.test.ts"
   ],
   "frontendGuardScripts": [
     {

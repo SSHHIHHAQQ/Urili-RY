@@ -41,9 +41,6 @@ export function persistPortalLogin(
 ) {
   if (!result?.token || result.terminal !== expectedTerminal) {
     clearPortalLogin(expectedTerminal);
-    if (result?.terminal) {
-      clearPortalLogin(result.terminal);
-    }
     return false;
   }
   const terminal = expectedTerminal;

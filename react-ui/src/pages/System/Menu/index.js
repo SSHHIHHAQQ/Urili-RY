@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useIntl, FormattedMessage, useAccess } from '@umijs/max';
 import { Button, Modal } from 'antd';
 import { FooterToolbar, PageContainer, ProTable } from '@ant-design/pro-components';
-import { getPersistedProTableSearch } from '@/utils/proTableSearch';
+import { getPersistedProTableSearch, getProTableScroll } from '@/utils/proTableSearch';
 import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 import { PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, PoweroffOutlined, StopOutlined, EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons';
 import { getMenuList, removeMenu, addMenu, updateMenu, cascadeMenuStatus, cascadeMenuVisible } from '@/services/system/menu';
@@ -257,7 +257,7 @@ const MenuTableList = () => {
     return (_jsxs(PageContainer, { children: [_jsx("div", { style: { width: '100%', float: 'right' }, children: _jsx(ProTable, { headerTitle: intl.formatMessage({
                         id: 'pages.searchTable.title',
                         defaultMessage: '信息',
-                    }), actionRef: actionRef, rowKey: "menuId", search: getPersistedProTableSearch({ labelWidth: 120 }), tableAlertRender: false, tableAlertOptionRender: false, toolBarRender: () => [
+                    }), actionRef: actionRef, rowKey: "menuId", search: getPersistedProTableSearch({ labelWidth: 120 }), scroll: getProTableScroll(1300), tableAlertRender: false, tableAlertOptionRender: false, toolBarRender: () => [
                         _jsxs(Button, { type: "primary", hidden: !access.hasPerms('system:menu:add'), onClick: async () => {
                                 setCurrentRow(undefined);
                                 setModalVisible(true);

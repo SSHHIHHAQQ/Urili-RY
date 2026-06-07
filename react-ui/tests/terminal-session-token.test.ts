@@ -5,6 +5,8 @@ import {
   type SessionTerminal,
 } from '../src/access';
 import { persistPortalLogin } from '../src/pages/Portal/terminal';
+import fs from 'fs';
+import path from 'path';
 
 describe('terminal session token isolation', () => {
   const terminals: SessionTerminal[] = ['admin', 'seller', 'buyer'];
@@ -70,7 +72,7 @@ describe('terminal session token isolation', () => {
     expect(setItemSpy).not.toHaveBeenCalledWith('buyer_access_token', expect.anything());
   });
 
-  it('rejects a portal login response from another terminal and clears both terminal slots', () => {
+  it('rejects a portal login response from another terminal and clears only the page terminal slot', () => {
     expect(
       persistPortalLogin(
         {
@@ -84,6 +86,18 @@ describe('terminal session token isolation', () => {
 
     expect(setItemSpy).not.toHaveBeenCalledWith('buyer_access_token', 'seller-token');
     expect(removeItemSpy).toHaveBeenCalledWith('buyer_access_token');
-    expect(removeItemSpy).toHaveBeenCalledWith('seller_access_token');
+    expect(removeItemSpy).not.toHaveBeenCalledWith('seller_access_token');
+  });
+
+  it('does not pre-clear existing portal tokens before login or direct-login succeeds', () => {
+    const portalPageSources = [
+      '../src/pages/Portal/Login/index.tsx',
+      '../src/pages/Portal/DirectLogin/index.tsx',
+      '../src/pages/Portal/DirectLogin/index.js',
+    ].map((relativePath) => fs.readFileSync(path.resolve(__dirname, relativePath), 'utf8'));
+
+    for (const source of portalPageSources) {
+      expect(source).not.toContain('clearPortalLogin');
+    }
   });
 });

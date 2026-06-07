@@ -101,8 +101,15 @@ export default function SyncSettingsPanel({
   const [syncModalOpen, setSyncModalOpen] = useState(false);
   const [testing, setTesting] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const canViewSyncConfig = access.hasPerms('finance:currency:syncConfig');
+  const canViewSyncLog = access.hasPerms('finance:currency:log');
+  const canSyncCurrency = access.hasPerms('finance:currency:sync');
 
   const reloadSyncConfig = async () => {
+    if (!canViewSyncConfig) {
+      setSyncConfig(undefined);
+      return;
+    }
     const resp = await getSyncConfig();
     if (resp.code === 200) {
       setSyncConfig({ ...resp.data, credential: undefined });
@@ -111,7 +118,7 @@ export default function SyncSettingsPanel({
 
   useEffect(() => {
     reloadSyncConfig();
-  }, []);
+  }, [canViewSyncConfig]);
 
   const handleSave = async (values: API.Finance.SyncConfig) => {
     const ok = resultOk(
@@ -131,7 +138,9 @@ export default function SyncSettingsPanel({
       const resp = await testSyncConfig(normalizeSyncValues(values));
       if (resp.code === 200) {
         message.success(`测试成功，返回币种 ${resp.data.currencyCount}`);
-        syncLogActionRef.current?.reload();
+        if (canViewSyncLog) {
+          syncLogActionRef.current?.reload();
+        }
         await reloadSyncConfig();
       } else {
         message.error(resp.msg);
@@ -155,7 +164,9 @@ export default function SyncSettingsPanel({
       if (resp.code === 200) {
         message.success(`同步完成，更新币种 ${resp.data.updatedCount}`);
         onSynced?.();
-        syncLogActionRef.current?.reload();
+        if (canViewSyncLog) {
+          syncLogActionRef.current?.reload();
+        }
         await reloadSyncConfig();
         setSyncModalOpen(false);
       } else {
@@ -212,7 +223,7 @@ export default function SyncSettingsPanel({
             </Space>
             <Button
               icon={<SettingOutlined />}
-              hidden={!access.hasPerms('finance:currency:syncConfig')}
+              hidden={!canViewSyncConfig}
               onClick={() => setSyncModalOpen(true)}
             >
               同步设置
@@ -246,24 +257,26 @@ export default function SyncSettingsPanel({
           </Descriptions>
         </div>
 
-        <ProTable<API.Finance.SyncLog>
-          actionRef={syncLogActionRef}
-          rowKey="syncLogId"
-          columns={syncLogColumns}
-          scroll={getProTableScroll(1200)}
-          search={getPersistedProTableSearch(
-            { labelWidth: 100 },
-            'finance-currency-sync-log',
-          )}
-          request={async (params) => {
-            const resp = await getSyncLogList(params);
-            return {
-              data: resp.rows || [],
-              success: resp.code === 200,
-              total: resp.total || 0,
-            };
-          }}
-        />
+        {canViewSyncLog ? (
+          <ProTable<API.Finance.SyncLog>
+            actionRef={syncLogActionRef}
+            rowKey="syncLogId"
+            columns={syncLogColumns}
+            scroll={getProTableScroll(1200)}
+            search={getPersistedProTableSearch(
+              { labelWidth: 100 },
+              'finance-currency-sync-log',
+            )}
+            request={async (params) => {
+              const resp = await getSyncLogList(params);
+              return {
+                data: resp.rows || [],
+                success: resp.code === 200,
+                total: resp.total || 0,
+              };
+            }}
+          />
+        ) : null}
       </Space>
 
       <ModalForm<API.Finance.SyncConfig>
@@ -289,7 +302,7 @@ export default function SyncSettingsPanel({
               key="test"
               icon={<ReloadOutlined />}
               loading={testing}
-              hidden={!access.hasPerms('finance:currency:sync')}
+              hidden={!canSyncCurrency}
               onClick={handleTestConnection}
             >
               测试连接
@@ -298,7 +311,7 @@ export default function SyncSettingsPanel({
               key="sync"
               icon={<SyncOutlined />}
               loading={syncing}
-              hidden={!access.hasPerms('finance:currency:sync')}
+              hidden={!canSyncCurrency}
               onClick={handleSyncNow}
             >
               立即同步

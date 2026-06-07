@@ -207,7 +207,7 @@ export const layout: RunTimeLayoutConfig = ({ initialState, setInitialState }) =
 
 export function rootContainer(container: ReactNode) {
   return (
-    <ConfigProvider select={{ showSearch: true }}>
+    <ConfigProvider select={{ showSearch: true }} variant="outlined">
       <AntdApp>
         <AntdFeedbackProvider>{container}</AntdFeedbackProvider>
       </AntdApp>

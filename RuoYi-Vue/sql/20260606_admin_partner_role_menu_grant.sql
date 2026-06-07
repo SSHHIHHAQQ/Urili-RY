@@ -67,10 +67,116 @@ begin
   end if;
 end//
 
+drop procedure if exists assert_admin_partner_child_menu_signature//
+create procedure assert_admin_partner_child_menu_signature()
+begin
+  declare v_count int default 0;
+
+  drop temporary table if exists tmp_admin_partner_child_menu_signature;
+  create temporary table tmp_admin_partner_child_menu_signature (
+    menu_id bigint not null primary key,
+    parent_id bigint not null,
+    perms varchar(100) not null
+  ) engine=memory;
+
+  insert into tmp_admin_partner_child_menu_signature (menu_id, parent_id, perms)
+  values
+    (2200, 2011, 'seller:admin:query'),
+    (2201, 2011, 'seller:admin:add'),
+    (2202, 2011, 'seller:admin:edit'),
+    (2203, 2011, 'seller:admin:changeStatus'),
+    (2205, 2011, 'seller:admin:directLogin'),
+    (2206, 2011, 'seller:admin:forceLogout'),
+    (2256, 2011, 'seller:admin:session:list'),
+    (2210, 2012, 'buyer:admin:query'),
+    (2211, 2012, 'buyer:admin:add'),
+    (2212, 2012, 'buyer:admin:edit'),
+    (2213, 2012, 'buyer:admin:changeStatus'),
+    (2215, 2012, 'buyer:admin:directLogin'),
+    (2216, 2012, 'buyer:admin:forceLogout'),
+    (2257, 2012, 'buyer:admin:session:list'),
+    (2220, 2011, 'seller:admin:menu:list'),
+    (2221, 2011, 'seller:admin:menu:query'),
+    (2222, 2011, 'seller:admin:menu:add'),
+    (2223, 2011, 'seller:admin:menu:edit'),
+    (2224, 2011, 'seller:admin:menu:remove'),
+    (2225, 2011, 'seller:admin:role:list'),
+    (2226, 2011, 'seller:admin:role:query'),
+    (2227, 2011, 'seller:admin:role:add'),
+    (2228, 2011, 'seller:admin:role:edit'),
+    (2229, 2011, 'seller:admin:role:remove'),
+    (2230, 2012, 'buyer:admin:menu:list'),
+    (2231, 2012, 'buyer:admin:menu:query'),
+    (2232, 2012, 'buyer:admin:menu:add'),
+    (2233, 2012, 'buyer:admin:menu:edit'),
+    (2234, 2012, 'buyer:admin:menu:remove'),
+    (2235, 2012, 'buyer:admin:role:list'),
+    (2236, 2012, 'buyer:admin:role:query'),
+    (2237, 2012, 'buyer:admin:role:add'),
+    (2238, 2012, 'buyer:admin:role:edit'),
+    (2239, 2012, 'buyer:admin:role:remove'),
+    (2240, 2011, 'seller:admin:dept:list'),
+    (2241, 2011, 'seller:admin:dept:query'),
+    (2242, 2011, 'seller:admin:dept:add'),
+    (2243, 2011, 'seller:admin:dept:edit'),
+    (2244, 2011, 'seller:admin:dept:remove'),
+    (2245, 2012, 'buyer:admin:dept:list'),
+    (2246, 2012, 'buyer:admin:dept:query'),
+    (2247, 2012, 'buyer:admin:dept:add'),
+    (2248, 2012, 'buyer:admin:dept:edit'),
+    (2249, 2012, 'buyer:admin:dept:remove'),
+    (2250, 2011, 'seller:admin:loginLog:list'),
+    (2251, 2011, 'seller:admin:operLog:list'),
+    (2252, 2011, 'seller:admin:ticket:list'),
+    (2310, 2011, 'seller:admin:account:list'),
+    (2311, 2011, 'seller:admin:account:add'),
+    (2312, 2011, 'seller:admin:account:edit'),
+    (2322, 2011, 'seller:admin:account:lock'),
+    (2313, 2011, 'seller:admin:account:resetPwd'),
+    (2314, 2011, 'seller:admin:account:role:query'),
+    (2315, 2011, 'seller:admin:account:role:edit'),
+    (2253, 2012, 'buyer:admin:loginLog:list'),
+    (2254, 2012, 'buyer:admin:operLog:list'),
+    (2255, 2012, 'buyer:admin:ticket:list'),
+    (2316, 2012, 'buyer:admin:account:list'),
+    (2317, 2012, 'buyer:admin:account:add'),
+    (2318, 2012, 'buyer:admin:account:edit'),
+    (2323, 2012, 'buyer:admin:account:lock'),
+    (2319, 2012, 'buyer:admin:account:resetPwd'),
+    (2320, 2012, 'buyer:admin:account:role:query'),
+    (2321, 2012, 'buyer:admin:account:role:edit');
+
+  select count(1) into v_count
+  from tmp_admin_partner_child_menu_signature;
+
+  if v_count <> 64 then
+    signal sqlstate '45000' set message_text = 'partner child menu signature seed count must be 64';
+  end if;
+
+  select count(1) into v_count
+  from tmp_admin_partner_child_menu_signature seed
+  left join sys_menu m
+    on m.menu_id = seed.menu_id
+   and m.parent_id = seed.parent_id
+   and m.menu_type = 'F'
+   and coalesce(m.path, '') = '#'
+   and coalesce(m.component, '') = ''
+   and coalesce(m.route_name, '') = ''
+   and m.perms = seed.perms
+  where m.menu_id is null;
+
+  if v_count <> 0 then
+    signal sqlstate '45000' set message_text = 'partner sys_menu child button signature does not match expected seller/buyer admin buttons';
+  end if;
+
+  drop temporary table if exists tmp_admin_partner_child_menu_signature;
+end//
+
 delimiter ;
 
 call assert_admin_partner_role_menu_grant_confirmed();
 call assert_admin_partner_menu_signature();
+call assert_admin_partner_child_menu_signature();
 
 insert into sys_role_menu (role_id, menu_id)
 select r.role_id, m.menu_id
@@ -100,8 +206,8 @@ where r.role_key = 'admin'
   and coalesce(child.route_name, '') = ''
   and substring_index(child.perms, ':', 1) = substring_index(page_menu.perms, ':', 1)
   and child.menu_id in (
-      2200, 2201, 2202, 2203, 2205, 2206,
-      2210, 2211, 2212, 2213, 2215, 2216,
+      2200, 2201, 2202, 2203, 2205, 2206, 2256,
+      2210, 2211, 2212, 2213, 2215, 2216, 2257,
       2220, 2221, 2222, 2223, 2224, 2225, 2226, 2227, 2228, 2229,
       2230, 2231, 2232, 2233, 2234, 2235, 2236, 2237, 2238, 2239,
       2240, 2241, 2242, 2243, 2244,
@@ -112,8 +218,10 @@ where r.role_key = 'admin'
   and child.perms in (
       'seller:admin:query', 'seller:admin:add', 'seller:admin:edit',
       'seller:admin:changeStatus', 'seller:admin:directLogin', 'seller:admin:forceLogout',
+      'seller:admin:session:list',
       'buyer:admin:query', 'buyer:admin:add', 'buyer:admin:edit',
       'buyer:admin:changeStatus', 'buyer:admin:directLogin', 'buyer:admin:forceLogout',
+      'buyer:admin:session:list',
       'seller:admin:menu:list', 'seller:admin:menu:query', 'seller:admin:menu:add',
       'seller:admin:menu:edit', 'seller:admin:menu:remove',
       'seller:admin:role:list', 'seller:admin:role:query', 'seller:admin:role:add',
@@ -144,3 +252,4 @@ where r.role_key = 'admin'
 
 drop procedure if exists assert_admin_partner_role_menu_grant_confirmed;
 drop procedure if exists assert_admin_partner_menu_signature;
+drop procedure if exists assert_admin_partner_child_menu_signature;

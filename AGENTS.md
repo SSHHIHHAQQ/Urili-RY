@@ -99,6 +99,7 @@ cd E:\Urili-Ruoyi
   - 权限点、菜单、按钮、审计日志、导入导出是否受影响
   - 初始化数据、迁移方式、回滚方式
 - 日期前缀增量 SQL（例如 `20xxxxxx*.sql`）必须纳入 `SqlExecutionGuardContractTest` 自动发现；包含 dynamic DDL helper 的脚本，例如 `set @ddl = concat('alter table ...')` / `prepare stmt from @ddl`，也必须被视为高影响 SQL，保留确认 token、`45000` fail-closed 和确认调用在执行前的合同。
+- 高影响 DML 不能只靠宽泛条件执行。清理历史 `sys_*` 遗留角色、账号、菜单等脚本，必须要求预览确认的精确目标集合和签名/hash，执行前重新计算校验，不匹配直接 `45000` fail-closed。全量删除再重建的读模型脚本，必须使用 staging/swap 或事务保护，不能在删除后无原子化保障地继续重建。
 - 数据表确认通过后，才能进入后端、前端和 SQL 实现。
 
 ## 复用台账与重复代码规则
@@ -163,20 +164,25 @@ cd E:\Urili-Ruoyi
 - 管理端不通过混用账号体系获得控制权，而是通过平台管理接口、主体状态、账号状态、菜单/角色配置、免密代入、强制踢出和审计日志保留控制权。
 - 三端登录入口、token/session、Redis key、权限校验和数据范围必须能明确区分 `admin` / `seller` / `buyer`。
 - 卖家端接口不能相信前端传入的 `sellerId`，必须从当前卖家端 token 身份推导；买家端接口不能相信前端传入的 `buyerId`，必须从当前买家端 token 身份推导。
-- 卖家/买家账号查询必须下推到 SQL 层同时带 `seller_id/buyer_id + account_id` 约束；管理端登录日志、操作日志和免密票据审计列表按账号筛选时也必须显式提供对应主体 ID，不允许通过裸 `select*AccountById(accountId)` 反查主体 ID。Mapper 接口和 XML 不得保留裸 `select*AccountById(accountId)` 声明，生产代码中的裸 accountId mapper 调用必须被静态契约拦截。
+- 卖家/买家账号查询必须下推到 SQL 层同时带 `seller_id/buyer_id + account_id` 约束；管理端登录日志、操作日志和免密票据审计列表按账号筛选时也必须显式提供对应主体 ID，不允许通过裸 `select*AccountById(accountId)` 反查主体 ID。Mapper 接口和 XML 不得保留裸 `select*AccountById(accountId)` 声明，Service 接口和实现也不得新增单参数账号查询入口，生产代码中的裸 accountId mapper/service 调用必须被静态契约拦截。
+- 管理端账号弹窗的“分配角色”入口必须同时满足端角色查询权限 `*:admin:role:query`、账号角色查询权限 `*:admin:account:role:query` 和账号角色编辑权限 `*:admin:account:role:edit`；按钮可见性必须覆盖实际会调用的后端查询接口权限，避免前端显示入口但后端 403。
 - 管理端免密代入卖家端或买家端必须短时、一次性、可审计，必须记录 acting admin、目标端、目标主体、目标账号、原因、过期时间、使用时间和 IP；不能无痕冒充端内员工。
 - 管理端免密代入打开 seller/buyer 端窗口后，前端成功提示必须等待目标 portal 端完成 `/direct-login` 消费并通过 `PORTAL_DIRECT_LOGIN_RESULT_MESSAGE` 回传成功；不能只收到 `READY` 或只发出 token 就提示成功。
 - `portal.seller.web.url` / `portal.buyer.web.url` 属于环境配置；seed 脚本只允许在缺失时插入本地验证占位地址，不得无条件覆盖已有值，避免远端回放把真实端地址改回 `127.0.0.1:8001`。
 - 管理端强制踢出、账号锁定导致的强退、密码重置导致的强退等后台控制动作，登录日志里的 `actingAdminId` / `actingAdminName` 必须记录当前执行控制动作的管理端账号；如果被控制的是免密代入会话，可以保留 `directLogin` / `directLoginTicketId` 标记会话来源，但不得把原票据签发人误写成本次操作人。
+- 管理端查看卖家/买家端在线会话必须使用只读权限 `seller:admin:session:list` / `buyer:admin:session:list`；真正强制踢出会话才使用 `seller:admin:forceLogout` / `buyer:admin:forceLogout`。前端“会话”入口和后端 `GET .../sessions/list` 不得继续绑定强退权限。
 - 管理端重置卖家/买家端账号密码时，“重置密码”默认语义是人工输入 5-20 位临时密码并调用端账号 `resetPwd` 接口；不得把该入口静默退回默认密码 `U12346`。当前实现不保留 `resetDefaultPwd` 默认密码重置接口；如未来确需恢复默认密码能力，必须重新确认，并作为独立操作入口继续使用 `*:admin:account:resetPwd` 权限和端账号密码表。
 - 免密代入 Redis payload key 必须使用 `portal_direct_login:{terminal}:{token_hash}`；认证链路不得读取旧 `portal_direct_login:{token_hash}`，旧 key 只允许作为历史残留清理目标，不得新增依赖。
 - 卖家端、买家端消费免密票据时，如果票据 `terminal` 与当前端不匹配，不得把外端票据的 `ticketId`、`actingAdmin*`、`reason`、目标主体或目标账号写入当前端登录日志、操作日志或会话；应按当前端普通失败记录或直接拒绝。
 - `seller_oper_log` / `buyer_oper_log` 的免密代入审计必须落结构化字段，至少包含 `direct_login`、`direct_login_ticket_id`、`acting_admin_id`、`acting_admin_name`、`direct_login_reason`；`oper_param` 文本前缀只能作为兼容信息，不能作为唯一审计来源。
 - 卖家端、买家端自助日志接口不得直接返回 `PortalLoginLog` / `PortalOperLog` 内部审计模型；必须映射为 `PortalOwnLoginLogProfile` / `PortalOwnOperLogProfile` 等端内可见 DTO，不返回 `subjectId`、`accountId`、`directLoginTicketId`、`actingAdminId`、`actingAdminName`、`directLoginReason`、`operParam`、`jsonResult`、`tokenId` 或 Redis key。管理端审计接口继续返回完整结构化审计字段。
+- 卖家端、买家端普通登录页和 `/direct-login` 消费页不得在新 portal token 成功持久化前清理当前端已有 token；免密失败、超时或未收到 token 时只反馈失败，不误踢已有端内会话。跨端或无效响应仍由 `persistPortalLogin(...)` fail-closed，但只能清理当前页面端 token，不得清理响应声明的另一端 token；该规则必须同时由 `terminal-session-token.test.ts` 和 `check-portal-token-isolation.mjs` 固定。
 - 卖家端、买家端端内菜单写入必须 fail-closed：页面菜单 `C` 和按钮菜单 `F` 的 `perms` 必填，必须使用当前端前缀 `seller:` / `buyer:`，禁止 `*` 通配和 `seller:admin:` / `buyer:admin:` 管理端命名空间；页面菜单 `C` 的 `component` 必填，并且必须使用当前端页面根路径，不得为空回退到共享占位页。
 - 当前 `seller_menu` / `buyer_menu` 是端级共享菜单模板，不是单个卖家/买家的主体私有菜单；端内角色绑定菜单时，后端必须先全量校验提交的 `menuIds` 均存在于当前端对应菜单表，任何不存在或跨端菜单 ID 都必须在写 `seller_role_menu` / `buyer_role_menu` 前 fail-closed。
 - `seller_menu` / `buyer_menu` 的数字 ID 空间必须保持不重叠：seller 端菜单使用 `100000-199999`，buyer 端菜单使用 `200000-299999`。fresh seed 和三端隔离迁移必须分别从 `auto_increment=100000` / `auto_increment=200000` 开始；已运行库重排必须使用 guarded 迁移脚本并同步更新 role-menu 与 `parent_id`，不得手写无 guard 的主键重排 SQL。
 - React 远程菜单路由 guard 必须对空 `authority` 拒绝访问，不能把空权限当作允许；涉及三端 token、代理、菜单和权限的 `.ts/.tsx` 与 `.js` 镜像必须纳入 guard 脚本，尤其是 `access.js`、`proxy.js` 这类运行入口镜像。
+- `verify-three-terminal` 必须从 manifest 读取关键测试和 guard，前端关键测试发现范围必须覆盖 `react-ui` 仓库级测试文件，后端执行模块必须从 `RuoYi-Vue/pom.xml` reactor 动态派生存在 `src/test/java` 的模块；不得把 Maven `-pl` 模块清单长期硬编码成少数模块。新增或改造管理端业务模块时，必须补对应 admin route/permission/service/frontend 契约测试并登记到 `react-ui/tests/three-terminal.manifest.json`，不能只依赖 reactor compile 覆盖。
+- 三端隔离迁移不得把端账号空密码静默规范成 `''`；存量 `seller_account` / `buyer_account` 只要存在 null 或空白密码，迁移必须 fail-closed，要求先走 legacy backfill、人工重置或明确修复。`seller_account.password` / `buyer_account.password` 列必须是 `varchar(100) not null` 且无默认空串；seed、增量迁移和远端修正都不得使用 `default ''` 给遗漏密码的写入兜底。综合 seed 的端内菜单 ID 区间 guard 必须在端内角色、菜单、权限和端地址写入前执行。
 
 ## 文件大小与拆分判断规则
 
@@ -211,6 +217,7 @@ cd E:\Urili-Ruoyi
 - 三端前端表格操作列如果同一行超过 2 个操作，最多保留 2 个高频操作按钮直接展示，其余操作必须使用 Ant Design `Dropdown` 收进“更多”下拉菜单；不要在一行里平铺 3 个及以上文字按钮。
 - 三端前端表格操作列的行内操作和“更多”下拉菜单项默认只展示文字，不加操作图标；“更多”作为下拉触发器必须使用 Ant Design 小下箭头提示可展开。
 - 三端 portal 401 处理必须按端隔离：`/api/seller/**`、`/api/buyer/**` 的非 admin 请求只能清当前端 token，并跳转到对应 `/seller/login` 或 `/buyer/login`，且必须带当前 portal 路由的 `redirect` 参数；`/api/seller/admin/**`、`/api/buyer/admin/**` 仍按管理端 401 处理。
+- 三端 portal 登录页只能接受当前端 portal 白名单路径作为 `redirect`，即登录页、直登消费页和 `/{terminal}/portal` 子树；不得把 `/seller`、`/buyer` 或 `/seller/*`、`/buyer/*` 管理端路径粗略识别为 portal 路由。
 - React 全局响应拦截器发现响应体 `code/errorCode = 401` 后，完成清 token 和跳登录后必须 reject/throw，不能继续把原 response 交给业务页面当成功结果处理。
 
 ## 外部系统与领星接入边界
@@ -233,7 +240,8 @@ cd E:\Urili-Ruoyi
 
 总原则：非平凡任务优先谨慎和可验证，不盲目追求速度。简单任务可以快速处理；复杂任务必须先读上下文、明确成功标准、分步验证。
 
-- 需要使用子 Agent 时，优先使用 GPT-5.3 Codex；如果平台返回不可用、额度限制或上下文失败，再降级使用 `gpt-5.4`。子 Agent 完成、失败或不再需要后必须关闭，并在 Markdown 检查点记录实际模型、数量和结论处理。
+- 需要使用子 Agent 时，默认使用 `gpt-5.4`；如果平台返回不可用、额度限制或上下文失败，再回退到平台当前可用的下一优先级 Codex 模型。子 Agent 完成、失败或不再需要后必须关闭，并在 Markdown 检查点记录实际模型、数量和结论处理。
+- 当用户明确进入快速推进模式时，只修 P0/P1：编译、guard、接口、权限、串端、service/字段缺失。浏览器、截图、DOM 检测和 UI 细调默认跳过；P2 记录到 Markdown，不阻塞当前推进。已确认的同构管理端 UI 必须先做一套标准模板，代码级通过后再机械复制另一端，只替换配置、文案、路由、权限标识、字段和 service。
 
 ### 规则 1：先想清楚，再写代码
 
@@ -327,7 +335,7 @@ cd E:\Urili-Ruoyi
 
 ### 子 Agent 使用规则
 
-- 需要并行检查或大型任务拆分时，子 Agent 模型优先使用 GPT-5.3 Codex（工具模型 `gpt-5.3-codex-spark`）；如果不可用，再回退 `gpt-5.4`。
+- 需要并行检查或大型任务拆分时，子 Agent 模型默认使用 `gpt-5.4`；如果不可用，再回退到平台当前可用的下一优先级 Codex 模型。
 - 回退模型时，必须在阶段记录或最终回复中写明不可用原因、实际使用的模型和子 Agent 数量。
 - 子 Agent 的读写范围必须由主 Agent 明确；用完必须关闭，主 Agent 负责合并结论、复核冲突和执行最终验证。
 

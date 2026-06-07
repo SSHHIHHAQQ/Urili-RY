@@ -409,10 +409,6 @@ public class SellerPortalPermissionServiceImplTest
         }
         InvocationHandler handler = (Object proxy, Method method, Object[] args) -> {
             String methodName = method.getName();
-            if ("selectSellerAccountById".equals(methodName))
-            {
-                return accountById.get((Long) args[0]);
-            }
             if ("selectSellerAccountByIdAndSellerId".equals(methodName))
             {
                 Long sellerId = (Long) args[0];

@@ -21,13 +21,10 @@ const frontendDiscoveryIgnoredDirs = new Set([
   '.umi',
   '.umi-production',
 ]);
-const criticalBackendTestClassPattern = /(?:Terminal|ThreeTerminal|Portal|DirectLogin|Partner|SqlExecutionGuard|Admin.*Permission|Permission.*Account|SysMenuServiceImpl|LogAspectSensitiveFieldFilter|TokenServiceTerminalIsolation)/;
+const criticalBackendTestClassPattern = /(?:Terminal|ThreeTerminal|Portal|DirectLogin|Partner|SqlExecutionGuard|Admin.*(?:Permission|Route)|Permission.*Account|SysMenuServiceImpl|LogAspectSensitiveFieldFilter|TokenServiceTerminalIsolation)/;
 const criticalBackendExplicitTestClasses = new Set(manifest.criticalBackendExplicitTestClasses);
-const frontendDiscoveryRoots = [
-  path.join(uiRoot, 'tests'),
-  path.join(uiRoot, 'src'),
-];
-const criticalFrontendTestPathPattern = /(?:terminal|portal|partner|remote-menu|direct-login|unauthorized|redirect|three-terminal|product-distribution-permission)/i;
+const frontendDiscoveryRoots = [uiRoot];
+const criticalFrontendTestPathPattern = /(?:terminal|portal|partner|remote-menu|direct-login|unauthorized|redirect|three-terminal|product-distribution-permission|upstream-system-permission)/i;
 
 function readThreeTerminalManifest() {
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
@@ -167,11 +164,15 @@ function walkFiles(dir, files = [], ignoredDirs = new Set()) {
 }
 
 function getBackendTestSourceRoots() {
-  return fs
-    .readdirSync(backendRoot, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && backendReportModules.includes(entry.name))
-    .map((entry) => path.join(backendRoot, entry.name, 'src', 'test', 'java'))
+  return backendReportModules
+    .map((moduleName) => path.join(backendRoot, moduleName, 'src', 'test', 'java'))
     .filter((root) => fs.existsSync(root));
+}
+
+function getBackendTestModules() {
+  return backendReportModules.filter((moduleName) => {
+    return fs.existsSync(path.join(backendRoot, moduleName, 'src', 'test', 'java'));
+  });
 }
 
 function isCriticalBackendTestClass(testClass) {
@@ -347,7 +348,7 @@ const steps = [
     label: 'backend reactor test-compile',
     cwd: backendRoot,
     command: 'mvn',
-    args: ['-pl', 'ruoyi-admin', '-am', '-DskipTests', 'test-compile'],
+    args: ['-pl', backendReportModules.join(','), '-am', '-DskipTests', 'test-compile'],
   },
   {
     label: 'backend three-terminal contracts',
@@ -360,7 +361,7 @@ const steps = [
     command: 'mvn',
     args: [
       '-pl',
-      'ruoyi-system,ruoyi-framework,integration,product,seller,buyer',
+      getBackendTestModules().join(','),
       '-am',
       `-Dtest=${backendTests}`,
       // Kept for reactor dependency modules; report checks above/below prevent silent class skips.

@@ -166,6 +166,18 @@ function assertIncludes(source, relativePath, expected, description) {
   }
 }
 
+function assertDoesNotInclude(source, relativePath, forbidden, description) {
+  if (source.includes(forbidden)) {
+    violations.push(`${relativePath} must ${description}; found ${forbidden}`);
+  }
+}
+
+function assertDoesNotMatch(source, relativePath, pattern, description) {
+  if (pattern.test(source)) {
+    violations.push(`${relativePath} must ${description}; found ${pattern}`);
+  }
+}
+
 function assertMatches(source, relativePath, pattern, description) {
   if (!pattern.test(source)) {
     violations.push(`${relativePath} must ${description}`);
@@ -289,6 +301,12 @@ for (const file of [directLoginPageFile, directLoginPageJsFile]) {
       );
     }
   }
+  assertDoesNotInclude(
+    source,
+    relativePath,
+    'clearPortalLogin',
+    'not clear existing portal token before direct-login succeeds',
+  );
 }
 
 for (const portalPathsFile of portalPathsFiles) {
@@ -302,6 +320,7 @@ for (const portalPathsFile of portalPathsFiles) {
     '/seller/login',
     '/buyer/login',
     'getPortalLoginPath',
+    'isPortalTerminalPath',
     'isPortalRoute',
   ]) {
     if (!source.includes(expected)) {
@@ -391,8 +410,9 @@ for (const remoteMenuStorageFile of remoteMenuStorageFiles) {
 const portalLoginPage = assertFileExists(portalLoginPageFile);
 if (portalLoginPage) {
   for (const expected of [
-    'getPortalTerminal(redirect) !== terminal',
-    'redirect === PORTAL_META[terminal].loginPath',
+    '!isPortalTerminalPath(redirect, terminal)',
+    'redirectPath === PORTAL_META[terminal].loginPath',
+    "redirectPath === `/${terminal}/direct-login`",
     'PORTAL_META[terminal].homePath',
     'persistPortalLogin(response.data, terminal)',
     'history.replace(resolveRedirect(location.search, terminal))',
@@ -404,6 +424,12 @@ if (portalLoginPage) {
       'keep portal login redirect and terminal match checks',
     );
   }
+  assertDoesNotInclude(
+    portalLoginPage.source,
+    portalLoginPage.relativePath,
+    'clearPortalLogin',
+    'not clear existing portal token before login succeeds',
+  );
 }
 
 const portalLoginPageJs = assertFileExists(portalLoginPageJsFile);
@@ -413,6 +439,12 @@ if (portalLoginPageJs) {
     portalLoginPageJs.relativePath,
     "export { default } from './index.tsx';",
     'delegate to the guarded TSX login page implementation',
+  );
+  assertDoesNotInclude(
+    portalLoginPageJs.source,
+    portalLoginPageJs.relativePath,
+    'clearPortalLogin',
+    'not clear existing portal token before login succeeds',
   );
 }
 
@@ -582,13 +614,18 @@ for (const file of [portalTerminalFile, portalTerminalJsFile]) {
     'persistPortalLogin',
     'result.terminal !== expectedTerminal',
     'clearPortalLogin(expectedTerminal)',
-    'clearPortalLogin(result.terminal)',
     'setTerminalSessionToken(terminal, result.token',
   ]) {
     if (!source.includes(expected)) {
       violations.push(`${relativePath} must keep terminal-matching login persistence with ${expected}`);
     }
   }
+  assertDoesNotMatch(
+    source,
+    relativePath,
+    /clearPortalLogin\(\s*result\??\.terminal\s*\)/,
+    'not clear another portal terminal on login terminal mismatch',
+  );
 }
 
 if (fs.existsSync(portalTypeFile)) {

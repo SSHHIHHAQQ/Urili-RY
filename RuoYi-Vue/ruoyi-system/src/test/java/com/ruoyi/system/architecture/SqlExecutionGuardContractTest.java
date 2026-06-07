@@ -139,6 +139,12 @@ public class SqlExecutionGuardContractTest
         assertGuard(backendRoot, "sql/20260607_product_sku_source_binding.sql",
                 "@confirm_product_sku_source_binding",
                 "APPLY_PRODUCT_SKU_SOURCE_BINDING", violations);
+        assertGuard(backendRoot, "sql/20260607_inventory_overview_platform_stock.sql",
+                "@confirm_inventory_overview_platform_stock",
+                "APPLY_INVENTORY_OVERVIEW_PLATFORM_STOCK", violations);
+        assertGuard(backendRoot, "sql/20260608_inventory_overview_sku_baseline_refresh.sql",
+                "@confirm_inventory_overview_sku_baseline_refresh",
+                "APPLY_INVENTORY_OVERVIEW_SKU_BASELINE_REFRESH", violations);
         assertGuard(backendRoot, "sql/seller_buyer_management_seed.sql",
                 "@confirm_seller_buyer_management_seed",
                 "APPLY_SELLER_BUYER_MANAGEMENT_SEED", violations);
@@ -299,6 +305,12 @@ public class SqlExecutionGuardContractTest
         requireContains(violations, legacySql.getFileName().toString(), legacySource,
                 "@legacy_seller_expected_count");
         requireContains(violations, legacySql.getFileName().toString(), legacySource,
+                "@legacy_seller_expected_signature");
+        requireContains(violations, legacySql.getFileName().toString(), legacySource,
+                "set @legacy_seller_expected_signature after previewing exact seller_account/sys_user rows");
+        requireContains(violations, legacySql.getFileName().toString(), legacySource,
+                "seller_account legacy backfill exact target signature mismatch");
+        requireContains(violations, legacySql.getFileName().toString(), legacySource,
                 "preview-confirmed comma-separated seller_account_id values");
         requireContains(violations, legacySql.getFileName().toString(), legacySource,
                 "seller_account legacy backfill account_ids include rows outside legacy user_id scope");
@@ -312,6 +324,12 @@ public class SqlExecutionGuardContractTest
                 "@legacy_buyer_account_ids");
         requireContains(violations, legacySql.getFileName().toString(), legacySource,
                 "@legacy_buyer_expected_count");
+        requireContains(violations, legacySql.getFileName().toString(), legacySource,
+                "@legacy_buyer_expected_signature");
+        requireContains(violations, legacySql.getFileName().toString(), legacySource,
+                "set @legacy_buyer_expected_signature after previewing exact buyer_account/sys_user rows");
+        requireContains(violations, legacySql.getFileName().toString(), legacySource,
+                "buyer_account legacy backfill exact target signature mismatch");
         requireContains(violations, legacySql.getFileName().toString(), legacySource,
                 "preview-confirmed comma-separated buyer_account_id values");
         requireContains(violations, legacySql.getFileName().toString(), legacySource,
@@ -365,22 +383,286 @@ public class SqlExecutionGuardContractTest
                 "@legacy_sys_role_cleanup_role_keys",
                 "@legacy_sys_role_cleanup_role_ids",
                 "@legacy_sys_role_cleanup_expected_count",
+                "@legacy_sys_role_cleanup_expected_signature",
                 "LEGACY_SYS_ROLE_SELLER_BUYER_CONFIRMED",
                 "preview-confirmed comma-separated role_id values",
+                "set @legacy_sys_role_cleanup_expected_signature after previewing exact sys_role candidates",
+                "create procedure assert_terminal_owner_roles_ready",
+                "seller owner terminal roles are not ready before legacy sys_role cleanup",
+                "buyer owner terminal roles are not ready before legacy sys_role cleanup",
                 "create procedure assert_legacy_sys_role_cleanup_targets",
                 "legacy sys_role cleanup role_ids include non seller/buyer roles",
                 "legacy sys_role cleanup expected count does not match role_ids",
+                "legacy sys_role cleanup exact target signature mismatch",
+                "legacy_sys_role_cleanup_expected_signature",
                 "call assert_legacy_sys_role_cleanup_targets();"
         })
         {
             requireContains(violations, legacyRoleSql.getFileName().toString(), source, expected);
         }
         assertAppearsBefore(violations, legacyRoleSql.getFileName().toString(), source,
+                "call assert_terminal_owner_roles_ready();", "call assert_legacy_sys_role_cleanup_targets();");
+        assertAppearsBefore(violations, legacyRoleSql.getFileName().toString(), source,
                 "call assert_legacy_sys_role_cleanup_targets();", "update sys_role");
 
         if (!violations.isEmpty())
         {
             fail("legacy sys_role cleanup must stay preview-confirmed and target-bounded:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    @Test
+    public void adminPartnerButtonCleanupMustKeepPreviewConfirmedTargetSignature() throws IOException
+    {
+        Path backendRoot = findWorkspaceRoot().resolve("RuoYi-Vue");
+        Path cleanupSql = backendRoot.resolve("sql/20260606_admin_partner_non_admin_button_grant_cleanup.sql");
+        String source = Files.readString(cleanupSql, StandardCharsets.UTF_8);
+        List<String> violations = new ArrayList<>();
+
+        for (String expected : new String[] {
+                "@admin_partner_button_cleanup_expected_delete_count",
+                "@admin_partner_button_cleanup_expected_signature",
+                "set @admin_partner_button_cleanup_expected_signature after previewing exact sys_role_menu rows",
+                "sha2(coalesce(group_concat(",
+                "concat_ws(':', child_grant.role_id, child_grant.menu_id, child.perms)",
+                "admin partner button cleanup exact target signature mismatch",
+                "call assert_admin_partner_button_cleanup_targets();"
+        })
+        {
+            requireContains(violations, cleanupSql.getFileName().toString(), source, expected);
+        }
+        assertAppearsBefore(violations, cleanupSql.getFileName().toString(), source,
+                "call assert_admin_partner_button_cleanup_targets();", "delete child_grant");
+
+        if (!violations.isEmpty())
+        {
+            fail("admin partner button cleanup must keep preview-confirmed exact target signature:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    @Test
+    public void adminPartnerOwnerResetCleanupMustKeepPreviewConfirmedTargetSignatures() throws IOException
+    {
+        Path backendRoot = findWorkspaceRoot().resolve("RuoYi-Vue");
+        Path cleanupSql = backendRoot.resolve("sql/20260607_admin_partner_owner_reset_permission_cleanup.sql");
+        String source = Files.readString(cleanupSql, StandardCharsets.UTF_8);
+        List<String> violations = new ArrayList<>();
+
+        for (String expected : new String[] {
+                "@admin_partner_owner_reset_expected_role_menu_count",
+                "@admin_partner_owner_reset_expected_menu_count",
+                "@admin_partner_owner_reset_expected_role_menu_signature",
+                "@admin_partner_owner_reset_expected_menu_signature",
+                "set @admin_partner_owner_reset_expected_role_menu_signature after previewing exact sys_role_menu rows",
+                "set @admin_partner_owner_reset_expected_menu_signature after previewing exact sys_menu rows",
+                "concat_ws(':', rm.role_id, rm.menu_id)",
+                "concat_ws(':',",
+                "m.menu_id,",
+                "admin partner owner reset role-menu exact target signature mismatch",
+                "admin partner owner reset menu exact target signature mismatch",
+                "call assert_admin_partner_owner_reset_permission_cleanup_targets();"
+        })
+        {
+            requireContains(violations, cleanupSql.getFileName().toString(), source, expected);
+        }
+        assertAppearsBefore(violations, cleanupSql.getFileName().toString(), source,
+                "call assert_admin_partner_owner_reset_permission_cleanup_targets();", "delete rm");
+        assertAppearsBefore(violations, cleanupSql.getFileName().toString(), source,
+                "call assert_admin_partner_owner_reset_permission_cleanup_targets();", "delete m");
+
+        if (!violations.isEmpty())
+        {
+            fail("admin partner owner reset cleanup must keep preview-confirmed exact target signatures:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    @Test
+    public void threeTerminalIsolationMigrationMustFailClosedBeforeUsernameUniqueIndexMigration()
+            throws IOException
+    {
+        Path backendRoot = findWorkspaceRoot().resolve("RuoYi-Vue");
+        Path migrationSql = backendRoot.resolve("sql/20260604_three_terminal_isolation_migration.sql");
+        String source = Files.readString(migrationSql, StandardCharsets.UTF_8);
+        String fileName = migrationSql.getFileName().toString();
+        List<String> violations = new ArrayList<>();
+
+        for (String expected : new String[] {
+                "create procedure assert_no_duplicate_terminal_user_name",
+                "seller_account has duplicate user_name values before username unique index migration",
+                "buyer_account has duplicate user_name values before username unique index migration",
+                "call recreate_index_if_mismatch('seller_account', 'uk_seller_account_username'",
+                "call recreate_index_if_mismatch('buyer_account', 'uk_buyer_account_username'",
+                "call assert_index_definition('seller_account', 'uk_seller_account_username'",
+                "call assert_index_definition('buyer_account', 'uk_buyer_account_username'",
+                "drop procedure if exists assert_no_duplicate_terminal_user_name"
+        })
+        {
+            requireContains(violations, fileName, source, expected);
+        }
+
+        assertAppearsBefore(violations, fileName, source,
+                "call assert_no_duplicate_terminal_user_name('seller_account'",
+                "call drop_index_if_exists('seller_account', 'uk_seller_account_user');");
+        assertAppearsBefore(violations, fileName, source,
+                "call assert_no_duplicate_terminal_user_name('buyer_account'",
+                "call drop_column_if_exists('buyer_account', 'user_id');");
+        assertAppearsBefore(violations, fileName, source,
+                "call assert_no_duplicate_terminal_user_name('seller_account'",
+                "call recreate_index_if_mismatch('seller_account', 'uk_seller_account_username'");
+        assertAppearsBefore(violations, fileName, source,
+                "call recreate_index_if_mismatch('seller_account', 'uk_seller_account_username'",
+                "call assert_index_definition('seller_account', 'uk_seller_account_username'");
+
+        if (!violations.isEmpty())
+        {
+            fail("three-terminal isolation migration must fail closed before username unique index migration:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    @Test
+    public void adminPartnerRoleMenuGrantMustVerifyExactChildMenuSignature() throws IOException
+    {
+        Path backendRoot = findWorkspaceRoot().resolve("RuoYi-Vue");
+        Path grantSql = backendRoot.resolve("sql/20260606_admin_partner_role_menu_grant.sql");
+        String source = Files.readString(grantSql, StandardCharsets.UTF_8);
+        String fileName = grantSql.getFileName().toString();
+        List<String> violations = new ArrayList<>();
+
+        for (String expected : new String[] {
+                "create procedure assert_admin_partner_child_menu_signature",
+                "tmp_admin_partner_child_menu_signature",
+                "partner child menu signature seed count must be 64",
+                "partner sys_menu child button signature does not match expected seller/buyer admin buttons",
+                "and m.parent_id = seed.parent_id",
+                "and m.perms = seed.perms",
+                "(2322, 2011, 'seller:admin:account:lock')",
+                "(2323, 2012, 'buyer:admin:account:lock')",
+                "call assert_admin_partner_child_menu_signature();",
+                "drop procedure if exists assert_admin_partner_child_menu_signature"
+        })
+        {
+            requireContains(violations, fileName, source, expected);
+        }
+
+        assertAppearsBefore(violations, fileName, source,
+                "call assert_admin_partner_child_menu_signature();",
+                "select distinct r.role_id, child.menu_id");
+
+        if (!violations.isEmpty())
+        {
+            fail("admin partner role-menu grant must verify exact child menu signatures before granting:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    @Test
+    public void terminalMenuSeedsAndMigrationMustEnforceUniqueTerminalPermsBeforeRoleBinding()
+            throws IOException
+    {
+        Path backendRoot = findWorkspaceRoot().resolve("RuoYi-Vue");
+        Path seedSql = backendRoot.resolve("sql/seller_buyer_management_seed.sql");
+        Path migrationSql = backendRoot.resolve("sql/20260604_three_terminal_isolation_migration.sql");
+        String seedSource = Files.readString(seedSql, StandardCharsets.UTF_8);
+        String migrationSource = Files.readString(migrationSql, StandardCharsets.UTF_8);
+        List<String> violations = new ArrayList<>();
+
+        for (String expected : new String[] {
+                "unique key uk_seller_menu_perms (perms)",
+                "unique key uk_buyer_menu_perms (perms)",
+                "seller_menu contains invalid terminal perms",
+                "buyer_menu contains invalid terminal perms",
+                "seller_menu page menus require component",
+                "buyer_menu page menus require component",
+                "seller_menu perms must be unique before terminal role grants",
+                "buyer_menu perms must be unique before terminal role grants",
+                "call add_index_if_missing('seller_menu', 'uk_seller_menu_perms'",
+                "call add_index_if_missing('buyer_menu', 'uk_buyer_menu_perms'",
+                "call assert_terminal_menu_perms_unique_index('seller_menu', 'uk_seller_menu_perms'",
+                "call assert_terminal_menu_perms_unique_index('buyer_menu', 'uk_buyer_menu_perms'"
+        })
+        {
+            requireContains(violations, seedSql.getFileName().toString(), seedSource, expected);
+        }
+        assertAppearsBefore(violations, seedSql.getFileName().toString(), seedSource,
+                "call assert_terminal_menu_range_ready();",
+                "call add_index_if_missing('seller_menu', 'uk_seller_menu_perms'");
+        assertAppearsBefore(violations, seedSql.getFileName().toString(), seedSource,
+                "call assert_terminal_menu_perms_unique_index('seller_menu', 'uk_seller_menu_perms'",
+                "insert into seller_role_menu");
+        assertAppearsBefore(violations, seedSql.getFileName().toString(), seedSource,
+                "call assert_terminal_menu_perms_unique_index('buyer_menu', 'uk_buyer_menu_perms'",
+                "insert into buyer_role_menu");
+
+        for (String expected : new String[] {
+                "create procedure assert_terminal_menu_integrity_ready",
+                "unique key uk_seller_menu_perms (perms)",
+                "unique key uk_buyer_menu_perms (perms)",
+                "seller_menu contains invalid terminal perms",
+                "buyer_menu contains invalid terminal perms",
+                "seller_menu page menus require component",
+                "buyer_menu page menus require component",
+                "seller_menu perms must be unique before terminal role grants",
+                "buyer_menu perms must be unique before terminal role grants",
+                "call assert_terminal_menu_integrity_ready();",
+                "call recreate_index_if_mismatch('seller_menu', 'uk_seller_menu_perms'",
+                "call recreate_index_if_mismatch('buyer_menu', 'uk_buyer_menu_perms'",
+                "call assert_index_definition('seller_menu', 'uk_seller_menu_perms'",
+                "call assert_index_definition('buyer_menu', 'uk_buyer_menu_perms'",
+                "drop procedure if exists assert_terminal_menu_integrity_ready"
+        })
+        {
+            requireContains(violations, migrationSql.getFileName().toString(), migrationSource, expected);
+        }
+        assertAppearsBefore(violations, migrationSql.getFileName().toString(), migrationSource,
+                "call assert_terminal_menu_integrity_ready();",
+                "call recreate_index_if_mismatch('seller_menu', 'uk_seller_menu_perms'");
+        assertAppearsBefore(violations, migrationSql.getFileName().toString(), migrationSource,
+                "call assert_index_definition('seller_menu', 'uk_seller_menu_perms'",
+                "create table if not exists seller_login_log");
+
+        if (!violations.isEmpty())
+        {
+            fail("terminal menu seeds and migration must fail closed before perms-based role binding:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    @Test
+    public void inventoryOverviewSkuBaselineRefreshMustRebuildReadModelsInTransaction() throws IOException
+    {
+        Path backendRoot = findWorkspaceRoot().resolve("RuoYi-Vue");
+        Path sqlFile = backendRoot.resolve("sql/20260608_inventory_overview_sku_baseline_refresh.sql");
+        String source = Files.readString(sqlFile, StandardCharsets.UTF_8);
+        String fileName = sqlFile.getFileName().toString();
+        List<String> violations = new ArrayList<>();
+
+        for (String expected : new String[] {
+                "start transaction;",
+                "delete from inventory_overview_sku_read_model;",
+                "delete from inventory_overview_spu_read_model;",
+                "insert into inventory_overview_sku_read_model(",
+                "insert into inventory_overview_spu_read_model(",
+                "commit;"
+        })
+        {
+            requireContains(violations, fileName, source, expected);
+        }
+        assertAppearsBefore(violations, fileName, source,
+                "start transaction;", "delete from inventory_overview_sku_read_model;");
+        assertAppearsBefore(violations, fileName, source,
+                "delete from inventory_overview_spu_read_model;", "insert into inventory_overview_sku_read_model(");
+        assertAppearsBefore(violations, fileName, source,
+                "insert into inventory_overview_sku_read_model(", "insert into inventory_overview_spu_read_model(");
+        assertAppearsBefore(violations, fileName, source,
+                "insert into inventory_overview_spu_read_model(", "commit;");
+
+        if (!violations.isEmpty())
+        {
+            fail("inventory overview sku baseline refresh must atomically rebuild read models:\n"
                     + String.join("\n", violations));
         }
     }
@@ -534,6 +816,7 @@ public class SqlExecutionGuardContractTest
                 "'seller_account_role'",
                 "'buyer_role_menu'",
                 "call assert_seller_buyer_management_seed_profile();",
+                "call assert_terminal_menu_range_ready();",
                 "drop procedure if exists assert_seller_buyer_management_seed_profile"
         })
         {
@@ -548,6 +831,15 @@ public class SqlExecutionGuardContractTest
         assertAppearsBefore(violations, seedSql.getFileName().toString(), source,
                 "call assert_seller_buyer_management_seed_profile();",
                 "insert into sys_config");
+        assertAppearsBefore(violations, seedSql.getFileName().toString(), source,
+                "call assert_terminal_menu_range_ready();",
+                "insert into sys_config");
+        assertAppearsBefore(violations, seedSql.getFileName().toString(), source,
+                "call assert_terminal_menu_range_ready();",
+                "insert into seller_role");
+        assertAppearsBefore(violations, seedSql.getFileName().toString(), source,
+                "call assert_terminal_menu_range_ready();",
+                "insert into buyer_role");
         assertAppearsBefore(violations, seedSql.getFileName().toString(), source,
                 "call assert_seller_buyer_management_seed_profile();",
                 "insert into seller_role");
@@ -858,6 +1150,8 @@ public class SqlExecutionGuardContractTest
                 "product:distribution:list",
                 "(2412, '售后管理'",
                 "order:afterSale:list",
+                "(2420, '库存总览'",
+                "inventory:overview:list",
                 "(2421, '来源仓库库存'",
                 "inventory:sourceWarehouse:list",
                 "(2440, '商品分类配置'",
@@ -1513,17 +1807,27 @@ public class SqlExecutionGuardContractTest
                 "coalesce(c.character_maximum_length, -1) <> expected.expected_length",
                 "c.is_nullable <> expected.expected_nullable",
                 "coalesce(c.column_default, '<NULL>') <> coalesce(expected.expected_default, '<NULL>')",
-                "alter table `', p_table, '` modify user_name varchar(30) not null, modify nick_name varchar(30) not null default '''', modify password varchar(100) not null default ''''",
+                "alter table `', p_table, '` modify user_name varchar(30) not null, modify nick_name varchar(30) not null default '''', modify password varchar(100) not null comment ''密码密文''",
+                "create procedure assert_no_blank_terminal_passwords",
+                "terminal account password column is required before password preflight",
+                "where password is null or trim(password) = ', char(39), char(39)",
+                "seller_account contains blank passwords; reset or backfill before isolation migration",
+                "buyer_account contains blank passwords; reset or backfill before isolation migration",
                 "call modify_terminal_account_identity_columns_if_needed('seller_account');",
                 "call modify_terminal_account_identity_columns_if_needed('buyer_account');",
-                "drop procedure if exists modify_terminal_account_identity_columns_if_needed"
+                "call assert_no_blank_terminal_passwords('seller_account'",
+                "call assert_no_blank_terminal_passwords('buyer_account'",
+                "drop procedure if exists modify_terminal_account_identity_columns_if_needed",
+                "drop procedure if exists assert_no_blank_terminal_passwords"
         })
         {
             requireContains(violations, sqlFile.getFileName().toString(), source, expected);
         }
         for (String forbidden : new String[] {
                 "alter table seller_account modify user_name varchar(30) not null",
-                "alter table buyer_account modify user_name varchar(30) not null"
+                "alter table buyer_account modify user_name varchar(30) not null",
+                "modify password varchar(100) not null default ''''",
+                "password = coalesce(password, '')"
         })
         {
             requireNotContains(violations, sqlFile.getFileName().toString(), normalizedSource, forbidden);
@@ -1532,15 +1836,63 @@ public class SqlExecutionGuardContractTest
                 "call drop_column_if_exists('buyer_account', 'user_id');",
                 "call modify_terminal_account_identity_columns_if_needed('seller_account');");
         assertAppearsBefore(violations, sqlFile.getFileName().toString(), source,
+                "call assert_no_blank_terminal_passwords('seller_account'",
+                "update seller_account");
+        assertAppearsBefore(violations, sqlFile.getFileName().toString(), source,
+                "call assert_no_blank_terminal_passwords('buyer_account'",
+                "update buyer_account");
+        assertAppearsBefore(violations, sqlFile.getFileName().toString(), source,
                 "call modify_terminal_account_identity_columns_if_needed('seller_account');",
-                "call add_index_if_missing('seller_account', 'uk_seller_account_username'");
+                "call recreate_index_if_mismatch('seller_account', 'uk_seller_account_username'");
         assertAppearsBefore(violations, sqlFile.getFileName().toString(), source,
                 "call modify_terminal_account_identity_columns_if_needed('buyer_account');",
-                "call add_index_if_missing('buyer_account', 'uk_buyer_account_username'");
+                "call recreate_index_if_mismatch('buyer_account', 'uk_buyer_account_username'");
 
         if (!violations.isEmpty())
         {
             fail("three terminal isolation migration must use a replay-safe account identity modify helper:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    @Test
+    public void terminalAccountPasswordColumnsMustNotDefaultToBlank() throws IOException
+    {
+        Path backendRoot = findWorkspaceRoot().resolve("RuoYi-Vue");
+        Path seedSql = backendRoot.resolve("sql/seller_buyer_management_seed.sql");
+        Path migrationSql = backendRoot.resolve("sql/20260604_three_terminal_isolation_migration.sql");
+        String seedSource = Files.readString(seedSql, StandardCharsets.UTF_8).replace("\r\n", "\n").toLowerCase();
+        String migrationSource = Files.readString(migrationSql, StandardCharsets.UTF_8).replace("\r\n", "\n")
+                .toLowerCase();
+        List<String> violations = new ArrayList<>();
+
+        for (String forbidden : new String[] {
+                "password              varchar(100)    not null default ''",
+                "modify password varchar(100) not null default ''''",
+                "union all select 'password', 'varchar', 100, 'no', ''"
+        })
+        {
+            requireNotContains(violations, seedSql.getFileName().toString(), seedSource, forbidden);
+            requireNotContains(violations, migrationSql.getFileName().toString(), migrationSource, forbidden);
+        }
+        for (String expected : new String[] {
+                "password              varchar(100)    not null                   comment '密码密文'"
+        })
+        {
+            requireContains(violations, seedSql.getFileName().toString(), seedSource, expected);
+        }
+        for (String expected : new String[] {
+                "union all select 'password', 'varchar', 100, 'no', cast(null as char)",
+                "modify password varchar(100) not null comment ''密码密文''",
+                "password              varchar(100)    not null,"
+        })
+        {
+            requireContains(violations, migrationSql.getFileName().toString(), migrationSource, expected);
+        }
+
+        if (!violations.isEmpty())
+        {
+            fail("terminal account password columns must fail closed instead of defaulting to blank strings:\n"
                     + String.join("\n", violations));
         }
     }

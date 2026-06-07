@@ -40,12 +40,15 @@ describe('product distribution permission guard', () => {
     expect(editPageTsx).toMatch(/request=\{async \(params\) => \{[\s\S]*?if \(!canQuerySourceProducts\)[\s\S]*?getSourceProductList/);
     expect(editPageTsx).toContain('disabled={!canQuerySourceProducts}');
 
-    expect(editPageJs).toContain("import { history, useAccess, useParams } from '@umijs/max'");
-    expect(editPageJs).toContain("const canQueryOfficialWarehouses = access.hasPerms('warehouse:official:list')");
-    expect(editPageJs).toContain("const canQueryThirdPartyWarehouses = access.hasPerms('warehouse:thirdParty:list')");
+    expect(editPageJs).toMatch(/from ["']@umijs\/max["']/);
+    expect(editPageJs).toMatch(/const canQuerySourceProducts = access\.hasPerms\(["']product:list:list["']\)/);
+    expect(editPageJs).toMatch(/const canQueryOfficialWarehouses = access\.hasPerms\(["']warehouse:official:list["']\)/);
+    expect(editPageJs).toMatch(/const canQueryThirdPartyWarehouses = access\.hasPerms\(["']warehouse:thirdParty:list["']\)/);
     expect(editPageJs).toMatch(/const officialWarehouseRequest = canQueryOfficialWarehouses[\s\S]*?\? getOfficialWarehouseList/);
     expect(editPageJs).toMatch(/const thirdPartyWarehouseRequest = selectedSellerId && canQueryThirdPartyWarehouses[\s\S]*?\? getThirdPartyWarehouseList/);
-    expect(editPageJs).not.toContain('getSourceProductList');
+    expect(editPageJs).toMatch(/const openSourceSelector = \(\) => \{[\s\S]*?if \(!canQuerySourceProducts\)/);
+    expect(editPageJs).toMatch(/request: async \(params\d*\) => \{[\s\S]*?if \(!canQuerySourceProducts\)[\s\S]*?getSourceProductList/);
+    expect(editPageJs).toContain('disabled: !canQuerySourceProducts');
   });
 
   it('does not mix seller or buyer admin permissions into the admin product page', () => {

@@ -9,7 +9,6 @@ import {
   type PortalDirectLoginTokenMessage,
 } from '@/utils/portalDirectLoginMessage';
 import {
-  clearPortalLogin,
   getPortalTerminal,
   persistPortalLogin,
   PORTAL_META,
@@ -68,7 +67,6 @@ const DirectLoginPage: React.FC = () => {
       };
     }
 
-    clearPortalLogin(terminal);
     const openerOrigin = resolveOpenerOrigin();
     const postConsumeResult = (status: PortalDirectLoginResultMessage['status'], ticketId?: number, message?: string) => {
       const payload: PortalDirectLoginResultMessage = {
@@ -97,7 +95,6 @@ const DirectLoginPage: React.FC = () => {
         }
       } catch (error) {
         console.log(error);
-        clearPortalLogin(terminal);
         postConsumeResult('error', message.ticketId, 'Direct login failed');
         if (mounted) {
           setState({ status: 'error', message: 'Direct login failed' });
@@ -122,7 +119,6 @@ const DirectLoginPage: React.FC = () => {
     window.opener?.postMessage({ type: PORTAL_DIRECT_LOGIN_READY_MESSAGE, terminal }, openerOrigin);
     const timeoutTimer = window.setTimeout(() => {
       if (!consumed && mounted) {
-        clearPortalLogin(terminal);
         setState({ status: 'error', message: 'Direct login token was not received' });
       }
     }, 5000);

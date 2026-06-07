@@ -227,6 +227,20 @@ begin
   end if;
 end//
 
+drop procedure if exists assert_no_duplicate_terminal_user_name//
+create procedure assert_no_duplicate_terminal_user_name(in p_table varchar(64), in p_message varchar(128))
+begin
+  set @duplicate_terminal_user_name_count := 0;
+  set @sql = concat('select count(1) into @duplicate_terminal_user_name_count from (select user_name from ',
+      p_table, ' group by user_name having count(1) > 1) t');
+  prepare stmt from @sql;
+  execute stmt;
+  deallocate prepare stmt;
+  if @duplicate_terminal_user_name_count > 0 then
+    signal sqlstate '45000' set message_text = p_message;
+  end if;
+end//
+
 drop procedure if exists modify_terminal_account_identity_columns_if_needed//
 create procedure modify_terminal_account_identity_columns_if_needed(in p_table varchar(64))
 begin
@@ -255,7 +269,7 @@ begin
   from (
     select 'user_name' as expected_column, 'varchar' as expected_type, 30 as expected_length, 'NO' as expected_nullable, cast(null as char) as expected_default
     union all select 'nick_name', 'varchar', 30, 'NO', ''
-    union all select 'password', 'varchar', 100, 'NO', ''
+    union all select 'password', 'varchar', 100, 'NO', cast(null as char)
   ) expected
   left join information_schema.columns c
     on c.table_schema = database()
@@ -268,7 +282,7 @@ begin
      or coalesce(c.column_default, '<NULL>') <> coalesce(expected.expected_default, '<NULL>');
 
   if v_mismatch_count > 0 then
-    set @ddl = concat('alter table `', p_table, '` modify user_name varchar(30) not null, modify nick_name varchar(30) not null default '''', modify password varchar(100) not null default ''''');
+    set @ddl = concat('alter table `', p_table, '` modify user_name varchar(30) not null, modify nick_name varchar(30) not null default '''', modify password varchar(100) not null comment ''密码密文''');
     prepare stmt from @ddl;
     execute stmt;
     deallocate prepare stmt;
@@ -314,6 +328,109 @@ begin
   end if;
 end//
 
+drop procedure if exists assert_no_blank_terminal_passwords//
+create procedure assert_no_blank_terminal_passwords(
+  in p_table varchar(64),
+  in p_message varchar(128)
+)
+begin
+  declare v_column_count int default 0;
+
+  select count(1)
+    into v_column_count
+  from information_schema.columns
+  where table_schema = database()
+    and table_name = p_table
+    and column_name = 'password';
+
+  if v_column_count <> 1 then
+    signal sqlstate '45000' set message_text = 'terminal account password column is required before password preflight';
+  end if;
+
+  set @blank_terminal_password_count = 0;
+  set @terminal_password_preflight_sql = concat(
+    'select count(1) into @blank_terminal_password_count from `', p_table,
+    '` where password is null or trim(password) = ', char(39), char(39)
+  );
+  prepare stmt from @terminal_password_preflight_sql;
+  execute stmt;
+  deallocate prepare stmt;
+
+  if @blank_terminal_password_count > 0 then
+    signal sqlstate '45000' set message_text = p_message;
+  end if;
+end//
+
+drop procedure if exists assert_terminal_menu_integrity_ready//
+create procedure assert_terminal_menu_integrity_ready()
+begin
+  if exists (
+    select 1
+    from seller_menu
+    where coalesce(perms, '') = ''
+       or coalesce(perms, '') = '*'
+       or coalesce(perms, '') not like 'seller:%'
+       or coalesce(perms, '') like 'seller:admin:%'
+       or coalesce(perms, '') like 'buyer:%'
+  ) then
+    signal sqlstate '45000' set message_text = 'seller_menu contains invalid terminal perms';
+  end if;
+
+  if exists (
+    select 1
+    from seller_menu
+    where menu_type = 'C'
+      and coalesce(component, '') = ''
+  ) then
+    signal sqlstate '45000' set message_text = 'seller_menu page menus require component';
+  end if;
+
+  if exists (
+    select 1
+    from (
+      select perms
+      from seller_menu
+      group by perms
+      having count(1) > 1
+    ) duplicate_seller_menu_perms
+  ) then
+    signal sqlstate '45000' set message_text = 'seller_menu perms must be unique before terminal role grants';
+  end if;
+
+  if exists (
+    select 1
+    from buyer_menu
+    where coalesce(perms, '') = ''
+       or coalesce(perms, '') = '*'
+       or coalesce(perms, '') not like 'buyer:%'
+       or coalesce(perms, '') like 'buyer:admin:%'
+       or coalesce(perms, '') like 'seller:%'
+  ) then
+    signal sqlstate '45000' set message_text = 'buyer_menu contains invalid terminal perms';
+  end if;
+
+  if exists (
+    select 1
+    from buyer_menu
+    where menu_type = 'C'
+      and coalesce(component, '') = ''
+  ) then
+    signal sqlstate '45000' set message_text = 'buyer_menu page menus require component';
+  end if;
+
+  if exists (
+    select 1
+    from (
+      select perms
+      from buyer_menu
+      group by perms
+      having count(1) > 1
+    ) duplicate_buyer_menu_perms
+  ) then
+    signal sqlstate '45000' set message_text = 'buyer_menu perms must be unique before terminal role grants';
+  end if;
+end//
+
 delimiter ;
 
 call assert_three_terminal_isolation_preflight();
@@ -324,7 +441,7 @@ create table if not exists seller_account (
   dept_id               bigint(20)      default null,
   user_name             varchar(30)     not null,
   nick_name             varchar(30)     not null default '',
-  password              varchar(100)    not null default '',
+  password              varchar(100)    not null,
   email                 varchar(50)     default '',
   phonenumber           varchar(32)     default '',
   account_role          varchar(32)     not null default 'OWNER',
@@ -353,7 +470,7 @@ create table if not exists buyer_account (
   dept_id               bigint(20)      default null,
   user_name             varchar(30)     not null,
   nick_name             varchar(30)     not null default '',
-  password              varchar(100)    not null default '',
+  password              varchar(100)    not null,
   email                 varchar(50)     default '',
   phonenumber           varchar(32)     default '',
   account_role          varchar(32)     not null default 'OWNER',
@@ -404,11 +521,12 @@ call add_column_if_missing('buyer_account', 'owner_unique_buyer_id', 'bigint(20)
 
 call assert_owner_generated_column('seller_account', 'owner_unique_seller_id', 'seller_id', 'seller owner generated column definition is invalid');
 call assert_owner_generated_column('buyer_account', 'owner_unique_buyer_id', 'buyer_id', 'buyer owner generated column definition is invalid');
+call assert_no_blank_terminal_passwords('seller_account', 'seller_account contains blank passwords; reset or backfill before isolation migration');
+call assert_no_blank_terminal_passwords('buyer_account', 'buyer_account contains blank passwords; reset or backfill before isolation migration');
 
 update seller_account
 set user_name = coalesce(nullif(user_name, ''), concat('seller_', seller_account_id)),
     nick_name = coalesce(nullif(nick_name, ''), user_name),
-    password = coalesce(password, ''),
     email = coalesce(email, ''),
     phonenumber = coalesce(phonenumber, ''),
     status = coalesce(nullif(status, ''), '0'),
@@ -419,13 +537,15 @@ set user_name = coalesce(nullif(user_name, ''), concat('seller_', seller_account
 update buyer_account
 set user_name = coalesce(nullif(user_name, ''), concat('buyer_', buyer_account_id)),
     nick_name = coalesce(nullif(nick_name, ''), user_name),
-    password = coalesce(password, ''),
     email = coalesce(email, ''),
     phonenumber = coalesce(phonenumber, ''),
     status = coalesce(nullif(status, ''), '0'),
     lock_status = case when lock_status in ('0', '1') then lock_status else '0' end,
     lock_reason = coalesce(lock_reason, ''),
     pwd_update_time = coalesce(pwd_update_time, sysdate());
+
+call assert_no_duplicate_terminal_user_name('seller_account', 'seller_account has duplicate user_name values before username unique index migration');
+call assert_no_duplicate_terminal_user_name('buyer_account', 'buyer_account has duplicate user_name values before username unique index migration');
 
 call drop_index_if_exists('seller_account', 'uk_seller_account_user');
 call drop_index_if_exists('seller_account', 'uk_seller_account_seller_user');
@@ -436,8 +556,14 @@ call drop_column_if_exists('buyer_account', 'user_id');
 
 call modify_terminal_account_identity_columns_if_needed('seller_account');
 call modify_terminal_account_identity_columns_if_needed('buyer_account');
-call add_index_if_missing('seller_account', 'uk_seller_account_username', 'unique key uk_seller_account_username (user_name)');
-call add_index_if_missing('buyer_account', 'uk_buyer_account_username', 'unique key uk_buyer_account_username (user_name)');
+call recreate_index_if_mismatch('seller_account', 'uk_seller_account_username',
+  'user_name', 0, 'unique key uk_seller_account_username (user_name)');
+call recreate_index_if_mismatch('buyer_account', 'uk_buyer_account_username',
+  'user_name', 0, 'unique key uk_buyer_account_username (user_name)');
+call assert_index_definition('seller_account', 'uk_seller_account_username',
+  'user_name', 0, 'seller_account username unique index is invalid');
+call assert_index_definition('buyer_account', 'uk_buyer_account_username',
+  'user_name', 0, 'buyer_account username unique index is invalid');
 call assert_no_duplicate_owner_account('seller_account', 'seller_id', 'seller_account has duplicate OWNER accounts');
 call assert_no_duplicate_owner_account('buyer_account', 'buyer_id', 'buyer_account has duplicate OWNER accounts');
 call recreate_index_if_mismatch('seller_account', 'uk_seller_account_owner',
@@ -551,6 +677,7 @@ create table if not exists seller_menu (
   update_time datetime,
   remark varchar(500) default '',
   primary key (seller_menu_id),
+  unique key uk_seller_menu_perms (perms),
   key idx_seller_menu_parent (parent_id),
   key idx_seller_menu_status (status)
 ) engine=innodb auto_increment=100000 comment = '卖家端菜单权限表';
@@ -577,6 +704,7 @@ create table if not exists buyer_menu (
   update_time datetime,
   remark varchar(500) default '',
   primary key (buyer_menu_id),
+  unique key uk_buyer_menu_perms (perms),
   key idx_buyer_menu_parent (parent_id),
   key idx_buyer_menu_status (status)
 ) engine=innodb auto_increment=200000 comment = '买家端菜单权限表';
@@ -604,6 +732,16 @@ create table if not exists buyer_role_menu (
   buyer_menu_id bigint(20) not null,
   primary key (buyer_role_id, buyer_menu_id)
 ) engine=innodb comment = '买家端角色菜单关联表';
+
+call assert_terminal_menu_integrity_ready();
+call recreate_index_if_mismatch('seller_menu', 'uk_seller_menu_perms',
+  'perms', 0, 'unique key uk_seller_menu_perms (perms)');
+call recreate_index_if_mismatch('buyer_menu', 'uk_buyer_menu_perms',
+  'perms', 0, 'unique key uk_buyer_menu_perms (perms)');
+call assert_index_definition('seller_menu', 'uk_seller_menu_perms',
+  'perms', 0, 'seller_menu perms unique index is invalid');
+call assert_index_definition('buyer_menu', 'uk_buyer_menu_perms',
+  'perms', 0, 'buyer_menu perms unique index is invalid');
 
 create table if not exists seller_login_log (
   info_id bigint(20) not null auto_increment,
@@ -831,6 +969,9 @@ drop procedure if exists drop_index_if_exists;
 drop procedure if exists add_index_if_missing;
 drop procedure if exists recreate_index_if_mismatch;
 drop procedure if exists assert_index_definition;
+drop procedure if exists assert_terminal_menu_integrity_ready;
 drop procedure if exists assert_no_duplicate_owner_account;
+drop procedure if exists assert_no_duplicate_terminal_user_name;
 drop procedure if exists modify_terminal_account_identity_columns_if_needed;
 drop procedure if exists assert_owner_generated_column;
+drop procedure if exists assert_no_blank_terminal_passwords;

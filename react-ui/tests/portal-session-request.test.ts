@@ -6,6 +6,7 @@ import {
   getPortalSessions,
   getSellerPortalDistributionProducts,
 } from '@/services/portal/session';
+import { getPortalTerminalFromPath, isPortalRoute, isPortalTerminalPath } from '@/utils/portalPaths';
 import { getPortalTerminalFromApiUrl } from '@/utils/portalRequest';
 import { request } from '@umijs/max';
 
@@ -40,6 +41,16 @@ describe('portal request isolation', () => {
     expect(getPortalTerminalFromApiUrl('/seller')).toBeUndefined();
     expect(getPortalTerminalFromApiUrl('/buyer')).toBeUndefined();
     expect(getPortalTerminalFromApiUrl('/api/system/user/list')).toBeUndefined();
+  });
+
+  it('classifies only login, direct-login, and portal page paths as portal routes', () => {
+    expect(getPortalTerminalFromPath('/seller/portal/orders?status=pending#row')).toBe('seller');
+    expect(getPortalTerminalFromPath('/buyer/login?redirect=/buyer/portal/account')).toBe('buyer');
+    expect(isPortalTerminalPath('/buyer/portal/account/logs', 'buyer')).toBe(true);
+    expect(isPortalTerminalPath('/buyer/admin/menus', 'buyer')).toBe(false);
+    expect(getPortalTerminalFromPath('/seller/accounts')).toBeUndefined();
+    expect(getPortalTerminalFromPath('/seller')).toBeUndefined();
+    expect(isPortalRoute('/buyer')).toBe(false);
   });
 
   it('uses the selected terminal token and strips caller-controlled scope params', async () => {

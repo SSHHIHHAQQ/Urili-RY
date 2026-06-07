@@ -103,6 +103,7 @@ function applyTailRule(value, rule) {
 }
 export default function ProductDistributionPage() {
     const access = useAccess();
+    const canViewDistributionDetail = access.hasPerms('product:distribution:query');
     const actionRef = useRef(null);
     const [detailOpen, setDetailOpen] = useState(false);
     const [current, setCurrent] = useState();
@@ -166,7 +167,7 @@ export default function ProductDistributionPage() {
             : _jsx(Tag, { children: "\u65E0\u5E93\u5B58" });
     };
     const openDetail = async (record) => {
-        if (record.spuId == null) {
+        if (!canViewDistributionDetail || record.spuId == null) {
             return;
         }
         const resp = await getDistributionProduct(record.spuId);
@@ -518,7 +519,7 @@ export default function ProductDistributionPage() {
                     ...(disabled ? [{ key: 'recover', label: '恢复' }] : []),
                 ];
                 return [
-                    _jsx(Button, { type: "link", size: "small", onClick: () => openDetail(record), children: "\u67E5\u770B" }, "view"),
+                    _jsx(Button, { type: "link", size: "small", hidden: !canViewDistributionDetail, onClick: () => openDetail(record), children: "\u67E5\u770B" }, "view"),
                     _jsx(Button, { type: "link", size: "small", hidden: !access.hasPerms('product:distribution:edit'), onClick: () => openEdit(record), children: "\u7F16\u8F91" }, "edit"),
                     _jsx(Dropdown, { menu: {
                             items,
@@ -655,7 +656,7 @@ export default function ProductDistributionPage() {
                         : []),
                 ];
                 return [
-                    _jsx(Button, { type: "link", size: "small", onClick: () => openDetail({ spuId: record.spuId }), children: "\u67E5\u770BSPU" }, "view"),
+                    _jsx(Button, { type: "link", size: "small", hidden: !canViewDistributionDetail, onClick: () => openDetail({ spuId: record.spuId }), children: "\u67E5\u770BSPU" }, "view"),
                     _jsx(Button, { type: "link", size: "small", hidden: !access.hasPerms('product:distribution:edit'), onClick: () => openSkuEdit(record), children: "\u7F16\u8F91\u5546\u54C1" }, "edit"),
                     _jsx(Dropdown, { menu: {
                             items,

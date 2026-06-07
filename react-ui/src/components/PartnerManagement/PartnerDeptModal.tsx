@@ -121,27 +121,35 @@ const PartnerDeptModal: React.FC<PartnerDeptModalProps> = ({
     },
   ];
 
+  const loadDeptTree = async () => {
+    if (!partnerId || !canQueryDeptTree) {
+      setDeptTree([]);
+      return;
+    }
+    try {
+      const treeResp = await config.services.getDeptTree(partnerId);
+      if (treeResp.code === 200) {
+        setDeptTree(treeResp.data || []);
+        return;
+      }
+      setDeptTree([]);
+    } catch {
+      setDeptTree([]);
+    }
+  };
+
   const loadDepts = async () => {
     if (!partnerId) {
       setDepts([]);
-      setDeptTree([]);
       return;
     }
     setLoading(true);
     try {
-      const [listResp, treeResp] = await Promise.all([
-        config.services.listDepts(partnerId),
-        canQueryDeptTree ? config.services.getDeptTree(partnerId) : Promise.resolve(undefined),
-      ]);
+      const listResp = await config.services.listDepts(partnerId);
       if (listResp.code === 200) {
         setDepts((listResp.data || []) as DeptRecord[]);
       } else {
         message.error(listResp.msg || '部门列表加载失败');
-      }
-      if (treeResp?.code === 200) {
-        setDeptTree(treeResp.data || []);
-      } else {
-        setDeptTree([]);
       }
     } catch {
       message.error('部门列表加载失败，请重试');
@@ -153,11 +161,12 @@ const PartnerDeptModal: React.FC<PartnerDeptModalProps> = ({
   useEffect(() => {
     if (open) {
       void loadDepts();
+      void loadDeptTree();
       return;
     }
     setDepts([]);
     setDeptTree([]);
-  }, [open, partnerId]);
+  }, [open, partnerId, canQueryDeptTree]);
 
   const openDeptForm = (dept?: DeptRecord) => {
     setCurrentDept(dept);
@@ -191,6 +200,7 @@ const PartnerDeptModal: React.FC<PartnerDeptModalProps> = ({
         message.success(currentDeptId ? '部门已更新' : '部门已新增');
         closeDeptForm();
         await loadDepts();
+        await loadDeptTree();
         return;
       }
       message.error(resp.msg || '部门保存失败');
@@ -213,6 +223,7 @@ const PartnerDeptModal: React.FC<PartnerDeptModalProps> = ({
         if (resp.code === 200) {
           message.success('部门已删除');
           await loadDepts();
+          await loadDeptTree();
           return;
         }
         message.error(resp.msg || '部门删除失败');

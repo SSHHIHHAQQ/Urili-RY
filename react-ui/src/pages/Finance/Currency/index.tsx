@@ -75,6 +75,10 @@ function formatRate(value?: number | string, precision?: number) {
 
 export default function FinanceCurrencyPage() {
   const access = useAccess();
+  const canViewRateHistory = access.hasPerms('finance:currency:query');
+  const canViewSyncTab = access.hasPerms('finance:currency:syncConfig')
+    || access.hasPerms('finance:currency:sync')
+    || access.hasPerms('finance:currency:log');
   const actionRef = useRef<ActionType>(null);
   const historyActionRef = useRef<ActionType>(null);
   const currencyFormRef =
@@ -218,7 +222,6 @@ export default function FinanceCurrencyPage() {
     {
       title: '生效汇率时间',
       dataIndex: 'effectiveRateTimeRange',
-      colSize: 2,
       valueType: 'dateRange',
       hideInTable: true,
       search: {
@@ -258,6 +261,7 @@ export default function FinanceCurrencyPage() {
               {
                 key: 'history',
                 label: '汇率历史',
+                disabled: !canViewRateHistory,
               },
               {
                 key: 'default',
@@ -274,7 +278,7 @@ export default function FinanceCurrencyPage() {
               },
             ],
             onClick: ({ key }) => {
-              if (key === 'history') setHistoryCurrency(record);
+              if (key === 'history' && canViewRateHistory) setHistoryCurrency(record);
               if (key === 'default') setDefaultCurrency(record);
               if (key === 'delete') removeCurrency(record);
             },
@@ -343,16 +347,18 @@ export default function FinanceCurrencyPage() {
       <Tabs
         items={[
           { key: 'currency', label: '币种列表', children: currencyTable },
-          {
-            key: 'sync',
-            label: '同步设置',
-            children: (
-              <SyncSettingsPanel
-                access={access}
-                onSynced={() => actionRef.current?.reload()}
-              />
-            ),
-          },
+          ...(canViewSyncTab
+            ? [{
+                key: 'sync',
+                label: '同步设置',
+                children: (
+                  <SyncSettingsPanel
+                    access={access}
+                    onSynced={() => actionRef.current?.reload()}
+                  />
+                ),
+              }]
+            : []),
         ]}
       />
 

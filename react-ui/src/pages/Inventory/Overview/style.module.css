@@ -1,0 +1,37 @@
+/* biome-ignore-all lint: Umi CSS Modules supports :global; these rules override Ant Table expanded-row clipping styles. */
+.overviewExpandedRow > :global(td.ant-table-cell) {
+  padding: 0 !important;
+  background: #fafafa;
+}
+
+.overviewExpandedRow :global(.ant-table-expanded-row-fixed) {
+  width: 100% !important;
+  margin-left: 0 !important;
+  padding: 0 !important;
+  overflow: visible !important;
+}
+
+.overviewNestedTable {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 8px 16px;
+  background: #fafafa;
+}
+
+.overviewNestedTable :global(.ant-table-wrapper),
+.overviewNestedTable :global(.ant-pro-table),
+.overviewNestedTable :global(.ant-spin-nested-loading),
+.overviewNestedTable :global(.ant-spin-container) {
+  width: 100%;
+  min-width: 0;
+}
+
+.overviewNestedTable :global(.ant-table) {
+  margin: 0;
+  background: #fff;
+}
+
+.overviewNestedTable :global(.ant-table-container) {
+  border-inline-start: 1px solid #f0f0f0;
+}

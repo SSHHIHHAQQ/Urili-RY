@@ -1,0 +1,367 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.inventory.mapper.InventoryOverviewMapper">
+
+    <resultMap type="InventoryOverviewItem" id="InventoryOverviewItemResult">
+        <id     property="stockKey"                 column="stock_key" />
+        <result property="spuId"                    column="spu_id" />
+        <result property="skuId"                    column="sku_id" />
+        <result property="sellerId"                 column="seller_id" />
+        <result property="systemSpuCode"            column="system_spu_code" />
+        <result property="systemSkuCode"            column="system_sku_code" />
+        <result property="productName"              column="product_name" />
+        <result property="mainImageUrl"             column="main_image_url" />
+        <result property="skuName"                  column="sku_name" />
+        <result property="skuImageUrl"              column="sku_image_url" />
+        <result property="skuCount"                 column="sku_count" />
+        <result property="warehouseKindSummary"     column="warehouse_kind_summary" />
+        <result property="warehouseCount"           column="warehouse_count" />
+        <result property="platformTotalQty"         column="platform_total_qty" />
+        <result property="platformAvailableQty"     column="platform_available_qty" />
+        <result property="platformReservedQty"      column="platform_reserved_qty" />
+        <result property="platformInTransitQty"     column="platform_in_transit_qty" />
+        <result property="sourceTotalQty"           column="source_total_qty" />
+        <result property="sourceAvailableQty"       column="source_available_qty" />
+        <result property="sourceInTransitQty"       column="source_in_transit_qty" />
+        <result property="inventoryStatus"          column="inventory_status" />
+        <result property="latestSourceSnapshotTime" column="latest_source_snapshot_time" />
+        <result property="latestStockUpdateTime"    column="latest_stock_update_time" />
+    </resultMap>
+
+    <resultMap type="InventorySkuWarehouseStock" id="InventorySkuWarehouseStockResult">
+        <id     property="stockId"                    column="stock_id" />
+        <result property="stockKey"                   column="stock_key" />
+        <result property="spuId"                      column="spu_id" />
+        <result property="skuId"                      column="sku_id" />
+        <result property="sellerId"                   column="seller_id" />
+        <result property="systemSkuCode"              column="system_sku_code" />
+        <result property="warehouseKind"              column="warehouse_kind" />
+        <result property="warehouseRefType"           column="warehouse_ref_type" />
+        <result property="warehouseId"                column="warehouse_id" />
+        <result property="warehouseCode"              column="warehouse_code" />
+        <result property="warehouseName"              column="warehouse_name" />
+        <result property="sourceScope"                column="source_scope" />
+        <result property="sourceMasterWarehouseName"  column="source_master_warehouse_name" />
+        <result property="sourceTotalQty"             column="source_total_qty" />
+        <result property="sourceAvailableQty"         column="source_available_qty" />
+        <result property="sourceInTransitQty"         column="source_in_transit_qty" />
+        <result property="sourceSnapshotTime"         column="source_snapshot_time" />
+        <result property="platformTotalQty"           column="platform_total_qty" />
+        <result property="platformReservedQty"        column="platform_reserved_qty" />
+        <result property="platformInTransitQty"       column="platform_in_transit_qty" />
+        <result property="pendingAvailableInboundQty" column="pending_available_inbound_qty" />
+        <result property="pendingSourceDeductionQty"  column="pending_source_deduction_qty" />
+        <result property="platformAvailableQty"       column="platform_available_qty" />
+        <result property="effectiveStatus"            column="effective_status" />
+        <result property="version"                    column="version" />
+        <result property="calcTime"                   column="calc_time" />
+        <result property="createBy"                   column="create_by" />
+        <result property="createTime"                 column="create_time" />
+        <result property="updateBy"                   column="update_by" />
+        <result property="updateTime"                 column="update_time" />
+        <result property="remark"                     column="remark" />
+    </resultMap>
+
+    <resultMap type="InventoryStockLedger" id="InventoryStockLedgerResult">
+        <id     property="ledgerId"                 column="ledger_id" />
+        <result property="stockId"                  column="stock_id" />
+        <result property="stockKey"                 column="stock_key" />
+        <result property="spuId"                    column="spu_id" />
+        <result property="skuId"                    column="sku_id" />
+        <result property="sellerId"                 column="seller_id" />
+        <result property="warehouseKind"            column="warehouse_kind" />
+        <result property="warehouseRefType"         column="warehouse_ref_type" />
+        <result property="warehouseName"            column="warehouse_name" />
+        <result property="operationType"            column="operation_type" />
+        <result property="operationSource"          column="operation_source" />
+        <result property="bizType"                  column="biz_type" />
+        <result property="bizNo"                    column="biz_no" />
+        <result property="deltaQty"                 column="delta_qty" />
+        <result property="beforePlatformTotalQty"   column="before_platform_total_qty" />
+        <result property="afterPlatformTotalQty"    column="after_platform_total_qty" />
+        <result property="beforeAvailableQty"       column="before_available_qty" />
+        <result property="afterAvailableQty"        column="after_available_qty" />
+        <result property="beforeReservedQty"        column="before_reserved_qty" />
+        <result property="afterReservedQty"         column="after_reserved_qty" />
+        <result property="beforeInTransitQty"       column="before_in_transit_qty" />
+        <result property="afterInTransitQty"        column="after_in_transit_qty" />
+        <result property="riskConfirmed"            column="risk_confirmed" />
+        <result property="riskMessage"              column="risk_message" />
+        <result property="reason"                   column="reason" />
+        <result property="operatorId"               column="operator_id" />
+        <result property="operatorName"             column="operator_name" />
+        <result property="operateTime"              column="operate_time" />
+        <result property="createTime"               column="create_time" />
+        <result property="remark"                   column="remark" />
+    </resultMap>
+
+    <sql id="overviewItemWhere">
+        <where>
+            <if test="spuId != null">and spu_id = #{spuId}</if>
+            <if test="sellerId != null">and seller_id = #{sellerId}</if>
+            <if test="inventoryStatus != null and inventoryStatus != ''">and inventory_status = #{inventoryStatus}</if>
+            <if test="warehouseKindSummary != null and warehouseKindSummary != ''">and warehouse_kind_summary = #{warehouseKindSummary}</if>
+            <if test="keyword != null and keyword != ''">
+                and search_text like concat('%', #{keyword}, '%')
+            </if>
+        </where>
+    </sql>
+
+    <select id="selectSpuList" parameterType="InventoryOverviewItem" resultMap="InventoryOverviewItemResult">
+        select spu_stock_key as stock_key,
+               spu_id,
+               null as sku_id,
+               seller_id,
+               system_spu_code,
+               null as system_sku_code,
+               product_name,
+               main_image_url,
+               null as sku_name,
+               null as sku_image_url,
+               sku_count,
+               warehouse_kind_summary,
+               warehouse_count,
+               platform_total_qty,
+               platform_available_qty,
+               platform_reserved_qty,
+               platform_in_transit_qty,
+               source_total_qty,
+               source_available_qty,
+               source_in_transit_qty,
+               inventory_status,
+               latest_source_snapshot_time,
+               latest_stock_update_time
+        from inventory_overview_spu_read_model
+        <include refid="overviewItemWhere" />
+        order by latest_stock_update_time desc, spu_id desc
+    </select>
+
+    <select id="selectSkuList" parameterType="InventoryOverviewItem" resultMap="InventoryOverviewItemResult">
+        select sku_stock_key as stock_key,
+               spu_id,
+               sku_id,
+               seller_id,
+               null as system_spu_code,
+               system_sku_code,
+               product_name,
+               null as main_image_url,
+               sku_name,
+               sku_image_url,
+               null as sku_count,
+               warehouse_kind_summary,
+               warehouse_count,
+               platform_total_qty,
+               platform_available_qty,
+               platform_reserved_qty,
+               platform_in_transit_qty,
+               source_total_qty,
+               source_available_qty,
+               source_in_transit_qty,
+               inventory_status,
+               latest_source_snapshot_time,
+               latest_stock_update_time
+        from inventory_overview_sku_read_model
+        <include refid="overviewItemWhere" />
+        order by latest_stock_update_time desc, sku_id desc
+    </select>
+
+    <select id="selectWarehouseStockListBySkuId" resultMap="InventorySkuWarehouseStockResult">
+        select *
+        from inventory_sku_warehouse_stock
+        where sku_id = #{skuId}
+        order by case warehouse_kind when 'official' then 1 else 2 end,
+                 warehouse_name asc,
+                 stock_id asc
+    </select>
+
+    <select id="selectWarehouseStockById" resultMap="InventorySkuWarehouseStockResult">
+        select *
+        from inventory_sku_warehouse_stock
+        where stock_id = #{stockId}
+    </select>
+
+    <update id="updateWarehouseStock" parameterType="InventorySkuWarehouseStock">
+        update inventory_sku_warehouse_stock
+        set platform_total_qty = #{platformTotalQty},
+            platform_reserved_qty = #{platformReservedQty},
+            platform_in_transit_qty = #{platformInTransitQty},
+            pending_available_inbound_qty = #{pendingAvailableInboundQty},
+            pending_source_deduction_qty = #{pendingSourceDeductionQty},
+            platform_available_qty = #{platformAvailableQty},
+            effective_status = #{effectiveStatus},
+            calc_time = #{calcTime},
+            version = version + 1,
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where stock_id = #{stockId}
+    </update>
+
+    <insert id="insertLedger" parameterType="InventoryStockLedger">
+        insert into inventory_stock_ledger(
+            stock_id, stock_key, spu_id, sku_id, seller_id, warehouse_kind, warehouse_ref_type, warehouse_name,
+            operation_type, operation_source, biz_type, biz_no, delta_qty,
+            before_platform_total_qty, after_platform_total_qty, before_available_qty, after_available_qty,
+            before_reserved_qty, after_reserved_qty, before_in_transit_qty, after_in_transit_qty,
+            risk_confirmed, risk_message, reason, operator_id, operator_name, operate_time, create_time, remark
+        ) values (
+            #{stockId}, #{stockKey}, #{spuId}, #{skuId}, #{sellerId}, #{warehouseKind}, #{warehouseRefType}, #{warehouseName},
+            #{operationType}, #{operationSource}, #{bizType}, coalesce(#{bizNo}, ''), #{deltaQty},
+            #{beforePlatformTotalQty}, #{afterPlatformTotalQty}, #{beforeAvailableQty}, #{afterAvailableQty},
+            #{beforeReservedQty}, #{afterReservedQty}, #{beforeInTransitQty}, #{afterInTransitQty},
+            #{riskConfirmed}, coalesce(#{riskMessage}, ''), coalesce(#{reason}, ''), #{operatorId}, #{operatorName},
+            #{operateTime}, sysdate(), ''
+        )
+    </insert>
+
+    <select id="selectLedgerList" parameterType="InventoryStockLedger" resultMap="InventoryStockLedgerResult">
+        select *
+        from inventory_stock_ledger
+        <where>
+            <if test="stockId != null">and stock_id = #{stockId}</if>
+            <if test="skuId != null">and sku_id = #{skuId}</if>
+            <if test="spuId != null">and spu_id = #{spuId}</if>
+            <if test="operationType != null and operationType != ''">and operation_type = #{operationType}</if>
+            <if test="bizNo != null and bizNo != ''">and biz_no = #{bizNo}</if>
+        </where>
+        order by operate_time desc, ledger_id desc
+    </select>
+
+    <insert id="refreshSkuReadModel">
+        insert into inventory_overview_sku_read_model(
+            sku_stock_key, spu_id, sku_id, seller_id, system_sku_code, product_name, sku_name, sku_image_url,
+            warehouse_kind_summary, warehouse_count, platform_total_qty, platform_available_qty,
+            platform_reserved_qty, platform_in_transit_qty, source_total_qty, source_available_qty,
+            source_in_transit_qty, inventory_status, latest_source_snapshot_time, latest_stock_update_time,
+            search_text, rebuild_time
+        )
+        select concat('SKU:', sk.sku_id),
+               sk.spu_id,
+               sk.sku_id,
+               sk.seller_id,
+               sk.system_sku_code,
+               p.product_name,
+               trim(concat_ws(' / ', nullif(sk.color, ''), nullif(sk.size, ''), nullif(sk.model, ''))),
+               coalesce(sk.sku_image_url, ''),
+               case
+                 when count(st.stock_id) = 0 then 'unconfigured'
+                 when count(distinct st.warehouse_kind) = 1 then min(st.warehouse_kind)
+                 else 'MIXED'
+               end,
+               count(st.stock_id),
+               sum(coalesce(st.platform_total_qty, 0)),
+               sum(coalesce(st.platform_available_qty, 0)),
+               sum(coalesce(st.platform_reserved_qty, 0)),
+               sum(coalesce(st.platform_in_transit_qty, 0)),
+               sum(case when st.warehouse_kind = 'official' then coalesce(st.source_total_qty, 0) else 0 end),
+               sum(case when st.warehouse_kind = 'official' then coalesce(st.source_available_qty, 0) else 0 end),
+               sum(case when st.warehouse_kind = 'official' then coalesce(st.source_in_transit_qty, 0) else 0 end),
+               case
+                 when sum(coalesce(st.platform_available_qty, 0)) > 0 then 'IN_STOCK'
+                 when count(st.stock_id) = 0 then 'NO_WAREHOUSE'
+                 when sum(case when st.effective_status = 'NO_WAREHOUSE' then 1 else 0 end) > 0 then 'NO_WAREHOUSE'
+                 when sum(case when st.effective_status = 'SOURCE_UNBOUND' then 1 else 0 end) > 0 then 'SOURCE_UNBOUND'
+                 when sum(case when st.effective_status = 'SOURCE_ONLY_IN_TRANSIT' then 1 else 0 end) > 0 then 'SOURCE_ONLY_IN_TRANSIT'
+                 when sum(case when st.effective_status = 'NO_SOURCE' then 1 else 0 end) > 0 then 'NO_SOURCE'
+                 else 'OUT_OF_STOCK'
+               end,
+               max(st.source_snapshot_time),
+               max(st.update_time),
+               concat_ws(' ', p.system_spu_code, p.product_name, sk.system_sku_code, sk.seller_sku_code, sk.color, sk.size, sk.model),
+               sysdate()
+        from product_sku sk
+        join product_spu p on p.spu_id = sk.spu_id
+        left join inventory_sku_warehouse_stock st on st.sku_id = sk.sku_id
+        where sk.sku_id = #{skuId}
+          and sk.del_flag = '0'
+        group by sk.sku_id, sk.spu_id, sk.seller_id, sk.system_sku_code, p.product_name, sk.sku_image_url,
+                 sk.color, sk.size, sk.model, p.system_spu_code, sk.seller_sku_code
+        on duplicate key update
+            spu_id = values(spu_id),
+            seller_id = values(seller_id),
+            system_sku_code = values(system_sku_code),
+            product_name = values(product_name),
+            sku_name = values(sku_name),
+            sku_image_url = values(sku_image_url),
+            warehouse_kind_summary = values(warehouse_kind_summary),
+            warehouse_count = values(warehouse_count),
+            platform_total_qty = values(platform_total_qty),
+            platform_available_qty = values(platform_available_qty),
+            platform_reserved_qty = values(platform_reserved_qty),
+            platform_in_transit_qty = values(platform_in_transit_qty),
+            source_total_qty = values(source_total_qty),
+            source_available_qty = values(source_available_qty),
+            source_in_transit_qty = values(source_in_transit_qty),
+            inventory_status = values(inventory_status),
+            latest_source_snapshot_time = values(latest_source_snapshot_time),
+            latest_stock_update_time = values(latest_stock_update_time),
+            search_text = values(search_text),
+            rebuild_time = sysdate()
+    </insert>
+
+    <insert id="refreshSpuReadModel">
+        insert into inventory_overview_spu_read_model(
+            spu_stock_key, spu_id, seller_id, system_spu_code, product_name, main_image_url, sku_count,
+            warehouse_kind_summary, warehouse_count, platform_total_qty, platform_available_qty,
+            platform_reserved_qty, platform_in_transit_qty, source_total_qty, source_available_qty,
+            source_in_transit_qty, inventory_status, latest_source_snapshot_time, latest_stock_update_time,
+            search_text, rebuild_time
+        )
+        select concat('SPU:', p.spu_id),
+               p.spu_id,
+               p.seller_id,
+               p.system_spu_code,
+               p.product_name,
+               coalesce(p.main_image_url, ''),
+               count(distinct sk.sku_id),
+               case when count(distinct srm.warehouse_kind_summary) = 1 then min(srm.warehouse_kind_summary) else 'MIXED' end,
+               sum(coalesce(srm.warehouse_count, 0)),
+               sum(coalesce(srm.platform_total_qty, 0)),
+               sum(coalesce(srm.platform_available_qty, 0)),
+               sum(coalesce(srm.platform_reserved_qty, 0)),
+               sum(coalesce(srm.platform_in_transit_qty, 0)),
+               sum(coalesce(srm.source_total_qty, 0)),
+               sum(coalesce(srm.source_available_qty, 0)),
+               sum(coalesce(srm.source_in_transit_qty, 0)),
+               case
+                 when sum(coalesce(srm.platform_available_qty, 0)) > 0 then 'IN_STOCK'
+                 when sum(case when srm.inventory_status = 'NO_WAREHOUSE' then 1 else 0 end) > 0 then 'NO_WAREHOUSE'
+                 when sum(case when srm.inventory_status = 'SOURCE_UNBOUND' then 1 else 0 end) > 0 then 'SOURCE_UNBOUND'
+                 when sum(case when srm.inventory_status = 'SOURCE_ONLY_IN_TRANSIT' then 1 else 0 end) > 0 then 'SOURCE_ONLY_IN_TRANSIT'
+                 when sum(case when srm.inventory_status = 'NO_SOURCE' then 1 else 0 end) > 0 then 'NO_SOURCE'
+                 else 'OUT_OF_STOCK'
+               end,
+               max(srm.latest_source_snapshot_time),
+               max(srm.latest_stock_update_time),
+               concat_ws(' ', p.system_spu_code, p.seller_spu_code, p.product_name, p.product_name_en, p.seller_name),
+               sysdate()
+        from product_spu p
+        join product_sku sk on sk.spu_id = p.spu_id and sk.del_flag = '0'
+        join inventory_overview_sku_read_model srm on srm.sku_id = sk.sku_id
+        where p.spu_id = #{spuId}
+          and p.del_flag = '0'
+        group by p.spu_id, p.seller_id, p.system_spu_code, p.product_name, p.main_image_url,
+                 p.seller_spu_code, p.product_name_en, p.seller_name
+        on duplicate key update
+            seller_id = values(seller_id),
+            system_spu_code = values(system_spu_code),
+            product_name = values(product_name),
+            main_image_url = values(main_image_url),
+            sku_count = values(sku_count),
+            warehouse_kind_summary = values(warehouse_kind_summary),
+            warehouse_count = values(warehouse_count),
+            platform_total_qty = values(platform_total_qty),
+            platform_available_qty = values(platform_available_qty),
+            platform_reserved_qty = values(platform_reserved_qty),
+            platform_in_transit_qty = values(platform_in_transit_qty),
+            source_total_qty = values(source_total_qty),
+            source_available_qty = values(source_available_qty),
+            source_in_transit_qty = values(source_in_transit_qty),
+            inventory_status = values(inventory_status),
+            latest_source_snapshot_time = values(latest_source_snapshot_time),
+            latest_stock_update_time = values(latest_stock_update_time),
+            search_text = values(search_text),
+            rebuild_time = sysdate()
+    </insert>
+</mapper>

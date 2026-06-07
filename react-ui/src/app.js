@@ -175,7 +175,7 @@ export const layout = ({ initialState, setInitialState }) => {
     };
 };
 export function rootContainer(container) {
-    return (_jsx(ConfigProvider, { select: { showSearch: true }, children: _jsx(AntdApp, { children: _jsx(AntdFeedbackProvider, { children: container }) }) }));
+    return (_jsx(ConfigProvider, { select: { showSearch: true }, variant: "outlined", children: _jsx(AntdApp, { children: _jsx(AntdFeedbackProvider, { children: container }) }) }));
 }
 export async function onRouteChange({ location }) {
     if (isPortalRoute(location.pathname)) {

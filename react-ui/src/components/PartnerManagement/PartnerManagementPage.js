@@ -577,14 +577,12 @@ const PartnerManagementPage = ({ config }) => {
         {
             title: '创建时间',
             dataIndex: 'createTimeRange',
-            colSize: 2,
             valueType: 'dateRange',
             hideInTable: true,
         },
         {
             title: '最后登录时间',
             dataIndex: 'lastLoginTimeRange',
-            colSize: 2,
             valueType: 'dateRange',
             hideInTable: true,
         },
@@ -613,13 +611,13 @@ const PartnerManagementPage = ({ config }) => {
                         label: '角色',
                     });
                 }
+                if (access.hasPerms(`${permPrefix}:session:list`) && config.services.listSubjectSessions) {
+                    moreItems.push({
+                        key: 'sessions',
+                        label: '会话',
+                    });
+                }
                 if (access.hasPerms(`${permPrefix}:forceLogout`)) {
-                    if (config.services.listSubjectSessions) {
-                        moreItems.push({
-                            key: 'sessions',
-                            label: '会话',
-                        });
-                    }
                     moreItems.push({
                         key: 'forceLogout',
                         label: '强制踢出',

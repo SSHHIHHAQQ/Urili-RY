@@ -44,6 +44,10 @@ function formatRate(value, precision) {
 }
 export default function FinanceCurrencyPage() {
     const access = useAccess();
+    const canViewRateHistory = access.hasPerms('finance:currency:query');
+    const canViewSyncTab = access.hasPerms('finance:currency:syncConfig')
+        || access.hasPerms('finance:currency:sync')
+        || access.hasPerms('finance:currency:log');
     const actionRef = useRef(null);
     const historyActionRef = useRef(null);
     const currencyFormRef = useRef(undefined);
@@ -168,7 +172,6 @@ export default function FinanceCurrencyPage() {
         {
             title: '生效汇率时间',
             dataIndex: 'effectiveRateTimeRange',
-            colSize: 2,
             valueType: 'dateRange',
             hideInTable: true,
             search: {
@@ -190,6 +193,7 @@ export default function FinanceCurrencyPage() {
                             {
                                 key: 'history',
                                 label: '汇率历史',
+                                disabled: !canViewRateHistory,
                             },
                             {
                                 key: 'default',
@@ -205,7 +209,7 @@ export default function FinanceCurrencyPage() {
                             },
                         ],
                         onClick: ({ key }) => {
-                            if (key === 'history')
+                            if (key === 'history' && canViewRateHistory)
                                 setHistoryCurrency(record);
                             if (key === 'default')
                                 setDefaultCurrency(record);
@@ -247,11 +251,13 @@ export default function FinanceCurrencyPage() {
         ] }));
     return (_jsxs(PageContainer, { children: [_jsx(Tabs, { items: [
                     { key: 'currency', label: '币种列表', children: currencyTable },
-                    {
-                        key: 'sync',
-                        label: '同步设置',
-                        children: (_jsx(SyncSettingsPanel, { access: access, onSynced: () => actionRef.current?.reload() })),
-                    },
+                    ...(canViewSyncTab
+                        ? [{
+                                key: 'sync',
+                                label: '同步设置',
+                                children: (_jsx(SyncSettingsPanel, { access: access, onSynced: () => actionRef.current?.reload() })),
+                            }]
+                        : []),
                 ] }), _jsxs(ModalForm, { formRef: currencyFormRef, title: currentCurrency ? '编辑币种' : '新增币种', open: modalOpen, modalProps: { destroyOnHidden: true, onCancel: () => setModalOpen(false) }, initialValues: currentCurrency || defaultCurrencyValues, onOpenChange: setModalOpen, onFinish: saveCurrency, children: [_jsx(ProFormSelect, { name: "currencyCode", label: "\u5E01\u79CD\u4EE3\u7801", options: currencyOptions, disabled: !!currentCurrency, rules: [{ required: true }], fieldProps: {
                             ...SEARCHABLE_SELECT_PROPS,
                             onChange: (_, option) => {

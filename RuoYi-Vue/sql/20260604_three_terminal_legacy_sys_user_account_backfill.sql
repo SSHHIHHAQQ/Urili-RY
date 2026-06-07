@@ -11,8 +11,10 @@ set @confirm_legacy_sys_user_backfill := coalesce(@confirm_legacy_sys_user_backf
 set @confirm_legacy_sys_user_backfill_profile := coalesce(@confirm_legacy_sys_user_backfill_profile, '');
 set @legacy_seller_account_ids := coalesce(@legacy_seller_account_ids, '');
 set @legacy_seller_expected_count := coalesce(@legacy_seller_expected_count, '');
+set @legacy_seller_expected_signature := coalesce(@legacy_seller_expected_signature, '');
 set @legacy_buyer_account_ids := coalesce(@legacy_buyer_account_ids, '');
 set @legacy_buyer_expected_count := coalesce(@legacy_buyer_expected_count, '');
+set @legacy_buyer_expected_signature := coalesce(@legacy_buyer_expected_signature, '');
 set @legacy_seller_missing_sys_user_rows := 0;
 set @legacy_seller_blank_password_rows := 0;
 set @legacy_buyer_missing_sys_user_rows := 0;
@@ -82,6 +84,7 @@ seller_targets: begin
   declare v_seller_user_id_column_count int default 0;
   declare v_target_count int default 0;
   declare v_invalid_count int default 0;
+  declare v_signature varchar(64) default '';
 
   select count(1)
     into v_seller_user_id_column_count
@@ -99,6 +102,9 @@ seller_targets: begin
   end if;
   if coalesce(@legacy_seller_expected_count, '') = '' then
     signal sqlstate '45000' set message_text = 'set @legacy_seller_expected_count after previewing exact seller_account rows';
+  end if;
+  if coalesce(@legacy_seller_expected_signature, '') = '' then
+    signal sqlstate '45000' set message_text = 'set @legacy_seller_expected_signature after previewing exact seller_account/sys_user rows';
   end if;
 
   select count(1)
@@ -119,6 +125,34 @@ seller_targets: begin
   if v_target_count <> cast(@legacy_seller_expected_count as unsigned) then
     signal sqlstate '45000' set message_text = 'seller_account legacy backfill expected count does not match target rows';
   end if;
+
+  select coalesce(sha2(group_concat(concat_ws(':',
+          cast(a.seller_account_id as char),
+          cast(a.seller_id as char),
+          coalesce(cast(a.user_id as char), ''),
+          coalesce(a.user_name, ''),
+          coalesce(a.nick_name, ''),
+          coalesce(a.password, ''),
+          coalesce(a.email, ''),
+          coalesce(a.phonenumber, ''),
+          coalesce(a.status, ''),
+          coalesce(cast(u.user_id as char), ''),
+          coalesce(u.user_name, ''),
+          coalesce(u.nick_name, ''),
+          coalesce(u.password, ''),
+          coalesce(u.email, ''),
+          coalesce(u.phonenumber, ''),
+          coalesce(u.status, ''))
+        order by a.seller_account_id separator '|'), 256), '')
+    into v_signature
+  from seller_account a
+  left join sys_user u on u.user_id = a.user_id
+  where a.user_id is not null
+    and find_in_set(cast(a.seller_account_id as char), @legacy_seller_account_ids) > 0;
+
+  if v_signature <> @legacy_seller_expected_signature then
+    signal sqlstate '45000' set message_text = 'seller_account legacy backfill exact target signature mismatch';
+  end if;
 end//
 
 drop procedure if exists assert_legacy_buyer_backfill_targets//
@@ -127,6 +161,7 @@ buyer_targets: begin
   declare v_buyer_user_id_column_count int default 0;
   declare v_target_count int default 0;
   declare v_invalid_count int default 0;
+  declare v_signature varchar(64) default '';
 
   select count(1)
     into v_buyer_user_id_column_count
@@ -144,6 +179,9 @@ buyer_targets: begin
   end if;
   if coalesce(@legacy_buyer_expected_count, '') = '' then
     signal sqlstate '45000' set message_text = 'set @legacy_buyer_expected_count after previewing exact buyer_account rows';
+  end if;
+  if coalesce(@legacy_buyer_expected_signature, '') = '' then
+    signal sqlstate '45000' set message_text = 'set @legacy_buyer_expected_signature after previewing exact buyer_account/sys_user rows';
   end if;
 
   select count(1)
@@ -163,6 +201,34 @@ buyer_targets: begin
   end if;
   if v_target_count <> cast(@legacy_buyer_expected_count as unsigned) then
     signal sqlstate '45000' set message_text = 'buyer_account legacy backfill expected count does not match target rows';
+  end if;
+
+  select coalesce(sha2(group_concat(concat_ws(':',
+          cast(a.buyer_account_id as char),
+          cast(a.buyer_id as char),
+          coalesce(cast(a.user_id as char), ''),
+          coalesce(a.user_name, ''),
+          coalesce(a.nick_name, ''),
+          coalesce(a.password, ''),
+          coalesce(a.email, ''),
+          coalesce(a.phonenumber, ''),
+          coalesce(a.status, ''),
+          coalesce(cast(u.user_id as char), ''),
+          coalesce(u.user_name, ''),
+          coalesce(u.nick_name, ''),
+          coalesce(u.password, ''),
+          coalesce(u.email, ''),
+          coalesce(u.phonenumber, ''),
+          coalesce(u.status, ''))
+        order by a.buyer_account_id separator '|'), 256), '')
+    into v_signature
+  from buyer_account a
+  left join sys_user u on u.user_id = a.user_id
+  where a.user_id is not null
+    and find_in_set(cast(a.buyer_account_id as char), @legacy_buyer_account_ids) > 0;
+
+  if v_signature <> @legacy_buyer_expected_signature then
+    signal sqlstate '45000' set message_text = 'buyer_account legacy backfill exact target signature mismatch';
   end if;
 end//
 

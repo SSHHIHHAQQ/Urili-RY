@@ -66,9 +66,29 @@ type ResetPasswordFormValues = {
   confirmPassword?: string;
 };
 
-const DEFAULT_ACCOUNT_PASSWORD = 'U12346';
 const PASSWORD_MIN_LENGTH = 5;
 const PASSWORD_MAX_LENGTH = 20;
+
+function normalizePassword(value: unknown) {
+  const password = String(value ?? '').trim();
+  return password || undefined;
+}
+
+const passwordRules = [
+  { required: true, message: '请输入密码' },
+  {
+    validator: (_: unknown, value: unknown) => {
+      const password = normalizePassword(value);
+      if (!password) {
+        return Promise.reject(new Error('请输入密码'));
+      }
+      if (password.length < PASSWORD_MIN_LENGTH || password.length > PASSWORD_MAX_LENGTH) {
+        return Promise.reject(new Error('密码长度必须在5到20个字符之间'));
+      }
+      return Promise.resolve();
+    },
+  },
+];
 
 const fallbackAccountRoleOptions: SelectOption[] = [
   { label: '负责人', value: 'OWNER', searchText: 'owner 负责人' },
@@ -169,7 +189,7 @@ function buildAccountPayload(
     [config.idField]: partnerId,
     userName: values.userName,
     nickName: values.nickName,
-    password: currentAccountId ? undefined : values.password || DEFAULT_ACCOUNT_PASSWORD,
+    password: currentAccountId ? undefined : normalizePassword(values.password),
     deptId: values.deptId,
     accountRole: values.accountRole || 'STAFF',
     status: values.status || '0',
@@ -183,7 +203,7 @@ function mapAccountToForm(account?: AccountRecord): AccountFormValues {
   return {
     userName: account?.userName,
     nickName: account?.nickName,
-    password: DEFAULT_ACCOUNT_PASSWORD,
+    password: undefined,
     deptId: account?.deptId,
     accountRole: account?.accountRole || 'STAFF',
     status: account?.status || '0',
@@ -230,7 +250,9 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
     roleQuery: `${permPrefix}:account:role:query`,
     roleEdit: `${permPrefix}:account:role:edit`,
   };
-  const canAssignAccountRoles = access.hasPerms(accountPermissions.roleQuery)
+  const canQueryRole = access.hasPerms(`${permPrefix}:role:query`);
+  const canAssignAccountRoles = canQueryRole
+    && access.hasPerms(accountPermissions.roleQuery)
     && access.hasPerms(accountPermissions.roleEdit);
   const canQueryDept = access.hasPerms(`${permPrefix}:dept:query`);
   const canViewAccountAudit = access.hasPerms(`${permPrefix}:loginLog:list`)
@@ -409,7 +431,7 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
       ),
       onOk: async () => {
         const values = await resetPasswordForm.validateFields();
-        const resp = await config.services.resetAccountPassword(partnerId, accountId, values.password || '');
+        const resp = await config.services.resetAccountPassword(partnerId, accountId, normalizePassword(values.password) || '');
         if (resp.code === 200) {
           message.success('账号密码已重置');
           return;
@@ -630,7 +652,7 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
           access.hasPerms(accountPermissions.resetPwd)
             ? { key: 'resetPwd', label: '重置密码' }
             : null,
-          access.hasPerms(`${permPrefix}:forceLogout`) && config.services.listAccountSessions
+          access.hasPerms(`${permPrefix}:session:list`) && config.services.listAccountSessions
             ? { key: 'sessions', label: '会话' }
             : null,
           canViewAccountAudit
@@ -791,7 +813,7 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
             <Input placeholder="请输入" />
           </Form.Item>
           {!currentAccountId ? (
-            <Form.Item label="初始密码" name="password" rules={[{ required: true, message: '请输入初始密码' }]}>
+            <Form.Item label="初始密码" name="password" rules={passwordRules}>
               <Input.Password placeholder="请输入" />
             </Form.Item>
           ) : null}

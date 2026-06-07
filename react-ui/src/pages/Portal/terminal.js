@@ -27,9 +27,6 @@ export function getPortalTerminal(pathname) {
 export function persistPortalLogin(result, expectedTerminal) {
     if (!result?.token || result.terminal !== expectedTerminal) {
         clearPortalLogin(expectedTerminal);
-        if (result?.terminal) {
-            clearPortalLogin(result.terminal);
-        }
         return false;
     }
     const terminal = expectedTerminal;

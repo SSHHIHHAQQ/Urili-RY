@@ -208,7 +208,6 @@ const RoleTableList = () => {
         {
             title: _jsx(FormattedMessage, { id: "system.role.create_time", defaultMessage: "\u521B\u5EFA\u65F6\u95F4" }),
             dataIndex: 'createTime',
-            colSize: 2,
             valueType: 'dateRange',
             render: (_, record) => {
                 return (_jsxs("span", { children: [record.createTime.toString(), " "] }));

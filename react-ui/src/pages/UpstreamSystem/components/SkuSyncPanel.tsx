@@ -55,9 +55,10 @@ export default function SkuSyncPanel({
   const [keyword, setKeyword] = useState('');
   const [pairingStatus, setPairingStatus] = useState('');
   const [syncStatus, setSyncStatus] = useState('');
+  const canQueryUpstream = access.hasPerms('integration:upstream:query');
 
   const loadSyncState = async () => {
-    if (!selectedCode) {
+    if (!selectedCode || !canQueryUpstream) {
       setSyncState(undefined);
       return;
     }
@@ -69,7 +70,7 @@ export default function SkuSyncPanel({
 
   useEffect(() => {
     loadSyncState();
-  }, [selectedCode]);
+  }, [selectedCode, canQueryUpstream]);
 
   const skuColumns: ProColumns<API.Integration.SkuSyncItem>[] = [
     {
@@ -249,6 +250,9 @@ export default function SkuSyncPanel({
           selectedCode,
         }}
         request={async (params) => {
+          if (!canQueryUpstream) {
+            return { data: [], total: 0, success: true };
+          }
           const resp = await getSkuSyncList(selectedCode, {
             pageNum: params.current,
             pageSize: params.pageSize,

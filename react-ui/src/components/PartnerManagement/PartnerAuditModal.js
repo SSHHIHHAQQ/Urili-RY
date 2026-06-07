@@ -159,7 +159,6 @@ const PartnerAuditModal = ({ config, open, partner, account, onOpenChange, }) =>
         {
             title: '登录时间',
             dataIndex: 'timeRange',
-            colSize: 2,
             valueType: 'dateRange',
             hideInTable: true,
         },
@@ -224,7 +223,6 @@ const PartnerAuditModal = ({ config, open, partner, account, onOpenChange, }) =>
         {
             title: '操作时间',
             dataIndex: 'timeRange',
-            colSize: 2,
             valueType: 'dateRange',
             hideInTable: true,
         },
@@ -289,7 +287,6 @@ const PartnerAuditModal = ({ config, open, partner, account, onOpenChange, }) =>
         {
             title: '签发时间',
             dataIndex: 'timeRange',
-            colSize: 2,
             valueType: 'dateRange',
             hideInTable: true,
         },

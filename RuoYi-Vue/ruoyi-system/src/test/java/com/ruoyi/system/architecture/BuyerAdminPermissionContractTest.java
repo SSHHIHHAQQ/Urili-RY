@@ -64,13 +64,15 @@ public class BuyerAdminPermissionContractTest
         assertHandlerPermission(handlers, "accountRoles", "buyer:admin:account:role:query", violations);
         assertHandlerPermission(handlers, "accountRoles", "buyer:admin:role:query", violations);
         assertHandlerPermission(handlers, "assignAccountRoles", "buyer:admin:account:role:edit", violations);
+        assertHandlerPermission(handlers, "assignAccountRoles", "buyer:admin:account:role:query", violations);
+        assertHandlerPermission(handlers, "assignAccountRoles", "buyer:admin:role:query", violations);
         assertHandlerPermission(handlers, "addAccount", "buyer:admin:account:add", violations);
         assertHandlerPermission(handlers, "editAccount", "buyer:admin:account:edit", violations);
         assertHandlerPermission(handlers, "resetPassword", "buyer:admin:account:resetPwd", violations);
         assertHandlerPermission(handlers, "lockAccount", "buyer:admin:account:lock", violations);
         assertHandlerPermission(handlers, "unlockAccount", "buyer:admin:account:lock", violations);
-        assertHandlerPermission(handlers, "sessions", "buyer:admin:forceLogout", violations);
-        assertHandlerPermission(handlers, "accountSessions", "buyer:admin:forceLogout", violations);
+        assertHandlerPermission(handlers, "sessions", "buyer:admin:session:list", violations);
+        assertHandlerPermission(handlers, "accountSessions", "buyer:admin:session:list", violations);
         assertHandlerPermission(handlers, "forceLogoutBuyer", "buyer:admin:forceLogout", violations);
         assertHandlerPermission(handlers, "forceLogoutBuyerAccount", "buyer:admin:forceLogout", violations);
         assertHandlerPermission(handlers, "directLogin", "buyer:admin:directLogin", violations);

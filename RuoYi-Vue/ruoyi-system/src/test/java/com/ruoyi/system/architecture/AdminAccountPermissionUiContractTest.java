@@ -126,6 +126,7 @@ public class AdminAccountPermissionUiContractTest
             assertContains(source, "PartnerSessionModal", page, violations);
             assertContains(source, "config.services.listSubjectSessions", page, violations);
             assertContains(source, "config.services.forceLogoutSubject", page, violations);
+            assertContains(source, "access.hasPerms(`${permPrefix}:session:list`)", page, violations);
             assertContains(source, "access.hasPerms(`${permPrefix}:forceLogout`)", page, violations);
             assertContains(source, "access.hasPerms(`${permPrefix}:directLogin`)", page, violations);
             assertContains(source, "access.hasPerms(`${permPrefix}:dept:list`)", page, violations);
@@ -228,6 +229,9 @@ public class AdminAccountPermissionUiContractTest
                 continue;
             }
             assertContains(source, "const accountPermissions = config.accountPermissions ??", modal, violations);
+            assertContains(source, "const canQueryRole = access.hasPerms(`${permPrefix}:role:query`)", modal,
+                    violations);
+            assertContains(source, "const canAssignAccountRoles = canQueryRole", modal, violations);
             assertContains(source, "access.hasPerms(accountPermissions.roleQuery)", modal, violations);
             assertContains(source, "access.hasPerms(accountPermissions.roleEdit)", modal, violations);
             assertContains(source, "access.hasPerms(accountPermissions.resetPwd)", modal, violations);
@@ -250,6 +254,7 @@ public class AdminAccountPermissionUiContractTest
             assertContains(source, "PartnerSessionModal", modal, violations);
             assertContains(source, "config.services.listAccountSessions", modal, violations);
             assertContains(source, "config.services.forceLogoutAccount", modal, violations);
+            assertContains(source, "access.hasPerms(`${permPrefix}:session:list`)", modal, violations);
             assertContains(source, "access.hasPerms(`${permPrefix}:forceLogout`)", modal, violations);
             assertContains(source, "access.hasPerms(`${permPrefix}:directLogin`) && config.services.directLoginAccount",
                     modal, violations);

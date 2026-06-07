@@ -220,6 +220,39 @@ begin
     signal sqlstate '45000' set message_text = 'seller_menu auto_increment must be between 100000 and 199999 before terminal menu seed inserts';
   end if;
 
+  if exists (
+    select 1
+    from seller_menu
+    where coalesce(perms, '') = ''
+       or coalesce(perms, '') = '*'
+       or coalesce(perms, '') not like 'seller:%'
+       or coalesce(perms, '') like 'seller:admin:%'
+       or coalesce(perms, '') like 'buyer:%'
+  ) then
+    signal sqlstate '45000' set message_text = 'seller_menu contains invalid terminal perms';
+  end if;
+
+  if exists (
+    select 1
+    from seller_menu
+    where menu_type = 'C'
+      and coalesce(component, '') = ''
+  ) then
+    signal sqlstate '45000' set message_text = 'seller_menu page menus require component';
+  end if;
+
+  if exists (
+    select 1
+    from (
+      select perms
+      from seller_menu
+      group by perms
+      having count(1) > 1
+    ) duplicate_seller_menu_perms
+  ) then
+    signal sqlstate '45000' set message_text = 'seller_menu perms must be unique before terminal role grants';
+  end if;
+
   select count(1)
     into v_table_count
   from information_schema.tables
@@ -248,6 +281,79 @@ begin
   if coalesce(v_auto_increment, 0) < 200000
       or coalesce(v_auto_increment, 0) >= 300000 then
     signal sqlstate '45000' set message_text = 'buyer_menu auto_increment must be between 200000 and 299999 before terminal menu seed inserts';
+  end if;
+
+  if exists (
+    select 1
+    from buyer_menu
+    where coalesce(perms, '') = ''
+       or coalesce(perms, '') = '*'
+       or coalesce(perms, '') not like 'buyer:%'
+       or coalesce(perms, '') like 'buyer:admin:%'
+       or coalesce(perms, '') like 'seller:%'
+  ) then
+    signal sqlstate '45000' set message_text = 'buyer_menu contains invalid terminal perms';
+  end if;
+
+  if exists (
+    select 1
+    from buyer_menu
+    where menu_type = 'C'
+      and coalesce(component, '') = ''
+  ) then
+    signal sqlstate '45000' set message_text = 'buyer_menu page menus require component';
+  end if;
+
+  if exists (
+    select 1
+    from (
+      select perms
+      from buyer_menu
+      group by perms
+      having count(1) > 1
+    ) duplicate_buyer_menu_perms
+  ) then
+    signal sqlstate '45000' set message_text = 'buyer_menu perms must be unique before terminal role grants';
+  end if;
+end//
+
+drop procedure if exists add_index_if_missing//
+create procedure add_index_if_missing(in p_table varchar(64), in p_index varchar(64), in p_definition text)
+begin
+  if not exists (
+    select 1
+    from information_schema.statistics
+    where table_schema = database() and table_name = p_table and index_name = p_index
+  ) then
+    set @ddl = concat('alter table `', p_table, '` add ', p_definition);
+    prepare stmt from @ddl;
+    execute stmt;
+    deallocate prepare stmt;
+  end if;
+end//
+
+drop procedure if exists assert_terminal_menu_perms_unique_index//
+create procedure assert_terminal_menu_perms_unique_index(
+  in p_table varchar(64),
+  in p_index varchar(64),
+  in p_message varchar(128)
+)
+begin
+  declare v_index_count int default 0;
+  declare v_actual_columns text default '';
+  declare v_actual_non_unique int default null;
+
+  select count(distinct index_name),
+         coalesce(group_concat(column_name order by seq_in_index separator ','), ''),
+         max(non_unique)
+    into v_index_count, v_actual_columns, v_actual_non_unique
+  from information_schema.statistics
+  where table_schema = database() and table_name = p_table and index_name = p_index;
+
+  if v_index_count <> 1
+      or v_actual_columns <> 'perms'
+      or v_actual_non_unique <> 0 then
+    signal sqlstate '45000' set message_text = p_message;
   end if;
 end//
 
@@ -338,7 +444,7 @@ create table if not exists seller_account (
   dept_id               bigint(20)      default null               comment '卖家端部门ID',
   user_name             varchar(30)     not null                   comment '登录账号',
   nick_name             varchar(30)     not null default ''        comment '姓名',
-  password              varchar(100)    not null default ''        comment '密码密文',
+  password              varchar(100)    not null                   comment '密码密文',
   email                 varchar(50)     default ''                 comment '邮箱',
   phonenumber           varchar(32)     default ''                 comment '手机',
   account_role          varchar(32)     not null default 'OWNER'   comment '卖家侧账号角色',
@@ -367,7 +473,7 @@ create table if not exists buyer_account (
   dept_id               bigint(20)      default null               comment '买家端部门ID',
   user_name             varchar(30)     not null                   comment '登录账号',
   nick_name             varchar(30)     not null default ''        comment '姓名',
-  password              varchar(100)    not null default ''        comment '密码密文',
+  password              varchar(100)    not null                   comment '密码密文',
   email                 varchar(50)     default ''                 comment '邮箱',
   phonenumber           varchar(32)     default ''                 comment '手机',
   account_role          varchar(32)     not null default 'OWNER'   comment '买家侧账号角色',
@@ -490,6 +596,7 @@ create table if not exists seller_menu (
   update_time           datetime                                   comment '更新时间',
   remark                varchar(500)    default ''                 comment '备注',
   primary key (seller_menu_id),
+  unique key uk_seller_menu_perms (perms),
   key idx_seller_menu_parent (parent_id),
   key idx_seller_menu_status (status)
 ) engine=innodb auto_increment=100000 comment = '卖家端菜单权限表';
@@ -516,6 +623,7 @@ create table if not exists buyer_menu (
   update_time           datetime                                   comment '更新时间',
   remark                varchar(500)    default ''                 comment '备注',
   primary key (buyer_menu_id),
+  unique key uk_buyer_menu_perms (perms),
   key idx_buyer_menu_parent (parent_id),
   key idx_buyer_menu_status (status)
 ) engine=innodb auto_increment=200000 comment = '买家端菜单权限表';
@@ -711,6 +819,16 @@ create table if not exists portal_direct_login_ticket (
   key idx_portal_direct_login_ticket_status_expire (status, expire_time)
 ) engine=innodb auto_increment=1 comment = '管理端免密代入审计票据表';
 
+call assert_terminal_menu_range_ready();
+call add_index_if_missing('seller_menu', 'uk_seller_menu_perms',
+  'unique key uk_seller_menu_perms (perms)');
+call add_index_if_missing('buyer_menu', 'uk_buyer_menu_perms',
+  'unique key uk_buyer_menu_perms (perms)');
+call assert_terminal_menu_perms_unique_index('seller_menu', 'uk_seller_menu_perms',
+  'seller_menu perms unique index is invalid');
+call assert_terminal_menu_perms_unique_index('buyer_menu', 'uk_buyer_menu_perms',
+  'buyer_menu perms unique index is invalid');
+
 insert into sys_dict_type
     (dict_name, dict_type, status, create_by, create_time, update_by, update_time, remark)
 select
@@ -874,12 +992,14 @@ values
     (2203, 2011, 'F', '#', '', '', 'seller:admin:changeStatus'),
     (2205, 2011, 'F', '#', '', '', 'seller:admin:directLogin'),
     (2206, 2011, 'F', '#', '', '', 'seller:admin:forceLogout'),
+    (2256, 2011, 'F', '#', '', '', 'seller:admin:session:list'),
     (2210, 2012, 'F', '#', '', '', 'buyer:admin:query'),
     (2211, 2012, 'F', '#', '', '', 'buyer:admin:add'),
     (2212, 2012, 'F', '#', '', '', 'buyer:admin:edit'),
     (2213, 2012, 'F', '#', '', '', 'buyer:admin:changeStatus'),
     (2215, 2012, 'F', '#', '', '', 'buyer:admin:directLogin'),
     (2216, 2012, 'F', '#', '', '', 'buyer:admin:forceLogout'),
+    (2257, 2012, 'F', '#', '', '', 'buyer:admin:session:list'),
     (2220, 2011, 'F', '#', '', '', 'seller:admin:menu:list'),
     (2221, 2011, 'F', '#', '', '', 'seller:admin:menu:query'),
     (2222, 2011, 'F', '#', '', '', 'seller:admin:menu:add'),
@@ -962,6 +1082,9 @@ values
     (2206, '卖家强制踢出', 2011, 32, '#', '', '', '',
      1, 0, 'F', '0', '0', 'seller:admin:forceLogout', '#', 'admin',
      sysdate(), '', null, ''),
+    (2256, '卖家会话查看', 2011, 33, '#', '', '', '',
+     1, 0, 'F', '0', '0', 'seller:admin:session:list', '#', 'admin',
+     sysdate(), '', null, ''),
     (2210, '买家查询', 2012, 5, '#', '', '', '',
      1, 0, 'F', '0', '0', 'buyer:admin:query', '#', 'admin',
      sysdate(), '', null, ''),
@@ -979,6 +1102,9 @@ values
      sysdate(), '', null, ''),
     (2216, '买家强制踢出', 2012, 32, '#', '', '', '',
      1, 0, 'F', '0', '0', 'buyer:admin:forceLogout', '#', 'admin',
+     sysdate(), '', null, ''),
+    (2257, '买家会话查看', 2012, 33, '#', '', '', '',
+     1, 0, 'F', '0', '0', 'buyer:admin:session:list', '#', 'admin',
      sysdate(), '', null, ''),
     (2220, '卖家端菜单列表', 2011, 35, '#', '', '', '',
      1, 0, 'F', '0', '0', 'seller:admin:menu:list', '#', 'admin',
@@ -1194,8 +1320,6 @@ where b.status = '0'
         and r.del_flag = '0'
   );
 
-call assert_terminal_menu_range_ready();
-
 call assert_seller_menu_permission_slot('seller:account:list', 0, 'F', '', null, '',
     'seller:account:list menu slot is occupied by another signature');
 call assert_seller_menu_permission_slot('seller:account:loginLog:list', 0, 'F', '', null, '',
@@ -1378,3 +1502,5 @@ drop procedure if exists assert_seller_buyer_sys_menu_seed_guard;
 drop procedure if exists assert_seller_menu_permission_slot;
 drop procedure if exists assert_buyer_menu_permission_slot;
 drop procedure if exists assert_terminal_menu_range_ready;
+drop procedure if exists add_index_if_missing;
+drop procedure if exists assert_terminal_menu_perms_unique_index;
