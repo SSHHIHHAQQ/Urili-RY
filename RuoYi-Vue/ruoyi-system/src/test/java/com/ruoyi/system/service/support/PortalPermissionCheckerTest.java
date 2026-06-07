@@ -14,14 +14,17 @@ import com.ruoyi.system.service.IPortalPermissionCheckService;
 public class PortalPermissionCheckerTest
 {
     @Test
-    public void requireAuthorizedAllowsAuthenticatedSessionWhenNoPermissionIsRequired()
+    public void requireAuthorizedChecksTerminalServiceWhenNoPermissionIsRequired()
     {
         PortalLoginSession session = session("seller");
-        PortalPermissionChecker checker = checker(session, service("seller"));
+        RecordingPermissionCheckService service = recordingService("seller");
+        PortalPermissionChecker checker = checker(session, service);
 
         PortalLoginSession result = checker.requireAuthorized("seller", new String[0], new String[0]);
 
         assertSame(session, result);
+        assertEquals(1, service.callCount);
+        assertSame(session, service.lastSession);
     }
 
     @Test
@@ -111,21 +114,40 @@ public class PortalPermissionCheckerTest
 
     private IPortalPermissionCheckService service(String terminal, String... permissions)
     {
-        Set<String> permissionSet = new LinkedHashSet<>(Arrays.asList(permissions));
-        return new IPortalPermissionCheckService()
-        {
-            @Override
-            public String terminal()
-            {
-                return terminal;
-            }
+        return recordingService(terminal, permissions);
+    }
 
-            @Override
-            public Set<String> selectPermissions(PortalLoginSession session)
-            {
-                return permissionSet;
-            }
-        };
+    private RecordingPermissionCheckService recordingService(String terminal, String... permissions)
+    {
+        return new RecordingPermissionCheckService(terminal, permissions);
+    }
+
+    private static class RecordingPermissionCheckService implements IPortalPermissionCheckService
+    {
+        private final String terminal;
+        private final Set<String> permissionSet;
+        private int callCount;
+        private PortalLoginSession lastSession;
+
+        private RecordingPermissionCheckService(String terminal, String... permissions)
+        {
+            this.terminal = terminal;
+            this.permissionSet = new LinkedHashSet<>(Arrays.asList(permissions));
+        }
+
+        @Override
+        public String terminal()
+        {
+            return terminal;
+        }
+
+        @Override
+        public Set<String> selectPermissions(PortalLoginSession session)
+        {
+            callCount++;
+            lastSession = session;
+            return permissionSet;
+        }
     }
 
     private static class FakePortalTokenSupport extends PortalTokenSupport

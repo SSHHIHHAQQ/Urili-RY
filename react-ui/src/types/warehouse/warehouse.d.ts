@@ -28,6 +28,13 @@ declare namespace API.Warehouse {
     upstreamWarehouseCode?: string;
     upstreamWarehouseName?: string;
     pairingStatus?: string;
+    pairingRole?: string;
+    quoteWarehousePairingId?: number;
+    quoteConnectionCode?: string;
+    quoteMasterWarehouseName?: string;
+    quoteUpstreamWarehouseCode?: string;
+    quoteUpstreamWarehouseName?: string;
+    quotePairingStatus?: string;
     createBy?: string;
     createTime?: string;
     updateBy?: string;
@@ -97,6 +104,7 @@ declare namespace API.Warehouse {
     connectionCode: string;
     masterWarehouseName: string;
     systemKind?: string;
+    settlementType?: string;
   }
 
   export interface SyncCandidate {
@@ -107,6 +115,7 @@ declare namespace API.Warehouse {
     countryCode?: string;
     status?: string;
     paired?: boolean;
+    pairingRole?: string;
     systemWarehouseCode?: string;
     systemWarehouseName?: string;
   }
@@ -114,5 +123,23 @@ declare namespace API.Warehouse {
   export interface OfficialSyncRequest extends Warehouse {
     connectionCode: string;
     upstreamWarehouseCode: string;
+  }
+
+  export type PairingRole = 'FULFILLMENT' | 'QUOTE';
+
+  export interface PairingOptionParams {
+    pairingRole: PairingRole;
+    keyword?: string;
+  }
+
+  export interface PairingCandidateParams extends PairingOptionParams {
+    connectionCode: string;
+  }
+
+  export interface OfficialPairingRequest {
+    pairingRole: PairingRole;
+    connectionCode?: string;
+    upstreamWarehouseCode?: string;
+    unpair?: boolean;
   }
 }

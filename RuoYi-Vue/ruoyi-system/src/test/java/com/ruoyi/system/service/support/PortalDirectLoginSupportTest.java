@@ -171,7 +171,7 @@ public class PortalDirectLoginSupportTest
     }
 
     @Test
-    public void consumeTokenShouldReadLegacyRedisPayloadAndDeleteBothKeyShapes()
+    public void consumeTokenShouldRejectLegacyRedisPayloadAndDeleteBothKeyShapes()
     {
         PortalDirectLoginResult result = support.createToken("seller", 7L, "SAAA010001",
                 activeAccount(44L, "seller-owner"), "Support inspection",
@@ -182,11 +182,14 @@ public class PortalDirectLoginSupportTest
         redisCache.values.remove(cacheKey);
         redisCache.values.put(legacyCacheKey, legacyPayload);
 
-        PortalDirectLoginToken payload = support.consumeToken("seller", result.getToken(), token -> {
-        });
+        ServiceException exception = assertThrows(ServiceException.class,
+                () -> support.consumeToken("seller", result.getToken(), token -> {
+                }));
 
-        assertEquals(result.getTicketId(), payload.getTicketId());
-        assertEquals(1, ticketMapper.usedCalls);
+        assertEquals("免密登录 token 不存在或已过期", exception.getMessage());
+        assertEquals(0, ticketMapper.usedCalls);
+        assertEquals(1, ticketMapper.expiredCalls);
+        assertEquals(result.getTicketId(), ticketMapper.expiredTicketId);
         assertTrue(redisCache.deletedKeys.contains(cacheKey));
         assertTrue(redisCache.deletedKeys.contains(legacyCacheKey));
         assertNull(redisCache.getCacheObject(cacheKey));
@@ -331,8 +334,8 @@ public class PortalDirectLoginSupportTest
                 }));
 
         assertEquals("免密登录票据端类型不匹配", exception.getMessage());
-        assertEquals(exception, auditedException[0]);
-        assertTicketContext(result.getTicketId(), auditedPayload[0]);
+        assertNull(auditedException[0]);
+        assertNull(auditedPayload[0]);
         assertEquals(0, ticketMapper.usedCalls);
         assertEquals(0, ticketMapper.expiredCalls);
         assertFalse(redisCache.deletedKeys.contains(cacheKey(result.getToken())));

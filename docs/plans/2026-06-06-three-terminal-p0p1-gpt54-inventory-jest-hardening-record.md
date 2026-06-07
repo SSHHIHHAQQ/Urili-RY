@@ -27,7 +27,7 @@
 ## 已修复问题
 
 - `upstream_system_management_seed.sql` 已移除库存快照表 DDL、库存状态表 DDL、库存权限 seed、库存自动扩权和库存 job 启用块，仅保留“库存 schema 未确认前省略”的说明。
-- `20260606_upstream_inventory_dimension_sync.sql` 已改为 cleanup/disable 脚本：保留已确认的 `integration:upstream:dimensionSync` 权限，清理/隐藏库存权限，禁用旧 `upstreamSystemTask.syncInventory` job，不建库存表、不启库存 job。
+- 2026-06-07 追记：本条为 2026-06-06 当时的历史口径。当前 `20260606_upstream_inventory_dimension_sync.sql` 仍承载库存 schema、job 和 `sys_role_menu` 授权继承，但已在后续检查点退出 `2307/2308/2309` 的 `sys_menu` owner。
 - `AdminSourceWarehouseStockController` 已降级为不可路由占位类。
 - `AdminUpstreamSystemController` 中库存相关方法取消 HTTP mapping，不再暴露 `inventory/sync`、`inventory/list`、`inventory-sync-state`。
 - `UpstreamSystemTask.syncInventory()` 保留旧 Quartz 方法名但立即抛出禁用错误，防止历史 job 命中后继续落库存数据。
@@ -38,7 +38,7 @@
 ## 残留问题
 
 - 来源仓库库存的 domain、mapper XML 和部分 service 内部实现仍保留历史草稿；当前前端 Tab 仅为占位，不发真实请求，没有 HTTP 映射、权限 seed 或启用 job 入口。后续恢复必须先确认库存 schema、同步落库方案、权限点和审计边界。
-- `20260606_upstream_inventory_dimension_sync.sql` 中库存权限字符串仅用于 cleanup/disable，不代表重新开放库存能力。
+- 2026-06-07 追记：当前 `20260606_upstream_inventory_dimension_sync.sql` 中库存权限字符串用于上游系统管理按钮存在性断言和 `sys_role_menu` 授权继承，不再表示该脚本 owning `sys_menu`。
 - 未处理 P2：portal 异常 terminal fallback、JS/TS twin 长期维护风险、direct-login 成功链路未在端内 session/log 上直接写 ticketId。
 
 ## 验证命令
@@ -48,7 +48,7 @@
 - `cd E:\Urili-Ruoyi\react-ui; npm run tsc -- --pretty false`：通过。
 - `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-admin -am -DskipTests compile`：通过，`BUILD SUCCESS`。
 - `cd E:\Urili-Ruoyi\react-ui; npm run verify:three-terminal`：通过，`three-terminal verification passed.`。
-- 静态搜索确认：当前只在 cleanup/disable SQL 中保留 `integration:upstream:inventory*` 字符串；没有 `inventory/sync`、`inventory/list`、`inventory-sync-state`、库存建表语句或可触达来源仓库库存 Controller mapping。
+- 2026-06-07 追记：该静态搜索结论已过期。当前库存 schema/job 已按后续实现演进，`20260606_upstream_inventory_dimension_sync.sql` 的 `2307/2308/2309` 菜单 owner 已收敛到 `upstream_system_management_seed.sql`。
 
 ## 未验证原因
 

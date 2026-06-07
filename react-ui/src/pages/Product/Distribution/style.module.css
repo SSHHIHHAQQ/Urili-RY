@@ -188,6 +188,10 @@
   gap: 14px;
 }
 
+.sourceSkuToolbar {
+  margin-bottom: 12px;
+}
+
 .specPanel {
   padding: 14px;
   background: #fafafa;

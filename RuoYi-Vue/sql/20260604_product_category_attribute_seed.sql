@@ -22,6 +22,50 @@ delimiter ;
 call assert_product_category_attribute_seed_confirmed();
 drop procedure if exists assert_product_category_attribute_seed_confirmed;
 
+delimiter //
+
+drop procedure if exists assert_product_category_attribute_sys_menu_guard//
+create procedure assert_product_category_attribute_sys_menu_guard()
+begin
+  if exists (
+    select 1
+    from sys_menu m
+    where exists (
+        select 1
+        from tmp_product_category_attribute_sys_menu_guard seed
+        where seed.menu_id = m.menu_id
+    )
+      and not exists (
+        select 1
+        from tmp_product_category_attribute_sys_menu_guard seed
+        where seed.menu_id = m.menu_id
+          and m.parent_id = seed.parent_id
+          and coalesce(m.menu_type, '') = coalesce(seed.menu_type, '')
+          and coalesce(m.path, '') = coalesce(seed.path, '')
+          and coalesce(m.component, '') = coalesce(seed.component, '')
+          and coalesce(m.route_name, '') = coalesce(seed.route_name, '')
+          and coalesce(m.perms, '') = coalesce(seed.perms, '')
+    )
+  ) then
+    signal sqlstate '45000' set message_text = 'product category attribute sys_menu id slot is occupied by another menu';
+  end if;
+
+  if exists (
+    select 1
+    from sys_menu m
+    join tmp_product_category_attribute_sys_menu_guard seed
+      on m.menu_id <> seed.menu_id
+     and coalesce(m.path, '') = coalesce(seed.path, '')
+     and coalesce(m.component, '') = coalesce(seed.component, '')
+     and coalesce(m.route_name, '') = coalesce(seed.route_name, '')
+     and coalesce(m.perms, '') = coalesce(seed.perms, '')
+  ) then
+    signal sqlstate '45000' set message_text = 'product category attribute sys_menu signature is already used by another menu';
+  end if;
+end//
+
+delimiter ;
+
 create table if not exists product_category (
   category_id      bigint(20)    not null auto_increment comment '商品分类ID',
   parent_id        bigint(20)    not null default 0       comment '父分类ID',
@@ -182,6 +226,39 @@ from (
 ) seed
 where not exists (select 1 from sys_dict_data d where d.dict_type = 'product_attribute_group' and d.dict_value = seed.dict_value);
 
+create temporary table if not exists tmp_product_category_attribute_sys_menu_guard (
+  menu_id    bigint       not null,
+  parent_id  bigint       not null,
+  menu_type  char(1)      not null,
+  path       varchar(200) not null default '',
+  component  varchar(255) not null default '',
+  route_name varchar(50)  not null default '',
+  perms      varchar(100) not null default '',
+  key idx_product_category_attribute_sys_menu_guard_id (menu_id)
+) engine=memory;
+
+truncate table tmp_product_category_attribute_sys_menu_guard;
+
+insert into tmp_product_category_attribute_sys_menu_guard(menu_id, parent_id, menu_type, path, component, route_name, perms) values
+    (2060, 0, 'M', 'product', '', 'ProductManagement', ''),
+    (2440, 2090, 'C', 'product-category', 'Product/Category/index', 'ProductCategoryConfig', 'product:category:list'),
+    (2440, 2090, 'C', 'product-category', 'Common/PlannedPage/index', 'ProductCategoryConfig', 'basic:productCategory:list'),
+    (2441, 2090, 'C', 'product-attribute', 'Product/Attribute/index', 'ProductAttributeConfig', 'product:attribute:list'),
+    (2441, 2090, 'C', 'product-attribute', 'Common/PlannedPage/index', 'ProductAttributeConfig', 'basic:productAttribute:list'),
+    (2470, 2440, 'F', '#', '', '', 'product:category:query'),
+    (2471, 2440, 'F', '#', '', '', 'product:category:add'),
+    (2472, 2440, 'F', '#', '', '', 'product:category:edit'),
+    (2473, 2440, 'F', '#', '', '', 'product:category:remove'),
+    (2474, 2441, 'F', '#', '', '', 'product:attribute:query'),
+    (2475, 2441, 'F', '#', '', '', 'product:attribute:add'),
+    (2476, 2441, 'F', '#', '', '', 'product:attribute:edit'),
+    (2477, 2441, 'F', '#', '', '', 'product:attribute:remove'),
+    (2478, 2441, 'F', '#', '', '', 'product:categoryAttribute:list'),
+    (2479, 2441, 'F', '#', '', '', 'product:categoryAttribute:edit'),
+    (2480, 2441, 'F', '#', '', '', 'product:categoryAttribute:preview');
+
+call assert_product_category_attribute_sys_menu_guard();
+
 insert into sys_menu
     (menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
      is_frame, is_cache, menu_type, visible, status, perms, icon, create_by,
@@ -265,3 +342,6 @@ from (
 ) seed
 where not exists (select 1 from sys_menu m where m.menu_id = seed.menu_id)
   and not exists (select 1 from sys_menu p where p.perms = seed.perms);
+
+drop temporary table if exists tmp_product_category_attribute_sys_menu_guard;
+drop procedure if exists assert_product_category_attribute_sys_menu_guard;

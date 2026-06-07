@@ -37,22 +37,48 @@ public class PortalLogAspectContractTest
         {
             violations.add("PortalLogAspect must explicitly gate anonymous auth audit by annotation flag");
         }
+        if (source.contains("if (session == null && controllerLog.allowAnonymous())"))
+        {
+            violations.add("PortalLogAspect must not resolve anonymous auth audit after reading an old request token");
+        }
+        assertAppearsBefore(source, "PortalLogAspect.java", "if (controllerLog.allowAnonymous())",
+                "portalTokenSupport.getSession(controllerLog.terminal())", violations);
         if (!source.contains("resolveSessionFromLoginResult(controllerLog.terminal(), jsonResult)")
                 || !source.contains("AjaxResult.DATA_TAG")
                 || !source.contains("portalTokenSupport.getSession(expectedTerminal, loginResult.getToken())"))
         {
             violations.add("PortalLogAspect must resolve successful portal auth responses back to their stored sessions");
         }
-        if (!source.contains("directLoginAudit{ticketId=")
-                || !source.contains("session.getActingAdminId()")
-                || !source.contains("session.getDirectLoginReason()"))
+        if (!source.contains("applyDirectLoginAudit(operLog, session)")
+                || !source.contains("operLog.setDirectLogin(Boolean.FALSE)")
+                || !source.contains("operLog.setDirectLogin(Boolean.TRUE)")
+                || !source.contains("operLog.setDirectLoginTicketId(session.getDirectLoginTicketId())")
+                || !source.contains("operLog.setActingAdminId(session.getActingAdminId())")
+                || !source.contains("operLog.setActingAdminName(session.getActingAdminName())")
+                || !source.contains("operLog.setDirectLoginReason(session.getDirectLoginReason())"))
         {
-            violations.add("PortalLogAspect must append direct-login acting admin audit context to oper_param");
+            violations.add("PortalLogAspect must copy direct-login audit context into PortalOperLog structured fields");
+        }
+        if (!source.contains("directLoginAudit{ticketId=")
+                || !source.contains("appendDirectLoginAuditParam(operLog, session)"))
+        {
+            violations.add("PortalLogAspect must keep the direct-login oper_param compatibility prefix");
         }
 
         if (!violations.isEmpty())
         {
             fail(String.join("\n", violations));
+        }
+    }
+
+    private void assertAppearsBefore(String source, String fileName, String first, String second,
+            List<String> violations)
+    {
+        int firstIndex = source.indexOf(first);
+        int secondIndex = source.indexOf(second);
+        if (firstIndex < 0 || secondIndex < 0 || firstIndex > secondIndex)
+        {
+            violations.add(fileName + " must evaluate " + first + " before " + second);
         }
     }
 

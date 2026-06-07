@@ -145,8 +145,8 @@ export async function addWarehousePairing(connectionCode: string, data: API.Inte
   });
 }
 
-export async function deleteWarehousePairing(warehousePairingId: number) {
-  return request<API.Result>(`${baseUrl}/warehouse-pairings/${warehousePairingId}`, {
+export async function deleteWarehousePairing(connectionCode: string, warehousePairingId: number) {
+  return request<API.Result>(`${baseUrl}/${connectionCode}/warehouse-pairings/${warehousePairingId}`, {
     method: 'DELETE',
   });
 }
@@ -177,8 +177,8 @@ export async function addLogisticsChannelPairing(connectionCode: string, data: A
   });
 }
 
-export async function deleteLogisticsChannelPairing(logisticsChannelPairingId: number) {
-  return request<API.Result>(`${baseUrl}/logistics-channel-pairings/${logisticsChannelPairingId}`, {
+export async function deleteLogisticsChannelPairing(connectionCode: string, logisticsChannelPairingId: number) {
+  return request<API.Result>(`${baseUrl}/${connectionCode}/logistics-channel-pairings/${logisticsChannelPairingId}`, {
     method: 'DELETE',
   });
 }
@@ -209,8 +209,8 @@ export async function addSkuPairing(connectionCode: string, data: API.Integratio
   });
 }
 
-export async function deleteSkuPairing(skuPairingId: number) {
-  return request<API.Result>(`${baseUrl}/sku-pairings/${skuPairingId}`, {
+export async function deleteSkuPairing(connectionCode: string, skuPairingId: number) {
+  return request<API.Result>(`${baseUrl}/${connectionCode}/sku-pairings/${skuPairingId}`, {
     method: 'DELETE',
   });
 }

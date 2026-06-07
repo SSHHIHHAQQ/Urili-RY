@@ -188,14 +188,18 @@ function getOppositeModuleKey(moduleKey: PartnerModuleConfig['moduleKey']) {
 }
 
 const forbiddenPathRoots = new Set(['admin', 'common', 'shared', 'system', 'account', 'monitor', 'tool']);
-const forbiddenComponentRoots = new Set(['Admin', 'Common', 'Shared', 'System', 'User', 'Monitor', 'Tool']);
+const forbiddenComponentRoots = new Set(['admin', 'common', 'shared', 'system', 'user', 'monitor', 'tool']);
+
+function normalizeMenuTarget(value: string) {
+  return value.trim().replace(/^(?:\.\/|\/)+/, '');
+}
 
 function getFirstSegment(value: string) {
-  return value.trim().replace(/^\/+/, '').split('/')[0] || '';
+  return normalizeMenuTarget(value).split('/')[0]?.toLowerCase() || '';
 }
 
 function validateMenuPathForTerminal(moduleKey: PartnerModuleConfig['moduleKey'], value?: string) {
-  const normalized = (value || '').trim().replace(/^\/+/, '').toLowerCase();
+  const normalized = normalizeMenuTarget(value || '').toLowerCase();
   const opposite = getOppositeModuleKey(moduleKey);
   const root = getFirstSegment(normalized);
   if (!normalized || normalized === '#') {
@@ -214,11 +218,15 @@ function validateMenuPathForTerminal(moduleKey: PartnerModuleConfig['moduleKey']
 }
 
 function validateMenuComponentForTerminal(moduleKey: PartnerModuleConfig['moduleKey'], value?: string) {
-  const normalized = (value || '').trim();
-  const oppositeRoot = moduleKey === 'seller' ? 'Buyer' : 'Seller';
+  const normalized = normalizeMenuTarget(value || '');
+  const normalizedLower = normalized.toLowerCase();
+  const oppositeRoot = getOppositeModuleKey(moduleKey);
   const root = getFirstSegment(normalized);
   if (!normalized) {
-    return Promise.resolve();
+    return Promise.reject(new Error('menu component is required for page menus'));
+  }
+  if (root !== moduleKey) {
+    return Promise.reject(new Error('menu component must use the current terminal root'));
   }
   if (root === oppositeRoot) {
     return Promise.reject(new Error('menu component cannot point to the opposite terminal'));
@@ -226,7 +234,7 @@ function validateMenuComponentForTerminal(moduleKey: PartnerModuleConfig['module
   if (forbiddenComponentRoots.has(root)) {
     return Promise.reject(new Error('menu component cannot point to admin or shared control roots'));
   }
-  if (normalized === oppositeRoot || normalized.startsWith(`${oppositeRoot}/`)) {
+  if (normalizedLower === oppositeRoot || normalizedLower.startsWith(`${oppositeRoot}/`)) {
     return Promise.reject(new Error(`组件不能指向${oppositeRoot}端页面`));
   }
   return Promise.resolve();
@@ -234,10 +242,17 @@ function validateMenuComponentForTerminal(moduleKey: PartnerModuleConfig['module
 
 function validateMenuPermsForTerminal(moduleKey: PartnerModuleConfig['moduleKey'], value?: string) {
   const normalized = (value || '').trim();
-  if (normalized && !normalized.startsWith(`${moduleKey}:`)) {
+  const permissions = normalized.split(',').map((item) => item.trim()).filter(Boolean);
+  if (permissions.length === 0) {
+    return Promise.reject(new Error('menu permission is required for page and button menus'));
+  }
+  if (permissions.some((permission) => permission.includes('*'))) {
+    return Promise.reject(new Error('terminal menu cannot use wildcard permissions'));
+  }
+  if (permissions.some((permission) => !permission.startsWith(`${moduleKey}:`))) {
     return Promise.reject(new Error(`权限标识必须以 ${moduleKey}: 开头`));
   }
-  if (normalized === `${moduleKey}:admin` || normalized.startsWith(`${moduleKey}:admin:`)) {
+  if (permissions.some((permission) => permission === `${moduleKey}:admin` || permission.startsWith(`${moduleKey}:admin:`))) {
     return Promise.reject(new Error('terminal menu cannot use admin permission namespace'));
   }
   return Promise.resolve();

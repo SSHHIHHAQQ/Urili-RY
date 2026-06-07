@@ -10,6 +10,9 @@ import com.ruoyi.system.domain.PortalLoginLog;
 import com.ruoyi.system.domain.PortalLoginResult;
 import com.ruoyi.system.domain.PortalLoginSession;
 import com.ruoyi.system.domain.PortalOperLog;
+import com.ruoyi.system.domain.PortalOwnLoginLogProfile;
+import com.ruoyi.system.domain.PortalOwnOperLogProfile;
+import com.ruoyi.system.domain.PortalOwnSessionProfile;
 import com.ruoyi.system.domain.PortalPasswordChangeRequest;
 import com.ruoyi.system.domain.PortalSessionProfile;
 
@@ -42,10 +45,6 @@ public interface ISellerService
 
     public int resetSellerAccountPassword(Long sellerId, Long sellerAccountId, String password);
 
-    public int resetSellerAccountDefaultPassword(Long sellerId, Long sellerAccountId);
-
-    public int resetSellerOwnerPassword(Long sellerId);
-
     public List<PortalSessionProfile> selectSellerSessionList(Long sellerId);
 
     public List<PortalSessionProfile> selectSellerAccountSessionList(Long sellerId, Long sellerAccountId);
@@ -62,11 +61,11 @@ public interface ISellerService
 
     public List<PortalOperLog> selectSellerOperLogList(PortalOperLog log);
 
-    public List<PortalLoginLog> selectSellerOwnLoginLogList(PortalLoginSession session, PortalLoginLog log);
+    public List<PortalOwnLoginLogProfile> selectSellerOwnLoginLogList(PortalLoginSession session, PortalLoginLog log);
 
-    public List<PortalOperLog> selectSellerOwnOperLogList(PortalLoginSession session, PortalOperLog log);
+    public List<PortalOwnOperLogProfile> selectSellerOwnOperLogList(PortalLoginSession session, PortalOperLog log);
 
-    public List<PortalSessionProfile> selectSellerOwnSessionList(PortalLoginSession session);
+    public List<PortalOwnSessionProfile> selectSellerOwnSessionList(PortalLoginSession session);
 
     public List<PortalDirectLoginTicket> selectSellerDirectLoginTicketList(PortalDirectLoginTicket ticket);
 

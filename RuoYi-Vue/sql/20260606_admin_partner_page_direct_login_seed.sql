@@ -27,6 +27,8 @@ delimiter //
 drop procedure if exists assert_sys_menu_slot//
 create procedure assert_sys_menu_slot(
   in p_menu_id bigint,
+  in p_parent_id bigint,
+  in p_menu_type char(1),
   in p_path varchar(200),
   in p_component varchar(255),
   in p_route_name varchar(50),
@@ -39,13 +41,33 @@ begin
     from sys_menu
     where menu_id = p_menu_id
       and (
-        coalesce(path, '') <> coalesce(p_path, '')
+        coalesce(parent_id, -1) <> p_parent_id
+        or coalesce(menu_type, '') <> coalesce(p_menu_type, '')
+        or coalesce(path, '') <> coalesce(p_path, '')
         or coalesce(component, '') <> coalesce(p_component, '')
         or coalesce(route_name, '') <> coalesce(p_route_name, '')
         or coalesce(perms, '') <> coalesce(p_perms, '')
       )
   ) then
     signal sqlstate '45000' set message_text = p_message;
+  end if;
+end//
+
+drop procedure if exists assert_partner_root_menu_exists//
+create procedure assert_partner_root_menu_exists()
+begin
+  if not exists (
+    select 1
+    from sys_menu
+    where menu_id = 2010
+      and coalesce(parent_id, -1) = 0
+      and coalesce(menu_type, '') = 'M'
+      and coalesce(path, '') = 'partner'
+      and coalesce(component, '') = ''
+      and coalesce(route_name, '') = 'PartnerManagement'
+      and coalesce(perms, '') = ''
+  ) then
+    signal sqlstate '45000' set message_text = 'admin direct-login seed requires top_menu_seed partner root 2010';
   end if;
 end//
 
@@ -74,13 +96,13 @@ end//
 
 delimiter ;
 
-call assert_sys_menu_slot(2010, 'partner', '', 'PartnerManagement', '', 'sys_menu 2010 is occupied by another menu');
-call assert_sys_menu_slot(2011, 'seller', 'Seller/index', 'Seller', 'seller:admin:list', 'sys_menu 2011 is occupied by another menu');
-call assert_sys_menu_slot(2012, 'buyer', 'Buyer/index', 'Buyer', 'buyer:admin:list', 'sys_menu 2012 is occupied by another menu');
-call assert_sys_menu_slot(2205, '#', '', '', 'seller:admin:directLogin', 'sys_menu 2205 is occupied by another menu');
-call assert_sys_menu_slot(2215, '#', '', '', 'buyer:admin:directLogin', 'sys_menu 2215 is occupied by another menu');
+call assert_partner_root_menu_exists();
 
-call assert_sys_menu_signature_available(2010, 'partner', '', 'PartnerManagement', '', 'partner root menu signature is already used by another menu');
+call assert_sys_menu_slot(2011, 2010, 'C', 'seller', 'Seller/index', 'Seller', 'seller:admin:list', 'sys_menu 2011 is occupied by another menu');
+call assert_sys_menu_slot(2012, 2010, 'C', 'buyer', 'Buyer/index', 'Buyer', 'buyer:admin:list', 'sys_menu 2012 is occupied by another menu');
+call assert_sys_menu_slot(2205, 2011, 'F', '#', '', '', 'seller:admin:directLogin', 'sys_menu 2205 is occupied by another menu');
+call assert_sys_menu_slot(2215, 2012, 'F', '#', '', '', 'buyer:admin:directLogin', 'sys_menu 2215 is occupied by another menu');
+
 call assert_sys_menu_signature_available(2011, 'seller', 'Seller/index', 'Seller', 'seller:admin:list', 'seller admin menu signature is already used by another menu');
 call assert_sys_menu_signature_available(2012, 'buyer', 'Buyer/index', 'Buyer', 'buyer:admin:list', 'buyer admin menu signature is already used by another menu');
 call assert_sys_menu_signature_available(2205, '#', '', '', 'seller:admin:directLogin', 'seller direct-login menu signature is already used by another menu');
@@ -91,9 +113,6 @@ insert into sys_menu
      is_frame, is_cache, menu_type, visible, status, perms, icon, create_by,
      create_time, update_by, update_time, remark)
 values
-    (2010, '主体管理', 0, 5, 'partner', null, '', 'PartnerManagement',
-     1, 0, 'M', '0', '0', '', 'TeamOutlined', 'admin',
-     sysdate(), '', null, '顶级菜单：主体管理'),
     (2011, '卖家管理', 2010, 5, 'seller', 'Seller/index', '', 'Seller',
      1, 0, 'C', '0', '0', 'seller:admin:list', 'ShopOutlined', 'admin',
      sysdate(), '', null, '管理端卖家管理'),
@@ -126,4 +145,5 @@ on duplicate key update
     remark = values(remark);
 
 drop procedure if exists assert_sys_menu_slot;
+drop procedure if exists assert_partner_root_menu_exists;
 drop procedure if exists assert_sys_menu_signature_available;

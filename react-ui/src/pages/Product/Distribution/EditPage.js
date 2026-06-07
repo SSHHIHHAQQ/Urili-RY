@@ -1,7 +1,7 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { ArrowLeftOutlined, SaveOutlined } from '@ant-design/icons';
 import { PageContainer } from '@ant-design/pro-components';
-import { history, useParams } from '@umijs/max';
+import { history, useAccess, useParams } from '@umijs/max';
 import { Affix, Button, Card, DatePicker, Form, Input, InputNumber, Radio, Select, Space, TreeSelect } from 'antd';
 import dayjs from 'dayjs';
 import { useEffect, useMemo, useState } from 'react';
@@ -106,6 +106,7 @@ function mergeWarehouseOptions(options, boundWarehouses) {
     return Array.from(map.values());
 }
 export default function ProductDistributionEditPage() {
+    const access = useAccess();
     const params = useParams();
     const spuId = params.spuId ? Number(params.spuId) : undefined;
     const focusSkuId = useMemo(() => {
@@ -131,6 +132,8 @@ export default function ProductDistributionEditPage() {
     const [skuRows, setSkuRows] = useState([
         { rowKey: 'sku-new-0', skuStatus: 'DRAFT', sortOrder: 0 },
     ]);
+    const canQueryOfficialWarehouses = access.hasPerms('warehouse:official:list');
+    const canQueryThirdPartyWarehouses = access.hasPerms('warehouse:thirdParty:list');
     const categoryTreeData = useMemo(() => toPublishCategoryTreeData(buildCategoryTree(categories)), [categories]);
     const availableWarehouseOptions = useMemo(() => selectedWarehouseKind
         ? warehouseOptions.filter((item) => item.warehouseKind === selectedWarehouseKind)
@@ -150,11 +153,15 @@ export default function ProductDistributionEditPage() {
         });
     }, []);
     useEffect(() => {
+        const officialWarehouseRequest = canQueryOfficialWarehouses
+            ? getOfficialWarehouseList({ pageNum: 1, pageSize: 500, status: '0' })
+            : Promise.resolve({ code: 200, msg: 'ok', total: 0, rows: [] });
+        const thirdPartyWarehouseRequest = selectedSellerId && canQueryThirdPartyWarehouses
+            ? getThirdPartyWarehouseList({ pageNum: 1, pageSize: 500, status: '0', sellerId: selectedSellerId })
+            : Promise.resolve({ code: 200, msg: 'ok', total: 0, rows: [] });
         Promise.all([
-            getOfficialWarehouseList({ pageNum: 1, pageSize: 500, status: '0' }),
-            selectedSellerId
-                ? getThirdPartyWarehouseList({ pageNum: 1, pageSize: 500, status: '0', sellerId: selectedSellerId })
-                : Promise.resolve({ code: 200, msg: 'ok', total: 0, rows: [] }),
+            officialWarehouseRequest,
+            thirdPartyWarehouseRequest,
         ]).then(([officialWarehouseResp, thirdPartyWarehouseResp]) => {
             const options = [
                 ...(officialWarehouseResp.code === 200 ? officialWarehouseResp.rows || [] : []),
@@ -166,7 +173,7 @@ export default function ProductDistributionEditPage() {
             const boundWarehouses = selectedSellerId === product?.sellerId ? product?.warehouses : undefined;
             setWarehouseOptions(mergeWarehouseOptions([], boundWarehouses));
         });
-    }, [product?.warehouses, selectedSellerId]);
+    }, [canQueryOfficialWarehouses, canQueryThirdPartyWarehouses, product?.warehouses, selectedSellerId]);
     useEffect(() => {
         if (!spuId) {
             form.setFieldsValue({ spuStatus: 'DRAFT' });

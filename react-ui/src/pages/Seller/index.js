@@ -1,6 +1,6 @@
 import { jsx as _jsx } from "react/jsx-runtime";
 import PartnerManagementPage from '@/components/PartnerManagement/PartnerManagementPage';
-import { addAdminSeller, addAdminSellerAccount, addAdminSellerDept, addAdminSellerMenu, addAdminSellerRole, assignAdminSellerAccountRoles, changeAdminSellerRoleStatus, changeAdminSellerStatus, createAdminSellerDirectLogin, createAdminSellerAccountDirectLogin, forceLogoutAdminSellerAccountSessions, forceLogoutAdminSellerSessions, getAdminSeller, getAdminSellerAccounts, getAdminSellerAccountRoles, getAdminSellerAccountSessions, getAdminSellerDepts, getAdminSellerDeptTree, getAdminSellerDirectLoginTickets, getAdminSellerList, getAdminSellerMenu, getAdminSellerMenus, getAdminSellerMenuTree, getAdminSellerLoginLogs, getAdminSellerOperLogs, getAdminSellerRole, getAdminSellerRoleMenuTree, getAdminSellerRoles, getAdminSellerSessions, lockAdminSellerAccount, removeAdminSellerDept, removeAdminSellerMenu, removeAdminSellerRoles, resetAdminSellerAccountDefaultPassword, resetAdminSellerOwnerPassword, unlockAdminSellerAccount, updateAdminSeller, updateAdminSellerAccount, updateAdminSellerDept, updateAdminSellerMenu, updateAdminSellerRole, } from '@/services/seller/seller';
+import { addAdminSeller, addAdminSellerAccount, addAdminSellerDept, addAdminSellerMenu, addAdminSellerRole, assignAdminSellerAccountRoles, changeAdminSellerRoleStatus, changeAdminSellerStatus, createAdminSellerDirectLogin, createAdminSellerAccountDirectLogin, forceLogoutAdminSellerAccountSessions, forceLogoutAdminSellerSessions, getAdminSeller, getAdminSellerAccounts, getAdminSellerAccountRoles, getAdminSellerAccountSessions, getAdminSellerDepts, getAdminSellerDeptTree, getAdminSellerDirectLoginTickets, getAdminSellerList, getAdminSellerMenu, getAdminSellerMenus, getAdminSellerMenuTree, getAdminSellerLoginLogs, getAdminSellerOperLogs, getAdminSellerRole, getAdminSellerRoleMenuTree, getAdminSellerRoles, getAdminSellerSessions, lockAdminSellerAccount, removeAdminSellerDept, removeAdminSellerMenu, removeAdminSellerRoles, resetAdminSellerAccountPassword, unlockAdminSellerAccount, updateAdminSeller, updateAdminSellerAccount, updateAdminSellerDept, updateAdminSellerMenu, updateAdminSellerRole, } from '@/services/seller/seller';
 const sellerConfig = {
     moduleKey: 'seller',
     title: '卖家管理',
@@ -14,11 +14,11 @@ const sellerConfig = {
     levelField: 'sellerLevel',
     ownerIdField: 'sellerId',
     accountIdField: 'sellerAccountId',
-    balanceTitle: '分销账户余额',
+    balanceTitle: '分销余额（占位）',
     levelDictType: 'seller_level',
     listTemplate: 'standard',
     searchStorageKey: 'admin-seller-management',
-    searchFieldCount: 8,
+    searchFieldCount: 7,
     accountPermissions: {
         list: 'seller:admin:account:list',
         add: 'seller:admin:account:add',
@@ -57,14 +57,13 @@ const sellerConfig = {
         updateRole: updateAdminSellerRole,
         changeRoleStatus: changeAdminSellerRoleStatus,
         removeRoles: removeAdminSellerRoles,
-        resetAccountDefaultPassword: resetAdminSellerAccountDefaultPassword,
+        resetAccountPassword: resetAdminSellerAccountPassword,
         listSubjectSessions: getAdminSellerSessions,
         listAccountSessions: getAdminSellerAccountSessions,
         forceLogoutSubject: forceLogoutAdminSellerSessions,
         forceLogoutAccount: forceLogoutAdminSellerAccountSessions,
         getAccountRoles: getAdminSellerAccountRoles,
         assignAccountRoles: assignAdminSellerAccountRoles,
-        resetOwnerPassword: resetAdminSellerOwnerPassword,
         directLogin: createAdminSellerDirectLogin,
         directLoginAccount: createAdminSellerAccountDirectLogin,
         listLoginLogs: getAdminSellerLoginLogs,

@@ -111,6 +111,34 @@ public class BuyerPortalPermissionServiceImplPortalAccessTest
     }
 
     @Test
+    public void selectPortalPermissionInfoTrimsBuyerPermissionsAndRejectsPollutedPrefixes()
+    {
+        Buyer buyer = buyer(11L);
+        BuyerAccount account = account(22L, 11L);
+        RecordingBuyerMapper buyerMapper = recordingBuyerMapper(1, account);
+        RecordingBuyerPortalPermissionMapper permissionMapper = new RecordingBuyerPortalPermissionMapper()
+                .withRoleKeys("buyer_owner")
+                .withPermissions(" buyer:product:list, buyer:order:list ", "buyer:order:detail,, ");
+        BuyerPortalPermissionServiceImpl service = service(buyerService(buyer), buyerMapper.proxy(),
+                permissionMapper.proxy());
+
+        PortalPermissionInfo info = service.selectPortalPermissionInfo(session(11L, 22L));
+
+        assertArrayEquals(new String[] { "buyer:product:list", "buyer:order:list", "buyer:order:detail" },
+                info.getPermissions().toArray(new String[0]));
+
+        for (String pollutedPermission : new String[] { "seller:account:list", "buyer:admin:list", "*:*:*" })
+        {
+            RecordingBuyerPortalPermissionMapper pollutedMapper = new RecordingBuyerPortalPermissionMapper()
+                    .withPermissions("buyer:product:list", pollutedPermission);
+            BuyerPortalPermissionServiceImpl pollutedService = service(buyerService(buyer),
+                    recordingBuyerMapper(1, account).proxy(), pollutedMapper.proxy());
+            assertServiceException("买家端权限配置异常",
+                    () -> pollutedService.selectPortalPermissionInfo(session(11L, 22L)));
+        }
+    }
+
+    @Test
     public void selectPermissionsRejectsMalformedBuyerSessionBeforeLookup()
     {
         BuyerPortalPermissionServiceImpl service = service(failOnLookup(IBuyerService.class, "buyer service"),
@@ -248,6 +276,12 @@ public class BuyerPortalPermissionServiceImplPortalAccessTest
                 if ("selectBuyerAccountById".equals(methodName))
                 {
                     return accountById.get((Long) args[0]);
+                }
+                if ("selectBuyerAccountByIdAndBuyerId".equals(methodName))
+                {
+                    Long buyerId = (Long) args[0];
+                    BuyerAccount account = accountById.get((Long) args[1]);
+                    return account != null && buyerId.equals(account.getBuyerId()) ? account : null;
                 }
                 if ("countOnlineBuyerSession".equals(methodName))
                 {

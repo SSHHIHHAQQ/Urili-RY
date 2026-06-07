@@ -44,12 +44,38 @@ public class TerminalSeedPermissionContractTest
         assertContains(sql, "insert into buyer_role_menu", seed, violations);
         assertContains(sql, "set @confirm_seller_buyer_management_seed", seed, violations);
         assertContains(sql, "call assert_seller_buyer_management_seed_confirmed();", seed, violations);
+        assertContains(sql, "set @seller_buyer_management_seed_profile", seed, violations);
+        assertContains(sql, "FRESH_BOOTSTRAP", seed, violations);
+        assertContains(sql, "PATCH_EXISTING", seed, violations);
+        assertContains(sql, "call assert_seller_buyer_management_seed_profile();", seed, violations);
         assertContains(sql, "call assert_seller_buyer_sys_menu_seed_guard();", seed, violations);
         assertContains(sql, "tmp_seller_buyer_sys_menu_guard", seed, violations);
 
         if (!violations.isEmpty())
         {
             fail("seller_buyer_management_seed.sql must initialize terminal portal permissions:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    @Test
+    public void managementSeedMustNotRestoreSubjectLevelOwnerPasswordResetPermissions() throws IOException
+    {
+        Path backendRoot = findWorkspaceRoot().resolve("RuoYi-Vue");
+        Path seed = backendRoot.resolve("sql/seller_buyer_management_seed.sql");
+        String sql = Files.readString(seed, StandardCharsets.UTF_8);
+        List<String> violations = new ArrayList<>();
+
+        assertNotContains(sql, "seller:admin:resetPwd", seed, violations);
+        assertNotContains(sql, "buyer:admin:resetPwd", seed, violations);
+        assertNotContains(sql, "(2204,", seed, violations);
+        assertNotContains(sql, "(2214,", seed, violations);
+        assertContains(sql, "seller:admin:account:resetPwd", seed, violations);
+        assertContains(sql, "buyer:admin:account:resetPwd", seed, violations);
+
+        if (!violations.isEmpty())
+        {
+            fail("seller/buyer management seed must keep password reset account-scoped:\n"
                     + String.join("\n", violations));
         }
     }
@@ -92,15 +118,19 @@ public class TerminalSeedPermissionContractTest
                     continue;
                 }
                 Matcher permissionMatcher = HAS_PERMI.matcher(annotation);
-                if (!permissionMatcher.find())
+                while (permissionMatcher.find())
                 {
-                    continue;
-                }
-                String permission = permissionMatcher.group(1);
-                if (!seededPerms.contains(permission))
-                {
-                    violations.add(backendRoot.relativize(path) + " declares " + permission
-                            + " but " + seed.getFileName() + " does not seed it");
+                    String permission = permissionMatcher.group(1);
+                    if (!permission.startsWith(terminal + ":"))
+                    {
+                        violations.add(backendRoot.relativize(path) + " declares " + terminal
+                                + " portal permission with wrong prefix: " + permission);
+                    }
+                    if (!seededPerms.contains(permission))
+                    {
+                        violations.add(backendRoot.relativize(path) + " declares " + permission
+                                + " but " + seed.getFileName() + " does not seed it");
+                    }
                 }
             }
         }
@@ -127,6 +157,14 @@ public class TerminalSeedPermissionContractTest
         if (!source.contains(expected))
         {
             violations.add(path.getFileName() + " must contain " + expected);
+        }
+    }
+
+    private void assertNotContains(String source, String forbidden, Path path, List<String> violations)
+    {
+        if (source.contains(forbidden))
+        {
+            violations.add(path.getFileName() + " must not contain " + forbidden);
         }
     }
 

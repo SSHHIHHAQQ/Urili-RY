@@ -3,7 +3,9 @@ import { history, useLocation } from '@umijs/max';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   PORTAL_DIRECT_LOGIN_READY_MESSAGE,
+  PORTAL_DIRECT_LOGIN_RESULT_MESSAGE,
   PORTAL_DIRECT_LOGIN_TOKEN_MESSAGE,
+  type PortalDirectLoginResultMessage,
   type PortalDirectLoginTokenMessage,
 } from '@/utils/portalDirectLoginMessage';
 import {
@@ -68,14 +70,27 @@ const DirectLoginPage: React.FC = () => {
 
     clearPortalLogin(terminal);
     const openerOrigin = resolveOpenerOrigin();
+    const postConsumeResult = (status: PortalDirectLoginResultMessage['status'], ticketId?: number, message?: string) => {
+      const payload: PortalDirectLoginResultMessage = {
+        type: PORTAL_DIRECT_LOGIN_RESULT_MESSAGE,
+        terminal,
+        status,
+        ticketId,
+        message,
+      };
+      window.opener?.postMessage(payload, openerOrigin);
+    };
 
-    const consumeToken = async (token: string) => {
+    const consumeToken = async (message: PortalDirectLoginTokenMessage) => {
       try {
-        const response = await PORTAL_SERVICE[terminal].directLogin(token);
+        const response = await PORTAL_SERVICE[terminal].directLogin(message.token);
         if (response.code !== 200 || !persistPortalLogin(response.data, terminal)) {
-          setState({ status: 'error', message: response.msg || 'Direct login terminal mismatch' });
+          const errorMessage = response.msg || 'Direct login terminal mismatch';
+          postConsumeResult('error', message.ticketId, errorMessage);
+          setState({ status: 'error', message: errorMessage });
           return;
         }
+        postConsumeResult('success', message.ticketId);
         if (mounted) {
           setState({ status: 'success' });
           history.replace(PORTAL_META[terminal].homePath);
@@ -83,6 +98,7 @@ const DirectLoginPage: React.FC = () => {
       } catch (error) {
         console.log(error);
         clearPortalLogin(terminal);
+        postConsumeResult('error', message.ticketId, 'Direct login failed');
         if (mounted) {
           setState({ status: 'error', message: 'Direct login failed' });
         }
@@ -99,7 +115,7 @@ const DirectLoginPage: React.FC = () => {
         return;
       }
       consumed = true;
-      void consumeToken(event.data.token);
+      void consumeToken(event.data);
     };
 
     window.addEventListener('message', handleTokenMessage);

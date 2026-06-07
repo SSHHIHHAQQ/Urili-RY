@@ -1,6 +1,7 @@
 import {
   openPortalDirectLoginWindow,
   PORTAL_DIRECT_LOGIN_READY_MESSAGE,
+  PORTAL_DIRECT_LOGIN_RESULT_MESSAGE,
   PORTAL_DIRECT_LOGIN_TOKEN_MESSAGE,
 } from '@/utils/portalDirectLoginMessage';
 
@@ -24,14 +25,14 @@ describe('portal direct-login message bridge', () => {
     jest.useRealTimers();
   });
 
-  it('posts the one-time token only after the target popup sends a matching ready message', () => {
+  it('posts the one-time token after READY and resolves only after a matching consume result', async () => {
     const popup = {
       closed: false,
       postMessage: jest.fn(),
     };
     jest.spyOn(window, 'open').mockReturnValue(popup as never);
 
-    const opened = openPortalDirectLoginWindow(
+    const bridge = openPortalDirectLoginWindow(
       {
         loginUrl: 'https://seller.example.test/direct-login',
         token: 'direct-token',
@@ -40,7 +41,7 @@ describe('portal direct-login message bridge', () => {
       'seller',
     );
 
-    expect(opened).toBe(true);
+    expect(bridge).not.toBe(false);
     jest.advanceTimersByTime(1000);
     expect(popup.postMessage).not.toHaveBeenCalled();
 
@@ -74,6 +75,37 @@ describe('portal direct-login message bridge', () => {
       },
       'https://seller.example.test',
     );
+
+    let resolved = false;
+    void (bridge as Promise<unknown>).then(() => {
+      resolved = true;
+    });
+    await Promise.resolve();
+    expect(resolved).toBe(false);
+
+    dispatchMessage(popup, 'https://seller.example.test', {
+      type: PORTAL_DIRECT_LOGIN_RESULT_MESSAGE,
+      terminal: 'buyer',
+      status: 'success',
+      ticketId: 7,
+    });
+    dispatchMessage(popup, 'https://seller.example.test', {
+      type: PORTAL_DIRECT_LOGIN_RESULT_MESSAGE,
+      terminal: 'seller',
+      status: 'success',
+      ticketId: 8,
+    });
+    await Promise.resolve();
+    expect(resolved).toBe(false);
+
+    dispatchMessage(popup, 'https://seller.example.test', {
+      type: PORTAL_DIRECT_LOGIN_RESULT_MESSAGE,
+      terminal: 'seller',
+      status: 'success',
+      ticketId: 7,
+    });
+
+    await expect(bridge as Promise<unknown>).resolves.toEqual({ status: 'success', ticketId: 7 });
   });
 
   it('does not open a bridge without a token or popup window', () => {
@@ -96,5 +128,63 @@ describe('portal direct-login message bridge', () => {
       ),
     ).toBe(false);
     expect(openSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects when the target popup reports direct-login consume failure', async () => {
+    const popup = {
+      closed: false,
+      postMessage: jest.fn(),
+    };
+    jest.spyOn(window, 'open').mockReturnValue(popup as never);
+
+    const bridge = openPortalDirectLoginWindow(
+      {
+        loginUrl: 'https://seller.example.test/direct-login',
+        token: 'direct-token',
+        ticketId: 7,
+      } as API.Partner.DirectLoginResult,
+      'seller',
+    );
+
+    dispatchMessage(popup, 'https://seller.example.test', {
+      type: PORTAL_DIRECT_LOGIN_READY_MESSAGE,
+      terminal: 'seller',
+    });
+    const assertion = expect(bridge as Promise<unknown>).rejects.toThrow('ticket expired');
+    dispatchMessage(popup, 'https://seller.example.test', {
+      type: PORTAL_DIRECT_LOGIN_RESULT_MESSAGE,
+      terminal: 'seller',
+      status: 'error',
+      ticketId: 7,
+      message: 'ticket expired',
+    });
+
+    await assertion;
+  });
+
+  it('rejects when the target popup never confirms token consumption', async () => {
+    const popup = {
+      closed: false,
+      postMessage: jest.fn(),
+    };
+    jest.spyOn(window, 'open').mockReturnValue(popup as never);
+
+    const bridge = openPortalDirectLoginWindow(
+      {
+        loginUrl: 'https://seller.example.test/direct-login',
+        token: 'direct-token',
+        ticketId: 7,
+      } as API.Partner.DirectLoginResult,
+      'seller',
+    );
+
+    dispatchMessage(popup, 'https://seller.example.test', {
+      type: PORTAL_DIRECT_LOGIN_READY_MESSAGE,
+      terminal: 'seller',
+    });
+    const assertion = expect(bridge as Promise<unknown>).rejects.toThrow('DIRECT_LOGIN_CONSUME_TIMEOUT');
+    jest.advanceTimersByTime(15000);
+
+    await assertion;
   });
 });

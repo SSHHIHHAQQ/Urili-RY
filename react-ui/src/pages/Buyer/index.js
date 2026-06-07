@@ -1,6 +1,6 @@
 import { jsx as _jsx } from "react/jsx-runtime";
 import PartnerManagementPage from '@/components/PartnerManagement/PartnerManagementPage';
-import { addAdminBuyer, addAdminBuyerAccount, addAdminBuyerDept, addAdminBuyerMenu, addAdminBuyerRole, assignAdminBuyerAccountRoles, changeAdminBuyerRoleStatus, changeAdminBuyerStatus, createAdminBuyerAccountDirectLogin, createAdminBuyerDirectLogin, forceLogoutAdminBuyerAccountSessions, forceLogoutAdminBuyerSessions, getAdminBuyer, getAdminBuyerAccounts, getAdminBuyerAccountRoles, getAdminBuyerAccountSessions, getAdminBuyerDepts, getAdminBuyerDeptTree, getAdminBuyerDirectLoginTickets, getAdminBuyerList, getAdminBuyerLoginLogs, getAdminBuyerMenu, getAdminBuyerMenus, getAdminBuyerMenuTree, getAdminBuyerOperLogs, getAdminBuyerRole, getAdminBuyerRoleMenuTree, getAdminBuyerRoles, getAdminBuyerSessions, lockAdminBuyerAccount, removeAdminBuyerDept, removeAdminBuyerMenu, removeAdminBuyerRoles, resetAdminBuyerAccountDefaultPassword, resetAdminBuyerOwnerPassword, unlockAdminBuyerAccount, updateAdminBuyer, updateAdminBuyerAccount, updateAdminBuyerDept, updateAdminBuyerMenu, updateAdminBuyerRole, } from '@/services/buyer/buyer';
+import { addAdminBuyer, addAdminBuyerAccount, addAdminBuyerDept, addAdminBuyerMenu, addAdminBuyerRole, assignAdminBuyerAccountRoles, changeAdminBuyerRoleStatus, changeAdminBuyerStatus, createAdminBuyerAccountDirectLogin, createAdminBuyerDirectLogin, forceLogoutAdminBuyerAccountSessions, forceLogoutAdminBuyerSessions, getAdminBuyer, getAdminBuyerAccounts, getAdminBuyerAccountRoles, getAdminBuyerAccountSessions, getAdminBuyerDepts, getAdminBuyerDeptTree, getAdminBuyerDirectLoginTickets, getAdminBuyerList, getAdminBuyerLoginLogs, getAdminBuyerMenu, getAdminBuyerMenus, getAdminBuyerMenuTree, getAdminBuyerOperLogs, getAdminBuyerRole, getAdminBuyerRoleMenuTree, getAdminBuyerRoles, getAdminBuyerSessions, lockAdminBuyerAccount, removeAdminBuyerDept, removeAdminBuyerMenu, removeAdminBuyerRoles, resetAdminBuyerAccountPassword, unlockAdminBuyerAccount, updateAdminBuyer, updateAdminBuyerAccount, updateAdminBuyerDept, updateAdminBuyerMenu, updateAdminBuyerRole, } from '@/services/buyer/buyer';
 const buyerConfig = {
     moduleKey: 'buyer',
     title: '买家管理',
@@ -14,12 +14,12 @@ const buyerConfig = {
     levelField: 'buyerLevel',
     ownerIdField: 'buyerId',
     accountIdField: 'buyerAccountId',
-    balanceTitle: '账户余额',
+    balanceTitle: '账户余额（占位）',
     showRechargePlaceholder: true,
     levelDictType: 'buyer_level',
     listTemplate: 'standard',
     searchStorageKey: 'admin-buyer-management',
-    searchFieldCount: 8,
+    searchFieldCount: 7,
     accountPermissions: {
         list: 'buyer:admin:account:list',
         add: 'buyer:admin:account:add',
@@ -58,14 +58,13 @@ const buyerConfig = {
         updateRole: updateAdminBuyerRole,
         changeRoleStatus: changeAdminBuyerRoleStatus,
         removeRoles: removeAdminBuyerRoles,
-        resetAccountDefaultPassword: resetAdminBuyerAccountDefaultPassword,
+        resetAccountPassword: resetAdminBuyerAccountPassword,
         listSubjectSessions: getAdminBuyerSessions,
         listAccountSessions: getAdminBuyerAccountSessions,
         forceLogoutSubject: forceLogoutAdminBuyerSessions,
         forceLogoutAccount: forceLogoutAdminBuyerAccountSessions,
         getAccountRoles: getAdminBuyerAccountRoles,
         assignAccountRoles: assignAdminBuyerAccountRoles,
-        resetOwnerPassword: resetAdminBuyerOwnerPassword,
         directLogin: createAdminBuyerDirectLogin,
         directLoginAccount: createAdminBuyerAccountDirectLogin,
         listLoginLogs: getAdminBuyerLoginLogs,

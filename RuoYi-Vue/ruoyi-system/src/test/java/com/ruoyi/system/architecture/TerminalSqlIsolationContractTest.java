@@ -11,6 +11,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import org.junit.Test;
 
 public class TerminalSqlIsolationContractTest
@@ -83,6 +84,152 @@ public class TerminalSqlIsolationContractTest
         if (!violations.isEmpty())
         {
             fail("seller/buyer terminal login logs must carry direct-login audit fields:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    @Test
+    public void terminalPortalMenuIdsMustStayInDisjointNumericRanges() throws IOException
+    {
+        Path backendRoot = findBackendRoot();
+        List<String> violations = new ArrayList<>();
+
+        for (String script : Arrays.asList(
+                "sql/20260604_three_terminal_isolation_migration.sql",
+                "sql/seller_buyer_management_seed.sql"))
+        {
+            Path path = backendRoot.resolve(script);
+            String sql = readText(path);
+            requireContains(violations, path.getFileName().toString(), sql,
+                    "engine=innodb auto_increment=100000 comment = '卖家端菜单权限表'");
+            requireContains(violations, path.getFileName().toString(), sql,
+                    "engine=innodb auto_increment=200000 comment = '买家端菜单权限表'");
+        }
+
+        Path rangeMigration = backendRoot.resolve("sql/20260607_terminal_menu_id_range_isolation.sql");
+        String rangeSql = readText(rangeMigration);
+        requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
+                "@confirm_terminal_menu_id_range_isolation");
+        requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
+                "APPLY_TERMINAL_MENU_ID_RANGE_ISOLATION");
+        requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
+                "seller_menu contains IDs outside seller range 100000-199999");
+        requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
+                "buyer_menu contains IDs inside reserved seller range 100000-199999");
+        requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
+                "buyer_menu contains IDs outside buyer range 200000-299999");
+        requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
+                "update seller_role_menu\nset seller_menu_id = seller_menu_id + 100000");
+        requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
+                "update seller_menu\nset parent_id = parent_id + 100000");
+        requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
+                "update seller_menu\nset seller_menu_id = seller_menu_id + 100000");
+        requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
+                "update buyer_role_menu\nset buyer_menu_id = buyer_menu_id + 200000");
+        requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
+                "update buyer_menu\nset parent_id = parent_id + 200000");
+        requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
+                "update buyer_menu\nset buyer_menu_id = buyer_menu_id + 200000");
+        requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
+                "create procedure reset_terminal_menu_auto_increment");
+        requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
+                "call reset_terminal_menu_auto_increment('seller_menu', 'seller_menu_id', 100000)");
+        requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
+                "call reset_terminal_menu_auto_increment('buyer_menu', 'buyer_menu_id', 200000)");
+        requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
+                "select greatest(', p_floor, ', coalesce(max(', p_id_column, '), 0) + 1)");
+
+        if (!violations.isEmpty())
+        {
+            fail("seller/buyer terminal menu numeric IDs must stay in disjoint ranges:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    @Test
+    public void terminalPermissionSeedsMustAssertMenuIdRangesBeforeMenuInserts() throws IOException
+    {
+        Path backendRoot = findBackendRoot();
+        Path sqlRoot = backendRoot.resolve("sql");
+        List<Path> scripts;
+        try (java.util.stream.Stream<Path> paths = Files.walk(sqlRoot))
+        {
+            scripts = paths
+                    .filter(path -> path.toString().endsWith(".sql"))
+                    .collect(Collectors.toList());
+        }
+
+        List<String> violations = new ArrayList<>();
+        for (Path path : scripts)
+        {
+            String sql = readText(path);
+            String lowerSql = sql.toLowerCase();
+            boolean insertsSellerMenu = lowerSql.contains("insert into seller_menu");
+            boolean insertsBuyerMenu = lowerSql.contains("insert into buyer_menu");
+            if (!insertsSellerMenu && !insertsBuyerMenu)
+            {
+                continue;
+            }
+
+            String scriptName = backendRoot.relativize(path).toString().replace('\\', '/');
+            requireContains(violations, scriptName, sql, "create procedure assert_terminal_menu_range_ready");
+            requireContains(violations, scriptName, sql, "call assert_terminal_menu_range_ready();");
+            requireContains(violations, scriptName, sql, "drop procedure if exists assert_terminal_menu_range_ready");
+            requireMenuRangeGuardRunsBeforeInsert(scriptName, lowerSql, insertsSellerMenu, insertsBuyerMenu, violations);
+
+            if (insertsSellerMenu)
+            {
+                requireContains(violations, scriptName, sql,
+                        "seller_menu contains IDs outside seller range 100000-199999");
+                requireContains(violations, scriptName, sql,
+                        "seller_menu auto_increment must be >= 100000 before terminal menu seed inserts");
+            }
+            if (insertsBuyerMenu)
+            {
+                requireContains(violations, scriptName, sql,
+                        "buyer_menu contains IDs outside buyer range 200000-299999");
+                requireContains(violations, scriptName, sql,
+                        "buyer_menu auto_increment must be >= 200000 before terminal menu seed inserts");
+            }
+        }
+
+        if (!violations.isEmpty())
+        {
+            fail("terminal permission seed scripts must fail closed when menu ID ranges are not ready:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    @Test
+    public void terminalOperLogTablesMustCarryDirectLoginAuditFields() throws IOException
+    {
+        Path backendRoot = findBackendRoot();
+        List<String> violations = new ArrayList<>();
+
+        for (String script : Arrays.asList(
+                "sql/20260604_three_terminal_isolation_migration.sql",
+                "sql/20260607_terminal_oper_log_direct_login_audit.sql",
+                "sql/seller_buyer_management_seed.sql"))
+        {
+            Path path = backendRoot.resolve(script);
+            String sql = readText(path);
+            for (String table : Arrays.asList("seller_oper_log", "buyer_oper_log"))
+            {
+                for (String expected : Arrays.asList(
+                        "direct_login",
+                        "direct_login_ticket_id",
+                        "acting_admin_id",
+                        "acting_admin_name",
+                        "direct_login_reason"))
+                {
+                    requireOperLogAuditColumn(path.getFileName().toString(), sql, table, expected, violations);
+                }
+            }
+        }
+
+        if (!violations.isEmpty())
+        {
+            fail("seller/buyer terminal operation logs must carry direct-login audit fields:\n"
                     + String.join("\n", violations));
         }
     }
@@ -358,11 +505,62 @@ public class TerminalSqlIsolationContractTest
         return xml.substring(bodyStart + 1, closeStart);
     }
 
+    private void requireOperLogAuditColumn(String fileName, String sql, String table, String column,
+            List<String> violations)
+    {
+        String createTable = extractCreateTableStatement(sql, table);
+        if (!createTable.isEmpty())
+        {
+            requireContains(violations, fileName + " " + table + " DDL", createTable, column);
+            return;
+        }
+        requireContains(violations, fileName + " " + table + " patch", sql,
+                "call add_column_if_missing('" + table + "', '" + column + "'");
+        requireContains(violations, fileName + " " + table + " patch", sql,
+                "call assert_column_exists('" + table + "', '" + column + "'");
+    }
+
+    private String extractCreateTableStatement(String sql, String table)
+    {
+        String openToken = "create table if not exists " + table;
+        String lowerSql = sql.toLowerCase();
+        int openStart = lowerSql.indexOf(openToken);
+        if (openStart < 0)
+        {
+            return "";
+        }
+        int closeStart = lowerSql.indexOf(") engine=", openStart);
+        if (closeStart < 0)
+        {
+            return "";
+        }
+        return sql.substring(openStart, closeStart);
+    }
+
     private void requireContains(List<String> violations, String fileName, String source, String expected)
     {
         if (!source.contains(expected))
         {
             violations.add(fileName + " must contain: " + expected);
+        }
+    }
+
+    private void requireMenuRangeGuardRunsBeforeInsert(String scriptName, String lowerSql, boolean insertsSellerMenu,
+            boolean insertsBuyerMenu, List<String> violations)
+    {
+        int callIndex = lowerSql.indexOf("call assert_terminal_menu_range_ready();");
+        int firstInsertIndex = Integer.MAX_VALUE;
+        if (insertsSellerMenu)
+        {
+            firstInsertIndex = Math.min(firstInsertIndex, lowerSql.indexOf("insert into seller_menu"));
+        }
+        if (insertsBuyerMenu)
+        {
+            firstInsertIndex = Math.min(firstInsertIndex, lowerSql.indexOf("insert into buyer_menu"));
+        }
+        if (callIndex < 0 || callIndex > firstInsertIndex)
+        {
+            violations.add(scriptName + " must call assert_terminal_menu_range_ready before terminal menu inserts");
         }
     }
 

@@ -186,7 +186,7 @@ public class PortalDirectLoginSupport
         }
         if (!StringUtils.equals(portalType, ticket.getTerminal()))
         {
-            throw directLoginFailure(ticket, "免密登录票据端类型不匹配", failureAuditor);
+            throw new ServiceException("免密登录票据端类型不匹配");
         }
         if (!STATUS_ISSUED.equals(ticket.getStatus()) || ticket.getUsedTime() != null)
         {
@@ -241,12 +241,7 @@ public class PortalDirectLoginSupport
 
     private PortalDirectLoginToken getPayload(String portalType, String tokenHash)
     {
-        PortalDirectLoginToken payload = redisCache.getCacheObject(cacheKey(portalType, tokenHash));
-        if (payload == null)
-        {
-            payload = redisCache.getCacheObject(legacyCacheKey(tokenHash));
-        }
-        return payload;
+        return redisCache.getCacheObject(cacheKey(portalType, tokenHash));
     }
 
     private ServiceException directLoginFailure(PortalDirectLoginTicket ticket, String message,

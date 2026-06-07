@@ -213,10 +213,11 @@ public class AdminUpstreamSystemController extends BaseController
 
     @PreAuthorize("@ss.hasPermi('integration:upstream:pair')")
     @Log(title = "仓库解除配对", businessType = BusinessType.DELETE)
-    @DeleteMapping("/warehouse-pairings/{warehousePairingId}")
-    public AjaxResult deleteWarehousePairing(@PathVariable("warehousePairingId") Long warehousePairingId)
+    @DeleteMapping("/{connectionCode}/warehouse-pairings/{warehousePairingId}")
+    public AjaxResult deleteWarehousePairing(@PathVariable("connectionCode") String connectionCode,
+        @PathVariable("warehousePairingId") Long warehousePairingId)
     {
-        return toAjax(upstreamSystemService.deleteWarehousePairing(warehousePairingId));
+        return toAjax(upstreamSystemService.deleteWarehousePairing(connectionCode, warehousePairingId));
     }
 
     @PreAuthorize("@ss.hasPermi('integration:upstream:query')")
@@ -245,10 +246,11 @@ public class AdminUpstreamSystemController extends BaseController
 
     @PreAuthorize("@ss.hasPermi('integration:upstream:pair')")
     @Log(title = "物流渠道解除配对", businessType = BusinessType.DELETE)
-    @DeleteMapping("/logistics-channel-pairings/{logisticsChannelPairingId}")
-    public AjaxResult deleteLogisticsChannelPairing(@PathVariable("logisticsChannelPairingId") Long logisticsChannelPairingId)
+    @DeleteMapping("/{connectionCode}/logistics-channel-pairings/{logisticsChannelPairingId}")
+    public AjaxResult deleteLogisticsChannelPairing(@PathVariable("connectionCode") String connectionCode,
+        @PathVariable("logisticsChannelPairingId") Long logisticsChannelPairingId)
     {
-        return toAjax(upstreamSystemService.deleteLogisticsChannelPairing(logisticsChannelPairingId));
+        return toAjax(upstreamSystemService.deleteLogisticsChannelPairing(connectionCode, logisticsChannelPairingId));
     }
 
     @PreAuthorize("@ss.hasPermi('integration:upstream:query')")
@@ -284,10 +286,11 @@ public class AdminUpstreamSystemController extends BaseController
 
     @PreAuthorize("@ss.hasPermi('integration:upstream:pair')")
     @Log(title = "SKU解除配对", businessType = BusinessType.DELETE)
-    @DeleteMapping("/sku-pairings/{skuPairingId}")
-    public AjaxResult deleteSkuPairing(@PathVariable("skuPairingId") Long skuPairingId)
+    @DeleteMapping("/{connectionCode}/sku-pairings/{skuPairingId}")
+    public AjaxResult deleteSkuPairing(@PathVariable("connectionCode") String connectionCode,
+        @PathVariable("skuPairingId") Long skuPairingId)
     {
-        return toAjax(upstreamSystemService.deleteSkuPairing(skuPairingId));
+        return toAjax(upstreamSystemService.deleteSkuPairing(connectionCode, skuPairingId));
     }
 
     @PreAuthorize("@ss.hasPermi('integration:upstream:query')")

@@ -1,5 +1,7 @@
 export {
   inventoryPairingStatusOptions,
+  pairingRoleTagColor,
+  pairingRoleText,
   pairingStatusText,
   inventoryScopeSearchOptions as inventoryScopeOptions,
   inventoryScopeText,

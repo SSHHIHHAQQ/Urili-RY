@@ -55,6 +55,24 @@ public class ProductSku extends BaseEntity
     private Integer warehouseCount;
     private String inventoryStatus;
     private Date stockUpdateTime;
+    private Long sourceBindingId;
+    private String sourceScope;
+    private String sourceSkuGroupKey;
+    private String sourceDimensionGroupKey;
+    private String masterSku;
+    private String masterProductNameSnapshot;
+    private String sourcePayloadHash;
+    private String wmsPayloadHash;
+    private BigDecimal measureLengthCm;
+    private BigDecimal measureWidthCm;
+    private BigDecimal measureHeightCm;
+    private BigDecimal measureWeightKg;
+    private String measureSource;
+    private String sourceWarehouseNames;
+    private Integer sourceWarehouseCount;
+    private String bindingStatus;
+    private String lockStatus;
+    private Date lockedTime;
 
     public Long getSkuId() { return skuId; }
     public void setSkuId(Long skuId) { this.skuId = skuId; }
@@ -144,4 +162,40 @@ public class ProductSku extends BaseEntity
     public void setInventoryStatus(String inventoryStatus) { this.inventoryStatus = inventoryStatus; }
     public Date getStockUpdateTime() { return stockUpdateTime; }
     public void setStockUpdateTime(Date stockUpdateTime) { this.stockUpdateTime = stockUpdateTime; }
+    public Long getSourceBindingId() { return sourceBindingId; }
+    public void setSourceBindingId(Long sourceBindingId) { this.sourceBindingId = sourceBindingId; }
+    public String getSourceScope() { return sourceScope; }
+    public void setSourceScope(String sourceScope) { this.sourceScope = sourceScope; }
+    public String getSourceSkuGroupKey() { return sourceSkuGroupKey; }
+    public void setSourceSkuGroupKey(String sourceSkuGroupKey) { this.sourceSkuGroupKey = sourceSkuGroupKey; }
+    public String getSourceDimensionGroupKey() { return sourceDimensionGroupKey; }
+    public void setSourceDimensionGroupKey(String sourceDimensionGroupKey) { this.sourceDimensionGroupKey = sourceDimensionGroupKey; }
+    public String getMasterSku() { return masterSku; }
+    public void setMasterSku(String masterSku) { this.masterSku = masterSku; }
+    public String getMasterProductNameSnapshot() { return masterProductNameSnapshot; }
+    public void setMasterProductNameSnapshot(String masterProductNameSnapshot) { this.masterProductNameSnapshot = masterProductNameSnapshot; }
+    public String getSourcePayloadHash() { return sourcePayloadHash; }
+    public void setSourcePayloadHash(String sourcePayloadHash) { this.sourcePayloadHash = sourcePayloadHash; }
+    public String getWmsPayloadHash() { return wmsPayloadHash; }
+    public void setWmsPayloadHash(String wmsPayloadHash) { this.wmsPayloadHash = wmsPayloadHash; }
+    public BigDecimal getMeasureLengthCm() { return measureLengthCm; }
+    public void setMeasureLengthCm(BigDecimal measureLengthCm) { this.measureLengthCm = measureLengthCm; }
+    public BigDecimal getMeasureWidthCm() { return measureWidthCm; }
+    public void setMeasureWidthCm(BigDecimal measureWidthCm) { this.measureWidthCm = measureWidthCm; }
+    public BigDecimal getMeasureHeightCm() { return measureHeightCm; }
+    public void setMeasureHeightCm(BigDecimal measureHeightCm) { this.measureHeightCm = measureHeightCm; }
+    public BigDecimal getMeasureWeightKg() { return measureWeightKg; }
+    public void setMeasureWeightKg(BigDecimal measureWeightKg) { this.measureWeightKg = measureWeightKg; }
+    public String getMeasureSource() { return measureSource; }
+    public void setMeasureSource(String measureSource) { this.measureSource = measureSource; }
+    public String getSourceWarehouseNames() { return sourceWarehouseNames; }
+    public void setSourceWarehouseNames(String sourceWarehouseNames) { this.sourceWarehouseNames = sourceWarehouseNames; }
+    public Integer getSourceWarehouseCount() { return sourceWarehouseCount; }
+    public void setSourceWarehouseCount(Integer sourceWarehouseCount) { this.sourceWarehouseCount = sourceWarehouseCount; }
+    public String getBindingStatus() { return bindingStatus; }
+    public void setBindingStatus(String bindingStatus) { this.bindingStatus = bindingStatus; }
+    public String getLockStatus() { return lockStatus; }
+    public void setLockStatus(String lockStatus) { this.lockStatus = lockStatus; }
+    public Date getLockedTime() { return lockedTime; }
+    public void setLockedTime(Date lockedTime) { this.lockedTime = lockedTime; }
 }

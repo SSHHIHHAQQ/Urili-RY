@@ -149,10 +149,61 @@ public class PortalAnonymousEndpointContractTest
         {
             expectedPermission = terminal + ":account:session:list";
         }
+        else if ("accounts".equals(handler.name))
+        {
+            expectedPermission = terminal + ":account:list";
+        }
+        else if ("depts".equals(handler.name))
+        {
+            expectedPermission = terminal + ":dept:list";
+        }
+        else if ("roles".equals(handler.name))
+        {
+            expectedPermission = terminal + ":role:list";
+        }
         if (expectedPermission != null && !handler.annotations.contains("hasPermi = \"" + expectedPermission + "\""))
         {
             violations.add(relative(path) + "#" + handler.name
-                    + " must require terminal self-audit permission " + expectedPermission);
+                    + " must require terminal portal permission " + expectedPermission);
+        }
+        if ("accountLoginLogs".equals(handler.name))
+        {
+            assertHandlerBodyContains(path, handler,
+                    "return getDataTable(" + terminal + "Service.select" + capitalize(terminal)
+                            + "OwnLoginLogList(session, log));",
+                    violations);
+        }
+        else if ("accountOperLogs".equals(handler.name))
+        {
+            assertHandlerBodyContains(path, handler,
+                    "return getDataTable(" + terminal + "Service.select" + capitalize(terminal)
+                            + "OwnOperLogList(session, log));",
+                    violations);
+        }
+        else if ("accountSessions".equals(handler.name))
+        {
+            assertHandlerBodyContains(path, handler,
+                    "return getDataTable(" + terminal + "Service.select" + capitalize(terminal)
+                            + "OwnSessionList(session));",
+                    violations);
+        }
+    }
+
+    private void assertHandlerBodyContains(Path path, HandlerMethod handler, String expected, List<String> violations)
+    {
+        if (!handler.body.contains(expected))
+        {
+            violations.add(relative(path) + "#" + handler.name
+                    + " must return portal self-audit rows from portal-visible service result " + expected);
+        }
+    }
+
+    private void assertHandlerBodyAbsent(Path path, HandlerMethod handler, String forbidden, List<String> violations)
+    {
+        if (handler.body.contains(forbidden))
+        {
+            violations.add(relative(path) + "#" + handler.name
+                    + " must not return internal audit rows directly with " + forbidden);
         }
     }
 

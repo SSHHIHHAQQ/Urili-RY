@@ -35,6 +35,8 @@ docker compose up -d
 - `RuoYi-Vue/sql/ry_20260417.sql`
 - `RuoYi-Vue/sql/quartz.sql`
 
+这两份脚本是 bootstrap-only 建库基线，包含 `DROP TABLE`，只适合全新数据卷初始化；不要在已有本地库或远程库上当作增量 SQL 回放。
+
 ## 启动后端
 
 ```powershell

@@ -58,6 +58,8 @@ public interface SellerPortalPermissionMapper
 
     public int countSellerRolesByIds(@Param("sellerId") Long sellerId, @Param("roleIds") Long[] roleIds);
 
+    public int countSellerMenusByIds(@Param("menuIds") Long[] menuIds);
+
     public int deleteSellerAccountRoles(@Param("sellerId") Long sellerId, @Param("accountId") Long accountId);
 
     public int batchSellerAccountRoles(@Param("sellerId") Long sellerId, @Param("accountId") Long accountId,

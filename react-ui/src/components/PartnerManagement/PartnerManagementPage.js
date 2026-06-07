@@ -1,7 +1,7 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useEffect, useRef, useState } from 'react';
 import { useAccess } from '@umijs/max';
-import { App, Button, Dropdown, Flex, Form, Image, Input, InputNumber, Modal, Select, Space, Switch, Tag, Typography, Upload, } from 'antd';
+import { App, Button, Dropdown, Flex, Form, Image, Input, Modal, Select, Space, Switch, Tag, Typography, Upload, } from 'antd';
 import { PageContainer, ProTable, } from '@ant-design/pro-components';
 import { AuditOutlined, DownOutlined, DollarOutlined, MenuOutlined, PlusOutlined, UploadOutlined, } from '@ant-design/icons';
 import { uploadCommonFile } from '@/services/common/file';
@@ -69,9 +69,6 @@ const compactSubTextStyle = {
     whiteSpace: 'nowrap',
     lineHeight: 1.35,
 };
-const balanceRangeNumberStyle = {
-    width: '50%',
-};
 function getStatusOptions(statusOptions) {
     return Object.keys(statusOptions).length > 0 ? statusOptions : fallbackStatusOptions;
 }
@@ -102,29 +99,17 @@ function optionsToValueEnum(options) {
 function getRangeValue(value) {
     return Array.isArray(value) ? value : [];
 }
-function hasSearchValue(value) {
-    return value !== undefined && value !== null && value !== '';
-}
-function getBalanceRangeInputValue(value) {
-    const range = getRangeValue(value);
-    return [range[0], range[1]];
-}
-function BalanceRangeInput({ value, onChange, disabled, }) {
-    const [minValue, maxValue] = getBalanceRangeInputValue(value);
-    const updateValue = (index, nextValue) => {
-        const next = [minValue, maxValue];
-        next[index] = nextValue ?? undefined;
-        onChange?.(hasSearchValue(next[0]) || hasSearchValue(next[1]) ? next : undefined);
-    };
-    return (_jsxs(Space.Compact, { block: true, children: [_jsx(InputNumber, { controls: false, disabled: disabled, min: 0, precision: 2, placeholder: "\u6700\u5C0F", value: minValue, style: balanceRangeNumberStyle, onChange: (nextValue) => updateValue(0, nextValue) }), _jsx(InputNumber, { controls: false, disabled: disabled, min: 0, precision: 2, placeholder: "\u6700\u5927", value: maxValue, style: balanceRangeNumberStyle, onChange: (nextValue) => updateValue(1, nextValue) })] }));
-}
 function buildListParams(params, current, pageSize) {
-    const { createTimeRange, lastLoginTimeRange, balanceRange, balanceMin, balanceMax, ...rest } = params;
+    const { createTimeRange, lastLoginTimeRange, ...rest } = params;
     const createRange = getRangeValue(createTimeRange);
     const lastLoginRange = getRangeValue(lastLoginTimeRange);
-    const accountBalanceRange = getRangeValue(balanceRange);
-    const resolvedBalanceMin = accountBalanceRange[0] ?? balanceMin;
-    const resolvedBalanceMax = accountBalanceRange[1] ?? balanceMax;
+    if (rest.phone && !rest.contactPhone) {
+        rest.contactPhone = rest.phone;
+    }
+    delete rest.phone;
+    delete rest.balanceRange;
+    delete rest.balanceMin;
+    delete rest.balanceMax;
     const next = {
         ...rest,
         pageNum: current,
@@ -142,18 +127,10 @@ function buildListParams(params, current, pageSize) {
     if (lastLoginRange[1]) {
         next['params[lastLoginEndTime]'] = lastLoginRange[1];
     }
-    if (hasSearchValue(resolvedBalanceMin)) {
-        next['params[balanceMin]'] = resolvedBalanceMin;
-    }
-    if (hasSearchValue(resolvedBalanceMax)) {
-        next['params[balanceMax]'] = resolvedBalanceMax;
-    }
     return next;
 }
-function formatBalance(record) {
-    const currency = record.balanceCurrency || 'USD';
-    const value = Number(record.accountBalance ?? 0);
-    return `${currency} ${Number.isFinite(value) ? value.toFixed(2) : '0.00'}`;
+function renderBalancePlaceholder() {
+    return (_jsxs(Flex, { vertical: true, gap: 0, children: [_jsx(Typography.Text, { type: "secondary", children: "\u5F85\u63A5\u5165" }), _jsx(Tag, { children: "\u5360\u4F4D" })] }));
 }
 function formatDateTimeText(value) {
     if (!value) {
@@ -409,24 +386,6 @@ const PartnerManagementPage = ({ config }) => {
             },
         });
     };
-    const handleResetOwnerPassword = (record) => {
-        const partnerId = getValue(record, config.idField);
-        if (!partnerId) {
-            return;
-        }
-        modal.confirm({
-            title: `确认重置${config.label}主账号密码吗？`,
-            content: '密码将重置为默认密码 U12346。',
-            onOk: async () => {
-                const resp = await config.services.resetOwnerPassword(partnerId);
-                if (resp.code === 200) {
-                    message.success('主账号密码已重置为默认密码 U12346');
-                    return;
-                }
-                message.error(resp.msg || '密码重置失败');
-            },
-        });
-    };
     const handleDirectLogin = async (record) => {
         const partnerId = getValue(record, config.idField);
         if (!partnerId) {
@@ -445,8 +404,11 @@ const PartnerManagementPage = ({ config }) => {
                 const hide = message.loading('正在生成免密登录链接');
                 try {
                     const resp = await config.services.directLogin(partnerId, values.reason?.trim() || '');
-                    if (resp.code === 200 && openPortalDirectLoginWindow(resp.data, config.moduleKey)) {
-                        message.success(`免密登录链接已生成，有效期 ${resp.data.expireMinutes || 30} 分钟`);
+                    const bridgeResult = resp.code === 200
+                        ? await openPortalDirectLoginWindow(resp.data, config.moduleKey)
+                        : false;
+                    if (bridgeResult) {
+                        message.success(`${config.label}端免密登录已确认，有效期 ${resp.data.expireMinutes || 30} 分钟`);
                         return;
                     }
                     message.error(resp.msg || '免密登录链接生成失败');
@@ -556,7 +518,7 @@ const PartnerManagementPage = ({ config }) => {
         },
         {
             title: '手机号',
-            dataIndex: 'phone',
+            dataIndex: 'contactPhone',
             valueType: 'text',
             hideInTable: true,
             search: true,
@@ -576,24 +538,16 @@ const PartnerManagementPage = ({ config }) => {
             dataIndex: 'accountBalance',
             search: false,
             width: useStandardListTemplate ? 112 : 140,
-            render: (_, record) => (_jsxs(Flex, { vertical: true, gap: 0, children: [_jsx("span", { children: formatBalance(record) }), _jsx(Tag, { children: "\u5360\u4F4D" })] })),
-        },
-        {
-            title: config.balanceTitle,
-            dataIndex: 'balanceRange',
-            colSize: 2,
-            valueType: 'digitRange',
-            hideInTable: true,
-            formItemRender: (_, config) => (_jsx(BalanceRangeInput, { value: config.value, onChange: config.onChange })),
+            render: renderBalancePlaceholder,
         },
         ...(config.showRechargePlaceholder
             ? [
                 {
-                    title: '充值',
+                    title: '充值能力',
                     dataIndex: 'rechargePlaceholder',
                     search: false,
                     width: 96,
-                    render: () => (_jsx(Tag, { icon: _jsx(DollarOutlined, {}), color: "default", children: "\u5F85\u63A5\u5165" })),
+                    render: () => (_jsx(Tag, { icon: _jsx(DollarOutlined, {}), color: "default", children: "\u89C4\u5212\u4E2D" })),
                 },
             ]
             : []),
@@ -659,12 +613,6 @@ const PartnerManagementPage = ({ config }) => {
                         label: '角色',
                     });
                 }
-                if (access.hasPerms(`${permPrefix}:resetPwd`)) {
-                    moreItems.push({
-                        key: 'resetOwnerPwd',
-                        label: '重置主账号',
-                    });
-                }
                 if (access.hasPerms(`${permPrefix}:forceLogout`)) {
                     if (config.services.listSubjectSessions) {
                         moreItems.push({
@@ -702,9 +650,6 @@ const PartnerManagementPage = ({ config }) => {
                                 else if (key === 'roles') {
                                     setRolePartner(record);
                                     setRoleModalOpen(true);
-                                }
-                                else if (key === 'resetOwnerPwd') {
-                                    handleResetOwnerPassword(record);
                                 }
                                 else if (key === 'sessions') {
                                     setSessionPartner(record);

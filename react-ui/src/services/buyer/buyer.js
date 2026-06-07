@@ -216,23 +216,13 @@ export async function removeAdminBuyerDept(buyerId, deptId) {
         method: 'DELETE',
     });
 }
-export async function resetAdminBuyerAccountPassword(buyerId, buyerAccountId, data) {
+export async function resetAdminBuyerAccountPassword(buyerId, buyerAccountId, password) {
     return request(`/api/buyer/admin/buyers/${buyerId}/accounts/${buyerAccountId}/resetPwd`, {
         method: 'PUT',
         headers: {
             'Content-Type': 'application/json;charset=UTF-8',
         },
-        data,
-    });
-}
-export async function resetAdminBuyerAccountDefaultPassword(buyerId, buyerAccountId) {
-    return request(`/api/buyer/admin/buyers/${buyerId}/accounts/${buyerAccountId}/resetDefaultPwd`, {
-        method: 'PUT',
-    });
-}
-export async function resetAdminBuyerOwnerPassword(buyerId) {
-    return request(`/api/buyer/admin/buyers/${buyerId}/resetOwnerPwd`, {
-        method: 'PUT',
+        data: { password },
     });
 }
 export async function forceLogoutAdminBuyerSessions(buyerId) {

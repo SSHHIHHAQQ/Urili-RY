@@ -1,6 +1,11 @@
 -- Three-terminal isolation migration for seller/buyer portal accounts.
 -- Confirmed scope: remote DDL/DML is allowed for this task.
 -- Admin remains on RuoYi sys_*; seller/buyer portal accounts use independent terminal tables.
+-- Non-transactional migration: this script contains MySQL DDL and DML.
+-- DDL causes implicit commits; if a failure occurs, changes may be partially applied.
+-- Complete legacy preflight before execution reaches the first DDL/DML; preflight
+-- only checks blockers and does not repair data. If execution stops after
+-- preflight, fix the failure cause and rerun the same script from the beginning.
 
 set names utf8mb4;
 
@@ -69,6 +74,51 @@ begin
   if @legacy_account_user_count > 0 then
     signal sqlstate '45000' set message_text = p_message;
   end if;
+end//
+
+drop procedure if exists assert_database_selected//
+create procedure assert_database_selected()
+begin
+  if database() is null then
+    signal sqlstate '45000' set message_text = 'select target database before running three-terminal isolation migration';
+  end if;
+end//
+
+drop procedure if exists assert_existing_column_if_table_present//
+create procedure assert_existing_column_if_table_present(in p_table varchar(64), in p_column varchar(64), in p_message varchar(128))
+begin
+  declare v_table_count int default 0;
+  declare v_column_count int default 0;
+
+  select count(1)
+    into v_table_count
+  from information_schema.tables
+  where table_schema = database() and table_name = p_table;
+
+  if v_table_count > 0 then
+    select count(1)
+      into v_column_count
+    from information_schema.columns
+    where table_schema = database() and table_name = p_table and column_name = p_column;
+
+    if v_column_count <> 1 then
+      signal sqlstate '45000' set message_text = p_message;
+    end if;
+  end if;
+end//
+
+drop procedure if exists assert_three_terminal_isolation_preflight//
+create procedure assert_three_terminal_isolation_preflight()
+begin
+  call assert_database_selected();
+  call assert_existing_column_if_table_present('seller_account', 'seller_account_id', 'seller_account.seller_account_id is required before three-terminal isolation migration');
+  call assert_existing_column_if_table_present('seller_account', 'seller_id', 'seller_account.seller_id is required before three-terminal isolation migration');
+  call assert_existing_column_if_table_present('seller_account', 'account_role', 'seller_account.account_role is required before three-terminal isolation migration');
+  call assert_existing_column_if_table_present('buyer_account', 'buyer_account_id', 'buyer_account.buyer_account_id is required before three-terminal isolation migration');
+  call assert_existing_column_if_table_present('buyer_account', 'buyer_id', 'buyer_account.buyer_id is required before three-terminal isolation migration');
+  call assert_existing_column_if_table_present('buyer_account', 'account_role', 'buyer_account.account_role is required before three-terminal isolation migration');
+  call assert_no_legacy_account_user_bindings('seller_account', 'seller_account.user_id still has bindings; run legacy sys_user backfill first');
+  call assert_no_legacy_account_user_bindings('buyer_account', 'buyer_account.user_id still has bindings; run legacy sys_user backfill first');
 end//
 
 drop procedure if exists drop_index_if_exists//
@@ -177,6 +227,54 @@ begin
   end if;
 end//
 
+drop procedure if exists modify_terminal_account_identity_columns_if_needed//
+create procedure modify_terminal_account_identity_columns_if_needed(in p_table varchar(64))
+begin
+  declare v_missing_count int default 0;
+  declare v_mismatch_count int default 0;
+
+  select count(1)
+    into v_missing_count
+  from (
+    select 'user_name' as expected_column
+    union all select 'nick_name'
+    union all select 'password'
+  ) expected
+  left join information_schema.columns c
+    on c.table_schema = database()
+   and c.table_name = p_table
+   and c.column_name = expected.expected_column
+  where c.column_name is null;
+
+  if v_missing_count > 0 then
+    signal sqlstate '45000' set message_text = 'terminal account identity columns are required before account identity modify';
+  end if;
+
+  select count(1)
+    into v_mismatch_count
+  from (
+    select 'user_name' as expected_column, 'varchar' as expected_type, 30 as expected_length, 'NO' as expected_nullable, cast(null as char) as expected_default
+    union all select 'nick_name', 'varchar', 30, 'NO', ''
+    union all select 'password', 'varchar', 100, 'NO', ''
+  ) expected
+  left join information_schema.columns c
+    on c.table_schema = database()
+   and c.table_name = p_table
+   and c.column_name = expected.expected_column
+  where c.column_name is null
+     or lower(c.data_type) <> expected.expected_type
+     or coalesce(c.character_maximum_length, -1) <> expected.expected_length
+     or c.is_nullable <> expected.expected_nullable
+     or coalesce(c.column_default, '<NULL>') <> coalesce(expected.expected_default, '<NULL>');
+
+  if v_mismatch_count > 0 then
+    set @ddl = concat('alter table `', p_table, '` modify user_name varchar(30) not null, modify nick_name varchar(30) not null default '''', modify password varchar(100) not null default ''''');
+    prepare stmt from @ddl;
+    execute stmt;
+    deallocate prepare stmt;
+  end if;
+end//
+
 drop procedure if exists assert_owner_generated_column//
 create procedure assert_owner_generated_column(
   in p_table varchar(64),
@@ -217,6 +315,8 @@ begin
 end//
 
 delimiter ;
+
+call assert_three_terminal_isolation_preflight();
 
 create table if not exists seller_account (
   seller_account_id     bigint(20)      not null auto_increment,
@@ -331,13 +431,11 @@ call drop_index_if_exists('seller_account', 'uk_seller_account_user');
 call drop_index_if_exists('seller_account', 'uk_seller_account_seller_user');
 call drop_index_if_exists('buyer_account', 'uk_buyer_account_user');
 call drop_index_if_exists('buyer_account', 'uk_buyer_account_buyer_user');
-call assert_no_legacy_account_user_bindings('seller_account', 'seller_account.user_id still has bindings; run legacy sys_user backfill first');
-call assert_no_legacy_account_user_bindings('buyer_account', 'buyer_account.user_id still has bindings; run legacy sys_user backfill first');
 call drop_column_if_exists('seller_account', 'user_id');
 call drop_column_if_exists('buyer_account', 'user_id');
 
-alter table seller_account modify user_name varchar(30) not null, modify nick_name varchar(30) not null default '', modify password varchar(100) not null default '';
-alter table buyer_account modify user_name varchar(30) not null, modify nick_name varchar(30) not null default '', modify password varchar(100) not null default '';
+call modify_terminal_account_identity_columns_if_needed('seller_account');
+call modify_terminal_account_identity_columns_if_needed('buyer_account');
 call add_index_if_missing('seller_account', 'uk_seller_account_username', 'unique key uk_seller_account_username (user_name)');
 call add_index_if_missing('buyer_account', 'uk_buyer_account_username', 'unique key uk_buyer_account_username (user_name)');
 call assert_no_duplicate_owner_account('seller_account', 'seller_id', 'seller_account has duplicate OWNER accounts');
@@ -455,7 +553,7 @@ create table if not exists seller_menu (
   primary key (seller_menu_id),
   key idx_seller_menu_parent (parent_id),
   key idx_seller_menu_status (status)
-) engine=innodb auto_increment=1 comment = '卖家端菜单权限表';
+) engine=innodb auto_increment=100000 comment = '卖家端菜单权限表';
 
 create table if not exists buyer_menu (
   buyer_menu_id bigint(20) not null auto_increment,
@@ -481,7 +579,7 @@ create table if not exists buyer_menu (
   primary key (buyer_menu_id),
   key idx_buyer_menu_parent (parent_id),
   key idx_buyer_menu_status (status)
-) engine=innodb auto_increment=1 comment = '买家端菜单权限表';
+) engine=innodb auto_increment=200000 comment = '买家端菜单权限表';
 
 create table if not exists seller_account_role (
   seller_account_id bigint(20) not null,
@@ -595,6 +693,11 @@ create table if not exists seller_oper_log (
   oper_location varchar(255) default '',
   oper_param varchar(2000) default '',
   json_result varchar(2000) default '',
+  direct_login tinyint(1) not null default 0,
+  direct_login_ticket_id bigint(20) default null,
+  acting_admin_id bigint(20) default null,
+  acting_admin_name varchar(64) default '',
+  direct_login_reason varchar(255) default '',
   status int default 0,
   error_msg varchar(2000) default '',
   oper_time datetime,
@@ -605,6 +708,11 @@ create table if not exists seller_oper_log (
 ) engine=innodb auto_increment=1 comment = '卖家端操作日志表';
 call add_column_if_missing('seller_oper_log', 'seller_id', 'bigint(20) default null');
 call add_column_if_missing('seller_oper_log', 'seller_account_id', 'bigint(20) default null');
+call add_column_if_missing('seller_oper_log', 'direct_login', 'tinyint(1) not null default 0');
+call add_column_if_missing('seller_oper_log', 'direct_login_ticket_id', 'bigint(20) default null');
+call add_column_if_missing('seller_oper_log', 'acting_admin_id', 'bigint(20) default null');
+call add_column_if_missing('seller_oper_log', 'acting_admin_name', 'varchar(64) default ''''');
+call add_column_if_missing('seller_oper_log', 'direct_login_reason', 'varchar(255) default ''''');
 call recreate_index_if_mismatch('seller_oper_log', 'idx_seller_oper_log_account_time',
   'seller_account_id,oper_time', 1, 'key idx_seller_oper_log_account_time (seller_account_id, oper_time)');
 call recreate_index_if_mismatch('seller_oper_log', 'idx_seller_oper_log_seller_time',
@@ -628,6 +736,11 @@ create table if not exists buyer_oper_log (
   oper_location varchar(255) default '',
   oper_param varchar(2000) default '',
   json_result varchar(2000) default '',
+  direct_login tinyint(1) not null default 0,
+  direct_login_ticket_id bigint(20) default null,
+  acting_admin_id bigint(20) default null,
+  acting_admin_name varchar(64) default '',
+  direct_login_reason varchar(255) default '',
   status int default 0,
   error_msg varchar(2000) default '',
   oper_time datetime,
@@ -638,6 +751,11 @@ create table if not exists buyer_oper_log (
 ) engine=innodb auto_increment=1 comment = '买家端操作日志表';
 call add_column_if_missing('buyer_oper_log', 'buyer_id', 'bigint(20) default null');
 call add_column_if_missing('buyer_oper_log', 'buyer_account_id', 'bigint(20) default null');
+call add_column_if_missing('buyer_oper_log', 'direct_login', 'tinyint(1) not null default 0');
+call add_column_if_missing('buyer_oper_log', 'direct_login_ticket_id', 'bigint(20) default null');
+call add_column_if_missing('buyer_oper_log', 'acting_admin_id', 'bigint(20) default null');
+call add_column_if_missing('buyer_oper_log', 'acting_admin_name', 'varchar(64) default ''''');
+call add_column_if_missing('buyer_oper_log', 'direct_login_reason', 'varchar(255) default ''''');
 call recreate_index_if_mismatch('buyer_oper_log', 'idx_buyer_oper_log_account_time',
   'buyer_account_id,oper_time', 1, 'key idx_buyer_oper_log_account_time (buyer_account_id, oper_time)');
 call recreate_index_if_mismatch('buyer_oper_log', 'idx_buyer_oper_log_buyer_time',
@@ -705,9 +823,14 @@ call add_column_if_missing('buyer_session', 'direct_login_reason', 'varchar(255)
 
 drop procedure if exists add_column_if_missing;
 drop procedure if exists drop_column_if_exists;
+drop procedure if exists assert_three_terminal_isolation_preflight;
+drop procedure if exists assert_existing_column_if_table_present;
+drop procedure if exists assert_database_selected;
+drop procedure if exists assert_no_legacy_account_user_bindings;
 drop procedure if exists drop_index_if_exists;
 drop procedure if exists add_index_if_missing;
 drop procedure if exists recreate_index_if_mismatch;
 drop procedure if exists assert_index_definition;
 drop procedure if exists assert_no_duplicate_owner_account;
+drop procedure if exists modify_terminal_account_identity_columns_if_needed;
 drop procedure if exists assert_owner_generated_column;

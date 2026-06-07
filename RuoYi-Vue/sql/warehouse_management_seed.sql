@@ -17,6 +17,53 @@ begin
   end if;
 end//
 
+drop procedure if exists assert_warehouse_management_sys_menu_guard//
+create procedure assert_warehouse_management_sys_menu_guard()
+begin
+  declare v_parent_count int default 0;
+
+  select count(1)
+    into v_parent_count
+  from sys_menu
+  where menu_id = 2020
+    and menu_name = '仓库管理'
+    and parent_id = 0
+    and path = 'warehouse'
+    and route_name = 'WarehouseManagement'
+    and menu_type = 'M';
+
+  if v_parent_count <> 1 then
+    signal sqlstate '45000' set message_text = 'warehouse management parent sys_menu 2020 is required before warehouse management seed';
+  end if;
+
+  if exists (
+    select 1
+    from sys_menu m
+    join tmp_warehouse_management_sys_menu_guard seed on seed.menu_id = m.menu_id
+    where m.parent_id <> seed.parent_id
+       or coalesce(m.menu_type, '') <> coalesce(seed.menu_type, '')
+       or coalesce(m.path, '') <> coalesce(seed.path, '')
+       or coalesce(m.component, '') <> coalesce(seed.component, '')
+       or coalesce(m.route_name, '') <> coalesce(seed.route_name, '')
+       or coalesce(m.perms, '') <> coalesce(seed.perms, '')
+  ) then
+    signal sqlstate '45000' set message_text = 'warehouse management sys_menu id slot is occupied by another menu';
+  end if;
+
+  if exists (
+    select 1
+    from sys_menu m
+    join tmp_warehouse_management_sys_menu_guard seed
+      on m.menu_id <> seed.menu_id
+     and coalesce(m.path, '') = coalesce(seed.path, '')
+     and coalesce(m.component, '') = coalesce(seed.component, '')
+     and coalesce(m.route_name, '') = coalesce(seed.route_name, '')
+     and coalesce(m.perms, '') = coalesce(seed.perms, '')
+  ) then
+    signal sqlstate '45000' set message_text = 'warehouse management sys_menu signature is already used by another menu';
+  end if;
+end//
+
 delimiter ;
 
 call assert_warehouse_management_seed_confirmed();
@@ -91,6 +138,34 @@ where not exists (
     select 1 from sys_dict_data d where d.dict_type = 'warehouse_kind' and d.dict_value = seed.dict_value
 );
 
+create temporary table if not exists tmp_warehouse_management_sys_menu_guard (
+  menu_id bigint(20) not null,
+  parent_id bigint(20) not null,
+  menu_type char(1) not null,
+  path varchar(200) not null default '',
+  component varchar(255) not null default '',
+  route_name varchar(255) not null default '',
+  perms varchar(100) not null default '',
+  key idx_warehouse_management_sys_menu_guard_id (menu_id)
+) engine=memory;
+
+truncate table tmp_warehouse_management_sys_menu_guard;
+
+insert into tmp_warehouse_management_sys_menu_guard(menu_id, parent_id, menu_type, path, component, route_name, perms) values
+    (2021, 2020, 'C', 'official', 'Warehouse/Official/index', 'OfficialWarehouse', 'warehouse:official:list'),
+    (2022, 2020, 'C', 'third-party', 'Warehouse/ThirdParty/index', 'ThirdPartyWarehouse', 'warehouse:thirdParty:list'),
+    (202101, 2021, 'F', '#', '', '', 'warehouse:official:list'),
+    (202102, 2021, 'F', '#', '', '', 'warehouse:official:add'),
+    (202103, 2021, 'F', '#', '', '', 'warehouse:official:edit'),
+    (202104, 2021, 'F', '#', '', '', 'warehouse:official:status'),
+    (202105, 2021, 'F', '#', '', '', 'warehouse:official:sync'),
+    (202201, 2022, 'F', '#', '', '', 'warehouse:thirdParty:list'),
+    (202202, 2022, 'F', '#', '', '', 'warehouse:thirdParty:add'),
+    (202203, 2022, 'F', '#', '', '', 'warehouse:thirdParty:edit'),
+    (202204, 2022, 'F', '#', '', '', 'warehouse:thirdParty:status');
+
+call assert_warehouse_management_sys_menu_guard();
+
 insert into sys_menu
     (menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
      is_frame, is_cache, menu_type, visible, status, perms, icon, create_by,
@@ -147,3 +222,6 @@ on duplicate key update
     update_by = 'admin',
     update_time = sysdate(),
     remark = values(remark);
+
+drop temporary table if exists tmp_warehouse_management_sys_menu_guard;
+drop procedure if exists assert_warehouse_management_sys_menu_guard;

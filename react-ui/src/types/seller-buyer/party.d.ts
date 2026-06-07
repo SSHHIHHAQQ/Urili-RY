@@ -225,8 +225,6 @@ declare namespace API.Partner {
     contactPhone?: string;
     contactEmail?: string;
     attachment?: PartyAttachment;
-    accountBalance?: number;
-    balanceCurrency?: string;
   }
 
   export interface PortalSubjectProfileResult {
@@ -332,6 +330,36 @@ declare namespace API.Partner {
     operLocation?: string;
     operParam?: string;
     jsonResult?: string;
+    directLogin?: boolean;
+    directLoginTicketId?: number;
+    actingAdminId?: number;
+    actingAdminName?: string;
+    directLoginReason?: string;
+    status?: number;
+    errorMsg?: string;
+    operTime?: string;
+    costTime?: number;
+  }
+
+  export interface PortalOwnLoginLogProfile {
+    userName?: string;
+    ipaddr?: string;
+    loginLocation?: string;
+    browser?: string;
+    os?: string;
+    status?: string;
+    msg?: string;
+    loginTime?: string;
+  }
+
+  export interface PortalOwnOperLogProfile {
+    title?: string;
+    businessType?: number;
+    requestMethod?: string;
+    operName?: string;
+    operUrl?: string;
+    operIp?: string;
+    operLocation?: string;
     status?: number;
     errorMsg?: string;
     operTime?: string;

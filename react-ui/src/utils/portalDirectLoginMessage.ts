@@ -1,5 +1,6 @@
 export const PORTAL_DIRECT_LOGIN_READY_MESSAGE = 'URILI_PORTAL_DIRECT_LOGIN_READY';
 export const PORTAL_DIRECT_LOGIN_TOKEN_MESSAGE = 'URILI_PORTAL_DIRECT_LOGIN_TOKEN';
+export const PORTAL_DIRECT_LOGIN_RESULT_MESSAGE = 'URILI_PORTAL_DIRECT_LOGIN_RESULT';
 
 export type PortalDirectLoginReadyMessage = {
   type: typeof PORTAL_DIRECT_LOGIN_READY_MESSAGE;
@@ -10,6 +11,19 @@ export type PortalDirectLoginTokenMessage = {
   type: typeof PORTAL_DIRECT_LOGIN_TOKEN_MESSAGE;
   terminal: API.Partner.PortalTerminal;
   token: string;
+  ticketId?: number;
+};
+
+export type PortalDirectLoginResultMessage = {
+  type: typeof PORTAL_DIRECT_LOGIN_RESULT_MESSAGE;
+  terminal: API.Partner.PortalTerminal;
+  status: 'success' | 'error';
+  ticketId?: number;
+  message?: string;
+};
+
+export type PortalDirectLoginBridgeResult = {
+  status: 'success';
   ticketId?: number;
 };
 
@@ -30,10 +44,28 @@ function isReadyMessage(data: unknown, terminal: API.Partner.PortalTerminal) {
   );
 }
 
+function isResultMessage(
+  data: unknown,
+  terminal: API.Partner.PortalTerminal,
+  ticketId?: number,
+): data is PortalDirectLoginResultMessage {
+  if (!(
+    data
+      && typeof data === 'object'
+      && (data as PortalDirectLoginResultMessage).type === PORTAL_DIRECT_LOGIN_RESULT_MESSAGE
+      && (data as PortalDirectLoginResultMessage).terminal === terminal
+      && ((data as PortalDirectLoginResultMessage).status === 'success'
+        || (data as PortalDirectLoginResultMessage).status === 'error')
+  )) {
+    return false;
+  }
+  return ticketId == null || (data as PortalDirectLoginResultMessage).ticketId === ticketId;
+}
+
 export function openPortalDirectLoginWindow(
   result: API.Partner.DirectLoginResult | undefined,
   terminal: API.Partner.PortalTerminal,
-) {
+): Promise<PortalDirectLoginBridgeResult> | false {
   if (!result?.loginUrl || !result.token) {
     return false;
   }
@@ -52,13 +84,16 @@ export function openPortalDirectLoginWindow(
   };
   let cleaned = false;
   let timeoutTimer: number | undefined;
+  let tokenPosted = false;
+  let resolveBridge: (value: PortalDirectLoginBridgeResult) => void = () => undefined;
+  let rejectBridge: (reason?: Error) => void = () => undefined;
 
   const cleanup = () => {
     if (cleaned) {
       return;
     }
     cleaned = true;
-    window.removeEventListener('message', handleReadyMessage);
+    window.removeEventListener('message', handleBridgeMessage);
     if (timeoutTimer !== undefined) {
       window.clearTimeout(timeoutTimer);
     }
@@ -67,20 +102,41 @@ export function openPortalDirectLoginWindow(
   const postToken = () => {
     if (popup.closed) {
       cleanup();
+      rejectBridge(new Error('DIRECT_LOGIN_POPUP_CLOSED'));
       return;
     }
+    tokenPosted = true;
     popup.postMessage(payload, targetOrigin);
   };
 
-  const handleReadyMessage = (event: MessageEvent) => {
-    if (event.source !== popup || event.origin !== targetOrigin || !isReadyMessage(event.data, terminal)) {
+  const handleBridgeMessage = (event: MessageEvent) => {
+    if (event.source !== popup || event.origin !== targetOrigin) {
       return;
     }
-    postToken();
+    if (isReadyMessage(event.data, terminal) && !tokenPosted) {
+      postToken();
+      return;
+    }
+    if (!tokenPosted || !isResultMessage(event.data, terminal, result.ticketId)) {
+      return;
+    }
     cleanup();
+    if (event.data.status === 'success') {
+      resolveBridge({ status: 'success', ticketId: event.data.ticketId });
+      return;
+    }
+    rejectBridge(new Error(event.data.message || 'DIRECT_LOGIN_CONSUME_FAILED'));
   };
 
-  timeoutTimer = window.setTimeout(cleanup, 5000);
-  window.addEventListener('message', handleReadyMessage);
-  return true;
+  const bridge = new Promise<PortalDirectLoginBridgeResult>((resolve, reject) => {
+    resolveBridge = resolve;
+    rejectBridge = reject;
+  });
+
+  timeoutTimer = window.setTimeout(() => {
+    cleanup();
+    rejectBridge(new Error(tokenPosted ? 'DIRECT_LOGIN_CONSUME_TIMEOUT' : 'DIRECT_LOGIN_READY_TIMEOUT'));
+  }, 15000);
+  window.addEventListener('message', handleBridgeMessage);
+  return bridge;
 }

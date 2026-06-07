@@ -31,8 +31,6 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="attachmentFileUrl"   column="attachment_file_url"   />
         <result property="accountCount"        column="account_count"         />
         <result property="lastLoginTime"       column="last_login_time"       />
-        <result property="accountBalance"      column="account_balance"       />
-        <result property="balanceCurrency"     column="balance_currency"      />
         <result property="createBy"            column="create_by"             />
         <result property="createTime"          column="create_time"           />
         <result property="updateBy"            column="update_by"             />
@@ -99,6 +97,11 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="operLocation"  column="oper_location"     />
         <result property="operParam"     column="oper_param"        />
         <result property="jsonResult"    column="json_result"       />
+        <result property="directLogin"   column="direct_login"      />
+        <result property="directLoginTicketId" column="direct_login_ticket_id" />
+        <result property="actingAdminId" column="acting_admin_id"   />
+        <result property="actingAdminName" column="acting_admin_name" />
+        <result property="directLoginReason" column="direct_login_reason" />
         <result property="status"        column="status"            />
         <result property="errorMsg"      column="error_msg"         />
         <result property="operTime"      column="oper_time"         />
@@ -115,9 +118,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                s.attachment_size_bytes, s.attachment_file_url, s.create_by, s.create_time,
                s.update_by, s.update_time, s.remark,
                coalesce(account_stat.account_count, 0) as account_count,
-               owner_link.last_login_time as last_login_time,
-               cast(0.00 as decimal(18,2)) as account_balance,
-               'USD' as balance_currency
+               owner_link.last_login_time as last_login_time
     </sql>
 
     <sql id="sellerJoins">
@@ -189,12 +190,6 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         </if>
         <if test="params.lastLoginEndTime != null and params.lastLoginEndTime != ''">
             and date_format(owner_link.last_login_time,'%Y%m%d') &lt;= date_format(#{params.lastLoginEndTime},'%Y%m%d')
-        </if>
-        <if test="params.balanceMin != null and params.balanceMin != ''">
-            and cast(0.00 as decimal(18,2)) &gt;= cast(#{params.balanceMin} as decimal(18,2))
-        </if>
-        <if test="params.balanceMax != null and params.balanceMax != ''">
-            and cast(0.00 as decimal(18,2)) &lt;= cast(#{params.balanceMax} as decimal(18,2))
         </if>
         order by s.create_time desc, s.seller_id desc
     </select>
@@ -285,14 +280,15 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         order by a.create_time desc, a.seller_account_id desc
     </select>
 
-    <select id="selectSellerAccountById" parameterType="Long" resultMap="SellerAccountResult">
+    <select id="selectSellerAccountByIdAndSellerId" resultMap="SellerAccountResult">
         select a.seller_account_id, a.seller_id, a.dept_id, d.dept_name, a.account_role, a.status, a.lock_status,
                a.lock_reason, a.status as user_status,
                a.user_name, a.nick_name, a.password, a.email, a.phonenumber, a.last_login_ip, a.last_login_time, a.pwd_update_time,
                a.create_by, a.create_time, a.update_by, a.update_time, a.remark
         from seller_account a
         left join seller_dept d on d.seller_dept_id = a.dept_id and d.seller_id = a.seller_id and d.del_flag = '0'
-        where a.seller_account_id = #{sellerAccountId}
+        where a.seller_id = #{sellerId}
+          and a.seller_account_id = #{sellerAccountId}
         limit 1
     </select>
 
@@ -407,6 +403,21 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <if test="status != null and status != ''">
             and l.status = #{status}
         </if>
+        <if test="directLogin != null">
+            and l.direct_login = #{directLogin}
+        </if>
+        <if test="directLoginTicketId != null">
+            and l.direct_login_ticket_id = #{directLoginTicketId}
+        </if>
+        <if test="actingAdminId != null">
+            and l.acting_admin_id = #{actingAdminId}
+        </if>
+        <if test="actingAdminName != null and actingAdminName != ''">
+            and l.acting_admin_name like concat('%', #{actingAdminName}, '%')
+        </if>
+        <if test="directLoginReason != null and directLoginReason != ''">
+            and l.direct_login_reason like concat('%', #{directLoginReason}, '%')
+        </if>
         <if test="params.beginTime != null and params.beginTime != ''">
             and date_format(l.login_time,'%Y%m%d') &gt;= date_format(#{params.beginTime},'%Y%m%d')
         </if>
@@ -420,7 +431,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         select l.oper_id, l.seller_id, l.seller_account_id, l.title, l.business_type,
                l.method, l.request_method, l.oper_name, l.oper_url, l.oper_ip,
                l.oper_location, l.oper_param, l.json_result, l.status, l.error_msg,
-               l.oper_time, l.cost_time
+               l.oper_time, l.cost_time, l.direct_login, l.direct_login_ticket_id,
+               l.acting_admin_id, l.acting_admin_name, l.direct_login_reason
         from seller_oper_log l
         where 1 = 1
         <if test="subjectId != null">
@@ -437,6 +449,21 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         </if>
         <if test="status != null">
             and l.status = #{status}
+        </if>
+        <if test="directLogin != null">
+            and l.direct_login = #{directLogin}
+        </if>
+        <if test="directLoginTicketId != null">
+            and l.direct_login_ticket_id = #{directLoginTicketId}
+        </if>
+        <if test="actingAdminId != null">
+            and l.acting_admin_id = #{actingAdminId}
+        </if>
+        <if test="actingAdminName != null and actingAdminName != ''">
+            and l.acting_admin_name like concat('%', #{actingAdminName}, '%')
+        </if>
+        <if test="directLoginReason != null and directLoginReason != ''">
+            and l.direct_login_reason like concat('%', #{directLoginReason}, '%')
         </if>
         <if test="params.beginTime != null and params.beginTime != ''">
             and date_format(l.oper_time,'%Y%m%d') &gt;= date_format(#{params.beginTime},'%Y%m%d')

@@ -18,7 +18,11 @@ import {
   getProTablePagination,
   getProTableScroll,
 } from '@/utils/proTableSearch';
-import { requestOperationText } from '../constants';
+import {
+  pairingRoleTagColor,
+  pairingRoleText,
+  requestOperationText,
+} from '../constants';
 import { resultOk, statusTag } from '../helpers';
 import styles from '../style.module.css';
 import type { LogisticsRow, PairingModalState, WarehouseRow } from '../types';
@@ -54,6 +58,12 @@ export default function SyncTabs({
   warehouseActionRef,
 }: SyncTabsProps) {
   const selectedCode = selectedConnection.connectionCode;
+  const currentPairingRole =
+    selectedConnection.settlementType === 'self-operated-receivable'
+      ? 'QUOTE'
+      : 'FULFILLMENT';
+  const currentPairingRoleLabel =
+    pairingRoleText[currentPairingRole] || currentPairingRole;
 
   const warehouseColumns: ProColumns<WarehouseRow>[] = [
     { title: '领星仓库代码', dataIndex: 'warehouseCode', width: 150 },
@@ -64,6 +74,18 @@ export default function SyncTabs({
       dataIndex: 'status',
       width: 110,
       render: (_, record) => statusTag(record.status),
+    },
+    {
+      title: '配对用途',
+      dataIndex: 'pairingRole',
+      width: 100,
+      search: false,
+      render: (_, record) => (
+        <Tag color={pairingRoleTagColor[record.pairingRole || currentPairingRole]}>
+          {pairingRoleText[record.pairingRole || currentPairingRole] ||
+            currentPairingRoleLabel}
+        </Tag>
+      ),
     },
     {
       title: '系统仓库代码',
@@ -86,11 +108,11 @@ export default function SyncTabs({
           ? [
               <Popconfirm
                 key="unpair"
-                title="确认解除仓库配对？"
+                title={`确认解除${currentPairingRoleLabel}仓配对？`}
                 onConfirm={async () => {
                   if (!record.warehousePairingId) return;
                   const ok = resultOk(
-                    await deleteWarehousePairing(record.warehousePairingId),
+                    await deleteWarehousePairing(selectedCode, record.warehousePairingId),
                     '已解除配对',
                   );
                   if (ok) warehouseActionRef.current?.reload();
@@ -119,7 +141,7 @@ export default function SyncTabs({
                   })
                 }
               >
-                配对
+                配为{currentPairingRoleLabel}仓
               </Button>,
             ],
     },
@@ -150,6 +172,7 @@ export default function SyncTabs({
                 onConfirm={async () => {
                   const ok = resultOk(
                     await deleteLogisticsChannelPairing(
+                      selectedCode,
                       pairing.logisticsChannelPairingId,
                     ),
                     '已解除配对',
@@ -158,6 +181,7 @@ export default function SyncTabs({
                 }}
               >
                 <Tag color="blue">
+                  {pairing.systemWarehouseCode || '-'} ·{' '}
                   {pairing.systemChannelCode} / {pairing.systemChannelName}
                 </Tag>
               </Popconfirm>
@@ -180,7 +204,7 @@ export default function SyncTabs({
             setPairingModal({ open: true, type: 'logistics', row: record })
           }
         >
-          配对
+          配为{currentPairingRoleLabel}渠道
         </Button>,
       ],
     },
@@ -253,10 +277,13 @@ export default function SyncTabs({
                       getWarehousePairings(requestCode),
                     ]);
                     const pairingMap = new Map(
-                      (pairingResp.data || []).map((item) => [
-                        item.upstreamWarehouseCode,
-                        item,
-                      ]),
+                      (pairingResp.data || [])
+                        .filter(
+                          (item) =>
+                            (item.pairingRole || 'FULFILLMENT') ===
+                            currentPairingRole,
+                        )
+                        .map((item) => [item.upstreamWarehouseCode, item]),
                     );
                     const rows = (syncResp.data || []).map((item) => ({
                       ...item,
@@ -287,12 +314,36 @@ export default function SyncTabs({
                   params={{ selectedCode }}
                   request={async () => {
                     const requestCode = selectedCode;
-                    const [syncResp, pairingResp] = await Promise.all([
-                      getLogisticsChannelSyncList(requestCode),
-                      getLogisticsChannelPairings(requestCode),
-                    ]);
+                    const [syncResp, pairingResp, warehousePairingResp] =
+                      await Promise.all([
+                        getLogisticsChannelSyncList(requestCode),
+                        getLogisticsChannelPairings(requestCode),
+                        getWarehousePairings(requestCode),
+                      ]);
+                    const warehousePairingMap = new Map(
+                      (warehousePairingResp.data || [])
+                        .filter(
+                          (item) =>
+                            (item.pairingRole || 'FULFILLMENT') ===
+                            currentPairingRole,
+                        )
+                        .map((item) => [item.upstreamWarehouseCode, item]),
+                    );
                     const groups = new Map<string, LogisticsRow>();
                     (syncResp.data || []).forEach((item) => {
+                      const warehousePairing = warehousePairingMap.get(
+                        item.warehouseCode,
+                      );
+                      const warehouseItem = {
+                        ...item,
+                        systemWarehouseCode:
+                          warehousePairing?.systemWarehouseCode,
+                        systemWarehouseName:
+                          warehousePairing?.systemWarehouseName,
+                        warehousePairingId:
+                          warehousePairing?.warehousePairingId,
+                        pairingRole: warehousePairing?.pairingRole,
+                      };
                       const current = groups.get(item.channelCode);
                       if (current) {
                         current.warehouseCodes = Array.from(
@@ -302,10 +353,12 @@ export default function SyncTabs({
                             ),
                           ),
                         ).join(',');
+                        current.warehouseItems.push(warehouseItem);
                       } else {
                         groups.set(item.channelCode, {
                           ...item,
                           warehouseCodes: item.warehouseCode,
+                          warehouseItems: [warehouseItem],
                           pairings: [],
                         });
                       }
@@ -314,7 +367,9 @@ export default function SyncTabs({
                       ...row,
                       pairings: (pairingResp.data || []).filter(
                         (pairing) =>
-                          pairing.upstreamChannelCode === row.channelCode,
+                          pairing.upstreamChannelCode === row.channelCode &&
+                          (pairing.pairingRole || 'FULFILLMENT') ===
+                            currentPairingRole,
                       ),
                     }));
                     return { data: rows, success: syncResp.code === 200 };

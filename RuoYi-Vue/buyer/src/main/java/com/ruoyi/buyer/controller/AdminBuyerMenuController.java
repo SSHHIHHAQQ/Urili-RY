@@ -49,7 +49,7 @@ public class AdminBuyerMenuController extends BaseController
         return success(permissionService.buildMenuTreeSelect(menu));
     }
 
-    @PreAuthorize("@ss.hasPermi('buyer:admin:role:query')")
+    @PreAuthorize("@ss.hasPermi('buyer:admin:role:query') and @ss.hasPermi('buyer:admin:menu:query')")
     @GetMapping("/roleMenuTreeselect/{buyerId}/{roleId}")
     public AjaxResult roleMenuTreeselect(@PathVariable("buyerId") Long buyerId, @PathVariable("roleId") Long roleId)
     {

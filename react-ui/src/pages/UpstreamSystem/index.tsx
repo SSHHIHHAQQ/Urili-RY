@@ -1,6 +1,6 @@
 import { type ActionType, PageContainer } from '@ant-design/pro-components';
 import { useAccess } from '@umijs/max';
-import { Checkbox, Empty, Modal, Space, Typography } from 'antd';
+import { Checkbox, Empty, Form, Modal, Select, Space, Typography } from 'antd';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   addLogisticsChannelPairing,
@@ -15,6 +15,8 @@ import {
   updateUpstreamCredentials,
   updateUpstreamStatus,
 } from '@/services/integration/upstreamSystem';
+import { getOfficialWarehouseList } from '@/services/warehouse/warehouse';
+import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 import { message } from '@/utils/feedback';
 import ConnectionModal, {
   type ConnectionModalMode,
@@ -23,14 +25,20 @@ import ConnectionSidebar from './components/ConnectionSidebar';
 import ConnectionSummary from './components/ConnectionSummary';
 import PairingModal from './components/PairingModal';
 import SyncTabs from './components/SyncTabs';
-import { syncTypeText } from './constants';
+import { pairingRoleText, syncTypeText } from './constants';
 import { resultOk } from './helpers';
 import './style.css';
 import styles from './style.module.css';
 import type { PairingModalState } from './types';
 
 const connectionPageSize = 200;
+const warehouseOptionPageSize = 1000;
 const defaultManualSyncTypes = ['WAREHOUSE', 'LOGISTICS_CHANNEL', 'SKU'];
+
+type WarehouseSelectOption = API.Warehouse.Option & {
+  warehouseCode: string;
+  warehouseName: string;
+};
 
 const syncTypeOptions = [
   {
@@ -108,6 +116,10 @@ export default function UpstreamSystemPage() {
     syncTypes: defaultManualSyncTypes,
     submitting: false,
   });
+  const [warehouseOptions, setWarehouseOptions] = useState<
+    WarehouseSelectOption[]
+  >([]);
+  const [warehouseOptionsLoading, setWarehouseOptionsLoading] = useState(false);
 
   const fetchConnections = useCallback(async (preferredCode?: string) => {
     setLoadingConnections(true);
@@ -132,11 +144,69 @@ export default function UpstreamSystemPage() {
     }
   }, []);
 
+  const loadWarehouseOptions = useCallback(
+    async (connectionCode: string, pairingRole: string) => {
+      if (!connectionCode) {
+        setWarehouseOptions([]);
+        return;
+      }
+      setWarehouseOptionsLoading(true);
+      try {
+        const warehouseResp = await getOfficialWarehouseList({
+          pageNum: 1,
+          pageSize: warehouseOptionPageSize,
+          status: '0',
+        });
+        if (warehouseResp.code !== 200) {
+          message.error(warehouseResp.msg || '系统仓库加载失败');
+          setWarehouseOptions([]);
+          return;
+        }
+        const options = (warehouseResp.rows || [])
+          .filter((item) => item.warehouseCode)
+          .filter((item) =>
+            pairingRole === 'QUOTE'
+              ? !item.quoteWarehousePairingId
+              : !item.warehousePairingId,
+          )
+          .map((item) => {
+            const warehouseCode = item.warehouseCode || '';
+            const warehouseName = item.warehouseName || '';
+            return {
+              label: `${warehouseCode} / ${warehouseName}`,
+              value: warehouseCode,
+              warehouseCode,
+              warehouseName,
+              name: warehouseName,
+              code: warehouseCode,
+              searchText: `${warehouseCode} ${warehouseName} ${item.countryCode || ''}`,
+            };
+          });
+        setWarehouseOptions(options);
+      } finally {
+        setWarehouseOptionsLoading(false);
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
     fetchConnections();
   }, [fetchConnections]);
 
   const selectedCode = selectedConnection?.connectionCode || '';
+  const selectedPairingRole =
+    selectedConnection?.settlementType === 'self-operated-receivable'
+      ? 'QUOTE'
+      : 'FULFILLMENT';
+  const selectedPairingRoleLabel =
+    pairingRoleText[selectedPairingRole] || selectedPairingRole;
+
+  useEffect(() => {
+    if (pairingModal.open && pairingModal.type === 'warehouse') {
+      loadWarehouseOptions(selectedCode, selectedPairingRole);
+    }
+  }, [loadWarehouseOptions, pairingModal, selectedCode, selectedPairingRole]);
 
   const reloadTabs = () => {
     warehouseActionRef.current?.reload();
@@ -237,6 +307,20 @@ export default function UpstreamSystemPage() {
     return ok;
   };
 
+  const logisticsWarehouseOptions =
+    pairingModal.open && pairingModal.type === 'logistics'
+      ? pairingModal.row.warehouseItems.map((item) => ({
+          label: item.systemWarehouseCode
+            ? `${item.warehouseCode} -> ${item.systemWarehouseCode} / ${item.systemWarehouseName || '-'}`
+            : `${item.warehouseCode}（请先配对${selectedPairingRoleLabel}仓）`,
+          value: item.warehouseCode,
+          disabled: !item.systemWarehouseCode,
+          searchText: `${item.warehouseCode} ${item.systemWarehouseCode || ''} ${
+            item.systemWarehouseName || ''
+          }`,
+        }))
+      : [];
+
   return (
     <PageContainer>
       <div className={styles.workspace}>
@@ -308,32 +392,35 @@ export default function UpstreamSystemPage() {
             return false;
           }
           const hide = message.loading('正在保存');
-          let resp: API.Result;
-          if (connectionModal.mode === 'create') {
-            resp = await addUpstreamConnection(values);
-          } else if (connectionModal.mode === 'edit') {
-            if (!modalRecord) return false;
-            resp = await updateUpstreamConnection(modalRecord.connectionCode, {
-              masterWarehouseName: values.masterWarehouseName,
-              settlementType: values.settlementType,
-              remark: values.remark,
-            });
-          } else {
-            if (!modalRecord) return false;
-            resp = await updateUpstreamCredentials(
-              modalRecord.connectionCode,
-              values,
-            );
+          try {
+            let resp: API.Result;
+            if (connectionModal.mode === 'create') {
+              resp = await addUpstreamConnection(values);
+            } else if (connectionModal.mode === 'edit') {
+              if (!modalRecord) return false;
+              resp = await updateUpstreamConnection(modalRecord.connectionCode, {
+                masterWarehouseName: values.masterWarehouseName,
+                settlementType: values.settlementType,
+                remark: values.remark,
+              });
+            } else {
+              if (!modalRecord) return false;
+              resp = await updateUpstreamCredentials(
+                modalRecord.connectionCode,
+                values,
+              );
+            }
+            const ok = resultOk(resp, '保存成功');
+            if (ok) {
+              setConnectionModal({ open: false, mode: 'create' });
+              await fetchConnections(
+                modalRecord?.connectionCode || values.connectionCode,
+              );
+            }
+            return ok;
+          } finally {
+            hide();
           }
-          hide();
-          const ok = resultOk(resp, '保存成功');
-          if (ok) {
-            setConnectionModal({ open: false, mode: 'create' });
-            await fetchConnections(
-              modalRecord?.connectionCode || values.connectionCode,
-            );
-          }
-          return ok;
         }}
       />
 
@@ -431,25 +518,78 @@ export default function UpstreamSystemPage() {
               : 'systemChannelName'
         }
         showCustomerName={pairingModal.open && pairingModal.type === 'sku'}
+        extraItems={
+          pairingModal.open && pairingModal.type === 'logistics' ? (
+            <Form.Item
+              name="upstreamWarehouseCode"
+              label="领星仓库"
+              rules={[{ required: true, message: '请选择领星仓库' }]}
+            >
+              <Select
+                {...SEARCHABLE_SELECT_PROPS}
+                options={logisticsWarehouseOptions}
+              />
+            </Form.Item>
+          ) : null
+        }
+        customPairingItems={
+          pairingModal.open && pairingModal.type === 'warehouse' ? (
+            <Form.Item
+              name="systemWarehouseCode"
+              label="系统仓库"
+              rules={[{ required: true, message: '请选择系统仓库' }]}
+            >
+              <Select
+                {...SEARCHABLE_SELECT_PROPS}
+                loading={warehouseOptionsLoading}
+                options={warehouseOptions}
+                placeholder={`请选择要绑定为${selectedPairingRoleLabel}仓的系统仓库`}
+              />
+            </Form.Item>
+          ) : null
+        }
         onCancel={() => setPairingModal({ open: false })}
         onSubmit={async (values) => {
           if (!pairingModal.open) return false;
           const hide = message.loading('正在配对');
-          const resp =
-            pairingModal.type === 'warehouse'
-              ? await addWarehousePairing(selectedCode, {
-                  ...values,
-                  upstreamWarehouseCode: pairingModal.row.warehouseCode,
-                })
-              : pairingModal.type === 'logistics'
-                ? await addLogisticsChannelPairing(selectedCode, {
-                    ...values,
-                    upstreamChannelCode: pairingModal.row.channelCode,
-                  })
-                : await addSkuPairing(selectedCode, {
-                    ...values,
-                    masterSku: pairingModal.row.masterSku,
-                  });
+          let resp: API.Result;
+          if (pairingModal.type === 'warehouse') {
+            const systemWarehouse = warehouseOptions.find(
+              (item) => item.value === values.systemWarehouseCode,
+            );
+            if (!systemWarehouse) {
+              hide();
+              message.error('请选择系统仓库');
+              return false;
+            }
+            resp = await addWarehousePairing(selectedCode, {
+              remark: values.remark,
+              pairingRole: selectedPairingRole,
+              upstreamWarehouseCode: pairingModal.row.warehouseCode,
+              systemWarehouseCode: systemWarehouse.warehouseCode,
+              systemWarehouseName: systemWarehouse.warehouseName,
+            });
+          } else if (pairingModal.type === 'logistics') {
+            const warehouseContext = pairingModal.row.warehouseItems.find(
+              (item) => item.warehouseCode === values.upstreamWarehouseCode,
+            );
+            if (!warehouseContext?.systemWarehouseCode) {
+              hide();
+              message.error(`请先配对${selectedPairingRoleLabel}仓`);
+              return false;
+            }
+            resp = await addLogisticsChannelPairing(selectedCode, {
+              ...values,
+              pairingRole: selectedPairingRole,
+              systemWarehouseCode: warehouseContext.systemWarehouseCode,
+              upstreamChannelCode: pairingModal.row.channelCode,
+            });
+          } else {
+            resp = await addSkuPairing(selectedCode, {
+              ...values,
+              masterSku: pairingModal.row.masterSku,
+            });
+          }
           hide();
           const ok = resultOk(resp, '配对成功');
           if (ok) {

@@ -93,6 +93,15 @@ public class LingxingOpenApiClient
         return new ArrayList<>(array);
     }
 
+    public void checkWarehouseAccess(String traceId)
+    {
+        Object data = post("/warehouse/options", Collections.emptyMap(), UpstreamSystemConstants.OP_AUTH_CHECK, traceId);
+        if (!(data instanceof JSONArray))
+        {
+            throw new LingxingClientException("LINGXING_RESPONSE_ERROR", "领星仓库授权校验响应不是数组", false);
+        }
+    }
+
     public List<LingxingWarehouse> listWarehouses(String traceId)
     {
         Object data = post("/warehouse/options", Collections.emptyMap(), UpstreamSystemConstants.OP_WAREHOUSE_SYNC, traceId);

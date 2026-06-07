@@ -1,8 +1,83 @@
 -- Upstream system management seed for the RuoYi validation project.
 -- Scope: integration tables, dictionaries, menu entries, and permissions.
 -- Sensitive credentials are not stored in this script. Save credentials through the backend API so they are encrypted.
+-- Fresh bootstrap must also run the mandatory post-seed chain documented in docs/architecture/integration-bootstrap-required-sql.md.
 
 set names utf8mb4;
+
+set @confirm_upstream_system_management_seed := coalesce(@confirm_upstream_system_management_seed, '');
+
+delimiter //
+
+drop procedure if exists assert_upstream_system_management_seed_confirmed//
+create procedure assert_upstream_system_management_seed_confirmed()
+begin
+  if coalesce(@confirm_upstream_system_management_seed, '')
+      <> 'APPLY_UPSTREAM_SYSTEM_MANAGEMENT_SEED' then
+    signal sqlstate '45000' set message_text = 'set @confirm_upstream_system_management_seed = APPLY_UPSTREAM_SYSTEM_MANAGEMENT_SEED before running this seed';
+  end if;
+end//
+
+drop procedure if exists assert_upstream_system_management_sys_menu_guard//
+create procedure assert_upstream_system_management_sys_menu_guard()
+begin
+  declare v_parent_count int default 0;
+
+  select count(1)
+    into v_parent_count
+  from sys_menu
+  where menu_id = 2030
+    and menu_name = '海外仓服务设置'
+    and parent_id = 0
+    and path = 'overseas-warehouse-service'
+    and route_name = 'OverseasWarehouseServiceManagement'
+    and menu_type = 'M';
+
+  if v_parent_count <> 1 then
+    signal sqlstate '45000' set message_text = 'upstream system management parent sys_menu 2030 is required before upstream system management seed';
+  end if;
+
+  if exists (
+    select 1
+    from sys_menu m
+    where exists (
+        select 1
+        from tmp_upstream_system_management_sys_menu_guard seed
+        where seed.menu_id = m.menu_id
+    )
+      and not exists (
+        select 1
+        from tmp_upstream_system_management_sys_menu_guard seed
+        where seed.menu_id = m.menu_id
+          and coalesce(m.parent_id, -1) = seed.parent_id
+          and coalesce(m.menu_type, '') = seed.menu_type
+          and coalesce(m.path, '') = coalesce(seed.path, '')
+          and coalesce(m.component, '') = coalesce(seed.component, '')
+          and coalesce(m.route_name, '') = coalesce(seed.route_name, '')
+          and coalesce(m.perms, '') = coalesce(seed.perms, '')
+    )
+  ) then
+    signal sqlstate '45000' set message_text = 'upstream system management sys_menu id slot is occupied by another menu';
+  end if;
+
+  if exists (
+    select 1
+    from sys_menu m
+    join tmp_upstream_system_management_sys_menu_guard seed
+      on m.menu_id <> seed.menu_id
+     and coalesce(m.path, '') = coalesce(seed.path, '')
+     and coalesce(m.component, '') = coalesce(seed.component, '')
+     and coalesce(m.route_name, '') = coalesce(seed.route_name, '')
+     and coalesce(m.perms, '') = coalesce(seed.perms, '')
+  ) then
+    signal sqlstate '45000' set message_text = 'upstream system management sys_menu signature is already used by another menu';
+  end if;
+end//
+
+delimiter ;
+
+call assert_upstream_system_management_seed_confirmed();
+drop procedure if exists assert_upstream_system_management_seed_confirmed;
 
 create table if not exists upstream_system_connection (
   connection_code        varchar(64)   not null                  comment '主仓接入编号',
@@ -53,6 +128,7 @@ create table if not exists upstream_system_warehouse_pairing (
   upstream_warehouse_name varchar(200)  not null                comment '领星仓库名称快照',
   system_warehouse_code   varchar(64)   not null                comment '系统仓库代码',
   system_warehouse_name   varchar(200)  not null                comment '系统仓库名称快照',
+  pairing_role            varchar(32)   not null default 'FULFILLMENT' comment '配对用途：FULFILLMENT履约仓，QUOTE报价仓',
   status                  varchar(16)   not null default 'ACTIVE' comment '配对状态',
   create_by               varchar(64)   default ''              comment '创建者',
   create_time             datetime                              comment '创建时间',
@@ -60,8 +136,8 @@ create table if not exists upstream_system_warehouse_pairing (
   update_time             datetime                              comment '更新时间',
   remark                  varchar(500)  default ''              comment '备注',
   primary key (warehouse_pairing_id),
-  unique key uk_upstream_wh_pairing_system (system_warehouse_code),
-  unique key uk_upstream_wh_pairing_upstream (connection_code, upstream_warehouse_code),
+  unique key uk_upstream_wh_pairing_system_role (system_warehouse_code, pairing_role),
+  unique key uk_upstream_wh_pairing_upstream_role (connection_code, upstream_warehouse_code, pairing_role),
   key idx_upstream_wh_pairing_connection (connection_code)
 ) engine=innodb comment='系统仓库与领星仓库配对表';
 
@@ -83,10 +159,13 @@ create table if not exists upstream_system_logistics_channel_candidate (
 create table if not exists upstream_system_logistics_channel_pairing (
   logistics_channel_pairing_id bigint(20)   not null auto_increment comment '物流渠道配对ID',
   connection_code              varchar(64)  not null                comment '主仓接入编号',
+  system_warehouse_code        varchar(64)  not null                comment '系统仓库代码',
+  upstream_warehouse_code      varchar(100) not null                comment '领星仓库代码',
   upstream_channel_code        varchar(100) not null                comment '领星物流渠道代码',
   upstream_channel_name        varchar(200) not null                comment '领星物流渠道名称快照',
   system_channel_code          varchar(64)  not null                comment '系统物流渠道代码',
   system_channel_name          varchar(200) not null                comment '系统物流渠道名称快照',
+  pairing_role                 varchar(32)  not null default 'FULFILLMENT' comment '配对用途：FULFILLMENT履约渠道，QUOTE报价渠道',
   status                       varchar(16)  not null default 'ACTIVE' comment '配对状态',
   create_by                    varchar(64)  default ''              comment '创建者',
   create_time                  datetime                             comment '创建时间',
@@ -94,8 +173,8 @@ create table if not exists upstream_system_logistics_channel_pairing (
   update_time                  datetime                             comment '更新时间',
   remark                       varchar(500) default ''              comment '备注',
   primary key (logistics_channel_pairing_id),
-  unique key uk_upstream_channel_pairing_system (system_channel_code),
-  key idx_upstream_channel_pairing_upstream (connection_code, upstream_channel_code),
+  unique key uk_upstream_channel_pairing_system_role (system_warehouse_code, system_channel_code, pairing_role),
+  key idx_upstream_channel_pairing_upstream_role (connection_code, upstream_warehouse_code, upstream_channel_code, pairing_role),
   key idx_upstream_channel_pairing_connection (connection_code)
 ) engine=innodb comment='系统物流渠道与领星渠道配对表';
 
@@ -277,6 +356,48 @@ from (
 ) seed
 where not exists (select 1 from sys_dict_data d where d.dict_type = 'upstream_settlement_type' and d.dict_value = seed.dict_value);
 
+insert into sys_dict_type
+    (dict_name, dict_type, status, create_by, create_time, update_by, update_time, remark)
+select '上游配对用途', 'upstream_pairing_role', '0', 'admin', sysdate(), '', null, '上游配对用途'
+where not exists (select 1 from sys_dict_type where dict_type = 'upstream_pairing_role');
+
+insert into sys_dict_data
+    (dict_sort, dict_label, dict_value, dict_type, css_class, list_class, is_default, status, create_by, create_time, update_by, update_time, remark)
+select seed.dict_sort, seed.dict_label, seed.dict_value, 'upstream_pairing_role', '', seed.list_class, seed.is_default, '0', 'admin', sysdate(), '', null, '上游配对用途'
+from (
+    select 1 as dict_sort, '履约' as dict_label, 'FULFILLMENT' as dict_value, 'primary' as list_class, 'Y' as is_default
+    union all select 2, '报价', 'QUOTE', 'warning', 'N'
+) seed
+where not exists (select 1 from sys_dict_data d where d.dict_type = 'upstream_pairing_role' and d.dict_value = seed.dict_value);
+
+create temporary table if not exists tmp_upstream_system_management_sys_menu_guard (
+  menu_id    bigint       not null,
+  parent_id  bigint       not null,
+  menu_type  char(1)      not null,
+  path       varchar(200) not null default '',
+  component  varchar(255) not null default '',
+  route_name varchar(50)  not null default '',
+  perms      varchar(100) not null default '',
+  key idx_upstream_system_management_sys_menu_guard_id (menu_id)
+) engine=memory;
+
+truncate table tmp_upstream_system_management_sys_menu_guard;
+
+insert into tmp_upstream_system_management_sys_menu_guard(menu_id, parent_id, menu_type, path, component, route_name, perms) values
+    (2031, 2030, 'C', 'upstream-system', 'UpstreamSystem/index', 'UpstreamSystem', 'integration:upstream:list'),
+    (2300, 2031, 'F', '#', '', '', 'integration:upstream:query'),
+    (2301, 2031, 'F', '#', '', '', 'integration:upstream:add'),
+    (2302, 2031, 'F', '#', '', '', 'integration:upstream:edit'),
+    (2303, 2031, 'F', '#', '', '', 'integration:upstream:credential'),
+    (2304, 2031, 'F', '#', '', '', 'integration:upstream:sync'),
+    (2305, 2031, 'F', '#', '', '', 'integration:upstream:pair'),
+    (2306, 2031, 'F', '#', '', '', 'integration:upstream:log'),
+    (2307, 2031, 'F', '#', '', '', 'integration:upstream:dimensionSync'),
+    (2308, 2031, 'F', '#', '', '', 'integration:upstream:inventoryQuery'),
+    (2309, 2031, 'F', '#', '', '', 'integration:upstream:inventorySync');
+
+call assert_upstream_system_management_sys_menu_guard();
+
 insert into sys_menu
     (menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
      is_frame, is_cache, menu_type, visible, status, perms, icon, create_by,
@@ -333,5 +454,8 @@ on duplicate key update
     update_by = 'admin',
     update_time = sysdate(),
     remark = values(remark);
+
+drop temporary table if exists tmp_upstream_system_management_sys_menu_guard;
+drop procedure if exists assert_upstream_system_management_sys_menu_guard;
 
 -- Inventory schema and scheduled jobs are maintained by follow-up migrations.

@@ -16,6 +16,7 @@ type SkuMatrixEditorProps = {
   focusSkuId?: number;
   currencyCode?: string;
   currencyLabel?: string;
+  sourceMode?: boolean;
   onChange: (value: SkuRow[]) => void;
 };
 
@@ -28,6 +29,7 @@ type MeasurementInputProps = {
   unit: string;
   placeholder?: string;
   style?: CSSProperties;
+  disabled?: boolean;
   onChange: (value: string | number | null) => void;
 };
 
@@ -86,6 +88,7 @@ function MeasurementInput({
   unit,
   placeholder,
   style,
+  disabled,
   onChange,
 }: MeasurementInputProps) {
   return (
@@ -97,6 +100,7 @@ function MeasurementInput({
       suffix={<span className={styles.measurementUnitSuffix}>{unit}</span>}
       className={styles.measurementInput}
       style={style}
+      disabled={disabled}
       onChange={onChange}
     />
   );
@@ -212,6 +216,7 @@ export default function SkuMatrixEditor({
   focusSkuId,
   currencyCode,
   currencyLabel,
+  sourceMode = false,
   onChange,
 }: SkuMatrixEditorProps) {
   const [selectedSpecs, setSelectedSpecs] = useState<(keyof API.ProductDistribution.Sku)[]>(['color', 'size']);
@@ -350,6 +355,27 @@ export default function SkuMatrixEditor({
   };
 
   const columns: ColumnsType<SkuRow> = [
+    ...(sourceMode ? [
+      {
+        title: '来源SKU',
+        dataIndex: 'masterSku',
+        width: 150,
+        fixed: 'left' as const,
+        render: (_: unknown, row: SkuRow) => row.masterSku || '-',
+      },
+      {
+        title: '来源商品',
+        dataIndex: 'masterProductNameSnapshot',
+        width: 220,
+        render: (_: unknown, row: SkuRow) => row.masterProductNameSnapshot || '-',
+      },
+      {
+        title: '来源仓',
+        dataIndex: 'sourceWarehouseNames',
+        width: 180,
+        render: (_: unknown, row: SkuRow) => row.sourceWarehouseNames || '-',
+      },
+    ] : []),
     ...selectedSpecs.map((field) => ({
       title: skuSpecFields.find((item) => item.value === field)?.label || String(field),
       dataIndex: field as string,
@@ -391,6 +417,7 @@ export default function SkuMatrixEditor({
           value={readMeasurementInputValue(row.lengthValue, currentUnits.dimension, 'dimension')}
           unit={currentUnits.dimension}
           placeholder="如 30"
+          disabled={sourceMode}
           onChange={(nextValue) => updateMeasurementRow(row, 'lengthValue', nextValue, 'dimension')}
         />
       ),
@@ -404,6 +431,7 @@ export default function SkuMatrixEditor({
           value={readMeasurementInputValue(row.widthValue, currentUnits.dimension, 'dimension')}
           unit={currentUnits.dimension}
           placeholder="如 20"
+          disabled={sourceMode}
           onChange={(nextValue) => updateMeasurementRow(row, 'widthValue', nextValue, 'dimension')}
         />
       ),
@@ -417,6 +445,7 @@ export default function SkuMatrixEditor({
           value={readMeasurementInputValue(row.heightValue, currentUnits.dimension, 'dimension')}
           unit={currentUnits.dimension}
           placeholder="如 8"
+          disabled={sourceMode}
           onChange={(nextValue) => updateMeasurementRow(row, 'heightValue', nextValue, 'dimension')}
         />
       ),
@@ -430,6 +459,7 @@ export default function SkuMatrixEditor({
           value={readMeasurementInputValue(row.weight, currentUnits.weight, 'weight')}
           unit={currentUnits.weight}
           placeholder="如 0.35"
+          disabled={sourceMode}
           onChange={(nextValue) => updateMeasurementRow(row, 'weight', nextValue, 'weight')}
         />
       ),
@@ -488,6 +518,7 @@ export default function SkuMatrixEditor({
   return (
     <div className={styles.skuEditor}>
       <div className={styles.sectionTitle}>SKU 信息</div>
+      {!sourceMode ? (
       <div className={styles.specPanel}>
         <div className={styles.specPanelTitle}>规格属性</div>
         <Checkbox.Group
@@ -526,50 +557,59 @@ export default function SkuMatrixEditor({
           <Button onClick={addManualSku} icon={<PlusOutlined />}>新增 SKU</Button>
         </Space>
       </div>
+      ) : null}
 
       <div className={styles.bulkPanel}>
         <Space size={8} wrap>
-          <Typography.Text strong className={styles.bulkPanelLabel}>
-            单位制
-          </Typography.Text>
-          <Radio.Group
-            optionType="button"
-            buttonStyle="solid"
-            options={compactMeasurementUnitOptions}
-            value={unitSystem}
-            onChange={(event) => changeUnitSystem(event.target.value)}
-          />
-          <Typography.Text strong className={styles.bulkPanelLabel}>
-            批量填充
-          </Typography.Text>
-          <MeasurementInput
-            placeholder="长"
-            style={{ width: 124 }}
-            value={bulkLengthValue}
-            unit={currentUnits.dimension}
-            onChange={(nextValue) => setBulkLengthValue(toOptionalNumber(nextValue))}
-          />
-          <MeasurementInput
-            placeholder="宽"
-            style={{ width: 124 }}
-            value={bulkWidthValue}
-            unit={currentUnits.dimension}
-            onChange={(nextValue) => setBulkWidthValue(toOptionalNumber(nextValue))}
-          />
-          <MeasurementInput
-            placeholder="高"
-            style={{ width: 124 }}
-            value={bulkHeightValue}
-            unit={currentUnits.dimension}
-            onChange={(nextValue) => setBulkHeightValue(toOptionalNumber(nextValue))}
-          />
-          <MeasurementInput
-            placeholder="重量"
-            style={{ width: 132 }}
-            value={bulkWeight}
-            unit={currentUnits.weight}
-            onChange={(nextValue) => setBulkWeight(toOptionalNumber(nextValue))}
-          />
+          {!sourceMode ? (
+            <>
+              <Typography.Text strong className={styles.bulkPanelLabel}>
+                单位制
+              </Typography.Text>
+              <Radio.Group
+                optionType="button"
+                buttonStyle="solid"
+                options={compactMeasurementUnitOptions}
+                value={unitSystem}
+                onChange={(event) => changeUnitSystem(event.target.value)}
+              />
+              <Typography.Text strong className={styles.bulkPanelLabel}>
+                批量填充
+              </Typography.Text>
+              <MeasurementInput
+                placeholder="长"
+                style={{ width: 124 }}
+                value={bulkLengthValue}
+                unit={currentUnits.dimension}
+                onChange={(nextValue) => setBulkLengthValue(toOptionalNumber(nextValue))}
+              />
+              <MeasurementInput
+                placeholder="宽"
+                style={{ width: 124 }}
+                value={bulkWidthValue}
+                unit={currentUnits.dimension}
+                onChange={(nextValue) => setBulkWidthValue(toOptionalNumber(nextValue))}
+              />
+              <MeasurementInput
+                placeholder="高"
+                style={{ width: 124 }}
+                value={bulkHeightValue}
+                unit={currentUnits.dimension}
+                onChange={(nextValue) => setBulkHeightValue(toOptionalNumber(nextValue))}
+              />
+              <MeasurementInput
+                placeholder="重量"
+                style={{ width: 132 }}
+                value={bulkWeight}
+                unit={currentUnits.weight}
+                onChange={(nextValue) => setBulkWeight(toOptionalNumber(nextValue))}
+              />
+            </>
+          ) : (
+            <Typography.Text strong className={styles.bulkPanelLabel}>
+              批量填充
+            </Typography.Text>
+          )}
           <InputNumber
             min={0}
             precision={4}

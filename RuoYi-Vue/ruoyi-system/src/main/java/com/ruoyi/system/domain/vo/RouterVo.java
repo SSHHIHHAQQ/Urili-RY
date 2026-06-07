@@ -42,6 +42,11 @@ public class RouterVo
     private String query;
 
     /**
+     * 权限标识
+     */
+    private String perms;
+
+    /**
      * 当你一个路由下面的 children 声明的路由大于1个时，自动会变成嵌套的模式--如组件页面
      */
     private Boolean alwaysShow;
@@ -114,6 +119,16 @@ public class RouterVo
     public void setQuery(String query)
     {
         this.query = query;
+    }
+
+    public String getPerms()
+    {
+        return perms;
+    }
+
+    public void setPerms(String perms)
+    {
+        this.perms = perms;
     }
 
     public Boolean getAlwaysShow()

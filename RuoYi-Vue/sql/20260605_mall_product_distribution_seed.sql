@@ -18,6 +18,46 @@ begin
   end if;
 end//
 
+drop procedure if exists assert_mall_product_distribution_sys_menu_guard//
+create procedure assert_mall_product_distribution_sys_menu_guard()
+begin
+  if exists (
+    select 1
+    from sys_menu m
+    where exists (
+        select 1
+        from tmp_mall_product_distribution_sys_menu_guard seed
+        where seed.menu_id = m.menu_id
+    )
+      and not exists (
+        select 1
+        from tmp_mall_product_distribution_sys_menu_guard seed
+        where seed.menu_id = m.menu_id
+          and m.parent_id = seed.parent_id
+          and coalesce(m.menu_type, '') = coalesce(seed.menu_type, '')
+          and coalesce(m.path, '') = coalesce(seed.path, '')
+          and coalesce(m.component, '') = coalesce(seed.component, '')
+          and coalesce(m.route_name, '') = coalesce(seed.route_name, '')
+          and coalesce(m.perms, '') = coalesce(seed.perms, '')
+    )
+  ) then
+    signal sqlstate '45000' set message_text = 'mall product distribution sys_menu id slot is occupied by another menu';
+  end if;
+
+  if exists (
+    select 1
+    from sys_menu m
+    join tmp_mall_product_distribution_sys_menu_guard seed
+      on m.menu_id <> seed.menu_id
+     and coalesce(m.path, '') = coalesce(seed.path, '')
+     and coalesce(m.component, '') = coalesce(seed.component, '')
+     and coalesce(m.route_name, '') = coalesce(seed.route_name, '')
+     and coalesce(m.perms, '') = coalesce(seed.perms, '')
+  ) then
+    signal sqlstate '45000' set message_text = 'mall product distribution sys_menu signature is already used by another menu';
+  end if;
+end//
+
 delimiter ;
 
 call assert_mall_product_distribution_seed_confirmed();
@@ -245,13 +285,50 @@ from (
 ) seed
 where not exists (select 1 from sys_dict_data d where d.dict_type = 'product_source_type' and d.dict_value = seed.dict_value);
 
-update sys_menu
-set component = 'Product/Distribution/index',
-    perms = 'product:distribution:list',
+create temporary table if not exists tmp_mall_product_distribution_sys_menu_guard (
+  menu_id    bigint       not null,
+  parent_id  bigint       not null,
+  menu_type  char(1)      not null,
+  path       varchar(200) not null default '',
+  component  varchar(255) not null default '',
+  route_name varchar(50)  not null default '',
+  perms      varchar(100) not null default '',
+  key idx_mall_product_distribution_sys_menu_guard_id (menu_id)
+) engine=memory;
+
+truncate table tmp_mall_product_distribution_sys_menu_guard;
+
+insert into tmp_mall_product_distribution_sys_menu_guard(menu_id, parent_id, menu_type, path, component, route_name, perms) values
+    (2402, 2060, 'C', 'distribution', 'Product/Distribution/index', 'DistributionProduct', 'product:distribution:list');
+
+call assert_mall_product_distribution_sys_menu_guard();
+
+insert into sys_menu
+    (menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
+     is_frame, is_cache, menu_type, visible, status, perms, icon, create_by,
+     create_time, update_by, update_time, remark)
+values
+    (2402, '商城商品列表', 2060, 15, 'distribution', 'Product/Distribution/index', '', 'DistributionProduct',
+     1, 0, 'C', '0', '0', 'product:distribution:list', 'ShareAltOutlined', 'admin',
+     sysdate(), '', null, '商品管理菜单：商城商品列表')
+on duplicate key update
+    menu_name = values(menu_name),
+    parent_id = values(parent_id),
+    order_num = values(order_num),
+    path = values(path),
+    component = values(component),
+    query = values(query),
+    route_name = values(route_name),
+    is_frame = values(is_frame),
+    is_cache = values(is_cache),
+    menu_type = values(menu_type),
+    visible = values(visible),
+    status = values(status),
+    perms = values(perms),
+    icon = values(icon),
     update_by = 'admin',
     update_time = sysdate(),
-    remark = '商品管理菜单：商城商品列表'
-where menu_id = 2402;
+    remark = values(remark);
 
 insert into sys_menu
     (menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
@@ -270,3 +347,6 @@ from (
 ) seed
 where not exists (select 1 from sys_menu m where m.menu_id = seed.menu_id)
   and not exists (select 1 from sys_menu p where p.perms = seed.perms);
+
+drop temporary table if exists tmp_mall_product_distribution_sys_menu_guard;
+drop procedure if exists assert_mall_product_distribution_sys_menu_guard;

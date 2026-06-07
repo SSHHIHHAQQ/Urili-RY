@@ -6,7 +6,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
-import com.ruoyi.common.constant.Constants;
 import com.ruoyi.common.constant.UserConstants;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.StringUtils;
@@ -52,6 +51,117 @@ public class PortalPermissionSupport
                 && !UserConstants.TYPE_BUTTON.equals(menu.getMenuType()))
         {
             throw new ServiceException("菜单类型参数不正确");
+        }
+    }
+
+    public static void normalizeTerminalMenu(PortalMenu menu, String terminal)
+    {
+        normalizeMenu(menu);
+        assertTerminalMenuComponent(menu, terminal);
+        assertTerminalMenuPerms(menu, terminal);
+    }
+
+    public static void assertReadableTerminalMenu(PortalMenu menu, String terminal)
+    {
+        if (menu == null)
+        {
+            throw new ServiceException("Terminal menu cannot be null");
+        }
+        assertTerminalMenuId(menu.getMenuId(), terminal);
+        assertTerminalMenuType(menu.getMenuType());
+        assertTerminalMenuComponent(menu, terminal);
+        assertTerminalMenuPerms(menu, terminal);
+    }
+
+    public static void assertTerminalMenuId(Long menuId, String terminal)
+    {
+        if (menuId == null || menuId <= 0)
+        {
+            throw new ServiceException("端内菜单ID不能为空");
+        }
+        String value = PartnerSupport.trimRequired(terminal, "端类型不能为空").toLowerCase();
+        if ("seller".equals(value) && (menuId < 100000L || menuId >= 200000L))
+        {
+            throw new ServiceException("卖家端菜单ID必须位于卖家端区间");
+        }
+        if ("buyer".equals(value) && (menuId < 200000L || menuId >= 300000L))
+        {
+            throw new ServiceException("买家端菜单ID必须位于买家端区间");
+        }
+    }
+
+    private static void assertTerminalMenuType(String menuType)
+    {
+        if (!UserConstants.TYPE_DIR.equals(menuType) && !UserConstants.TYPE_MENU.equals(menuType)
+                && !UserConstants.TYPE_BUTTON.equals(menuType))
+        {
+            throw new ServiceException("Terminal menu type is invalid");
+        }
+    }
+
+    public static void assertTerminalMenuComponent(PortalMenu menu, String terminal)
+    {
+        if (!UserConstants.TYPE_MENU.equals(menu.getMenuType()))
+        {
+            return;
+        }
+        String expectedRoot = PartnerSupport.trimRequired(terminal, "端类型不能为空").toLowerCase();
+        String component = StringUtils.trimToEmpty(menu.getComponent());
+        if (StringUtils.isEmpty(component))
+        {
+            throw new ServiceException("端内页面菜单组件不能为空");
+        }
+        String normalized = normalizeMenuTarget(component).toLowerCase();
+        String root = getFirstPathSegment(normalized);
+        if (!root.equals(expectedRoot))
+        {
+            throw new ServiceException("端内页面菜单组件必须使用本端页面根路径");
+        }
+        if (isForbiddenComponentRoot(root))
+        {
+            throw new ServiceException("端内页面菜单组件不能使用后台或共享根路径");
+        }
+    }
+
+    public static void assertTerminalMenuPerms(PortalMenu menu, String terminal)
+    {
+        String terminalPrefix = PartnerSupport.trimRequired(terminal, "端类型不能为空") + ":";
+        String perms = StringUtils.trimToEmpty(menu.getPerms());
+        boolean requiresPermission = UserConstants.TYPE_MENU.equals(menu.getMenuType())
+                || UserConstants.TYPE_BUTTON.equals(menu.getMenuType());
+        if (StringUtils.isEmpty(perms))
+        {
+            if (requiresPermission)
+            {
+                throw new ServiceException("端内页面或按钮菜单权限不能为空");
+            }
+            return;
+        }
+        boolean hasPermission = false;
+        for (String permission : perms.split(","))
+        {
+            String value = StringUtils.trimToEmpty(permission);
+            if (StringUtils.isEmpty(value))
+            {
+                continue;
+            }
+            hasPermission = true;
+            if (value.contains("*"))
+            {
+                throw new ServiceException("端内菜单权限不能使用通配符");
+            }
+            if (!value.startsWith(terminalPrefix))
+            {
+                throw new ServiceException("端内菜单权限必须使用本端前缀");
+            }
+            if (value.startsWith(terminalPrefix + "admin:"))
+            {
+                throw new ServiceException("端内菜单权限不能使用管理端权限前缀");
+            }
+        }
+        if (requiresPermission && !hasPermission)
+        {
+            throw new ServiceException("端内页面或按钮菜单权限不能为空");
         }
     }
 
@@ -164,7 +274,25 @@ public class PortalPermissionSupport
 
     private static boolean hasPermission(Set<String> permissions, String permission)
     {
-        return permissions.contains(Constants.ALL_PERMISSION) || permissions.contains(StringUtils.trim(permission));
+        return permissions.contains(StringUtils.trim(permission));
+    }
+
+    private static String normalizeMenuTarget(String value)
+    {
+        return StringUtils.trimToEmpty(value).replace("\\", "/").replaceAll("^(?:\\./|/)+", "");
+    }
+
+    private static String getFirstPathSegment(String value)
+    {
+        String normalized = normalizeMenuTarget(value);
+        int separatorIndex = normalized.indexOf('/');
+        return separatorIndex < 0 ? normalized : normalized.substring(0, separatorIndex);
+    }
+
+    private static boolean isForbiddenComponentRoot(String root)
+    {
+        return "admin".equals(root) || "common".equals(root) || "shared".equals(root) || "system".equals(root)
+                || "user".equals(root) || "monitor".equals(root) || "tool".equals(root);
     }
 
     private static void recursionFn(List<PortalMenu> list, PortalMenu t)

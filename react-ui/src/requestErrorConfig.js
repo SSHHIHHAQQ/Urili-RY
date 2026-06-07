@@ -12,6 +12,15 @@ function redirectToLogin(includePortal = false) {
     const redirect = `${pathname}${search || ''}${hash || ''}`;
     history.replace(`${PageEnum.LOGIN}?redirect=${encodeURIComponent(redirect)}`);
 }
+function redirectToPortalLogin(portalTerminal) {
+    const { pathname, search, hash } = history.location;
+    const loginPath = getPortalLoginPath(portalTerminal);
+    if (pathname === loginPath) {
+        return;
+    }
+    const redirect = `${pathname}${search || ''}${hash || ''}`;
+    history.replace(`${loginPath}?redirect=${encodeURIComponent(redirect)}`);
+}
 function isUnauthorizedCode(code) {
     return Number(code) === 401;
 }
@@ -19,7 +28,7 @@ function handleUnauthorized(requestUrl) {
     const portalTerminal = getPortalTerminalFromApiUrl(requestUrl);
     if (portalTerminal) {
         clearTerminalSessionToken(portalTerminal);
-        history.replace(getPortalLoginPath(portalTerminal));
+        redirectToPortalLogin(portalTerminal);
         return;
     }
     clearSessionToken();
@@ -64,7 +73,7 @@ export const errorConfig = {
                     const { errorMessage, errorCode } = errorInfo;
                     if (isUnauthorizedCode(errorCode)) {
                         handleUnauthorized(requestUrl);
-                        return;
+                        throw error;
                     }
                     switch (errorInfo.showType) {
                         case ErrorShowType.SILENT:
@@ -95,7 +104,7 @@ export const errorConfig = {
                 // 请求成功发出且服务器也响应了状态码，但状态代码超出了 2xx 的范围
                 if (isUnauthorizedCode(error.response.status)) {
                     handleUnauthorized(requestUrl);
-                    return;
+                    throw error;
                 }
                 message.error(`Response status:${error.response.status}`);
             }

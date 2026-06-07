@@ -48,6 +48,44 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="remark"          column="remark"           />
     </resultMap>
 
+    <resultMap type="ProductSkuSourceBinding" id="ProductSkuSourceBindingResult">
+        <id     property="bindingId"                   column="binding_id"                    />
+        <result property="spuId"                       column="spu_id"                        />
+        <result property="skuId"                       column="sku_id"                        />
+        <result property="sellerId"                    column="seller_id"                     />
+        <result property="systemSkuCode"               column="system_sku_code"               />
+        <result property="sourceScope"                 column="source_scope"                  />
+        <result property="sourceSkuGroupKey"           column="source_sku_group_key"          />
+        <result property="sourceDimensionGroupKey"     column="source_dimension_group_key"    />
+        <result property="masterSku"                   column="master_sku"                    />
+        <result property="masterProductNameSnapshot"   column="master_product_name_snapshot"  />
+        <result property="systemSkuNameSnapshot"       column="system_sku_name_snapshot"      />
+        <result property="sellerNameSnapshot"          column="seller_name_snapshot"          />
+        <result property="sourcePayloadHash"           column="source_payload_hash"           />
+        <result property="wmsPayloadHash"              column="wms_payload_hash"              />
+        <result property="measureLengthCm"             column="measure_length_cm"             />
+        <result property="measureWidthCm"              column="measure_width_cm"              />
+        <result property="measureHeightCm"             column="measure_height_cm"             />
+        <result property="measureWeightKg"             column="measure_weight_kg"             />
+        <result property="measureSource"               column="measure_source"                />
+        <result property="currencyCode"                column="currency_code"                 />
+        <result property="sourceWarehouseNames"        column="source_warehouse_names"        />
+        <result property="sourceWarehouseCount"        column="source_warehouse_count"        />
+        <result property="bindingStatus"               column="binding_status"                />
+        <result property="lockStatus"                  column="lock_status"                   />
+        <result property="lockedTime"                  column="locked_time"                   />
+        <result property="lockedBy"                    column="locked_by"                     />
+        <result property="releaseReason"               column="release_reason"                />
+        <result property="replaceReason"               column="replace_reason"                />
+        <result property="activeSkuKey"                column="active_sku_key"                />
+        <result property="activeSourceKey"             column="active_source_key"             />
+        <result property="createBy"                    column="create_by"                     />
+        <result property="createTime"                  column="create_time"                   />
+        <result property="updateBy"                    column="update_by"                     />
+        <result property="updateTime"                  column="update_time"                   />
+        <result property="remark"                      column="remark"                        />
+    </resultMap>
+
     <resultMap type="ProductSku" id="ProductSkuResult">
         <id     property="skuId"           column="sku_id"           />
         <result property="spuId"           column="spu_id"           />
@@ -146,6 +184,33 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="createBy"           column="create_by"           />
         <result property="createTime"         column="create_time"         />
     </resultMap>
+
+    <sql id="skuSourceBindingSelect">
+               b.binding_id as source_binding_id,
+               b.source_scope,
+               b.source_sku_group_key,
+               b.source_dimension_group_key,
+               b.master_sku,
+               b.master_product_name_snapshot,
+               b.source_payload_hash,
+               b.wms_payload_hash,
+               b.measure_length_cm,
+               b.measure_width_cm,
+               b.measure_height_cm,
+               b.measure_weight_kg,
+               b.measure_source,
+               b.source_warehouse_names,
+               b.source_warehouse_count,
+               b.binding_status,
+               b.lock_status,
+               b.locked_time
+    </sql>
+
+    <sql id="skuSourceBindingJoin">
+        left join product_sku_source_binding b
+               on b.sku_id = sk.sku_id
+              and b.binding_status = 'ACTIVE'
+    </sql>
 
     <sql id="spuAggregateSelect">
         select p.*,
@@ -418,7 +483,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                null as available_stock,
                null as warehouse_count,
                null as inventory_status,
-               null as stock_update_time
+               null as stock_update_time,
+               <include refid="skuSourceBindingSelect"/>
         from product_sku sk
         inner join product_spu p on p.spu_id = sk.spu_id and p.del_flag = '0'
         left join (
@@ -427,6 +493,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             from product_spu_warehouse
             group by spu_id
         ) wh on wh.spu_id = sk.spu_id
+        <include refid="skuSourceBindingJoin"/>
         where sk.del_flag = '0'
         <if test="keyword != null and keyword != ''">
             and (
@@ -493,7 +560,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                null as available_stock,
                null as warehouse_count,
                null as inventory_status,
-               null as stock_update_time
+               null as stock_update_time,
+               <include refid="skuSourceBindingSelect"/>
         from product_sku sk
         left join product_spu p on p.spu_id = sk.spu_id
         left join (
@@ -502,6 +570,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             from product_spu_warehouse
             group by spu_id
         ) wh on wh.spu_id = sk.spu_id
+        <include refid="skuSourceBindingJoin"/>
         where sk.spu_id = #{spuId}
           and sk.del_flag = '0'
         order by sort_order asc, sku_id asc
@@ -522,7 +591,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                null as available_stock,
                null as warehouse_count,
                null as inventory_status,
-               null as stock_update_time
+               null as stock_update_time,
+               <include refid="skuSourceBindingSelect"/>
         from product_sku sk
         left join product_spu p on p.spu_id = sk.spu_id
         left join (
@@ -531,6 +601,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             from product_spu_warehouse
             group by spu_id
         ) wh on wh.spu_id = sk.spu_id
+        <include refid="skuSourceBindingJoin"/>
         where sk.spu_id = #{spuId}
           and sk.sku_status = 'ON_SALE'
           and sk.control_status = 'NORMAL'
@@ -553,7 +624,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                null as available_stock,
                null as warehouse_count,
                null as inventory_status,
-               null as stock_update_time
+               null as stock_update_time,
+               <include refid="skuSourceBindingSelect"/>
         from product_sku sk
         left join product_spu p on p.spu_id = sk.spu_id
         left join (
@@ -562,6 +634,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             from product_spu_warehouse
             group by spu_id
         ) wh on wh.spu_id = sk.spu_id
+        <include refid="skuSourceBindingJoin"/>
         where sk.sku_id = #{skuId}
           and sk.del_flag = '0'
         limit 1
@@ -760,4 +833,254 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         delete from product_spu_warehouse
         where spu_id = #{spuId}
     </delete>
+
+    <select id="selectSourceBindingSnapshot" resultMap="ProductSkuSourceBindingResult">
+        select null as binding_id,
+               null as spu_id,
+               null as sku_id,
+               null as seller_id,
+               '' as system_sku_code,
+               d.repository_scope as source_scope,
+               d.source_sku_group_key,
+               d.source_dimension_group_key,
+               d.master_sku,
+               d.master_product_name as master_product_name_snapshot,
+               '' as system_sku_name_snapshot,
+               '' as seller_name_snapshot,
+               d.source_payload_hash,
+               coalesce(wd.wms_payload_hash, '') as wms_payload_hash,
+               case
+                   when d.wms_length is not null and d.wms_width is not null
+                        and d.wms_height is not null and d.wms_weight is not null
+                       then d.wms_length
+                   else d.product_length
+               end as measure_length_cm,
+               case
+                   when d.wms_length is not null and d.wms_width is not null
+                        and d.wms_height is not null and d.wms_weight is not null
+                       then d.wms_width
+                   else d.product_width
+               end as measure_width_cm,
+               case
+                   when d.wms_length is not null and d.wms_width is not null
+                        and d.wms_height is not null and d.wms_weight is not null
+                       then d.wms_height
+                   else d.product_height
+               end as measure_height_cm,
+               case
+                   when d.wms_length is not null and d.wms_width is not null
+                        and d.wms_height is not null and d.wms_weight is not null
+                       then d.wms_weight
+                   else d.product_weight
+               end as measure_weight_kg,
+               case
+                   when d.wms_length is not null and d.wms_width is not null
+                        and d.wms_height is not null and d.wms_weight is not null
+                       then 'WMS'
+                   else 'PRODUCT'
+               end as measure_source,
+               d.currency_code,
+               d.source_warehouse_names,
+               d.warehouse_count as source_warehouse_count,
+               'ACTIVE' as binding_status,
+               'UNLOCKED' as lock_status,
+               null as locked_time,
+               '' as locked_by,
+               '' as release_reason,
+               '' as replace_reason,
+               null as active_sku_key,
+               null as active_source_key,
+               '' as create_by,
+               null as create_time,
+               '' as update_by,
+               null as update_time,
+               '' as remark
+        from source_product_dimension_group d
+        left join (
+            select source_dimension_group_key,
+                   max(coalesce(wms_payload_hash, '')) as wms_payload_hash
+            from source_product_warehouse_detail
+            where repository_scope = 'OFFICIAL_MASTER'
+            group by source_dimension_group_key
+        ) wd on wd.source_dimension_group_key = d.source_dimension_group_key
+        where d.repository_scope = 'OFFICIAL_MASTER'
+          and d.status = 'ACTIVE'
+          and d.source_dimension_group_key = #{sourceDimensionGroupKey}
+        limit 1
+    </select>
+
+    <select id="selectActiveSourceBindingBySkuId" resultMap="ProductSkuSourceBindingResult">
+        select *
+        from product_sku_source_binding
+        where sku_id = #{skuId}
+          and binding_status = 'ACTIVE'
+        limit 1
+    </select>
+
+    <select id="selectActiveSourceBindingBySourceSkuGroupKey" resultMap="ProductSkuSourceBindingResult">
+        select *
+        from product_sku_source_binding
+        where source_sku_group_key = #{sourceSkuGroupKey}
+          and binding_status = 'ACTIVE'
+        limit 1
+    </select>
+
+    <select id="selectOfficialWarehousesBySourceDimensionGroup" resultMap="ProductSpuWarehouseResult">
+        select distinct
+               null as id,
+               null as spu_id,
+               w.warehouse_id,
+               w.warehouse_code,
+               w.warehouse_name,
+               w.warehouse_kind,
+               w.settlement_currency,
+               null as seller_id,
+               '' as create_by,
+               null as create_time
+        from source_product_warehouse_detail wd
+        inner join upstream_system_warehouse_pairing p
+                on p.connection_code = wd.connection_code
+               and p.pairing_role = 'FULFILLMENT'
+               and p.status = 'ACTIVE'
+        inner join warehouse w
+                on w.warehouse_code = p.system_warehouse_code
+               and w.warehouse_kind = 'official'
+               and w.status = '0'
+        where wd.repository_scope = 'OFFICIAL_MASTER'
+          and wd.status = 'ACTIVE'
+          and wd.source_dimension_group_key = #{sourceDimensionGroupKey}
+        order by w.warehouse_id asc
+    </select>
+
+    <select id="selectSourceConnectionCodesByDimensionGroup" resultType="string">
+        select distinct connection_code
+        from source_product_warehouse_detail
+        where repository_scope = 'OFFICIAL_MASTER'
+          and status = 'ACTIVE'
+          and source_dimension_group_key = #{sourceDimensionGroupKey}
+        order by connection_code asc
+    </select>
+
+    <insert id="insertSourceBinding" parameterType="ProductSkuSourceBinding" useGeneratedKeys="true" keyProperty="bindingId">
+        insert into product_sku_source_binding(
+            spu_id, sku_id, seller_id, system_sku_code, source_scope,
+            source_sku_group_key, source_dimension_group_key, master_sku, master_product_name_snapshot,
+            system_sku_name_snapshot, seller_name_snapshot, source_payload_hash, wms_payload_hash,
+            measure_length_cm, measure_width_cm, measure_height_cm, measure_weight_kg, measure_source,
+            currency_code, source_warehouse_names, source_warehouse_count, binding_status, lock_status,
+            locked_time, locked_by, release_reason, replace_reason, active_sku_key, active_source_key,
+            create_by, create_time, update_by, update_time, remark
+        ) values (
+            #{spuId}, #{skuId}, #{sellerId}, #{systemSkuCode}, #{sourceScope},
+            #{sourceSkuGroupKey}, #{sourceDimensionGroupKey}, #{masterSku}, #{masterProductNameSnapshot},
+            #{systemSkuNameSnapshot}, #{sellerNameSnapshot}, #{sourcePayloadHash}, #{wmsPayloadHash},
+            #{measureLengthCm}, #{measureWidthCm}, #{measureHeightCm}, #{measureWeightKg}, #{measureSource},
+            #{currencyCode}, #{sourceWarehouseNames}, #{sourceWarehouseCount}, #{bindingStatus}, #{lockStatus},
+            #{lockedTime}, #{lockedBy}, #{releaseReason}, #{replaceReason}, #{activeSkuKey}, #{activeSourceKey},
+            #{createBy}, sysdate(), #{updateBy}, sysdate(), #{remark}
+        )
+    </insert>
+
+    <update id="updateActiveSourceBinding" parameterType="ProductSkuSourceBinding">
+        update product_sku_source_binding
+        set seller_id = #{sellerId},
+            system_sku_code = #{systemSkuCode},
+            source_scope = #{sourceScope},
+            source_sku_group_key = #{sourceSkuGroupKey},
+            source_dimension_group_key = #{sourceDimensionGroupKey},
+            master_sku = #{masterSku},
+            master_product_name_snapshot = #{masterProductNameSnapshot},
+            system_sku_name_snapshot = #{systemSkuNameSnapshot},
+            seller_name_snapshot = #{sellerNameSnapshot},
+            source_payload_hash = #{sourcePayloadHash},
+            wms_payload_hash = #{wmsPayloadHash},
+            measure_length_cm = #{measureLengthCm},
+            measure_width_cm = #{measureWidthCm},
+            measure_height_cm = #{measureHeightCm},
+            measure_weight_kg = #{measureWeightKg},
+            measure_source = #{measureSource},
+            currency_code = #{currencyCode},
+            source_warehouse_names = #{sourceWarehouseNames},
+            source_warehouse_count = #{sourceWarehouseCount},
+            lock_status = #{lockStatus},
+            locked_time = #{lockedTime},
+            locked_by = #{lockedBy},
+            active_sku_key = #{activeSkuKey},
+            active_source_key = #{activeSourceKey},
+            update_by = #{updateBy},
+            update_time = sysdate(),
+            remark = #{remark}
+        where binding_id = #{bindingId}
+          and binding_status = 'ACTIVE'
+    </update>
+
+    <update id="markSourceBindingReplaced">
+        update product_sku_source_binding
+        set binding_status = 'REPLACED',
+            replace_reason = #{reason},
+            active_sku_key = null,
+            active_source_key = null,
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where binding_id = #{bindingId}
+          and binding_status = 'ACTIVE'
+    </update>
+
+    <update id="releaseActiveSourceBindingBySkuId">
+        update product_sku_source_binding
+        set binding_status = 'RELEASED',
+            release_reason = #{reason},
+            active_sku_key = null,
+            active_source_key = null,
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where sku_id = #{skuId}
+          and binding_status = 'ACTIVE'
+    </update>
+
+    <update id="lockActiveSourceBindingBySkuId">
+        update product_sku_source_binding
+        set lock_status = 'LOCKED',
+            locked_time = sysdate(),
+            locked_by = #{lockedBy},
+            update_by = #{lockedBy},
+            update_time = sysdate()
+        where sku_id = #{skuId}
+          and binding_status = 'ACTIVE'
+          and lock_status &lt;&gt; 'LOCKED'
+    </update>
+
+    <delete id="deleteUpstreamSkuPairingsBySystemSku">
+        delete from upstream_system_sku_pairing
+        where system_sku = #{systemSku}
+    </delete>
+
+    <insert id="upsertUpstreamSkuPairingsForBinding" parameterType="ProductSkuSourceBinding">
+        insert into upstream_system_sku_pairing(
+            connection_code, master_sku, system_sku, system_sku_name, customer_name,
+            create_by, create_time, update_by, update_time, remark
+        )
+        select distinct
+               wd.connection_code,
+               wd.master_sku,
+               #{systemSkuCode},
+               #{systemSkuNameSnapshot},
+               #{sellerNameSnapshot},
+               #{updateBy},
+               sysdate(),
+               #{updateBy},
+               sysdate(),
+               '商城商品来源SKU绑定同步'
+        from source_product_warehouse_detail wd
+        where wd.repository_scope = 'OFFICIAL_MASTER'
+          and wd.status = 'ACTIVE'
+          and wd.source_dimension_group_key = #{sourceDimensionGroupKey}
+        on duplicate key update
+            system_sku = values(system_sku),
+            system_sku_name = values(system_sku_name),
+            customer_name = values(customer_name),
+            update_by = values(update_by),
+            update_time = sysdate(),
+            remark = values(remark)
+    </insert>
 </mapper>

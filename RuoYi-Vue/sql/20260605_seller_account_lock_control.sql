@@ -60,6 +60,8 @@ end//
 drop procedure if exists assert_sys_menu_slot//
 create procedure assert_sys_menu_slot(
   in p_menu_id bigint,
+  in p_parent_id bigint,
+  in p_menu_type char(1),
   in p_path varchar(200),
   in p_component varchar(255),
   in p_route_name varchar(50),
@@ -72,7 +74,9 @@ begin
     from sys_menu
     where menu_id = p_menu_id
       and (
-        coalesce(path, '') <> coalesce(p_path, '')
+        parent_id <> p_parent_id
+        or coalesce(menu_type, '') <> coalesce(p_menu_type, '')
+        or coalesce(path, '') <> coalesce(p_path, '')
         or coalesce(component, '') <> coalesce(p_component, '')
         or coalesce(route_name, '') <> coalesce(p_route_name, '')
         or coalesce(perms, '') <> coalesce(p_perms, '')
@@ -156,7 +160,7 @@ where not exists (
       and d.dict_value = seed.dict_value
 );
 
-call assert_sys_menu_slot(2322, '#', '', '', 'seller:admin:account:lock', 'sys_menu 2322 is occupied by another menu');
+call assert_sys_menu_slot(2322, 2011, 'F', '#', '', '', 'seller:admin:account:lock', 'sys_menu 2322 is occupied by another menu');
 call assert_sys_menu_signature_available(2322, '#', '', '', 'seller:admin:account:lock', 'seller account lock menu signature is already used by another menu');
 
 insert into sys_menu

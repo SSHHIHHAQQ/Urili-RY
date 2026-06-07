@@ -71,6 +71,45 @@ public class TerminalAccountIsolationTest
         }
     }
 
+    @Test
+    public void terminalAccountMappersMustKeepSubjectScopeWithoutAccountOnlyLookup() throws IOException
+    {
+        Path backendRoot = findBackendRoot();
+        List<String> violations = new ArrayList<>();
+
+        assertContains(backendRoot.resolve("seller/src/main/java/com/ruoyi/seller/mapper/SellerMapper.java"),
+                "selectSellerAccountByIdAndSellerId(@Param(\"sellerId\") Long sellerId", violations);
+        assertContains(backendRoot.resolve("seller/src/main/resources/mapper/seller/SellerMapper.xml"),
+                "where a.seller_id = #{sellerId}", violations);
+        assertNotContains(backendRoot.resolve("seller/src/main/java/com/ruoyi/seller/mapper/SellerMapper.java"),
+                "selectSellerAccountById(Long sellerAccountId)", violations);
+        assertNotContains(backendRoot.resolve("seller/src/main/resources/mapper/seller/SellerMapper.xml"),
+                "<select id=\"selectSellerAccountById\"", violations);
+        scanForbiddenMapperCall(
+                backendRoot.resolve("seller/src/main/java"),
+                "sellerMapper.selectSellerAccountById(",
+                backendRoot, violations);
+
+        assertContains(backendRoot.resolve("buyer/src/main/java/com/ruoyi/buyer/mapper/BuyerMapper.java"),
+                "selectBuyerAccountByIdAndBuyerId(@Param(\"buyerId\") Long buyerId", violations);
+        assertContains(backendRoot.resolve("buyer/src/main/resources/mapper/buyer/BuyerMapper.xml"),
+                "where a.buyer_id = #{buyerId}", violations);
+        assertNotContains(backendRoot.resolve("buyer/src/main/java/com/ruoyi/buyer/mapper/BuyerMapper.java"),
+                "selectBuyerAccountById(Long buyerAccountId)", violations);
+        assertNotContains(backendRoot.resolve("buyer/src/main/resources/mapper/buyer/BuyerMapper.xml"),
+                "<select id=\"selectBuyerAccountById\"", violations);
+        scanForbiddenMapperCall(
+                backendRoot.resolve("buyer/src/main/java"),
+                "buyerMapper.selectBuyerAccountById(",
+                backendRoot, violations);
+
+        if (!violations.isEmpty())
+        {
+            fail("terminal account mapper accountId-only lookup is forbidden in production service code:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
     private void collectForbiddenReferences(Path backendRoot, String module, String sourceDirectory,
             List<String> violations) throws IOException
     {
@@ -99,6 +138,41 @@ public class TerminalAccountIsolationTest
         if (!source.contains(expected))
         {
             violations.add(findBackendRoot().relativize(path) + " must contain " + expected);
+        }
+    }
+
+    private void assertNotContains(Path path, String forbidden, List<String> violations) throws IOException
+    {
+        String source = Files.readString(path, StandardCharsets.UTF_8);
+        if (source.contains(forbidden))
+        {
+            violations.add(findBackendRoot().relativize(path) + " must not contain " + forbidden);
+        }
+    }
+
+    private void scanForbiddenMapperCall(Path sourceRoot, String mapperCall, Path backendRoot, List<String> violations)
+            throws IOException
+    {
+        try (Stream<Path> paths = Files.walk(sourceRoot))
+        {
+            for (Path path : paths.filter(path -> path.toString().endsWith(".java")).toList())
+            {
+                assertMapperCallAbsent(path, mapperCall, backendRoot, violations);
+            }
+        }
+    }
+
+    private void assertMapperCallAbsent(Path path, String mapperCall, Path backendRoot, List<String> violations)
+            throws IOException
+    {
+        List<String> lines = Files.readAllLines(path, StandardCharsets.UTF_8);
+        for (int i = 0; i < lines.size(); i++)
+        {
+            if (!lines.get(i).contains(mapperCall))
+            {
+                continue;
+            }
+            violations.add(backendRoot.relativize(path) + ":" + (i + 1) + " -> " + mapperCall);
         }
     }
 

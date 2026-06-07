@@ -35,6 +35,12 @@
             <artifactId>warehouse</artifactId>
         </dependency>
 
+        <!-- 来源商品和来源库存读模型刷新 -->
+        <dependency>
+            <groupId>com.ruoyi</groupId>
+            <artifactId>integration</artifactId>
+        </dependency>
+
         <!-- 单元测试 -->
         <dependency>
             <groupId>junit</groupId>

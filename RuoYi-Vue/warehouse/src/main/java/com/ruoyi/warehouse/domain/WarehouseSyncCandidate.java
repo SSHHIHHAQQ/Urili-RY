@@ -12,6 +12,7 @@ public class WarehouseSyncCandidate
     private String countryCode;
     private String status;
     private Boolean paired;
+    private String pairingRole;
     private String systemWarehouseCode;
     private String systemWarehouseName;
 
@@ -83,6 +84,16 @@ public class WarehouseSyncCandidate
     public void setPaired(Boolean paired)
     {
         this.paired = paired;
+    }
+
+    public String getPairingRole()
+    {
+        return pairingRole;
+    }
+
+    public void setPairingRole(String pairingRole)
+    {
+        this.pairingRole = pairingRole;
     }
 
     public String getSystemWarehouseCode()

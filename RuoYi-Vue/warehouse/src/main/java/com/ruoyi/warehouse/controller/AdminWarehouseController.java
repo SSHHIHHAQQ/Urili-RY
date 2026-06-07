@@ -18,6 +18,7 @@ import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.core.page.TableDataInfo;
 import com.ruoyi.common.enums.BusinessType;
 import com.ruoyi.warehouse.domain.Warehouse;
+import com.ruoyi.warehouse.domain.request.OfficialWarehousePairingRequest;
 import com.ruoyi.warehouse.domain.request.OfficialWarehouseSyncRequest;
 import com.ruoyi.warehouse.domain.request.WarehouseStatusRequest;
 import com.ruoyi.warehouse.service.IWarehouseService;
@@ -26,7 +27,7 @@ import com.ruoyi.warehouse.service.IWarehouseService;
  * 管理端仓库管理。
  */
 @RestController
-@RequestMapping("/warehouse")
+@RequestMapping("/warehouse/admin")
 public class AdminWarehouseController extends BaseController
 {
     @Autowired
@@ -93,6 +94,32 @@ public class AdminWarehouseController extends BaseController
     public AjaxResult syncOfficial(@Validated @RequestBody OfficialWarehouseSyncRequest request)
     {
         return toAjax(warehouseService.syncOfficialWarehouse(request));
+    }
+
+    @PreAuthorize("@ss.hasPermi('warehouse:official:sync')")
+    @GetMapping("/official/pairing-connections")
+    public AjaxResult pairingConnections(@RequestParam("pairingRole") String pairingRole,
+        @RequestParam(value = "keyword", required = false) String keyword)
+    {
+        return success(warehouseService.selectPairingConnections(pairingRole, keyword));
+    }
+
+    @PreAuthorize("@ss.hasPermi('warehouse:official:sync')")
+    @GetMapping("/official/pairing-candidates")
+    public AjaxResult pairingCandidates(@RequestParam("pairingRole") String pairingRole,
+        @RequestParam("connectionCode") String connectionCode,
+        @RequestParam(value = "keyword", required = false) String keyword)
+    {
+        return success(warehouseService.selectPairingCandidates(pairingRole, connectionCode, keyword));
+    }
+
+    @PreAuthorize("@ss.hasPermi('warehouse:official:sync')")
+    @Log(title = "官方仓库配对", businessType = BusinessType.UPDATE)
+    @PostMapping("/official/{warehouseId}/pairing")
+    public AjaxResult pairOfficial(@PathVariable("warehouseId") Long warehouseId,
+        @Validated @RequestBody OfficialWarehousePairingRequest request)
+    {
+        return toAjax(warehouseService.pairOfficialWarehouse(warehouseId, request));
     }
 
     @PreAuthorize("@ss.hasPermi('warehouse:thirdParty:list')")

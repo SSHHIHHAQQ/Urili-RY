@@ -17,27 +17,60 @@ const directLoginPageJsFile = path.join(
   'DirectLogin',
   'index.js',
 );
-const portalServiceFile = path.join(
-  root,
-  'src',
-  'services',
-  'portal',
-  'session.ts',
-);
+const portalServiceFiles = [
+  path.join(root, 'src', 'services', 'portal', 'session.ts'),
+  path.join(root, 'src', 'services', 'portal', 'session.js'),
+];
 const appFile = path.join(root, 'src', 'app.tsx');
 const appJsFile = path.join(root, 'src', 'app.js');
+const accessFile = path.join(root, 'src', 'access.ts');
+const accessJsFile = path.join(root, 'src', 'access.js');
 const requestErrorConfigFile = path.join(root, 'src', 'requestErrorConfig.ts');
 const requestErrorConfigJsFile = path.join(root, 'src', 'requestErrorConfig.js');
 const proxyConfigFile = path.join(root, 'config', 'proxy.ts');
+const proxyConfigJsFile = path.join(root, 'config', 'proxy.js');
 const routeConfigFiles = [
   path.join(root, 'config', 'routes.ts'),
   path.join(root, 'config', 'routes.js'),
 ];
 const portalRequestFile = path.join(root, 'src', 'utils', 'portalRequest.ts');
 const portalRequestJsFile = path.join(root, 'src', 'utils', 'portalRequest.js');
-const portalPathsFile = path.join(root, 'src', 'utils', 'portalPaths.ts');
+const portalPathsFiles = [
+  path.join(root, 'src', 'utils', 'portalPaths.ts'),
+  path.join(root, 'src', 'utils', 'portalPaths.js'),
+];
+const remoteMenuRouteGuardFiles = [
+  path.join(root, 'src', 'wrappers', 'RemoteMenuRouteGuard.tsx'),
+  path.join(root, 'src', 'wrappers', 'RemoteMenuRouteGuard.js'),
+];
+const adminSessionFile = path.join(root, 'src', 'services', 'session.ts');
+const adminSessionJsFile = path.join(root, 'src', 'services', 'session.js');
+const remoteMenuStorageFiles = [
+  path.join(root, 'src', 'utils', 'remoteMenuStorage.ts'),
+  path.join(root, 'src', 'utils', 'remoteMenuStorage.js'),
+];
 const portalTerminalFile = path.join(root, 'src', 'pages', 'Portal', 'terminal.ts');
 const portalTerminalJsFile = path.join(root, 'src', 'pages', 'Portal', 'terminal.js');
+const portalLoginPageFile = path.join(root, 'src', 'pages', 'Portal', 'Login', 'index.tsx');
+const portalLoginPageJsFile = path.join(root, 'src', 'pages', 'Portal', 'Login', 'index.js');
+const portalHomePageFile = path.join(root, 'src', 'pages', 'Portal', 'Home', 'index.tsx');
+const portalHomePageJsFile = path.join(root, 'src', 'pages', 'Portal', 'Home', 'index.js');
+const sellerPageFile = path.join(root, 'src', 'pages', 'Seller', 'index.tsx');
+const buyerPageFile = path.join(root, 'src', 'pages', 'Buyer', 'index.tsx');
+const partnerManagementPageFile = path.join(
+  root,
+  'src',
+  'components',
+  'PartnerManagement',
+  'PartnerManagementPage.tsx',
+);
+const partnerAccountModalFile = path.join(
+  root,
+  'src',
+  'components',
+  'PartnerManagement',
+  'PartnerAccountModal.tsx',
+);
 const portalTypeFile = path.join(
   root,
   'src',
@@ -115,6 +148,30 @@ function extractInterfaceFieldNames(block) {
 
 const violations = [];
 
+function assertFileExists(file) {
+  const relativePath = path.relative(root, file).replaceAll(path.sep, '/');
+  if (!fs.existsSync(file)) {
+    violations.push(`${relativePath} is missing`);
+    return null;
+  }
+  return {
+    relativePath,
+    source: read(file),
+  };
+}
+
+function assertIncludes(source, relativePath, expected, description) {
+  if (!source.includes(expected)) {
+    violations.push(`${relativePath} must ${description} with ${expected}`);
+  }
+}
+
+function assertMatches(source, relativePath, pattern, description) {
+  if (!pattern.test(source)) {
+    violations.push(`${relativePath} must ${description}`);
+  }
+}
+
 for (const file of sourceRoots.flatMap(walk)) {
   const relativePath = path.relative(root, file).replaceAll(path.sep, '/');
   const source = read(file);
@@ -142,7 +199,12 @@ for (const file of sourceRoots.flatMap(walk)) {
   }
 }
 
-if (fs.existsSync(portalServiceFile)) {
+for (const portalServiceFile of portalServiceFiles) {
+  const relativePath = path.relative(root, portalServiceFile).replaceAll(path.sep, '/');
+  if (!fs.existsSync(portalServiceFile)) {
+    violations.push(`${relativePath} is missing`);
+    continue;
+  }
   const source = read(portalServiceFile);
   const requestCount = [...source.matchAll(/\brequest(?:<[^;]+?>)?\s*\(/g)]
     .length;
@@ -150,22 +212,22 @@ if (fs.existsSync(portalServiceFile)) {
     .length;
   if (requestCount !== isTokenFalseCount) {
     violations.push(
-      `src/services/portal/session.ts must set isToken:false on every portal request; request=${requestCount}, isToken:false=${isTokenFalseCount}`,
+      `${relativePath} must set isToken:false on every portal request; request=${requestCount}, isToken:false=${isTokenFalseCount}`,
     );
   }
   if (!/\bfunction\s+sanitizePortalQueryParams\b/.test(source)) {
     violations.push(
-      'src/services/portal/session.ts must define sanitizePortalQueryParams for portal query params',
+      `${relativePath} must define sanitizePortalQueryParams for portal query params`,
     );
   }
   if (!/PORTAL_SCOPE_PARAM_KEYS[\s\S]*['"`]terminal['"`]/.test(source)) {
     violations.push(
-      'src/services/portal/session.ts must sanitize terminal from portal query params',
+      `${relativePath} must sanitize terminal from portal query params`,
     );
   }
   if (/\n\s*params\s*,/.test(source)) {
     violations.push(
-      'src/services/portal/session.ts must not pass raw params into portal requests',
+      `${relativePath} must not pass raw params into portal requests`,
     );
   }
   for (const fnName of portalQueryFunctions) {
@@ -174,12 +236,10 @@ if (fs.existsSync(portalServiceFile)) {
     );
     if (!functionPattern.test(source)) {
       violations.push(
-        `${fnName} must sanitize portal query params before request`,
+        `${relativePath} ${fnName} must sanitize portal query params before request`,
       );
     }
   }
-} else {
-  violations.push('src/services/portal/session.ts is missing');
 }
 
 for (const file of [directLoginPageFile, directLoginPageJsFile]) {
@@ -191,7 +251,9 @@ for (const file of [directLoginPageFile, directLoginPageJsFile]) {
   const source = read(file);
   for (const expected of [
     'PORTAL_DIRECT_LOGIN_READY_MESSAGE',
+    'PORTAL_DIRECT_LOGIN_RESULT_MESSAGE',
     'PORTAL_DIRECT_LOGIN_TOKEN_MESSAGE',
+    'postConsumeResult',
     "window.addEventListener('message'",
     'window.opener?.postMessage',
     'event.source !== window.opener',
@@ -229,7 +291,12 @@ for (const file of [directLoginPageFile, directLoginPageJsFile]) {
   }
 }
 
-if (fs.existsSync(portalPathsFile)) {
+for (const portalPathsFile of portalPathsFiles) {
+  const relativePath = path.relative(root, portalPathsFile).replaceAll(path.sep, '/');
+  if (!fs.existsSync(portalPathsFile)) {
+    violations.push(`${relativePath} is missing`);
+    continue;
+  }
   const source = read(portalPathsFile);
   for (const expected of [
     '/seller/login',
@@ -238,11 +305,188 @@ if (fs.existsSync(portalPathsFile)) {
     'isPortalRoute',
   ]) {
     if (!source.includes(expected)) {
-      violations.push(`src/utils/portalPaths.ts must define portal login routing with ${expected}`);
+      violations.push(`${relativePath} must define portal login routing with ${expected}`);
     }
   }
-} else {
-  violations.push('src/utils/portalPaths.ts is missing');
+}
+
+for (const remoteMenuRouteGuardFile of remoteMenuRouteGuardFiles) {
+  const file = assertFileExists(remoteMenuRouteGuardFile);
+  if (!file) {
+    continue;
+  }
+  for (const expected of [
+    'STATIC_ROUTE_AUTHORITIES',
+    "'/seller': ['seller:admin:list']",
+    "'/buyer': ['buyer:admin:list']",
+    'PUBLIC_PORTAL_ROUTE_PATHS',
+    '/seller/login',
+    '/buyer/login',
+    '/seller/direct-login',
+    '/buyer/direct-login',
+    '/seller/portal',
+    '/buyer/portal',
+    'return undefined;',
+    'getStaticRouteAuthority(location.pathname)',
+    'route?.authority ?? getStaticRouteAuthority(location.pathname) ?? []',
+  ]) {
+    assertIncludes(
+      file.source,
+      file.relativePath,
+      expected,
+      'keep terminal route fallback and public portal route exemption',
+    );
+  }
+}
+
+const adminSession = assertFileExists(adminSessionFile);
+if (adminSession) {
+  for (const expected of [
+    'getRemoteMenuStorageKey(scope)',
+    'window.sessionStorage.getItem(storageKey)',
+    'window.sessionStorage.setItem(storageKey, JSON.stringify(data))',
+    'window.sessionStorage.removeItem(storageKey)',
+    'permissions.length > 0 && permissions.some',
+    "status: '403'",
+    'createGuardedMenuElement(pagePath, menuItem.authority)',
+  ]) {
+    assertIncludes(
+      adminSession.source,
+      adminSession.relativePath,
+      expected,
+      'keep remote menu scope storage and fail-closed route guard',
+    );
+  }
+}
+
+const adminSessionJs = assertFileExists(adminSessionJsFile);
+if (adminSessionJs) {
+  assertIncludes(
+    adminSessionJs.source,
+    adminSessionJs.relativePath,
+    "export * from './session.ts';",
+    'delegate to the guarded TS session implementation',
+  );
+}
+
+for (const remoteMenuStorageFile of remoteMenuStorageFiles) {
+  const file = assertFileExists(remoteMenuStorageFile);
+  if (!file) {
+    continue;
+  }
+  for (const expected of [
+    'REMOTE_MENU_SCOPES',
+    "['admin', 'seller', 'buyer']",
+    'admin_remote_menu:${scope}',
+  ]) {
+    assertIncludes(
+      file.source,
+      file.relativePath,
+      expected,
+      'keep remote menu cache keys scoped by terminal',
+    );
+  }
+}
+
+const portalLoginPage = assertFileExists(portalLoginPageFile);
+if (portalLoginPage) {
+  for (const expected of [
+    'getPortalTerminal(redirect) !== terminal',
+    'redirect === PORTAL_META[terminal].loginPath',
+    'PORTAL_META[terminal].homePath',
+    'persistPortalLogin(response.data, terminal)',
+    'history.replace(resolveRedirect(location.search, terminal))',
+  ]) {
+    assertIncludes(
+      portalLoginPage.source,
+      portalLoginPage.relativePath,
+      expected,
+      'keep portal login redirect and terminal match checks',
+    );
+  }
+}
+
+const portalLoginPageJs = assertFileExists(portalLoginPageJsFile);
+if (portalLoginPageJs) {
+  assertIncludes(
+    portalLoginPageJs.source,
+    portalLoginPageJs.relativePath,
+    "export { default } from './index.tsx';",
+    'delegate to the guarded TSX login page implementation',
+  );
+}
+
+const portalHomePage = assertFileExists(portalHomePageFile);
+if (portalHomePage) {
+  for (const expected of [
+    'getTerminalAccessToken(terminal)',
+    'history.replace(PORTAL_META[terminal].loginPath)',
+    'loadData(terminal);',
+    'loadSessions(terminal);',
+    'clearPortalLogin(currentTerminal);',
+  ]) {
+    assertIncludes(
+      portalHomePage.source,
+      portalHomePage.relativePath,
+      expected,
+      'keep portal home token gate and terminal-scoped recovery',
+    );
+  }
+}
+
+const portalHomePageJs = assertFileExists(portalHomePageJsFile);
+if (portalHomePageJs) {
+  assertIncludes(
+    portalHomePageJs.source,
+    portalHomePageJs.relativePath,
+    "export { default } from './index.tsx';",
+    'delegate to the guarded TSX home page implementation',
+  );
+}
+
+const sellerPage = assertFileExists(sellerPageFile);
+if (sellerPage) {
+  for (const expected of [
+    "moduleKey: 'seller'",
+    'directLogin: createAdminSellerDirectLogin',
+    'directLoginAccount: createAdminSellerAccountDirectLogin',
+  ]) {
+    assertIncludes(
+      sellerPage.source,
+      sellerPage.relativePath,
+      expected,
+      'keep seller direct-login terminal binding',
+    );
+  }
+}
+
+const buyerPage = assertFileExists(buyerPageFile);
+if (buyerPage) {
+  for (const expected of [
+    "moduleKey: 'buyer'",
+    'directLogin: createAdminBuyerDirectLogin',
+    'directLoginAccount: createAdminBuyerAccountDirectLogin',
+  ]) {
+    assertIncludes(
+      buyerPage.source,
+      buyerPage.relativePath,
+      expected,
+      'keep buyer direct-login terminal binding',
+    );
+  }
+}
+
+for (const filePath of [partnerManagementPageFile, partnerAccountModalFile]) {
+  const file = assertFileExists(filePath);
+  if (!file) {
+    continue;
+  }
+  assertIncludes(
+    file.source,
+    file.relativePath,
+    'await openPortalDirectLoginWindow(resp.data, config.moduleKey)',
+    'wait for portal direct-login consume ack before reporting success',
+  );
 }
 
 for (const routeConfigFile of routeConfigFiles) {
@@ -279,10 +523,14 @@ for (const directLoginMessageFile of directLoginMessageFiles) {
   }
   const source = read(directLoginMessageFile);
   for (const expected of [
+    'PORTAL_DIRECT_LOGIN_RESULT_MESSAGE',
     'resolveTargetOrigin',
+    'isResultMessage',
     'const targetOrigin = resolveTargetOrigin(result.loginUrl)',
     'event.origin !== targetOrigin',
     'popup.postMessage(payload, targetOrigin)',
+    'DIRECT_LOGIN_CONSUME_TIMEOUT',
+    'rejectBridge',
   ]) {
     if (!source.includes(expected)) {
       violations.push(
@@ -462,9 +710,14 @@ for (const file of [appFile, appJsFile, requestErrorConfigFile, requestErrorConf
       `${relativePath} must clear only the matched portal terminal token on portal 401`,
     );
   }
-  if (!/history\.replace\s*\(\s*getPortalLoginPath\s*\(\s*portalTerminal\s*\)\s*\)/.test(source)) {
+  if (!/redirectToPortalLogin\s*\(\s*portalTerminal\s*\)/.test(source)) {
     violations.push(
-      `${relativePath} must redirect portal 401 to the matched terminal login after clearing the matched portal token`,
+      `${relativePath} must redirect portal 401 through redirectToPortalLogin after clearing the matched portal token`,
+    );
+  }
+  if (!/history\.replace\s*\(\s*`\$\{loginPath\}\?redirect=\$\{encodeURIComponent\(redirect\)\}`\s*\)/.test(source)) {
+    violations.push(
+      `${relativePath} must preserve current route in portal 401 redirect query`,
     );
   }
   if (source.includes('?token=123')) {
@@ -472,16 +725,58 @@ for (const file of [appFile, appJsFile, requestErrorConfigFile, requestErrorConf
   }
 }
 
-if (fs.existsSync(proxyConfigFile)) {
-  const source = read(proxyConfigFile);
+for (const file of [appFile, appJsFile]) {
+  const relativePath = path.relative(root, file).replaceAll(path.sep, '/');
+  if (!fs.existsSync(file)) {
+    continue;
+  }
+  const source = read(file);
+  if (
+    !/if\s*\(\s*isUnauthorizedCode\s*\(\s*getResponseCode\s*\(\s*response\?\.data\s*\)\s*\)\s*\)\s*\{[\s\S]*?handleUnauthorizedResponse\s*\(\s*response\?\.config\?\.url\s*\)\s*;[\s\S]*?return\s+Promise\.reject\s*\(\s*response\s*\)\s*;[\s\S]*?\}/.test(source)
+  ) {
+    violations.push(
+      `${relativePath} must reject body-level 401 responses after portal/admin redirect handling`,
+    );
+  }
+}
+
+for (const proxyFile of [proxyConfigFile, proxyConfigJsFile]) {
+  const relativePath = path.relative(root, proxyFile).replaceAll(path.sep, '/');
+  if (!fs.existsSync(proxyFile)) {
+    violations.push(`${relativePath} is missing`);
+    continue;
+  }
+  const source = read(proxyFile);
   if (source.includes('http://localhost:8080')) {
-    violations.push('config/proxy.ts must not hardcode localhost:8080');
+    violations.push(`${relativePath} must not hardcode localhost:8080`);
   }
   if (!source.includes('API_PROXY_TARGET')) {
-    violations.push('config/proxy.ts must allow API_PROXY_TARGET override');
+    violations.push(`${relativePath} must allow API_PROXY_TARGET override`);
   }
-} else {
-  violations.push('config/proxy.ts is missing');
+}
+
+for (const accessTokenFile of [accessFile, accessJsFile]) {
+  const relativePath = path.relative(root, accessTokenFile).replaceAll(path.sep, '/');
+  if (!fs.existsSync(accessTokenFile)) {
+    violations.push(`${relativePath} is missing`);
+    continue;
+  }
+  const source = read(accessTokenFile);
+  for (const expected of [
+    'SESSION_TOKEN_KEYS',
+    'seller_access_token',
+    'buyer_access_token',
+    'getTerminalSessionTokenKeys',
+    'setTerminalSessionToken',
+    'getTerminalAccessToken',
+    'clearTerminalSessionToken',
+    "setTerminalSessionToken('admin'",
+    "clearTerminalSessionToken('admin'",
+  ]) {
+    if (!source.includes(expected)) {
+      violations.push(`${relativePath} must keep terminal token isolation support for ${expected}`);
+    }
+  }
 }
 
 if (violations.length > 0) {

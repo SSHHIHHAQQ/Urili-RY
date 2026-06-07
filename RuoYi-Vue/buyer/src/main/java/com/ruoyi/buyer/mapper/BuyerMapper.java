@@ -31,7 +31,8 @@ public interface BuyerMapper
 
     public List<BuyerAccount> selectBuyerAccountList(@Param("buyerId") Long buyerId);
 
-    public BuyerAccount selectBuyerAccountById(Long buyerAccountId);
+    public BuyerAccount selectBuyerAccountByIdAndBuyerId(@Param("buyerId") Long buyerId,
+            @Param("buyerAccountId") Long buyerAccountId);
 
     public BuyerAccount selectBuyerAccountByUserName(String userName);
 

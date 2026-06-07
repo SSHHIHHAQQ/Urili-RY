@@ -29,6 +29,8 @@ public class PortalDirectLoginTicketSqlContractTest
                 "create procedure assert_no_invalid_direct_login_ticket_rows");
         requireContains(violations, path.getFileName().toString(), sql, "create procedure assert_column_exists");
         requireContains(violations, path.getFileName().toString(), sql,
+                "create procedure modify_portal_direct_login_ticket_columns_if_needed");
+        requireContains(violations, path.getFileName().toString(), sql,
                 "call assert_column_exists('portal_direct_login_ticket', 'ticket_id'");
         requireNotContains(violations, path.getFileName().toString(), sql,
                 "update portal_direct_login_ticket set token_hash = concat('legacy-', ticket_id)");
@@ -43,9 +45,25 @@ public class PortalDirectLoginTicketSqlContractTest
         requireContains(violations, path.getFileName().toString(), sql,
                 "call assert_no_invalid_direct_login_ticket_rows()");
         requireContains(violations, path.getFileName().toString(), sql,
+                "portal_direct_login_ticket expected columns are required before ticket column modify");
+        requireContains(violations, path.getFileName().toString(), sql,
+                "lower(c.data_type) <> expected.expected_type");
+        requireContains(violations, path.getFileName().toString(), sql,
+                "coalesce(c.character_maximum_length, -1) <> expected.expected_length");
+        requireContains(violations, path.getFileName().toString(), sql,
+                "c.is_nullable <> expected.expected_nullable");
+        requireContains(violations, path.getFileName().toString(), sql,
+                "coalesce(c.column_default, '<NULL>') <> coalesce(expected.expected_default, '<NULL>')");
+        requireContains(violations, path.getFileName().toString(), sql,
                 "modify token_hash varchar(64) not null");
         requireContains(violations, path.getFileName().toString(), sql,
                 "modify expire_time datetime not null");
+        requireContains(violations, path.getFileName().toString(), sql,
+                "call modify_portal_direct_login_ticket_columns_if_needed()");
+        requireContains(violations, path.getFileName().toString(), sql,
+                "drop procedure if exists modify_portal_direct_login_ticket_columns_if_needed");
+        requireNotContains(violations, path.getFileName().toString(), sql,
+                "alter table portal_direct_login_ticket\n  modify terminal varchar(20) not null");
 
         for (String column : Arrays.asList(
                 "terminal",
@@ -87,6 +105,12 @@ public class PortalDirectLoginTicketSqlContractTest
                 "call assert_index_definition('portal_direct_login_ticket', 'uk_portal_direct_login_ticket_hash'");
         requireContains(violations, path.getFileName().toString(), sql,
                 "call assert_index_definition('portal_direct_login_ticket', 'idx_portal_direct_login_ticket_target'");
+        assertAppearsBefore(violations, path.getFileName().toString(), sql,
+                "call assert_no_invalid_direct_login_ticket_rows()",
+                "call modify_portal_direct_login_ticket_columns_if_needed()");
+        assertAppearsBefore(violations, path.getFileName().toString(), sql,
+                "call modify_portal_direct_login_ticket_columns_if_needed()",
+                "call recreate_index_if_mismatch('portal_direct_login_ticket', 'uk_portal_direct_login_ticket_hash'");
 
         requireContains(violations, path.getFileName().toString(), sql,
                 "unique key uk_portal_direct_login_ticket_hash (token_hash)");
@@ -98,6 +122,57 @@ public class PortalDirectLoginTicketSqlContractTest
         if (!violations.isEmpty())
         {
             fail("portal_direct_login_ticket SQL must guard the audited ticket schema without dirty placeholders:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    @Test
+    public void directLoginTicketBootstrapSeedMustMatchAuditedTicketSchema() throws IOException
+    {
+        Path backendRoot = findBackendRoot();
+        Path path = backendRoot.resolve("sql/seller_buyer_management_seed.sql");
+        String sql = readText(path);
+        List<String> violations = new ArrayList<>();
+
+        requireContains(violations, path.getFileName().toString(), sql,
+                "create table if not exists portal_direct_login_ticket");
+        for (String column : Arrays.asList(
+                "ticket_id",
+                "terminal",
+                "target_subject_id",
+                "target_subject_no",
+                "target_account_id",
+                "target_user_name",
+                "acting_admin_id",
+                "acting_admin_name",
+                "reason",
+                "token_hash",
+                "expire_time",
+                "used_time",
+                "used_ip",
+                "status",
+                "create_by",
+                "create_time",
+                "update_by",
+                "update_time",
+                "remark"))
+        {
+            requireContains(violations, path.getFileName().toString(), sql, column);
+        }
+        requireContains(violations, path.getFileName().toString(), sql,
+                "unique key uk_portal_direct_login_ticket_hash (token_hash)");
+        requireContains(violations, path.getFileName().toString(), sql,
+                "key idx_portal_direct_login_ticket_target (terminal, target_subject_id, target_account_id)");
+        requireContains(violations, path.getFileName().toString(), sql,
+                "key idx_portal_direct_login_ticket_admin_time (acting_admin_id, create_time)");
+        requireContains(violations, path.getFileName().toString(), sql,
+                "key idx_portal_direct_login_ticket_status_expire (status, expire_time)");
+        requireContains(violations, path.getFileName().toString(), sql,
+                "comment = '管理端免密代入审计票据表'");
+
+        if (!violations.isEmpty())
+        {
+            fail("seller_buyer_management_seed.sql must bootstrap portal_direct_login_ticket with the audited schema:\n"
                     + String.join("\n", violations));
         }
     }
@@ -194,6 +269,17 @@ public class PortalDirectLoginTicketSqlContractTest
         if (source.contains(forbidden))
         {
             violations.add(fileName + " must not contain: " + forbidden);
+        }
+    }
+
+    private void assertAppearsBefore(List<String> violations, String fileName, String source, String before,
+            String after)
+    {
+        int beforeIndex = source.indexOf(before);
+        int afterIndex = source.indexOf(after);
+        if (beforeIndex < 0 || afterIndex < 0 || beforeIndex >= afterIndex)
+        {
+            violations.add(fileName + " must place `" + before + "` before `" + after + "`");
         }
     }
 

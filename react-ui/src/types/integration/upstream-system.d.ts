@@ -103,6 +103,7 @@ declare namespace API.Integration {
     upstreamWarehouseName: string;
     systemWarehouseCode: string;
     systemWarehouseName: string;
+    pairingRole?: 'FULFILLMENT' | 'QUOTE' | string;
     status?: string;
     createTime?: string;
     remark?: string;
@@ -112,6 +113,7 @@ declare namespace API.Integration {
     upstreamWarehouseCode: string;
     systemWarehouseCode: string;
     systemWarehouseName: string;
+    pairingRole?: 'FULFILLMENT' | 'QUOTE' | string;
     remark?: string;
   }
 
@@ -130,19 +132,25 @@ declare namespace API.Integration {
   export interface LogisticsChannelPairing {
     logisticsChannelPairingId: number;
     connectionCode: string;
+    systemWarehouseCode: string;
+    upstreamWarehouseCode: string;
     upstreamChannelCode: string;
     upstreamChannelName: string;
     systemChannelCode: string;
     systemChannelName: string;
+    pairingRole?: 'FULFILLMENT' | 'QUOTE' | string;
     status?: string;
     createTime?: string;
     remark?: string;
   }
 
   export interface LogisticsChannelPairingRequest {
+    upstreamWarehouseCode: string;
     upstreamChannelCode: string;
+    systemWarehouseCode: string;
     systemChannelCode: string;
     systemChannelName: string;
+    pairingRole?: 'FULFILLMENT' | 'QUOTE' | string;
     remark?: string;
   }
 
@@ -275,11 +283,65 @@ declare namespace API.Integration {
     updateTime?: string;
   }
 
+  export interface SourceWarehouseStockGroupItem {
+    sourceStockGroupKey: string;
+    repositoryScope?: string;
+    inventoryScope?: string;
+    masterSku: string;
+    masterProductName?: string;
+    inventoryAttributeCodes?: string;
+    inventoryAttributeLabels?: string;
+    inventoryAttributeCount?: number;
+    sourceConnectionCodes?: string;
+    masterWarehouseNames?: string;
+    masterWarehouseCount?: number;
+    upstreamWarehouseCodes?: string;
+    upstreamWarehouseNames?: string;
+    upstreamWarehouseCount?: number;
+    detailRowCount?: number;
+    activeDetailCount?: number;
+    missingDetailCount?: number;
+    totalQuantity?: number;
+    availableQuantity?: number;
+    lockedQuantity?: number;
+    inTransitQuantity?: number;
+    boxedQuantity?: number;
+    unboxedQuantity?: number;
+    systemWarehouseCodes?: string;
+    systemWarehouseNames?: string;
+    systemSkus?: string;
+    systemSkuNames?: string;
+    customerNames?: string;
+    warehousePairingStatus?: string;
+    skuPairingStatus?: string;
+    status?: string;
+    latestSyncBatchId?: string;
+    firstSeenTime?: string;
+    lastSeenTime?: string;
+    latestUpdateTime?: string;
+    rebuildTime?: string;
+  }
+
+  export interface SourceWarehouseStockOption {
+    label: string;
+    value: string;
+    code?: string;
+    name?: string;
+    searchText?: string;
+  }
+
   export interface SourceWarehouseStockPageResult {
     code: number;
     msg: string;
     total: number;
     rows: SourceWarehouseStockItem[];
+  }
+
+  export interface SourceWarehouseStockGroupPageResult {
+    code: number;
+    msg: string;
+    total: number;
+    rows: SourceWarehouseStockGroupItem[];
   }
 
   export interface RequestLog {

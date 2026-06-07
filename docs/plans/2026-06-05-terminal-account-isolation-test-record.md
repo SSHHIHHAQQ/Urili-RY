@@ -31,3 +31,9 @@
 - 本测试不扫描 `RuoYi-Vue/sql`，因为管理端菜单 seed 和若依后台初始化本身会合法使用 `sys_menu` 等后台表。
 - 如果后续把 seller/buyer 端账号权限逻辑迁到新的 terminal 子模块或资源目录，需要把新路径纳入测试扫描。
 - 真实业务接口的数据范围仍需逐接口验证，本测试只证明端账号权限控制面没有明显回退到管理端 `sys_*`。
+
+## 2026-06-07 补充
+
+- `TerminalAccountIsolationTest` 已新增账号 Mapper 主体作用域静态契约，扫描 `seller/src/main/java` 和 `buyer/src/main/java`。
+- 该契约固定裸 `sellerMapper.selectSellerAccountById(accountId)` / `buyerMapper.selectBuyerAccountById(accountId)` 只能出现在管理端日志 account-only 反查主体 helper；已有主体上下文的账号查询必须使用 `select*AccountByIdAnd*Id(...)`。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue\ruoyi-system; mvn -q "-Dtest=TerminalAccountIsolationTest,TerminalSqlIsolationContractTest" test`：通过。

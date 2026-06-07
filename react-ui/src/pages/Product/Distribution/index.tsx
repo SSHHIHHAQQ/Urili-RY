@@ -101,8 +101,8 @@ const tailRuleOptions = [
 ];
 const TABLE_SELECTION_COLUMN_WIDTH = 48;
 const SPU_TABLE_SCROLL_X = 2580;
-const SKU_TABLE_SCROLL_X = 3000;
-const SKU_DETAIL_TABLE_SCROLL_X = 1680;
+const SKU_TABLE_SCROLL_X = 3240;
+const SKU_DETAIL_TABLE_SCROLL_X = 1900;
 
 function resultOk(resp: API.Result, successText: string) {
   if (resp.code === 200) {
@@ -145,6 +145,19 @@ function renderWarehouseKindTag(kind?: string) {
   }
   const color = kind === 'official' ? 'blue' : 'purple';
   return <Tag color={color}>{warehouseKindText[kind] || kind}</Tag>;
+}
+
+function renderSourceSku(record: API.ProductDistribution.Sku) {
+  if (!record.masterSku) return '--';
+  return (
+    <div>
+      <Space size={4}>
+        <span>{record.masterSku}</span>
+        {record.lockStatus === 'LOCKED' ? <Tag color="blue">已锁定</Tag> : null}
+      </Space>
+      <div className={styles.mutedText}>{record.masterProductNameSnapshot || '--'}</div>
+    </div>
+  );
 }
 
 function formatAmount(value?: number | null) {
@@ -454,6 +467,11 @@ export default function ProductDistributionPage() {
     { title: '系统SKU', dataIndex: 'systemSkuCode', width: 150 },
     { title: '客户SKU', dataIndex: 'sellerSkuCode', width: 140 },
     {
+      title: '来源SKU',
+      width: 220,
+      render: (_, record) => renderSourceSku(record),
+    },
+    {
       title: 'SKU规格',
       width: 220,
       render: (_, record) => buildSkuSpecText(record, siblingRows) || '--',
@@ -712,6 +730,13 @@ export default function ProductDistributionPage() {
     },
     { title: '系统SKU', dataIndex: 'systemSkuCode', width: 160 },
     { title: '客户SKU', dataIndex: 'sellerSkuCode', width: 150 },
+    {
+      title: '来源SKU',
+      dataIndex: 'masterSku',
+      search: false,
+      width: 220,
+      render: (_, record) => renderSourceSku(record),
+    },
     {
       title: 'SKU规格',
       search: false,

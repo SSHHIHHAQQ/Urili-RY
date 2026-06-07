@@ -72,8 +72,38 @@ public class AdminDirectLoginPermissionContractTest
             violations.add(prefix + " must exist");
             return;
         }
+        String normalizerName = "normalize" + classPrefix + "DirectLoginTicketScope";
+        assertContains(methodBody, normalizerName + "(query)", service, violations);
         assertContains(methodBody, "query.setTerminal(\"" + terminal + "\")", service, violations);
         assertContains(methodBody, "ticketMapper.selectPortalDirectLoginTicketList(query)", service, violations);
+        assertNotContains(methodBody, "ticketMapper.selectPortalDirectLoginTicketList(ticket)", service, violations);
+        assertBefore(methodBody, normalizerName + "(query)", "query.setTerminal(\"" + terminal + "\")", prefix,
+                violations);
+        assertBefore(methodBody, "query.setTerminal(\"" + terminal + "\")",
+                "ticketMapper.selectPortalDirectLoginTicketList(query)", prefix, violations);
+
+        String normalizerBody = extractMethodBody(source, normalizerName);
+        if (normalizerBody.isEmpty())
+        {
+            violations.add(service.getFileName() + "#" + normalizerName
+                    + " must validate direct-login ticket account filters");
+            return;
+        }
+        String subjectIdVariable = terminal + "Id";
+        String accountIdVariable = terminal + "AccountId";
+        String mapperName = terminal + "Mapper";
+        assertContains(normalizerBody, "Long " + subjectIdVariable + " = ticket.getTargetSubjectId()", service,
+                violations);
+        assertContains(normalizerBody, "Long " + accountIdVariable + " = ticket.getTargetAccountId()", service,
+                violations);
+        assertContains(normalizerBody, "if (" + accountIdVariable + " != null)", service, violations);
+        assertContains(normalizerBody, "if (" + subjectIdVariable + " == null)", service, violations);
+        assertContains(normalizerBody, mapperName + ".select" + classPrefix + "AccountByIdAnd" + classPrefix
+                + "Id(" + subjectIdVariable + ", " + accountIdVariable + ")", service, violations);
+        assertContains(normalizerBody, "select" + classPrefix + "ById(" + subjectIdVariable + ")", service,
+                violations);
+        assertNotContains(normalizerBody, mapperName + ".select" + classPrefix + "AccountById(", service,
+                violations);
     }
 
     private void assertTicketMapperCanFilterByTerminal(Path backendRoot, List<String> violations) throws IOException
@@ -132,8 +162,11 @@ public class AdminDirectLoginPermissionContractTest
         assertContains(grantSql, "set @confirm_admin_partner_role_menu_grant", grantSeed, violations);
         assertContains(grantSql, "call assert_admin_partner_role_menu_grant_confirmed();", grantSeed, violations);
         assertContains(grantSql, "call assert_admin_partner_menu_signature();", grantSeed, violations);
+        assertAdminPartnerPageSignature(grantSeed, grantSql, violations);
         assertAdminPartnerGrantsStayInsideSignedMenuTree(grantSeed, grantSql, violations);
         assertAdminButtonGrantsStayAdminOnly(grantSeed, grantSql, violations);
+        assertAdminPartnerButtonWhitelist(grantSeed, grantSql, violations);
+        assertSubjectLevelOwnerResetPermissionsAreNotGranted(grantSeed, grantSql, violations);
 
         Path cleanupSeed = backendRoot.resolve("sql/20260606_admin_partner_non_admin_button_grant_cleanup.sql");
         String cleanupSql = Files.readString(cleanupSeed, StandardCharsets.UTF_8);
@@ -146,6 +179,29 @@ public class AdminDirectLoginPermissionContractTest
                 cleanupSeed, violations);
         assertContains(cleanupSql, "delete child_grant", cleanupSeed, violations);
         assertContains(cleanupSql, "and r.role_key <> 'admin'", cleanupSeed, violations);
+        assertAdminPartnerPageSignature(cleanupSeed, cleanupSql, violations);
+        assertAdminPartnerButtonWhitelist(cleanupSeed, cleanupSql, violations);
+        assertSubjectLevelOwnerResetPermissionsAreNotGranted(cleanupSeed, cleanupSql, violations);
+    }
+
+    private void assertAdminPartnerPageSignature(Path sqlFile, String sql, List<String> violations)
+    {
+        for (String expected : new String[] {
+                "coalesce(path, '') = 'partner'",
+                "coalesce(component, '') = ''",
+                "coalesce(route_name, '') = 'PartnerManagement'",
+                "coalesce(perms, '') = ''",
+                "coalesce(path, '') = 'seller'",
+                "coalesce(component, '') = 'Seller/index'",
+                "coalesce(route_name, '') = 'Seller'",
+                "coalesce(path, '') = 'buyer'",
+                "coalesce(component, '') = 'Buyer/index'",
+                "coalesce(route_name, '') = 'Buyer'",
+                "partner sys_menu path/component/route signature does not match expected seller/buyer admin pages"
+        })
+        {
+            assertContains(sql, expected, sqlFile, violations);
+        }
     }
 
     private void assertAdminButtonGrantsStayAdminOnly(Path sqlFile, String sql, List<String> violations)
@@ -154,6 +210,9 @@ public class AdminDirectLoginPermissionContractTest
         assertContains(sql, "join sys_role_menu page_grant on page_grant.role_id = r.role_id", sqlFile, violations);
         assertContains(sql, "where r.role_key = 'admin'", sqlFile, violations);
         assertContains(sql, "and r.del_flag = '0'", sqlFile, violations);
+        assertContains(sql,
+                "and substring_index(child.perms, ':', 1) = substring_index(page_menu.perms, ':', 1)",
+                sqlFile, violations);
         if (sql.contains("select distinct page_grant.role_id, child.menu_id"))
         {
             violations.add(sqlFile.getFileName()
@@ -177,6 +236,46 @@ public class AdminDirectLoginPermissionContractTest
             violations.add(sqlFile.getFileName()
                     + " must not grant every seller/buyer admin permission by prefix; grant the signed menu tree first");
         }
+    }
+
+    private void assertAdminPartnerButtonWhitelist(Path sqlFile, String sql, List<String> violations)
+    {
+        if (sql.contains("child.perms like 'seller:admin:%'")
+                || sql.contains("child.perms like 'buyer:admin:%'"))
+        {
+            violations.add(sqlFile.getFileName()
+                    + " must not select admin partner child buttons by terminal permission wildcard");
+        }
+
+        for (String expected : new String[] {
+                "and substring_index(child.perms, ':', 1) = substring_index(page_menu.perms, ':', 1)",
+                "and coalesce(child.path, '') = '#'",
+                "and coalesce(child.component, '') = ''",
+                "and coalesce(child.route_name, '') = ''",
+                "child.menu_id in (",
+                "child.perms in (",
+                "2205",
+                "2215",
+                "2315",
+                "2321",
+                "2322",
+                "2323",
+                "seller:admin:directLogin",
+                "buyer:admin:directLogin",
+                "seller:admin:account:lock",
+                "buyer:admin:account:lock"
+        })
+        {
+            assertContains(sql, expected, sqlFile, violations);
+        }
+    }
+
+    private void assertSubjectLevelOwnerResetPermissionsAreNotGranted(Path sqlFile, String sql, List<String> violations)
+    {
+        assertNotContains(sql, "seller:admin:resetPwd", sqlFile, violations);
+        assertNotContains(sql, "buyer:admin:resetPwd", sqlFile, violations);
+        assertNotContains(sql, "2204", sqlFile, violations);
+        assertNotContains(sql, "2214", sqlFile, violations);
     }
 
     private void assertManagementSeedDoesNotGrantAdminRoles(Path sqlFile, String sql, List<String> violations)
@@ -257,6 +356,28 @@ public class AdminDirectLoginPermissionContractTest
         if (!source.contains(expected))
         {
             violations.add(path.getFileName() + " must contain " + expected);
+        }
+    }
+
+    private void assertNotContains(String source, String forbidden, Path path, List<String> violations)
+    {
+        if (source.contains(forbidden))
+        {
+            violations.add(path.getFileName() + " must not contain " + forbidden);
+        }
+    }
+
+    private void assertBefore(String source, String first, String second, String sourceName, List<String> violations)
+    {
+        int firstIndex = source.indexOf(first);
+        int secondIndex = source.indexOf(second);
+        if (firstIndex < 0 || secondIndex < 0)
+        {
+            return;
+        }
+        if (firstIndex > secondIndex)
+        {
+            violations.add(sourceName + " must check " + first + " before " + second);
         }
     }
 

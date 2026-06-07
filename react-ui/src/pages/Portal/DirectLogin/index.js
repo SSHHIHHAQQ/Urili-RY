@@ -2,7 +2,7 @@ import { jsx as _jsx } from "react/jsx-runtime";
 import { Button, Result, Spin } from 'antd';
 import { history, useLocation } from '@umijs/max';
 import { useEffect, useMemo, useState } from 'react';
-import { PORTAL_DIRECT_LOGIN_READY_MESSAGE, PORTAL_DIRECT_LOGIN_TOKEN_MESSAGE, } from '@/utils/portalDirectLoginMessage';
+import { PORTAL_DIRECT_LOGIN_READY_MESSAGE, PORTAL_DIRECT_LOGIN_RESULT_MESSAGE, PORTAL_DIRECT_LOGIN_TOKEN_MESSAGE, } from '@/utils/portalDirectLoginMessage';
 import { clearPortalLogin, getPortalTerminal, persistPortalLogin, PORTAL_META, PORTAL_SERVICE, } from '../terminal';
 const pageStyle = {
     minHeight: '100vh',
@@ -43,13 +43,26 @@ const DirectLoginPage = () => {
         }
         clearPortalLogin(terminal);
         const openerOrigin = resolveOpenerOrigin();
-        const consumeToken = async (token) => {
+        const postConsumeResult = (status, ticketId, message) => {
+            const payload = {
+                type: PORTAL_DIRECT_LOGIN_RESULT_MESSAGE,
+                terminal,
+                status,
+                ticketId,
+                message,
+            };
+            window.opener?.postMessage(payload, openerOrigin);
+        };
+        const consumeToken = async (message) => {
             try {
-                const response = await PORTAL_SERVICE[terminal].directLogin(token);
+                const response = await PORTAL_SERVICE[terminal].directLogin(message.token);
                 if (response.code !== 200 || !persistPortalLogin(response.data, terminal)) {
-                    setState({ status: 'error', message: response.msg || 'Direct login terminal mismatch' });
+                    const errorMessage = response.msg || 'Direct login terminal mismatch';
+                    postConsumeResult('error', message.ticketId, errorMessage);
+                    setState({ status: 'error', message: errorMessage });
                     return;
                 }
+                postConsumeResult('success', message.ticketId);
                 if (mounted) {
                     setState({ status: 'success' });
                     history.replace(PORTAL_META[terminal].homePath);
@@ -58,6 +71,7 @@ const DirectLoginPage = () => {
             catch (error) {
                 console.log(error);
                 clearPortalLogin(terminal);
+                postConsumeResult('error', message.ticketId, 'Direct login failed');
                 if (mounted) {
                     setState({ status: 'error', message: 'Direct login failed' });
                 }
@@ -71,7 +85,7 @@ const DirectLoginPage = () => {
                 return;
             }
             consumed = true;
-            void consumeToken(event.data.token);
+            void consumeToken(event.data);
         };
         window.addEventListener('message', handleTokenMessage);
         window.opener?.postMessage({ type: PORTAL_DIRECT_LOGIN_READY_MESSAGE, terminal }, openerOrigin);

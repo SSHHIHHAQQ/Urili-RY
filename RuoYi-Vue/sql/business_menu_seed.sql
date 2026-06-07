@@ -4,6 +4,146 @@
 
 set names utf8mb4;
 
+set @confirm_business_menu_seed := coalesce(@confirm_business_menu_seed, '');
+
+delimiter //
+
+drop procedure if exists assert_business_menu_seed_confirmed//
+create procedure assert_business_menu_seed_confirmed()
+begin
+  if coalesce(@confirm_business_menu_seed, '')
+      <> 'APPLY_BUSINESS_MENU_SEED' then
+    signal sqlstate '45000' set message_text = 'set @confirm_business_menu_seed = APPLY_BUSINESS_MENU_SEED before running this seed';
+  end if;
+end//
+
+drop procedure if exists assert_business_menu_sys_menu_guard//
+create procedure assert_business_menu_sys_menu_guard()
+begin
+  declare v_parent_count int default 0;
+
+  select count(1)
+    into v_parent_count
+  from sys_menu
+  where (
+      menu_id = 2050
+      and menu_name = '财务管理'
+      and parent_id = 0
+      and path = 'finance'
+      and route_name = 'FinanceManagement'
+      and menu_type = 'M'
+    )
+    or (
+      menu_id = 2060
+      and menu_name = '商品管理'
+      and parent_id = 0
+      and path = 'product'
+      and route_name = 'ProductManagement'
+      and menu_type = 'M'
+    )
+    or (
+      menu_id = 2070
+      and menu_name = '订单管理'
+      and parent_id = 0
+      and path = 'order'
+      and route_name = 'OrderManagement'
+      and menu_type = 'M'
+    )
+    or (
+      menu_id = 2080
+      and menu_name = '库存管理'
+      and parent_id = 0
+      and path = 'inventory'
+      and route_name = 'InventoryManagement'
+      and menu_type = 'M'
+    )
+    or (
+      menu_id = 2100
+      and menu_name = '审核中心'
+      and parent_id = 0
+      and path = 'review-center'
+      and route_name = 'ReviewCenter'
+      and menu_type = 'M'
+    );
+
+  if v_parent_count <> 5 then
+    signal sqlstate '45000' set message_text = 'business menu parent sys_menu entries are required before business menu seed';
+  end if;
+
+  if exists (
+    select 1
+    from sys_menu m
+    where exists (
+        select 1
+        from tmp_business_menu_sys_menu_guard seed
+        where seed.menu_id = m.menu_id
+    )
+      and not exists (
+        select 1
+        from tmp_business_menu_sys_menu_guard seed
+        where seed.menu_id = m.menu_id
+          and coalesce(m.parent_id, -1) = seed.parent_id
+          and coalesce(m.menu_type, '') = seed.menu_type
+          and coalesce(m.path, '') = coalesce(seed.path, '')
+          and coalesce(m.component, '') = coalesce(seed.component, '')
+          and coalesce(m.route_name, '') = coalesce(seed.route_name, '')
+          and coalesce(m.perms, '') = coalesce(seed.perms, '')
+    )
+  ) then
+    signal sqlstate '45000' set message_text = 'business sys_menu id slot is occupied by another menu';
+  end if;
+
+  if exists (
+    select 1
+    from sys_menu m
+    join tmp_business_menu_sys_menu_guard seed
+      on m.menu_id <> seed.menu_id
+     and coalesce(m.path, '') = coalesce(seed.path, '')
+     and coalesce(m.component, '') = coalesce(seed.component, '')
+     and coalesce(m.route_name, '') = coalesce(seed.route_name, '')
+     and coalesce(m.perms, '') = coalesce(seed.perms, '')
+  ) then
+    signal sqlstate '45000' set message_text = 'business sys_menu signature is already used by another menu';
+  end if;
+end//
+
+delimiter ;
+
+call assert_business_menu_seed_confirmed();
+drop procedure if exists assert_business_menu_seed_confirmed;
+
+create temporary table if not exists tmp_business_menu_sys_menu_guard (
+  menu_id    bigint       not null,
+  parent_id  bigint       not null,
+  menu_type  char(1)      not null,
+  path       varchar(200) not null default '',
+  component  varchar(255) not null default '',
+  route_name varchar(50)  not null default '',
+  perms      varchar(100) not null default '',
+  key idx_business_menu_sys_menu_guard_id (menu_id)
+) engine=memory;
+
+truncate table tmp_business_menu_sys_menu_guard;
+
+insert into tmp_business_menu_sys_menu_guard(menu_id, parent_id, menu_type, path, component, route_name, perms) values
+    (2400, 2060, 'C', 'list', 'Product/SourceProductLibrary/index', 'SourceProductLibrary', 'product:list:list'),
+    (2401, 2060, 'C', 'zone', 'Common/PlannedPage/index', 'ProductZone', 'product:zone:list'),
+    (2403, 2060, 'C', 'warehouse-link', 'Common/PlannedPage/index', 'WarehouseProductLink', 'product:warehouseLink:list'),
+    (2410, 2070, 'C', 'list', 'Common/PlannedPage/index', 'OrderList', 'order:list:list'),
+    (2411, 2070, 'C', 'return', 'Common/PlannedPage/index', 'ReturnManagement', 'order:return:list'),
+    (2420, 2080, 'C', 'overview', 'Common/PlannedPage/index', 'InventoryOverview', 'inventory:overview:list'),
+    (2422, 2080, 'C', 'flow', 'Common/PlannedPage/index', 'InventoryFlow', 'inventory:flow:list'),
+    (2430, 2050, 'C', 'fund-account', 'Common/PlannedPage/index', 'FundAccount', 'finance:fundAccount:list'),
+    (2431, 2050, 'C', 'collection-account', 'Common/PlannedPage/index', 'CollectionAccount', 'finance:collectionAccount:list'),
+    (2432, 2050, 'C', 'distribution-fund', 'Common/PlannedPage/index', 'DistributionFund', 'finance:distributionFund:list'),
+    (2433, 2050, 'C', 'fee', 'Common/PlannedPage/index', 'FeeManagement', 'finance:fee:list'),
+    (2434, 2050, 'C', 'profit-reconciliation', 'Common/PlannedPage/index', 'ProfitReconciliation', 'finance:profitReconciliation:list'),
+    (2450, 2100, 'C', 'recharge', 'Common/PlannedPage/index', 'RechargeReview', 'review:recharge:list'),
+    (2451, 2100, 'C', 'product-distribution', 'Common/PlannedPage/index', 'ProductDistributionReview', 'review:productDistribution:list'),
+    (2452, 2100, 'C', 'inventory-adjustment', 'Common/PlannedPage/index', 'InventoryAdjustmentReview', 'review:inventoryAdjustment:list');
+
+call assert_business_menu_sys_menu_guard();
+
 insert into sys_menu
     (menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
      is_frame, is_cache, menu_type, visible, status, perms, icon, create_by,
@@ -15,9 +155,6 @@ values
     (2401, '商品专区', 2060, 10, 'zone', 'Common/PlannedPage/index', '', 'ProductZone',
      1, 0, 'C', '0', '0', 'product:zone:list', 'TagsOutlined', 'admin',
      sysdate(), '', null, '商品管理菜单：商品专区，占位入口'),
-    (2402, '商城商品列表', 2060, 15, 'distribution', 'Product/Distribution/index', '', 'DistributionProduct',
-     1, 0, 'C', '0', '0', 'product:distribution:list', 'ShareAltOutlined', 'admin',
-     sysdate(), '', null, '商品管理菜单：商城商品列表'),
     (2403, '仓库商品关联', 2060, 20, 'warehouse-link', 'Common/PlannedPage/index', '', 'WarehouseProductLink',
      1, 0, 'C', '0', '0', 'product:warehouseLink:list', 'LinkOutlined', 'admin',
      sysdate(), '', null, '商品管理菜单：仓库商品关联，占位入口'),
@@ -28,16 +165,10 @@ values
     (2411, '退件管理', 2070, 10, 'return', 'Common/PlannedPage/index', '', 'ReturnManagement',
      1, 0, 'C', '0', '0', 'order:return:list', 'UndoOutlined', 'admin',
      sysdate(), '', null, '订单管理菜单：退件管理，占位入口'),
-    (2412, '售后管理', 2070, 15, 'after-sale', 'Common/PlannedPage/index', '', 'AfterSaleManagement',
-     1, 0, 'C', '0', '0', 'order:afterSale:list', 'IssuesCloseOutlined', 'admin',
-     sysdate(), '', null, '订单管理菜单：售后管理，占位入口'),
 
     (2420, '库存总览', 2080, 5, 'overview', 'Common/PlannedPage/index', '', 'InventoryOverview',
      1, 0, 'C', '0', '0', 'inventory:overview:list', 'DashboardOutlined', 'admin',
      sysdate(), '', null, '库存管理菜单：库存总览，占位入口'),
-    (2421, '来源仓库库存', 2080, 10, 'source-warehouse-stock', 'Inventory/SourceWarehouseStock/index', '', 'SourceWarehouseStock',
-     1, 0, 'C', '0', '0', 'inventory:sourceWarehouse:list', 'StockOutlined', 'admin',
-     sysdate(), '', null, '库存管理菜单：来源仓库库存，读取上游系统SKU库存同步快照'),
     (2422, '库存流水', 2080, 15, 'flow', 'Common/PlannedPage/index', '', 'InventoryFlow',
      1, 0, 'C', '0', '0', 'inventory:flow:list', 'UnorderedListOutlined', 'admin',
      sysdate(), '', null, '库存管理菜单：库存流水，占位入口'),
@@ -57,16 +188,6 @@ values
     (2434, '利润对账', 2050, 25, 'profit-reconciliation', 'Common/PlannedPage/index', '', 'ProfitReconciliation',
      1, 0, 'C', '0', '0', 'finance:profitReconciliation:list', 'ReconciliationOutlined', 'admin',
      sysdate(), '', null, '财务管理菜单：利润对账，占位入口'),
-
-    (2440, '商品分类配置', 2090, 5, 'product-category', 'Common/PlannedPage/index', '', 'ProductCategoryConfig',
-     1, 0, 'C', '0', '0', 'basic:productCategory:list', 'ApartmentOutlined', 'admin',
-     sysdate(), '', null, '基础配置菜单：商品分类配置，占位入口'),
-    (2441, '商品属性配置', 2090, 10, 'product-attribute', 'Common/PlannedPage/index', '', 'ProductAttributeConfig',
-     1, 0, 'C', '0', '0', 'basic:productAttribute:list', 'ControlOutlined', 'admin',
-     sysdate(), '', null, '基础配置菜单：商品属性配置，占位入口'),
-    (2442, '币种配置', 2090, 15, 'currency', 'Common/PlannedPage/index', '', 'CurrencyConfig',
-     1, 0, 'C', '0', '0', 'basic:currency:list', 'MoneyCollectOutlined', 'admin',
-     sysdate(), '', null, '基础配置菜单：币种配置，占位入口'),
 
     (2450, '充值审核', 2100, 5, 'recharge', 'Common/PlannedPage/index', '', 'RechargeReview',
      1, 0, 'C', '0', '0', 'review:recharge:list', 'AuditOutlined', 'admin',
@@ -96,11 +217,5 @@ on duplicate key update
     update_time = sysdate(),
     remark = values(remark);
 
--- Keep the source warehouse stock entry as a placeholder until the inventory
--- snapshot schema, sync job, and permission rollout are explicitly confirmed.
-update sys_menu
-set component = 'Common/PlannedPage/index',
-    update_by = 'admin',
-    update_time = sysdate()
-where menu_id = 2421
-  and perms = 'inventory:sourceWarehouse:list';
+drop temporary table if exists tmp_business_menu_sys_menu_guard;
+drop procedure if exists assert_business_menu_sys_menu_guard;

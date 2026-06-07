@@ -8,7 +8,6 @@ import {
   Form,
   Image,
   Input,
-  InputNumber,
   Modal,
   Select,
   Space,
@@ -89,7 +88,7 @@ type PartnerService = {
   updateRole: (id: number, data: API.Partner.PortalRole) => Promise<API.Result>;
   changeRoleStatus: (id: number, data: Pick<API.Partner.PortalRole, 'roleId' | 'status'>) => Promise<API.Result>;
   removeRoles: (id: number, roleIds: number[]) => Promise<API.Result>;
-  resetAccountDefaultPassword: (id: number, accountId: number) => Promise<API.Result>;
+  resetAccountPassword: (id: number, accountId: number, password: string) => Promise<API.Result>;
   lockAccount?: (id: number, accountId: number, lockReason: string) => Promise<API.Result>;
   unlockAccount?: (id: number, accountId: number) => Promise<API.Result>;
   listSubjectSessions?: (id: number, params?: Record<string, any>) => Promise<API.Partner.PortalAuditPageResult<API.Partner.PortalSessionProfile>>;
@@ -98,7 +97,6 @@ type PartnerService = {
   forceLogoutAccount: (id: number, accountId: number) => Promise<API.Result>;
   getAccountRoles: (id: number, accountId: number) => Promise<API.Partner.PortalAccountRoleResult>;
   assignAccountRoles: (id: number, accountId: number, roleIds: number[]) => Promise<API.Result>;
-  resetOwnerPassword: (id: number) => Promise<API.Result>;
   directLogin: (id: number, reason: string) => Promise<API.Partner.DirectLoginApiResult>;
   directLoginAccount?: (id: number, accountId: number, reason: string) => Promise<API.Partner.DirectLoginApiResult>;
   listLoginLogs: (params?: Record<string, any>) => Promise<API.Partner.PortalAuditPageResult<API.Partner.PortalLoginLog>>;
@@ -222,10 +220,6 @@ const compactSubTextStyle: React.CSSProperties = {
   lineHeight: 1.35,
 };
 
-const balanceRangeNumberStyle: React.CSSProperties = {
-  width: '50%',
-};
-
 function getStatusOptions(statusOptions: DictValueEnumObj) {
   return Object.keys(statusOptions).length > 0 ? statusOptions : fallbackStatusOptions;
 }
@@ -264,65 +258,17 @@ function getRangeValue(value: unknown) {
   return Array.isArray(value) ? value : [];
 }
 
-function hasSearchValue(value: unknown) {
-  return value !== undefined && value !== null && value !== '';
-}
-
-function getBalanceRangeInputValue(value: unknown): [number | string | undefined, number | string | undefined] {
-  const range = getRangeValue(value);
-  return [range[0], range[1]];
-}
-
-function BalanceRangeInput({
-  value,
-  onChange,
-  disabled,
-}: {
-  value?: unknown;
-  onChange?: (value?: [number | string | undefined, number | string | undefined]) => void;
-  disabled?: boolean;
-}) {
-  const [minValue, maxValue] = getBalanceRangeInputValue(value);
-
-  const updateValue = (index: 0 | 1, nextValue: number | string | null) => {
-    const next: [number | string | undefined, number | string | undefined] = [minValue, maxValue];
-    next[index] = nextValue ?? undefined;
-    onChange?.(hasSearchValue(next[0]) || hasSearchValue(next[1]) ? next : undefined);
-  };
-
-  return (
-    <Space.Compact block>
-      <InputNumber
-        controls={false}
-        disabled={disabled}
-        min={0}
-        precision={2}
-        placeholder="最小"
-        value={minValue as number | undefined}
-        style={balanceRangeNumberStyle}
-        onChange={(nextValue) => updateValue(0, nextValue)}
-      />
-      <InputNumber
-        controls={false}
-        disabled={disabled}
-        min={0}
-        precision={2}
-        placeholder="最大"
-        value={maxValue as number | undefined}
-        style={balanceRangeNumberStyle}
-        onChange={(nextValue) => updateValue(1, nextValue)}
-      />
-    </Space.Compact>
-  );
-}
-
 function buildListParams(params: Record<string, any>, current?: number, pageSize?: number) {
-  const { createTimeRange, lastLoginTimeRange, balanceRange, balanceMin, balanceMax, ...rest } = params;
+  const { createTimeRange, lastLoginTimeRange, ...rest } = params;
   const createRange = getRangeValue(createTimeRange);
   const lastLoginRange = getRangeValue(lastLoginTimeRange);
-  const accountBalanceRange = getRangeValue(balanceRange);
-  const resolvedBalanceMin = accountBalanceRange[0] ?? balanceMin;
-  const resolvedBalanceMax = accountBalanceRange[1] ?? balanceMax;
+  if (rest.phone && !rest.contactPhone) {
+    rest.contactPhone = rest.phone;
+  }
+  delete rest.phone;
+  delete rest.balanceRange;
+  delete rest.balanceMin;
+  delete rest.balanceMax;
   const next: Record<string, any> = {
     ...rest,
     pageNum: current,
@@ -341,20 +287,17 @@ function buildListParams(params: Record<string, any>, current?: number, pageSize
   if (lastLoginRange[1]) {
     next['params[lastLoginEndTime]'] = lastLoginRange[1];
   }
-  if (hasSearchValue(resolvedBalanceMin)) {
-    next['params[balanceMin]'] = resolvedBalanceMin;
-  }
-  if (hasSearchValue(resolvedBalanceMax)) {
-    next['params[balanceMax]'] = resolvedBalanceMax;
-  }
 
   return next;
 }
 
-function formatBalance(record: PartnerRecord) {
-  const currency = record.balanceCurrency || 'USD';
-  const value = Number(record.accountBalance ?? 0);
-  return `${currency} ${Number.isFinite(value) ? value.toFixed(2) : '0.00'}`;
+function renderBalancePlaceholder() {
+  return (
+    <Flex vertical gap={0}>
+      <Typography.Text type="secondary">待接入</Typography.Text>
+      <Tag>占位</Tag>
+    </Flex>
+  );
 }
 
 function formatDateTimeText(value: unknown) {
@@ -639,25 +582,6 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
     });
   };
 
-  const handleResetOwnerPassword = (record: PartnerRecord) => {
-    const partnerId = getValue(record, config.idField);
-    if (!partnerId) {
-      return;
-    }
-    modal.confirm({
-      title: `确认重置${config.label}主账号密码吗？`,
-      content: '密码将重置为默认密码 U12346。',
-      onOk: async () => {
-        const resp = await config.services.resetOwnerPassword(partnerId);
-        if (resp.code === 200) {
-          message.success('主账号密码已重置为默认密码 U12346');
-          return;
-        }
-        message.error(resp.msg || '密码重置失败');
-      },
-    });
-  };
-
   const handleDirectLogin = async (record: PartnerRecord) => {
     const partnerId = getValue(record, config.idField);
     if (!partnerId) {
@@ -691,8 +615,11 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
         const hide = message.loading('正在生成免密登录链接');
         try {
           const resp = await config.services.directLogin(partnerId, values.reason?.trim() || '');
-          if (resp.code === 200 && openPortalDirectLoginWindow(resp.data, config.moduleKey)) {
-            message.success(`免密登录链接已生成，有效期 ${resp.data.expireMinutes || 30} 分钟`);
+          const bridgeResult = resp.code === 200
+            ? await openPortalDirectLoginWindow(resp.data, config.moduleKey)
+            : false;
+          if (bridgeResult) {
+            message.success(`${config.label}端免密登录已确认，有效期 ${resp.data.expireMinutes || 30} 分钟`);
             return;
           }
           message.error(resp.msg || '免密登录链接生成失败');
@@ -831,7 +758,7 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
     },
     {
       title: '手机号',
-      dataIndex: 'phone',
+      dataIndex: 'contactPhone',
       valueType: 'text',
       hideInTable: true,
       search: true,
@@ -851,33 +778,18 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
       dataIndex: 'accountBalance',
       search: false,
       width: useStandardListTemplate ? 112 : 140,
-      render: (_, record) => (
-        <Flex vertical gap={0}>
-          <span>{formatBalance(record)}</span>
-          <Tag>占位</Tag>
-        </Flex>
-      ),
-    },
-    {
-      title: config.balanceTitle,
-      dataIndex: 'balanceRange',
-      colSize: 2,
-      valueType: 'digitRange',
-      hideInTable: true,
-      formItemRender: (_, config) => (
-        <BalanceRangeInput value={config.value} onChange={config.onChange} />
-      ),
+      render: renderBalancePlaceholder,
     },
     ...(config.showRechargePlaceholder
       ? [
           {
-            title: '充值',
+            title: '充值能力',
             dataIndex: 'rechargePlaceholder',
             search: false,
             width: 96,
             render: () => (
               <Tag icon={<DollarOutlined />} color="default">
-                待接入
+                规划中
               </Tag>
             ),
           } as ProColumns<PartnerRecord>,
@@ -968,12 +880,6 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
             label: '角色',
           });
         }
-        if (access.hasPerms(`${permPrefix}:resetPwd`)) {
-          moreItems.push({
-            key: 'resetOwnerPwd',
-            label: '重置主账号',
-          });
-        }
         if (access.hasPerms(`${permPrefix}:forceLogout`)) {
           if (config.services.listSubjectSessions) {
             moreItems.push({
@@ -1030,8 +936,6 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
                   } else if (key === 'roles') {
                     setRolePartner(record);
                     setRoleModalOpen(true);
-                  } else if (key === 'resetOwnerPwd') {
-                    handleResetOwnerPassword(record);
                   } else if (key === 'sessions') {
                     setSessionPartner(record);
                     setSessionModalOpen(true);

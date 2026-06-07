@@ -1,6 +1,6 @@
 import { request } from '@umijs/max';
 
-const baseUrl = '/api/warehouse';
+const baseUrl = '/api/warehouse/admin';
 
 function withRuoYiPage(params?: Record<string, any>) {
   if (!params) {
@@ -124,6 +124,27 @@ export async function getOfficialSyncCandidates(params: { connectionCode: string
 
 export async function syncOfficialWarehouse(data: API.Warehouse.OfficialSyncRequest) {
   return request<API.Result>(`${baseUrl}/official/sync`, {
+    method: 'POST',
+    data,
+  });
+}
+
+export async function getOfficialPairingConnections(params: API.Warehouse.PairingOptionParams) {
+  return request<API.Result & { data: API.Warehouse.SyncConnection[] }>(`${baseUrl}/official/pairing-connections`, {
+    method: 'GET',
+    params,
+  });
+}
+
+export async function getOfficialPairingCandidates(params: API.Warehouse.PairingCandidateParams) {
+  return request<API.Result & { data: API.Warehouse.SyncCandidate[] }>(`${baseUrl}/official/pairing-candidates`, {
+    method: 'GET',
+    params,
+  });
+}
+
+export async function pairOfficialWarehouse(warehouseId: number, data: API.Warehouse.OfficialPairingRequest) {
+  return request<API.Result>(`${baseUrl}/official/${warehouseId}/pairing`, {
     method: 'POST',
     data,
   });

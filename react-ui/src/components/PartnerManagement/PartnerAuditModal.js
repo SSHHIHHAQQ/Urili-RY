@@ -39,6 +39,9 @@ const ticketStatusValueEnum = {
 function getValue(record, field) {
     return record ? record[field] : undefined;
 }
+function getAccountId(config, account) {
+    return account ? account[config.accountIdField] || account.accountId : undefined;
+}
 function renderCompactText(value) {
     const text = value == null || value === '' ? '-' : String(value);
     return _jsx(Typography.Text, { style: compactCellTextStyle, title: text, children: text });
@@ -75,7 +78,7 @@ function getTableScrollX(columns) {
         return total + 180;
     }, 0);
 }
-function buildAuditParams(params, current, pageSize, partnerId, subjectField) {
+export function buildAuditParams(params, current, pageSize, partnerId, accountId, subjectField, accountField) {
     const { timeRange, ...rest } = params;
     const range = Array.isArray(timeRange) ? timeRange : [];
     const next = {
@@ -85,6 +88,9 @@ function buildAuditParams(params, current, pageSize, partnerId, subjectField) {
     };
     if (partnerId) {
         next[subjectField] = partnerId;
+        if (accountId) {
+            next[accountField] = accountId;
+        }
     }
     if (range[0]) {
         next['params[beginTime]'] = range[0];
@@ -94,13 +100,16 @@ function buildAuditParams(params, current, pageSize, partnerId, subjectField) {
     }
     return next;
 }
-const PartnerAuditModal = ({ config, open, partner, onOpenChange, }) => {
+const PartnerAuditModal = ({ config, open, partner, account, onOpenChange, }) => {
     const access = useAccess();
     const permPrefix = `${config.moduleKey}:admin`;
     const partnerId = getValue(partner, config.idField);
+    const accountId = getAccountId(config, account);
     const partnerTitle = partnerId
         ? `${getValue(partner, config.nameField) || getValue(partner, config.noField) || partnerId}`
         : `全部${config.label}`;
+    const accountTitle = accountId ? `${account?.userName || account?.nickName || accountId}` : undefined;
+    const auditScopeKey = accountId ? `account:${accountId}` : partnerId ? `subject:${partnerId}` : 'all';
     const renderLoginDetail = (record) => (_jsxs(Descriptions, { size: "small", column: { xs: 1, sm: 2, md: 3 }, children: [_jsx(Descriptions.Item, { label: "\u767B\u5F55\u5730\u70B9", children: renderDetailText(record.loginLocation) }), _jsx(Descriptions.Item, { label: "\u6D4F\u89C8\u5668", children: renderDetailText(record.browser) }), _jsx(Descriptions.Item, { label: "\u64CD\u4F5C\u7CFB\u7EDF", children: renderDetailText(record.os) }), _jsx(Descriptions.Item, { label: "\u767B\u5F55\u63D0\u793A", span: 3, children: renderDetailText(record.msg) })] }));
     const renderOperDetail = (record) => (_jsxs(Descriptions, { size: "small", column: { xs: 1, sm: 2, md: 3 }, children: [_jsx(Descriptions.Item, { label: "\u8BF7\u6C42\u5730\u5740", children: renderDetailText(record.operUrl) }), _jsx(Descriptions.Item, { label: "\u64CD\u4F5CIP", children: renderDetailText(record.operIp) }), _jsx(Descriptions.Item, { label: "\u64CD\u4F5C\u5730\u70B9", children: renderDetailText(record.operLocation) }), _jsx(Descriptions.Item, { label: "\u65B9\u6CD5\u540D", span: 3, children: renderDetailText(record.method) }), _jsx(Descriptions.Item, { label: "\u5F02\u5E38\u4FE1\u606F", span: 3, children: renderDetailText(record.errorMsg) })] }));
     const renderTicketDetail = (record) => (_jsxs(Descriptions, { size: "small", column: { xs: 1, sm: 2, md: 3 }, children: [_jsx(Descriptions.Item, { label: "\u76EE\u6807\u7AEF", children: renderDetailText(record.terminal) }), _jsx(Descriptions.Item, { label: "\u7B7E\u53D1\u4EBAID", children: renderDetailText(record.actingAdminId) }), _jsx(Descriptions.Item, { label: "\u4F7F\u7528IP", children: renderDetailText(record.usedIp) }), _jsx(Descriptions.Item, { label: "\u521B\u5EFA\u4EBA", children: renderDetailText(record.createBy) }), _jsx(Descriptions.Item, { label: "\u66F4\u65B0\u4EBA", children: renderDetailText(record.updateBy) }), _jsx(Descriptions.Item, { label: "\u66F4\u65B0\u65F6\u95F4", children: renderDetailText(formatDateTimeText(record.updateTime)) }), _jsx(Descriptions.Item, { label: "\u4EE3\u5165\u539F\u56E0", span: 3, children: renderDetailText(record.reason) }), _jsx(Descriptions.Item, { label: "\u5907\u6CE8", span: 3, children: renderDetailText(record.remark) })] }));
@@ -123,6 +132,7 @@ const PartnerAuditModal = ({ config, open, partner, onOpenChange, }) => {
             title: '登录账号',
             dataIndex: 'userName',
             width: 140,
+            search: accountId ? false : undefined,
             render: (_, record) => renderCompactText(record.userName),
         },
         {
@@ -186,6 +196,7 @@ const PartnerAuditModal = ({ config, open, partner, onOpenChange, }) => {
             title: '操作人',
             dataIndex: 'operName',
             width: 130,
+            search: accountId ? false : undefined,
             render: (_, record) => renderCompactText(record.operName),
         },
         {
@@ -237,6 +248,7 @@ const PartnerAuditModal = ({ config, open, partner, onOpenChange, }) => {
             title: '内部编号',
             dataIndex: 'targetSubjectNo',
             width: 120,
+            search: accountId ? false : undefined,
             render: (_, record) => renderCompactText(record.targetSubjectNo),
         },
         {
@@ -250,6 +262,7 @@ const PartnerAuditModal = ({ config, open, partner, onOpenChange, }) => {
             title: '登录账号',
             dataIndex: 'targetUserName',
             width: 140,
+            search: accountId ? false : undefined,
             render: (_, record) => renderCompactText(record.targetUserName),
         },
         {
@@ -295,11 +308,11 @@ const PartnerAuditModal = ({ config, open, partner, onOpenChange, }) => {
             render: (_, record) => renderDateTime(record.usedTime),
         },
     ];
-    const renderTable = (tableKey, columns, request, subjectField, expandedRowRender) => (_jsx("div", { style: auditTableWrapperStyle, children: _jsx(ProTable, { rowKey: (record) => String(record.infoId || record.operId || record.ticketId), columns: columns, search: getPersistedProTableSearch({ labelWidth: 88 }, `${config.moduleKey}:audit:${tableKey}`), tableLayout: "fixed", scroll: { x: getTableScrollX(columns) }, pagination: getProTablePagination(10), toolBarRender: false, expandable: {
+    const renderTable = (tableKey, columns, request, subjectField, accountField, expandedRowRender) => (_jsx("div", { style: auditTableWrapperStyle, children: _jsx(ProTable, { rowKey: (record) => String(record.infoId || record.operId || record.ticketId), columns: columns, search: getPersistedProTableSearch({ labelWidth: 88 }, `${config.moduleKey}:audit:${tableKey}:${auditScopeKey}`), tableLayout: "fixed", scroll: { x: getTableScrollX(columns) }, pagination: getProTablePagination(10), toolBarRender: false, expandable: {
                 expandedRowRender,
             }, request: (params) => {
                 const { current, pageSize, ...rest } = params;
-                return request(buildAuditParams(rest, current, pageSize, partnerId, subjectField))
+                return request(buildAuditParams(rest, current, pageSize, partnerId, accountId, subjectField, accountField))
                     .then((res) => ({
                     data: res.rows || [],
                     total: res.total || 0,
@@ -311,24 +324,24 @@ const PartnerAuditModal = ({ config, open, partner, onOpenChange, }) => {
             ? {
                 key: 'login',
                 label: '登录日志',
-                children: renderTable('login', loginLogColumns, config.services.listLoginLogs, 'subjectId', renderLoginDetail),
+                children: renderTable('login', loginLogColumns, config.services.listLoginLogs, 'subjectId', 'accountId', renderLoginDetail),
             }
             : null,
         access.hasPerms(`${permPrefix}:operLog:list`)
             ? {
                 key: 'oper',
                 label: '操作日志',
-                children: renderTable('oper', operLogColumns, config.services.listOperLogs, 'subjectId', renderOperDetail),
+                children: renderTable('oper', operLogColumns, config.services.listOperLogs, 'subjectId', 'accountId', renderOperDetail),
             }
             : null,
         access.hasPerms(`${permPrefix}:ticket:list`)
             ? {
                 key: 'ticket',
                 label: '免密票据',
-                children: renderTable('ticket', ticketColumns, config.services.listDirectLoginTickets, 'targetSubjectId', renderTicketDetail),
+                children: renderTable('ticket', ticketColumns, config.services.listDirectLoginTickets, 'targetSubjectId', 'targetAccountId', renderTicketDetail),
             }
             : null,
     ].filter(Boolean);
-    return (_jsxs(Modal, { width: auditModalWidth, title: `${config.label}审计 - ${partnerTitle}`, open: open, destroyOnHidden: true, footer: null, onCancel: () => onOpenChange(false), children: [partnerId ? (_jsxs(Space, { size: 8, style: { marginBottom: 12 }, children: [_jsx(Tag, { children: getValue(partner, config.noField) || '-' }), _jsx(Typography.Text, { children: getValue(partner, config.nameField) || '-' })] })) : null, tabItems.length > 0 ? _jsx(Tabs, { items: tabItems, style: auditTabsStyle }) : _jsx(Typography.Text, { type: "secondary", children: "\u6682\u65E0\u5BA1\u8BA1\u6743\u9650" })] }));
+    return (_jsxs(Modal, { width: auditModalWidth, title: `${config.label}审计 - ${partnerTitle}${accountTitle ? ` / ${accountTitle}` : ''}`, open: open, destroyOnHidden: true, footer: null, onCancel: () => onOpenChange(false), children: [partnerId ? (_jsxs(Space, { size: 8, style: { marginBottom: 12 }, children: [_jsx(Tag, { children: getValue(partner, config.noField) || '-' }), _jsx(Typography.Text, { children: getValue(partner, config.nameField) || '-' }), accountTitle ? _jsx(Tag, { children: accountTitle }) : null] })) : null, tabItems.length > 0 ? _jsx(Tabs, { items: tabItems, style: auditTabsStyle }) : _jsx(Typography.Text, { type: "secondary", children: "\u6682\u65E0\u5BA1\u8BA1\u6743\u9650" })] }));
 };
 export default PartnerAuditModal;

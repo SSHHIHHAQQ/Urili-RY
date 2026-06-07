@@ -51,6 +51,7 @@ public class ProductSpu extends BaseEntity
     private Integer warehouseCount;
     private String inventoryStatus;
     private Date stockUpdateTime;
+    private String warehouseKind;
     private List<Long> warehouseIds;
     private List<ProductSpuWarehouse> warehouses;
     private List<ProductSku> skus;
@@ -135,6 +136,8 @@ public class ProductSpu extends BaseEntity
     public void setInventoryStatus(String inventoryStatus) { this.inventoryStatus = inventoryStatus; }
     public Date getStockUpdateTime() { return stockUpdateTime; }
     public void setStockUpdateTime(Date stockUpdateTime) { this.stockUpdateTime = stockUpdateTime; }
+    public String getWarehouseKind() { return warehouseKind; }
+    public void setWarehouseKind(String warehouseKind) { this.warehouseKind = warehouseKind; }
     public List<Long> getWarehouseIds() { return warehouseIds; }
     public void setWarehouseIds(List<Long> warehouseIds) { this.warehouseIds = warehouseIds; }
     public List<ProductSpuWarehouse> getWarehouses() { return warehouses; }

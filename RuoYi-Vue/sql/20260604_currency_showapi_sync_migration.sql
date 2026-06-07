@@ -17,14 +17,41 @@ begin
   end if;
 end//
 
+drop procedure if exists add_column_if_missing//
+create procedure add_column_if_missing(in p_table varchar(64), in p_column varchar(64), in p_definition text)
+begin
+  if not exists (
+    select 1
+    from information_schema.columns
+    where table_schema = database()
+      and table_name = p_table
+      and column_name = p_column
+  ) then
+    set @ddl = concat('alter table ', p_table, ' add column ', p_column, ' ', p_definition);
+    prepare stmt from @ddl;
+    execute stmt;
+    deallocate prepare stmt;
+  end if;
+end//
+
+drop procedure if exists assert_showapi_provider_conflict_absent//
+create procedure assert_showapi_provider_conflict_absent()
+begin
+  if exists (select 1 from finance_currency_sync_config where provider_code = 'GENERIC_RATES')
+     and exists (select 1 from finance_currency_sync_config where provider_code = 'SHOWAPI_BANK_RATE') then
+    signal sqlstate '45000' set message_text = 'finance currency sync config has both GENERIC_RATES and SHOWAPI_BANK_RATE; resolve provider_code conflict before migration';
+  end if;
+end//
+
 delimiter ;
 
 call assert_currency_showapi_sync_migration_confirmed();
 drop procedure if exists assert_currency_showapi_sync_migration_confirmed;
 
-alter table finance_currency_sync_config
-  add column rate_anchor_time time not null default '09:30:00' comment '汇率基准时间'
-  after cron_expression;
+call add_column_if_missing('finance_currency_sync_config', 'rate_anchor_time',
+  'time not null default ''09:30:00'' comment ''汇率基准时间'' after cron_expression');
+
+call assert_showapi_provider_conflict_absent();
 
 update finance_currency_sync_config
 set provider_code = 'SHOWAPI_BANK_RATE',
@@ -82,3 +109,6 @@ set is_default = case when dict_value = 'CNY' then 'Y' else 'N' end,
 where dict_type = 'currency_code'
   and dict_value in ('CNY', 'USD')
   and is_default <> case when dict_value = 'CNY' then 'Y' else 'N' end;
+
+drop procedure if exists assert_showapi_provider_conflict_absent;
+drop procedure if exists add_column_if_missing;

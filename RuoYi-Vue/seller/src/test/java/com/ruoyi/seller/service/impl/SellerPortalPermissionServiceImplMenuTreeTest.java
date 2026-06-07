@@ -47,7 +47,8 @@ public class SellerPortalPermissionServiceImplMenuTreeTest
         SellerAccount account = account(22L, 11L);
         RecordingSellerMapper sellerMapper = recordingSellerMapper(1, account);
         RecordingSellerPortalPermissionMapper permissionMapper = new RecordingSellerPortalPermissionMapper()
-                .withMenus(menu(100L, 0L, "商品中心"), menu(101L, 100L, "商品列表"));
+                .withMenus(menu(100000L, 0L, "商品中心"),
+                        sellerPageMenu(100001L, 100000L, "商品列表", "seller:product:list"));
         SellerPortalPermissionServiceImpl service = service(sellerService(seller), sellerMapper.proxy(),
                 permissionMapper.proxy());
 
@@ -56,11 +57,37 @@ public class SellerPortalPermissionServiceImplMenuTreeTest
         assertOnlineSellerSessionLookup(sellerMapper);
         assertSellerMenuLookup(permissionMapper);
         assertEquals(1, menuTree.size());
-        assertEquals(Long.valueOf(100L), menuTree.get(0).getMenuId());
+        assertEquals(Long.valueOf(100000L), menuTree.get(0).getMenuId());
         assertEquals("商品中心", menuTree.get(0).getMenuName());
         assertEquals(1, menuTree.get(0).getChildren().size());
-        assertEquals(Long.valueOf(101L), menuTree.get(0).getChildren().get(0).getMenuId());
+        assertEquals(Long.valueOf(100001L), menuTree.get(0).getChildren().get(0).getMenuId());
         assertEquals("商品列表", menuTree.get(0).getChildren().get(0).getMenuName());
+    }
+
+    @Test
+    public void selectPortalMenuTreeRejectsDirtySellerTerminalMenus()
+    {
+        assertSellerPortalMenuRejected(sellerPageMenu(200000L, 0L, "wrong id", "seller:product:list"));
+        assertSellerPortalMenuRejected(sellerPageMenu(100000L, 0L, "cross perms", "buyer:product:list"));
+        assertSellerPortalMenuRejected(sellerPageMenu(100000L, 0L, "admin perms", "seller:admin:list"));
+        assertSellerPortalMenuRejected(sellerPageMenu(100000L, 0L, "wildcard perms", "*:*:*"));
+        assertSellerPortalMenuRejected(sellerPageMenu(100000L, 0L, "blank perms", ""));
+
+        PortalMenu crossComponent = sellerPageMenu(100000L, 0L, "cross component", "seller:product:list");
+        crossComponent.setComponent("buyer/product/list");
+        assertSellerPortalMenuRejected(crossComponent);
+
+        PortalMenu commonComponent = sellerPageMenu(100000L, 0L, "common component", "seller:product:list");
+        commonComponent.setComponent("common/placeholder");
+        assertSellerPortalMenuRejected(commonComponent);
+
+        PortalMenu blankComponent = sellerPageMenu(100000L, 0L, "blank component", "seller:product:list");
+        blankComponent.setComponent("");
+        assertSellerPortalMenuRejected(blankComponent);
+
+        PortalMenu blankType = sellerPageMenu(100000L, 0L, "blank type", "seller:product:list");
+        blankType.setMenuType("");
+        assertSellerPortalMenuRejected(blankType);
     }
 
     @Test
@@ -73,8 +100,109 @@ public class SellerPortalPermissionServiceImplMenuTreeTest
         SellerPortalPermissionServiceImpl service = service(sellerService(seller), recordingSellerMapper(1, account).proxy(),
                 permissionMapper.proxy());
         PortalMenu payload = menu(10L, 11L, "商品中心");
+        markValidSellerPageMenu(payload, "seller:product:list");
 
         assertServiceException(() -> service.updateMenu(payload));
+
+        assertEquals(0, permissionMapper.updateMenuCallCount);
+    }
+
+    @Test
+    public void insertMenuRejectsWildcardAdminAndCrossTerminalPermsBeforeMapperWrite()
+    {
+        Seller seller = seller(11L);
+        SellerAccount account = account(22L, 11L);
+        RecordingSellerPortalPermissionMapper permissionMapper = new RecordingSellerPortalPermissionMapper();
+        SellerPortalPermissionServiceImpl service = service(sellerService(seller), recordingSellerMapper(1, account).proxy(),
+                permissionMapper.proxy());
+
+        for (String invalidPerm : new String[] { "*:*:*", "seller:admin:list", "buyer:account:list" })
+        {
+            PortalMenu payload = menu(null, 0L, "invalid " + invalidPerm);
+            markValidSellerPageMenu(payload, invalidPerm);
+            payload.setPerms(invalidPerm);
+            assertServiceException(() -> service.insertMenu(payload));
+        }
+
+        assertEquals(0, permissionMapper.insertMenuCallCount);
+    }
+
+    @Test
+    public void insertMenuRejectsBlankPermsAndInvalidComponentBeforeMapperWrite()
+    {
+        Seller seller = seller(11L);
+        SellerAccount account = account(22L, 11L);
+        RecordingSellerPortalPermissionMapper permissionMapper = new RecordingSellerPortalPermissionMapper();
+        SellerPortalPermissionServiceImpl service = service(sellerService(seller), recordingSellerMapper(1, account).proxy(),
+                permissionMapper.proxy());
+
+        for (String invalidComponent : new String[] { "", "buyer/product/list", "admin/system/list", "Product/List" })
+        {
+            PortalMenu payload = menu(null, 0L, "invalid component");
+            markValidSellerPageMenu(payload, "seller:product:list");
+            payload.setComponent(invalidComponent);
+            assertServiceException(() -> service.insertMenu(payload));
+        }
+
+        PortalMenu blankPagePerms = menu(null, 0L, "blank page perms");
+        markValidSellerPageMenu(blankPagePerms, "");
+        assertServiceException(() -> service.insertMenu(blankPagePerms));
+
+        PortalMenu blankButtonPerms = menu(null, 0L, "blank button perms");
+        blankButtonPerms.setMenuType("F");
+        blankButtonPerms.setPerms("");
+        assertServiceException(() -> service.insertMenu(blankButtonPerms));
+
+        assertEquals(0, permissionMapper.insertMenuCallCount);
+    }
+
+    @Test
+    public void updateMenuRejectsWildcardAdminAndCrossTerminalPermsBeforeMapperWrite()
+    {
+        Seller seller = seller(11L);
+        SellerAccount account = account(22L, 11L);
+        RecordingSellerPortalPermissionMapper permissionMapper = new RecordingSellerPortalPermissionMapper()
+                .withMenuIndex(menu(10L, 0L, "商品中心"));
+        SellerPortalPermissionServiceImpl service = service(sellerService(seller), recordingSellerMapper(1, account).proxy(),
+                permissionMapper.proxy());
+
+        for (String invalidPerm : new String[] { "*:*:*", "seller:admin:list", "buyer:account:list" })
+        {
+            PortalMenu payload = menu(10L, 0L, "invalid " + invalidPerm);
+            markValidSellerPageMenu(payload, invalidPerm);
+            payload.setPerms(invalidPerm);
+            assertServiceException(() -> service.updateMenu(payload));
+        }
+
+        assertEquals(0, permissionMapper.updateMenuCallCount);
+    }
+
+    @Test
+    public void updateMenuRejectsBlankPermsAndInvalidComponentBeforeMapperWrite()
+    {
+        Seller seller = seller(11L);
+        SellerAccount account = account(22L, 11L);
+        RecordingSellerPortalPermissionMapper permissionMapper = new RecordingSellerPortalPermissionMapper()
+                .withMenuIndex(menu(10L, 0L, "商品中心"));
+        SellerPortalPermissionServiceImpl service = service(sellerService(seller), recordingSellerMapper(1, account).proxy(),
+                permissionMapper.proxy());
+
+        for (String invalidComponent : new String[] { "", "buyer/product/list", "admin/system/list", "Product/List" })
+        {
+            PortalMenu payload = menu(10L, 0L, "invalid component");
+            markValidSellerPageMenu(payload, "seller:product:list");
+            payload.setComponent(invalidComponent);
+            assertServiceException(() -> service.updateMenu(payload));
+        }
+
+        PortalMenu blankPagePerms = menu(10L, 0L, "blank page perms");
+        markValidSellerPageMenu(blankPagePerms, "");
+        assertServiceException(() -> service.updateMenu(blankPagePerms));
+
+        PortalMenu blankButtonPerms = menu(10L, 0L, "blank button perms");
+        blankButtonPerms.setMenuType("F");
+        blankButtonPerms.setPerms("");
+        assertServiceException(() -> service.updateMenu(blankButtonPerms));
 
         assertEquals(0, permissionMapper.updateMenuCallCount);
     }
@@ -123,7 +251,38 @@ public class SellerPortalPermissionServiceImplMenuTreeTest
         menu.setMenuId(menuId);
         menu.setParentId(parentId);
         menu.setMenuName(menuName);
+        menu.setMenuType("M");
         return menu;
+    }
+
+    private PortalMenu sellerPageMenu(Long menuId, Long parentId, String menuName, String perms)
+    {
+        PortalMenu menu = menu(menuId, parentId, menuName);
+        markValidSellerPageMenu(menu, perms);
+        return menu;
+    }
+
+    private void markValidSellerPageMenu(PortalMenu menu, String perms)
+    {
+        menu.setMenuType("C");
+        menu.setComponent("seller/product/list");
+        menu.setPerms(perms);
+    }
+
+    private void assertSellerPortalMenuRejected(PortalMenu dirtyMenu)
+    {
+        Seller seller = seller(11L);
+        SellerAccount account = account(22L, 11L);
+        RecordingSellerMapper sellerMapper = recordingSellerMapper(1, account);
+        RecordingSellerPortalPermissionMapper permissionMapper = new RecordingSellerPortalPermissionMapper()
+                .withMenus(dirtyMenu);
+        SellerPortalPermissionServiceImpl service = service(sellerService(seller), sellerMapper.proxy(),
+                permissionMapper.proxy());
+
+        assertServiceException(() -> service.selectPortalMenuTree(session(11L, 22L)));
+
+        assertOnlineSellerSessionLookup(sellerMapper);
+        assertSellerMenuLookup(permissionMapper);
     }
 
     private ISellerService sellerService(Seller seller)
@@ -203,6 +362,12 @@ public class SellerPortalPermissionServiceImplMenuTreeTest
                 if ("selectSellerAccountById".equals(methodName))
                 {
                     return accountById.get((Long) args[0]);
+                }
+                if ("selectSellerAccountByIdAndSellerId".equals(methodName))
+                {
+                    Long sellerId = (Long) args[0];
+                    SellerAccount account = accountById.get((Long) args[1]);
+                    return account != null && sellerId.equals(account.getSellerId()) ? account : null;
                 }
                 if ("countOnlineSellerSession".equals(methodName))
                 {
@@ -319,6 +484,8 @@ public class SellerPortalPermissionServiceImplMenuTreeTest
 
         private int updateMenuCallCount;
 
+        private int insertMenuCallCount;
+
         private RecordingSellerPortalPermissionMapper withMenus(PortalMenu... menus)
         {
             this.menus = Arrays.asList(menus);
@@ -352,6 +519,11 @@ public class SellerPortalPermissionServiceImplMenuTreeTest
                 if ("updateSellerMenu".equals(methodName))
                 {
                     updateMenuCallCount++;
+                    return 1;
+                }
+                if ("insertSellerMenu".equals(methodName))
+                {
+                    insertMenuCallCount++;
                     return 1;
                 }
                 if ("toString".equals(methodName))

@@ -4,6 +4,68 @@
 
 set names utf8mb4;
 
+set @confirm_currency_configuration_seed := coalesce(@confirm_currency_configuration_seed, '');
+
+delimiter //
+
+drop procedure if exists assert_currency_configuration_seed_confirmed//
+create procedure assert_currency_configuration_seed_confirmed()
+begin
+  if coalesce(@confirm_currency_configuration_seed, '')
+      <> 'APPLY_CURRENCY_CONFIGURATION_SEED' then
+    signal sqlstate '45000' set message_text = 'set @confirm_currency_configuration_seed = APPLY_CURRENCY_CONFIGURATION_SEED before running this seed';
+  end if;
+end//
+
+delimiter ;
+
+call assert_currency_configuration_seed_confirmed();
+drop procedure if exists assert_currency_configuration_seed_confirmed;
+
+delimiter //
+
+drop procedure if exists assert_currency_configuration_sys_menu_guard//
+create procedure assert_currency_configuration_sys_menu_guard()
+begin
+  if exists (
+    select 1
+    from sys_menu m
+    where exists (
+        select 1
+        from tmp_currency_configuration_sys_menu_guard seed
+        where seed.menu_id = m.menu_id
+    )
+      and not exists (
+        select 1
+        from tmp_currency_configuration_sys_menu_guard seed
+        where seed.menu_id = m.menu_id
+          and m.parent_id = seed.parent_id
+          and coalesce(m.menu_type, '') = coalesce(seed.menu_type, '')
+          and coalesce(m.path, '') = coalesce(seed.path, '')
+          and coalesce(m.component, '') = coalesce(seed.component, '')
+          and coalesce(m.route_name, '') = coalesce(seed.route_name, '')
+          and coalesce(m.perms, '') = coalesce(seed.perms, '')
+    )
+  ) then
+    signal sqlstate '45000' set message_text = 'currency configuration sys_menu id slot is occupied by another menu';
+  end if;
+
+  if exists (
+    select 1
+    from sys_menu m
+    join tmp_currency_configuration_sys_menu_guard seed
+      on m.menu_id <> seed.menu_id
+     and coalesce(m.path, '') = coalesce(seed.path, '')
+     and coalesce(m.component, '') = coalesce(seed.component, '')
+     and coalesce(m.route_name, '') = coalesce(seed.route_name, '')
+     and coalesce(m.perms, '') = coalesce(seed.perms, '')
+  ) then
+    signal sqlstate '45000' set message_text = 'currency configuration sys_menu signature is already used by another menu';
+  end if;
+end//
+
+delimiter ;
+
 create table if not exists finance_currency (
   currency_id            bigint(20)      not null auto_increment    comment '币种配置ID',
   currency_code          varchar(16)     not null                   comment '币种代码',
@@ -142,6 +204,32 @@ where not exists (
     select 1 from finance_currency c where c.currency_code = seed.currency_code
 );
 
+create temporary table if not exists tmp_currency_configuration_sys_menu_guard (
+  menu_id    bigint       not null,
+  parent_id  bigint       not null,
+  menu_type  char(1)      not null,
+  path       varchar(200) not null default '',
+  component  varchar(255) not null default '',
+  route_name varchar(50)  not null default '',
+  perms      varchar(100) not null default '',
+  key idx_currency_configuration_sys_menu_guard_id (menu_id)
+) engine=memory;
+
+truncate table tmp_currency_configuration_sys_menu_guard;
+
+insert into tmp_currency_configuration_sys_menu_guard(menu_id, parent_id, menu_type, path, component, route_name, perms) values
+    (2442, 2050, 'C', 'currency', 'Finance/Currency/index', 'FinanceCurrency', 'finance:currency:list'),
+    (2442, 2050, 'C', 'currency', 'Common/PlannedPage/index', 'CurrencyConfig', 'basic:currency:list'),
+    (2460, 2442, 'F', '#', '', '', 'finance:currency:query'),
+    (2461, 2442, 'F', '#', '', '', 'finance:currency:add'),
+    (2462, 2442, 'F', '#', '', '', 'finance:currency:edit'),
+    (2463, 2442, 'F', '#', '', '', 'finance:currency:remove'),
+    (2464, 2442, 'F', '#', '', '', 'finance:currency:syncConfig'),
+    (2465, 2442, 'F', '#', '', '', 'finance:currency:sync'),
+    (2466, 2442, 'F', '#', '', '', 'finance:currency:log');
+
+call assert_currency_configuration_sys_menu_guard();
+
 insert into sys_menu
     (menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
      is_frame, is_cache, menu_type, visible, status, perms, icon, create_by,
@@ -189,3 +277,6 @@ on duplicate key update
     update_by = 'admin',
     update_time = sysdate(),
     remark = values(remark);
+
+drop temporary table if exists tmp_currency_configuration_sys_menu_guard;
+drop procedure if exists assert_currency_configuration_sys_menu_guard;

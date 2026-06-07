@@ -102,7 +102,7 @@ export default function OfficialSyncModal({
   return (
     <ModalForm<API.Warehouse.OfficialSyncRequest>
       formRef={formRef}
-      title="同步官方仓库"
+      title="同步官方履约仓"
       open={open}
       width={820}
       modalProps={{ destroyOnClose: true }}
@@ -113,8 +113,8 @@ export default function OfficialSyncModal({
     >
       <ProFormSelect
         name="connectionCode"
-        label="主仓接入"
-        rules={[{ required: true, message: '请选择主仓接入' }]}
+        label="上游履约接入"
+        rules={[{ required: true, message: '请选择上游履约接入' }]}
         fieldProps={{
           ...SEARCHABLE_SELECT_PROPS,
           options: connectionOptions,
@@ -128,8 +128,8 @@ export default function OfficialSyncModal({
         {({ connectionCode }) => (
           <ProFormSelect
             name="upstreamWarehouseCode"
-            label="上游仓库"
-            rules={[{ required: true, message: '请选择上游仓库' }]}
+            label="上游履约仓库"
+            rules={[{ required: true, message: '请选择上游履约仓库' }]}
             fieldProps={{
               ...SEARCHABLE_SELECT_PROPS,
               options: candidateOptions,

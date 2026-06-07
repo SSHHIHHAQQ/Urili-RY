@@ -88,7 +88,7 @@ public class AdminSellerController extends BaseController
         return success(sellerService.selectSellerAccountList(sellerId));
     }
 
-    @PreAuthorize("@ss.hasPermi('seller:admin:account:role:query')")
+    @PreAuthorize("@ss.hasPermi('seller:admin:account:role:query') and @ss.hasPermi('seller:admin:role:query')")
     @GetMapping("/{sellerId}/accounts/{accountId}/roles")
     public AjaxResult accountRoles(@PathVariable("sellerId") Long sellerId, @PathVariable("accountId") Long accountId)
     {
@@ -118,7 +118,7 @@ public class AdminSellerController extends BaseController
     @PreAuthorize("@ss.hasPermi('seller:admin:account:edit')")
     @Log(title = "卖家账号", businessType = BusinessType.UPDATE)
     @PutMapping("/{sellerId}/accounts")
-    public AjaxResult editAccount(@PathVariable("sellerId") Long sellerId, @RequestBody SellerAccount account)
+    public AjaxResult editAccount(@PathVariable("sellerId") Long sellerId, @Validated @RequestBody SellerAccount account)
     {
         return toAjax(sellerService.updateSellerAccount(sellerId, account));
     }
@@ -147,23 +147,6 @@ public class AdminSellerController extends BaseController
             @RequestBody SellerAccount account)
     {
         return toAjax(sellerService.resetSellerAccountPassword(sellerId, accountId, account == null ? null : account.getPassword()));
-    }
-
-    @PreAuthorize("@ss.hasPermi('seller:admin:account:resetPwd')")
-    @Log(title = "卖家账号", businessType = BusinessType.UPDATE)
-    @PutMapping("/{sellerId}/accounts/{accountId}/resetDefaultPwd")
-    public AjaxResult resetDefaultPassword(@PathVariable("sellerId") Long sellerId,
-            @PathVariable("accountId") Long accountId)
-    {
-        return toAjax(sellerService.resetSellerAccountDefaultPassword(sellerId, accountId));
-    }
-
-    @PreAuthorize("@ss.hasPermi('seller:admin:resetPwd')")
-    @Log(title = "卖家主账号", businessType = BusinessType.UPDATE)
-    @PutMapping("/{sellerId}/resetOwnerPwd")
-    public AjaxResult resetOwnerPassword(@PathVariable("sellerId") Long sellerId)
-    {
-        return toAjax(sellerService.resetSellerOwnerPassword(sellerId));
     }
 
     @PreAuthorize("@ss.hasPermi('seller:admin:forceLogout')")

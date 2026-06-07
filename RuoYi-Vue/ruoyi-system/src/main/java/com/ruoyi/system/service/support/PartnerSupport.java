@@ -6,6 +6,7 @@ import java.util.function.Function;
 import org.apache.commons.lang3.StringUtils;
 import com.ruoyi.common.constant.Constants;
 import com.ruoyi.common.constant.UserConstants;
+import com.ruoyi.common.core.domain.entity.SysDictData;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.system.domain.PartnerProfile;
 import com.ruoyi.system.domain.PartnerProfile.Attachment;
@@ -32,6 +33,8 @@ public class PartnerSupport
     public static final String DEFAULT_LEVEL = "L1";
 
     public static final String DEFAULT_OWNER_PASSWORD = "U12346";
+
+    public static final String COUNTRY_REGION_DICT_TYPE = "country_region";
 
     private static final List<String> SUBJECT_TYPES = List.of("COMPANY", "PERSON", "OTHER");
 
@@ -63,10 +66,7 @@ public class PartnerSupport
         profile.setLegalId(StringUtils.trimToEmpty(profile.getLegalId()));
         profile.setBusinessLicenseNo(StringUtils.trimToEmpty(profile.getBusinessLicenseNo()));
         profile.setCountryCode(trimRequired(profile.getCountryCode(), "国家/地区不能为空").toUpperCase());
-        if (profile.getCountryCode().length() != 2)
-        {
-            throw new ServiceException("国家/地区代码必须是2位代码");
-        }
+        assertCountryCodeFormat(profile.getCountryCode());
         profile.setStateProvince(StringUtils.trimToEmpty(profile.getStateProvince()));
         profile.setCity(trimRequired(profile.getCity(), "城市不能为空"));
         profile.setPostalCode(trimRequired(profile.getPostalCode(), "邮编不能为空"));
@@ -76,6 +76,30 @@ public class PartnerSupport
         profile.setContactPhone(trimRequired(profile.getContactPhone(), "手机号不能为空"));
         profile.setContactEmail(StringUtils.trimToEmpty(profile.getContactEmail()));
         normalizeAttachment(profile, unchangedLegacyAttachmentUrl);
+    }
+
+    public static void assertCountryRegionCode(String countryCode, List<SysDictData> countryRegionOptions)
+    {
+        String code = trimRequired(countryCode, "国家/地区不能为空").toUpperCase();
+        assertCountryCodeFormat(code);
+        if (countryRegionOptions == null || countryRegionOptions.isEmpty())
+        {
+            throw new ServiceException("国家/地区字典未配置");
+        }
+        boolean matched = countryRegionOptions.stream()
+                .anyMatch(data -> data != null && StringUtils.equalsIgnoreCase(code, data.getDictValue()));
+        if (!matched)
+        {
+            throw new ServiceException("国家/地区代码不在字典范围内");
+        }
+    }
+
+    private static void assertCountryCodeFormat(String countryCode)
+    {
+        if (!countryCode.matches("[A-Z]{2}"))
+        {
+            throw new ServiceException("国家/地区代码必须是2位大写字母代码");
+        }
     }
 
     public static String normalizeSubjectType(String value)
@@ -197,6 +221,20 @@ public class PartnerSupport
             throw new ServiceException("两次密码输入不一致");
         }
         return newPassword;
+    }
+
+    public static String normalizeTemporaryPassword(String password)
+    {
+        if (StringUtils.isBlank(password))
+        {
+            throw new ServiceException("新密码不能为空");
+        }
+        if (password.length() < UserConstants.PASSWORD_MIN_LENGTH
+                || password.length() > UserConstants.PASSWORD_MAX_LENGTH)
+        {
+            throw new ServiceException("密码长度必须在5到20个字符之间");
+        }
+        return password;
     }
 
     private static String buildNoPrefix(String prefix, LocalDate date)

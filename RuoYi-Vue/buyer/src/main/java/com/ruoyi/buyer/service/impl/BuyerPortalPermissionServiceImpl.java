@@ -98,7 +98,7 @@ public class BuyerPortalPermissionServiceImpl implements IBuyerPortalPermissionS
     @Override
     public int insertMenu(PortalMenu menu)
     {
-        PortalPermissionSupport.normalizeMenu(menu);
+        PortalPermissionSupport.normalizeTerminalMenu(menu, "buyer");
         assertMenuParentSafe(menu);
         if (!checkMenuNameUnique(menu))
         {
@@ -112,7 +112,7 @@ public class BuyerPortalPermissionServiceImpl implements IBuyerPortalPermissionS
     public int updateMenu(PortalMenu menu)
     {
         selectMenuById(menu.getMenuId());
-        PortalPermissionSupport.normalizeMenu(menu);
+        PortalPermissionSupport.normalizeTerminalMenu(menu, "buyer");
         PortalPermissionSupport.assertMenuNotSelfParent(menu);
         assertMenuParentSafe(menu);
         if (!checkMenuNameUnique(menu))
@@ -172,6 +172,7 @@ public class BuyerPortalPermissionServiceImpl implements IBuyerPortalPermissionS
         buyerService.selectBuyerById(buyerId);
         PortalPermissionSupport.normalizeRole(role, buyerId);
         checkRoleUnique(role);
+        assertRoleMenusExist(role);
         role.setCreateBy(SecurityUtils.getUsername());
         int rows = permissionMapper.insertBuyerRole(role);
         insertRoleMenus(role);
@@ -185,6 +186,7 @@ public class BuyerPortalPermissionServiceImpl implements IBuyerPortalPermissionS
         assertRoleNotOwner(selectRoleById(buyerId, role.getRoleId()));
         PortalPermissionSupport.normalizeRole(role, buyerId);
         checkRoleUnique(role);
+        assertRoleMenusExist(role);
         role.setUpdateBy(SecurityUtils.getUsername());
         int rows = permissionMapper.updateBuyerRole(role);
         permissionMapper.deleteBuyerRoleMenuByRoleId(buyerId, role.getRoleId());
@@ -241,7 +243,7 @@ public class BuyerPortalPermissionServiceImpl implements IBuyerPortalPermissionS
         {
             throw new ServiceException("存在不属于该买家的角色");
         }
-        assertOwnerAccountKeepsOwnerRole(buyerId, account, ids);
+        assertOwnerRoleBindingMatchesAccountRole(buyerId, account, ids);
         permissionMapper.deleteBuyerAccountRoles(buyerId, accountId);
         if (ids.length == 0)
         {
@@ -270,7 +272,12 @@ public class BuyerPortalPermissionServiceImpl implements IBuyerPortalPermissionS
     public List<PortalMenu> selectPortalMenuTree(PortalLoginSession session)
     {
         assertActiveBuyerSession(session);
-        return PortalPermissionSupport.buildMenuTree(permissionMapper.selectBuyerAccountMenuList(session.getSubjectId(), session.getAccountId()));
+        List<PortalMenu> menus = permissionMapper.selectBuyerAccountMenuList(session.getSubjectId(), session.getAccountId());
+        for (PortalMenu menu : menus)
+        {
+            PortalPermissionSupport.assertReadableTerminalMenu(menu, "buyer");
+        }
+        return PortalPermissionSupport.buildMenuTree(menus);
     }
 
     @Override
@@ -291,6 +298,26 @@ public class BuyerPortalPermissionServiceImpl implements IBuyerPortalPermissionS
         if (menuIds.length > 0)
         {
             permissionMapper.batchBuyerRoleMenu(role.getSubjectId(), role.getRoleId(), menuIds);
+        }
+    }
+
+    private void assertRoleMenusExist(PortalRole role)
+    {
+        Long[] menuIds = PortalPermissionSupport.sanitizeIds(role.getMenuIds());
+        if (menuIds.length > 0 && permissionMapper.countBuyerMenusByIds(menuIds) != menuIds.length)
+        {
+            throw new ServiceException("存在不属于买家端的菜单");
+        }
+        for (Long menuId : menuIds)
+        {
+            PortalMenu menu = permissionMapper.selectBuyerMenuById(menuId);
+            if (menu == null)
+            {
+                throw new ServiceException("存在不属于买家端的菜单");
+            }
+            PortalPermissionSupport.assertTerminalMenuId(menu.getMenuId(), "buyer");
+            PortalPermissionSupport.assertTerminalMenuComponent(menu, "buyer");
+            PortalPermissionSupport.assertTerminalMenuPerms(menu, "buyer");
         }
     }
 
@@ -331,20 +358,26 @@ public class BuyerPortalPermissionServiceImpl implements IBuyerPortalPermissionS
         return role != null && role.getRoleKey() != null && OWNER_ROLE_KEY.equalsIgnoreCase(role.getRoleKey().trim());
     }
 
-    private void assertOwnerAccountKeepsOwnerRole(Long buyerId, BuyerAccount account, Long[] roleIds)
+    private void assertOwnerRoleBindingMatchesAccountRole(Long buyerId, BuyerAccount account, Long[] roleIds)
     {
-        if (!PartnerSupport.ACCOUNT_ROLE_OWNER.equals(account.getAccountRole()))
-        {
-            return;
-        }
         PortalRole ownerRole = permissionMapper.checkBuyerRoleKeyUnique(buyerId, OWNER_ROLE_KEY);
+        boolean ownerAccount = PartnerSupport.ACCOUNT_ROLE_OWNER.equals(account.getAccountRole());
         if (ownerRole == null || !UserConstants.NORMAL.equals(ownerRole.getStatus()))
         {
-            throw new ServiceException("买家端 owner 角色不存在或已停用");
+            if (ownerAccount)
+            {
+                throw new ServiceException("买家端 owner 角色不存在或已停用");
+            }
+            return;
         }
-        if (!Arrays.asList(roleIds).contains(ownerRole.getRoleId()))
+        boolean hasOwnerRole = Arrays.asList(roleIds).contains(ownerRole.getRoleId());
+        if (ownerAccount && !hasOwnerRole)
         {
             throw new ServiceException("买家主账号必须保留 owner 角色");
+        }
+        if (!ownerAccount && hasOwnerRole)
+        {
+            throw new ServiceException("非买家主账号不能分配 owner 角色");
         }
     }
 
@@ -365,8 +398,8 @@ public class BuyerPortalPermissionServiceImpl implements IBuyerPortalPermissionS
     private BuyerAccount assertBuyerAccount(Long buyerId, Long accountId)
     {
         buyerService.selectBuyerById(buyerId);
-        BuyerAccount account = buyerMapper.selectBuyerAccountById(accountId);
-        if (account == null || !buyerId.equals(account.getBuyerId()))
+        BuyerAccount account = buyerMapper.selectBuyerAccountByIdAndBuyerId(buyerId, accountId);
+        if (account == null)
         {
             throw new ServiceException("买家端账号不存在");
         }
@@ -413,10 +446,26 @@ public class BuyerPortalPermissionServiceImpl implements IBuyerPortalPermissionS
         {
             if (StringUtils.isNotEmpty(value))
             {
-                permissions.addAll(Arrays.asList(value.trim().split(",")));
+                for (String item : value.split(","))
+                {
+                    String permission = StringUtils.trimToEmpty(item);
+                    if (StringUtils.isNotEmpty(permission))
+                    {
+                        assertBuyerPortalPermission(permission);
+                        permissions.add(permission);
+                    }
+                }
             }
         }
-        permissions.removeIf(StringUtils::isEmpty);
         return permissions;
+    }
+
+    private void assertBuyerPortalPermission(String permission)
+    {
+        if (!permission.startsWith("buyer:") || permission.startsWith("buyer:admin:")
+                || "*:*:*".equals(permission))
+        {
+            throw new ServiceException("买家端权限配置异常");
+        }
     }
 }

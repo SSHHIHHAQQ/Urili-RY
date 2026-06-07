@@ -216,23 +216,13 @@ export async function removeAdminSellerRoles(sellerId, roleIds) {
         method: 'DELETE',
     });
 }
-export async function resetAdminSellerAccountPassword(sellerId, sellerAccountId, data) {
+export async function resetAdminSellerAccountPassword(sellerId, sellerAccountId, password) {
     return request(`/api/seller/admin/sellers/${sellerId}/accounts/${sellerAccountId}/resetPwd`, {
         method: 'PUT',
         headers: {
             'Content-Type': 'application/json;charset=UTF-8',
         },
-        data,
-    });
-}
-export async function resetAdminSellerAccountDefaultPassword(sellerId, sellerAccountId) {
-    return request(`/api/seller/admin/sellers/${sellerId}/accounts/${sellerAccountId}/resetDefaultPwd`, {
-        method: 'PUT',
-    });
-}
-export async function resetAdminSellerOwnerPassword(sellerId) {
-    return request(`/api/seller/admin/sellers/${sellerId}/resetOwnerPwd`, {
-        method: 'PUT',
+        data: { password },
     });
 }
 export async function forceLogoutAdminSellerSessions(sellerId) {

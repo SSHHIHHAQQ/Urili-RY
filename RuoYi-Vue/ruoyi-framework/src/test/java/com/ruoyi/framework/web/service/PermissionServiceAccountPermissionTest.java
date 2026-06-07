@@ -44,7 +44,7 @@ public class PermissionServiceAccountPermissionTest
                 "seller:admin:query",
                 "seller:admin:add",
                 "seller:admin:edit",
-                "seller:admin:resetPwd",
+                "seller:admin:changeStatus",
                 "seller:admin:role:query",
                 "seller:admin:role:edit");
 
@@ -67,7 +67,7 @@ public class PermissionServiceAccountPermissionTest
                 "buyer:admin:query",
                 "buyer:admin:add",
                 "buyer:admin:edit",
-                "buyer:admin:resetPwd",
+                "buyer:admin:changeStatus",
                 "buyer:admin:role:query",
                 "buyer:admin:role:edit");
 

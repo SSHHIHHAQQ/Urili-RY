@@ -103,12 +103,12 @@ public class PortalPreAuthorizeAspect
                 operLog.setSubjectId(session.getSubjectId());
                 operLog.setAccountId(session.getAccountId());
                 operLog.setOperName(session.getUserName());
-                appendDirectLoginAudit(operLog, session);
             }
             else
             {
                 operLog.setOperName("anonymous");
             }
+            applyDirectLoginAudit(operLog, session);
 
             operLog.setTitle("Portal access denied");
             operLog.setBusinessType(BusinessType.OTHER.ordinal());
@@ -142,7 +142,22 @@ public class PortalPreAuthorizeAspect
         return code + ": " + exception.getMessage();
     }
 
-    private void appendDirectLoginAudit(PortalOperLog operLog, PortalLoginSession session)
+    private void applyDirectLoginAudit(PortalOperLog operLog, PortalLoginSession session)
+    {
+        operLog.setDirectLogin(Boolean.FALSE);
+        if (session == null || !Boolean.TRUE.equals(session.getDirectLogin()))
+        {
+            return;
+        }
+        operLog.setDirectLogin(Boolean.TRUE);
+        operLog.setDirectLoginTicketId(session.getDirectLoginTicketId());
+        operLog.setActingAdminId(session.getActingAdminId());
+        operLog.setActingAdminName(session.getActingAdminName());
+        operLog.setDirectLoginReason(session.getDirectLoginReason());
+        appendDirectLoginAuditParam(operLog, session);
+    }
+
+    private void appendDirectLoginAuditParam(PortalOperLog operLog, PortalLoginSession session)
     {
         if (session == null || !Boolean.TRUE.equals(session.getDirectLogin()))
         {

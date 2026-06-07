@@ -33,7 +33,7 @@ public class PortalLoginSessionConsistencyContractTest
     }
 
     @Test
-    public void forceLogoutMustAuditEachOnlineSessionWithDirectLoginContext() throws IOException
+    public void forceLogoutMustAuditEachOnlineSessionWithCurrentAdminActor() throws IOException
     {
         Path backendRoot = findBackendRoot();
         List<String> violations = new ArrayList<>();
@@ -43,7 +43,7 @@ public class PortalLoginSessionConsistencyContractTest
 
         if (!violations.isEmpty())
         {
-            fail("terminal force logout must load online sessions and preserve direct-login audit context:\n"
+            fail("terminal force logout must load online sessions, preserve direct-login session markers, and audit current admin actor:\n"
                     + String.join("\n", violations));
         }
     }
@@ -101,12 +101,16 @@ public class PortalLoginSessionConsistencyContractTest
         requireContains(serviceSource, selectMethod + "(" + subjectIdParam + ", " + accountIdParam + ")", service,
                 violations);
         requireContains(serviceSource, forceAuditMethod + "(" + subjectIdParam + ", " + accountIdParam
-                + ", reason, sessions)", service, violations);
+                + ", reason, sessions, auditCurrentAdmin)", service, violations);
         requireContains(serviceSource, "sessions.stream().map(PortalLoginSession::getTokenId)", service, violations);
         requireContains(serviceSource, "private void " + forceSessionAuditMethod + "(PortalLoginSession session",
                 service, violations);
         requireContains(serviceSource, "portalTokenSupport.buildDirectLoginLog(session.getSubjectId(), session.getAccountId()",
                 service, violations);
+        requireContains(serviceSource, "boolean auditCurrentAdmin", service, violations);
+        requireContains(serviceSource, "applyCurrentAdminAudit(log)", service, violations);
+        requireContains(serviceSource, "log.setActingAdminId(SecurityUtils.getUserId())", service, violations);
+        requireContains(serviceSource, "log.setActingAdminName(SecurityUtils.getUsername())", service, violations);
 
         requireContains(mapperXmlSource, "<select id=\"" + selectMethod + "\" resultType=\"PortalLoginSession\">",
                 mapperXml, violations);

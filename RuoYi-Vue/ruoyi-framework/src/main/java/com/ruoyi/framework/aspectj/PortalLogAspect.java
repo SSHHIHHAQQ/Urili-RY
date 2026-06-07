@@ -83,14 +83,18 @@ public class PortalLogAspect
     {
         try
         {
-            PortalLoginSession session = PortalSessionContext.getSession(controllerLog.terminal());
-            if (session == null)
-            {
-                session = portalTokenSupport.getSession(controllerLog.terminal());
-            }
-            if (session == null && controllerLog.allowAnonymous())
+            PortalLoginSession session = null;
+            if (controllerLog.allowAnonymous())
             {
                 session = resolveSessionFromLoginResult(controllerLog.terminal(), jsonResult);
+            }
+            else
+            {
+                session = PortalSessionContext.getSession(controllerLog.terminal());
+                if (session == null)
+                {
+                    session = portalTokenSupport.getSession(controllerLog.terminal());
+                }
             }
 
             PortalOperLog operLog = new PortalOperLog();
@@ -126,7 +130,7 @@ public class PortalLogAspect
 
             Long startTime = TIME_THREADLOCAL.get();
             operLog.setCostTime(startTime == null ? 0L : System.currentTimeMillis() - startTime);
-            appendDirectLoginAudit(operLog, session);
+            applyDirectLoginAudit(operLog, session);
             AsyncManager.me().execute(AsyncFactory.recordPortalOper(controllerLog.terminal(), operLog));
         }
         catch (Exception exp)
@@ -170,7 +174,22 @@ public class PortalLogAspect
         }
     }
 
-    private void appendDirectLoginAudit(PortalOperLog operLog, PortalLoginSession session)
+    private void applyDirectLoginAudit(PortalOperLog operLog, PortalLoginSession session)
+    {
+        operLog.setDirectLogin(Boolean.FALSE);
+        if (session == null || !Boolean.TRUE.equals(session.getDirectLogin()))
+        {
+            return;
+        }
+        operLog.setDirectLogin(Boolean.TRUE);
+        operLog.setDirectLoginTicketId(session.getDirectLoginTicketId());
+        operLog.setActingAdminId(session.getActingAdminId());
+        operLog.setActingAdminName(session.getActingAdminName());
+        operLog.setDirectLoginReason(session.getDirectLoginReason());
+        appendDirectLoginAuditParam(operLog, session);
+    }
+
+    private void appendDirectLoginAuditParam(PortalOperLog operLog, PortalLoginSession session)
     {
         if (session == null || !Boolean.TRUE.equals(session.getDirectLogin()))
         {

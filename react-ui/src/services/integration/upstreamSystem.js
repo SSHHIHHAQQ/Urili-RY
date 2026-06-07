@@ -121,8 +121,8 @@ export async function addWarehousePairing(connectionCode, data) {
   });
 }
 
-export async function deleteWarehousePairing(warehousePairingId) {
-  return request(`${baseUrl}/warehouse-pairings/${warehousePairingId}`, {
+export async function deleteWarehousePairing(connectionCode, warehousePairingId) {
+  return request(`${baseUrl}/${connectionCode}/warehouse-pairings/${warehousePairingId}`, {
     method: 'DELETE',
   });
 }
@@ -147,8 +147,8 @@ export async function addLogisticsChannelPairing(connectionCode, data) {
   });
 }
 
-export async function deleteLogisticsChannelPairing(logisticsChannelPairingId) {
-  return request(`${baseUrl}/logistics-channel-pairings/${logisticsChannelPairingId}`, {
+export async function deleteLogisticsChannelPairing(connectionCode, logisticsChannelPairingId) {
+  return request(`${baseUrl}/${connectionCode}/logistics-channel-pairings/${logisticsChannelPairingId}`, {
     method: 'DELETE',
   });
 }
@@ -179,8 +179,8 @@ export async function addSkuPairing(connectionCode, data) {
   });
 }
 
-export async function deleteSkuPairing(skuPairingId) {
-  return request(`${baseUrl}/sku-pairings/${skuPairingId}`, {
+export async function deleteSkuPairing(connectionCode, skuPairingId) {
+  return request(`${baseUrl}/${connectionCode}/sku-pairings/${skuPairingId}`, {
     method: 'DELETE',
   });
 }

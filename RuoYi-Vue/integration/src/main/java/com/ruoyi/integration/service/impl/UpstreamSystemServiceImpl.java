@@ -1,16 +1,11 @@
 package com.ruoyi.integration.service.impl;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Calendar;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
@@ -19,7 +14,9 @@ import org.springframework.transaction.annotation.Transactional;
 import com.alibaba.fastjson2.JSON;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
+import com.ruoyi.integration.domain.IntegrationOption;
 import com.ruoyi.integration.domain.SourceProductItem;
+import com.ruoyi.integration.domain.SourceWarehouseStockGroupItem;
 import com.ruoyi.integration.domain.SourceWarehouseStockItem;
 import com.ruoyi.integration.domain.UpstreamLogisticsChannelPairing;
 import com.ruoyi.integration.domain.UpstreamLogisticsChannelSyncItem;
@@ -29,7 +26,6 @@ import com.ruoyi.integration.domain.UpstreamSkuPairing;
 import com.ruoyi.integration.domain.UpstreamSkuPairingAuditEvent;
 import com.ruoyi.integration.domain.UpstreamSkuSyncItem;
 import com.ruoyi.integration.domain.UpstreamSkuSyncState;
-import com.ruoyi.integration.domain.UpstreamSyncBatch;
 import com.ruoyi.integration.domain.UpstreamSyncState;
 import com.ruoyi.integration.domain.UpstreamSystemConnection;
 import com.ruoyi.integration.domain.UpstreamWarehousePairing;
@@ -42,25 +38,14 @@ import com.ruoyi.integration.domain.request.SkuPairingRequest;
 import com.ruoyi.integration.domain.request.UpstreamConnectionInfoRequest;
 import com.ruoyi.integration.domain.request.UpstreamConnectionRequest;
 import com.ruoyi.integration.domain.request.UpstreamCredentialRequest;
-import com.ruoyi.integration.domain.request.UpstreamSyncRequest;
 import com.ruoyi.integration.domain.request.WarehousePairingRequest;
 import com.ruoyi.integration.domain.response.SourceProductGroupDetail;
-import com.ruoyi.integration.domain.response.UpstreamSyncItemResult;
-import com.ruoyi.integration.domain.response.UpstreamSyncResult;
-import com.ruoyi.integration.lingxing.LingxingClientException;
-import com.ruoyi.integration.lingxing.LingxingCredentials;
-import com.ruoyi.integration.lingxing.LingxingInventoryProductPage;
-import com.ruoyi.integration.lingxing.LingxingInventoryProductStock;
-import com.ruoyi.integration.lingxing.LingxingLogisticsChannel;
 import com.ruoyi.integration.lingxing.LingxingOpenApiClient;
-import com.ruoyi.integration.lingxing.LingxingProductPage;
-import com.ruoyi.integration.lingxing.LingxingProductSku;
-import com.ruoyi.integration.lingxing.LingxingRequestLogEntry;
-import com.ruoyi.integration.lingxing.LingxingWarehouse;
 import com.ruoyi.integration.mapper.UpstreamSystemMapper;
 import com.ruoyi.integration.service.IUpstreamSystemService;
 import com.ruoyi.integration.support.UpstreamMaskUtils;
 import com.ruoyi.integration.support.UpstreamSystemConstants;
+import com.ruoyi.integration.sync.UpstreamLingxingClientFactory;
 import com.ruoyi.system.service.support.SecretCipherSupport;
 
 /**
@@ -69,22 +54,6 @@ import com.ruoyi.system.service.support.SecretCipherSupport;
 @Service
 public class UpstreamSystemServiceImpl implements IUpstreamSystemService
 {
-    private static final int SKU_PAGE_SIZE = 100;
-
-    private static final int SKU_DIMENSION_BATCH_SIZE = 50;
-
-    private static final int SKU_DIMENSION_FULL_RATE_LIMIT_MS = 2000;
-
-    private static final int SKU_DIMENSION_SELECTED_LIMIT = 100;
-
-    private static final long INVENTORY_SYNC_OVERLAP_MS = 5 * 60 * 1000L;
-
-    private static final long TEN_MINUTES_MS = 10 * 60 * 1000L;
-
-    private static final long ONE_DAY_MS = 24 * 60 * 60 * 1000L;
-
-    private final Set<String> syncingConnectionCodes = ConcurrentHashMap.newKeySet();
-
     @Autowired
     private UpstreamSystemMapper upstreamSystemMapper;
 
@@ -92,7 +61,13 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
     private SourceProductReadModelService sourceProductReadModelService;
 
     @Autowired
+    private SourceWarehouseStockReadModelService sourceWarehouseStockReadModelService;
+
+    @Autowired
     private SecretCipherSupport secretCipherSupport;
+
+    @Autowired
+    private UpstreamLingxingClientFactory lingxingClientFactory;
 
     @Override
     public List<UpstreamSystemConnection> selectConnectionList(UpstreamSystemConnection query)
@@ -230,7 +205,7 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
         LingxingOpenApiClient client = createClient(connection);
         try
         {
-            client.listWorkOrderTypes(UUID.randomUUID().toString());
+            client.checkWarehouseAccess(UUID.randomUUID().toString());
             connection.setCredentialStatus(UpstreamSystemConstants.CREDENTIAL_STATUS_CONFIGURED);
             connection.setLastAuthorizedTime(new Date());
             connection.setUpdateBy(SecurityUtils.getUsername());
@@ -242,177 +217,6 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
             upstreamSystemMapper.updateConnectionStatus(connectionCode, connection.getStatus(), SecurityUtils.getUsername());
             throw toServiceException(ex);
         }
-    }
-
-    @Override
-    public UpstreamSyncResult syncAll(String connectionCode)
-    {
-        UpstreamSyncRequest request = new UpstreamSyncRequest();
-        request.setSyncTypes(Arrays.asList(
-            UpstreamSystemConstants.SYNC_TYPE_WAREHOUSE,
-            UpstreamSystemConstants.SYNC_TYPE_LOGISTICS_CHANNEL,
-            UpstreamSystemConstants.SYNC_TYPE_SKU));
-        return syncSelected(connectionCode, request);
-    }
-
-    @Override
-    public UpstreamSyncResult syncSelected(String connectionCode, UpstreamSyncRequest request)
-    {
-        UpstreamSystemConnection connection = selectConnectionByCode(connectionCode);
-        if (!UpstreamSystemConstants.STATUS_ENABLED.equals(connection.getStatus()))
-        {
-            throw new ServiceException("主仓接入已停用，不能同步");
-        }
-        List<String> syncTypes = normalizeSyncTypes(request == null ? null : request.getSyncTypes());
-        if (syncTypes.isEmpty())
-        {
-            throw new ServiceException("请选择需要同步的内容");
-        }
-        acquireSyncLock(connectionCode);
-        try
-        {
-            LingxingOpenApiClient client = createClient(connection);
-            UpstreamSyncResult result = new UpstreamSyncResult();
-            result.setSyncBatchId(UUID.randomUUID().toString());
-            for (String syncType : syncTypes)
-            {
-                UpstreamSyncItemResult item = executeManualSyncItem(client, connectionCode, syncType);
-                mergeSyncItemResult(result, item);
-            }
-            upstreamSystemMapper.updateConnectionSyncSummary(connectionCode);
-            return result;
-        }
-        finally
-        {
-            releaseSyncLock(connectionCode);
-        }
-    }
-
-    @Override
-    public UpstreamSyncResult syncScheduled(String connectionCode, String syncType)
-    {
-        return syncSingleType(connectionCode, normalizeSingleSyncType(syncType),
-            UpstreamSystemConstants.SYNC_MODE_SCHEDULED);
-    }
-
-    @Override
-    public UpstreamSyncResult syncWarehousesOnly(String connectionCode)
-    {
-        return syncSingleType(connectionCode, UpstreamSystemConstants.SYNC_TYPE_WAREHOUSE,
-            UpstreamSystemConstants.SYNC_MODE_MANUAL);
-    }
-
-    @Override
-    public UpstreamSyncResult syncLogisticsChannelsOnly(String connectionCode)
-    {
-        return syncSingleType(connectionCode, UpstreamSystemConstants.SYNC_TYPE_LOGISTICS_CHANNEL,
-            UpstreamSystemConstants.SYNC_MODE_MANUAL);
-    }
-
-    @Override
-    public UpstreamSyncResult syncSkuInfoOnly(String connectionCode)
-    {
-        return syncSingleType(connectionCode, UpstreamSystemConstants.SYNC_TYPE_SKU,
-            UpstreamSystemConstants.SYNC_MODE_MANUAL);
-    }
-
-    private UpstreamSyncResult syncSingleType(String connectionCode, String syncType, String mode)
-    {
-        UpstreamSystemConnection connection = selectEnabledConnection(connectionCode);
-        acquireSyncLock(connectionCode);
-        try
-        {
-            LingxingOpenApiClient client = createClient(connection);
-            UpstreamSyncItemResult item = executeSyncItem(client, connectionCode, syncType, mode);
-            UpstreamSyncResult result = new UpstreamSyncResult();
-            result.setSyncBatchId(UUID.randomUUID().toString());
-            mergeSyncItemResult(result, item);
-            upstreamSystemMapper.updateConnectionSyncSummary(connectionCode);
-            return result;
-        }
-        finally
-        {
-            releaseSyncLock(connectionCode);
-        }
-    }
-
-    @Override
-    public UpstreamSyncResult syncSkusOnly(String connectionCode)
-    {
-        return syncSkuInfoOnly(connectionCode);
-    }
-
-    @Override
-    public UpstreamSyncResult syncSkuDimensionsOnly(String connectionCode)
-    {
-        return syncSingleType(connectionCode, UpstreamSystemConstants.SYNC_TYPE_SKU_DIMENSION,
-            UpstreamSystemConstants.SYNC_MODE_MANUAL);
-    }
-
-    @Override
-    public UpstreamSyncResult syncSkuDimensionsBySkuList(String connectionCode, SkuDimensionSelectedSyncRequest request)
-    {
-        UpstreamSystemConnection connection = selectEnabledConnection(connectionCode);
-        List<String> skuList = normalizeSelectedSkuList(request == null ? null : request.getSkuList());
-        String syncBatchId = null;
-        Date startedTime = null;
-        acquireSyncLock(connectionCode);
-        try
-        {
-            LingxingOpenApiClient client = createClient(connection);
-            syncBatchId = UUID.randomUUID().toString();
-            startedTime = new Date();
-            recordSyncState(connectionCode, UpstreamSystemConstants.SYNC_TYPE_SKU_DIMENSION,
-                UpstreamSystemConstants.SYNC_STATUS_SYNCING, syncBatchId, startedTime, null, null, null,
-                0, 0, 0, "", "", UpstreamSystemConstants.SYNC_MODE_SELECTED, 0);
-            insertSyncBatch(syncBatchId, connectionCode, UpstreamSystemConstants.SYNC_TYPE_SKU_DIMENSION,
-                UpstreamSystemConstants.SYNC_MODE_SELECTED, startedTime);
-            UpstreamSyncItemResult item = syncSkuDimensionsByCodes(client, connectionCode, skuList, syncBatchId,
-                UpstreamSystemConstants.OP_SKU_DIMENSION_SELECTED_SYNC, 0);
-            int dimensionCount = item.getCount();
-            Date finishedTime = new Date();
-            recordSyncState(connectionCode, UpstreamSystemConstants.SYNC_TYPE_SKU_DIMENSION,
-                UpstreamSystemConstants.SYNC_STATUS_FRESH, syncBatchId, startedTime, finishedTime, finishedTime,
-                nextDailyTime(), dimensionCount, dimensionCount, 0, "", "", UpstreamSystemConstants.SYNC_MODE_SELECTED, 0);
-            upstreamSystemMapper.updateConnectionSyncSummary(connectionCode);
-            sourceProductReadModelService.rebuildOfficialMasterByConnection(connectionCode);
-
-            UpstreamSyncResult result = new UpstreamSyncResult();
-            result.setSyncBatchId(syncBatchId);
-            result.setSkuDimensionCount(dimensionCount);
-            result.getItems().add(item);
-            updateSyncBatch(syncBatchId, UpstreamSystemConstants.SYNC_STATUS_FRESH, item, finishedTime, "");
-            return result;
-        }
-        catch (RuntimeException ex)
-        {
-            Date finishedTime = new Date();
-            String message = StringUtils.left(ex.getMessage(), 500);
-            if (syncBatchId != null && startedTime != null)
-            {
-                recordSyncState(connectionCode, UpstreamSystemConstants.SYNC_TYPE_SKU_DIMENSION,
-                    UpstreamSystemConstants.SYNC_STATUS_FAILED, syncBatchId, startedTime, finishedTime, null,
-                    nextDailyTime(), 0, 0, 1, "", message, UpstreamSystemConstants.SYNC_MODE_SELECTED, 0);
-                UpstreamSyncItemResult failed = new UpstreamSyncItemResult();
-                failed.setSyncType(UpstreamSystemConstants.SYNC_TYPE_SKU_DIMENSION);
-                failed.setStatus(UpstreamSystemConstants.SYNC_STATUS_FAILED);
-                failed.setErrorMessage(message);
-                updateSyncBatch(syncBatchId, UpstreamSystemConstants.SYNC_STATUS_FAILED, failed, finishedTime, message);
-            }
-            upstreamSystemMapper.updateConnectionSyncSummary(connectionCode);
-            throw toServiceException(ex);
-        }
-        finally
-        {
-            releaseSyncLock(connectionCode);
-        }
-    }
-
-    @Override
-    public UpstreamSyncResult syncWarehouseStocksOnly(String connectionCode)
-    {
-        return syncSingleType(connectionCode, UpstreamSystemConstants.SYNC_TYPE_INVENTORY,
-            UpstreamSystemConstants.SYNC_MODE_MANUAL);
     }
 
     @Override
@@ -465,6 +269,39 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
     }
 
     @Override
+    public long countSourceWarehouseStockGroupList(SourceWarehouseStockQuery query)
+    {
+        return upstreamSystemMapper.countSourceWarehouseStockGroupList(normalizeSourceWarehouseStockQuery(query));
+    }
+
+    @Override
+    public List<SourceWarehouseStockGroupItem> selectSourceWarehouseStockGroupList(SourceWarehouseStockQuery query)
+    {
+        return upstreamSystemMapper.selectSourceWarehouseStockGroupList(normalizeSourceWarehouseStockQuery(query));
+    }
+
+    @Override
+    public List<SourceWarehouseStockItem> selectSourceWarehouseStockGroupDetailList(SourceWarehouseStockQuery query)
+    {
+        SourceWarehouseStockQuery normalized = normalizeSourceWarehouseStockQuery(query);
+        List<SourceWarehouseStockItem> list = upstreamSystemMapper.selectSourceWarehouseStockGroupDetailList(normalized);
+        fillSourceWarehouseStockLabels(list);
+        return list;
+    }
+
+    @Override
+    public List<IntegrationOption> selectSourceWarehouseStockMasterWarehouseOptions(SourceWarehouseStockQuery query)
+    {
+        return upstreamSystemMapper.selectSourceWarehouseStockMasterWarehouseOptions(normalizeSourceWarehouseStockQuery(query));
+    }
+
+    @Override
+    public List<IntegrationOption> selectSourceWarehouseStockUpstreamWarehouseOptions(SourceWarehouseStockQuery query)
+    {
+        return upstreamSystemMapper.selectSourceWarehouseStockUpstreamWarehouseOptions(normalizeSourceWarehouseStockQuery(query));
+    }
+
+    @Override
     public UpstreamInventorySyncState selectInventorySyncState(String connectionCode)
     {
         selectConnectionByCode(connectionCode);
@@ -500,12 +337,17 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
     @Transactional
     public int insertWarehousePairing(String connectionCode, WarehousePairingRequest request)
     {
-        selectConnectionByCode(connectionCode);
+        UpstreamSystemConnection connection = selectConnectionByCode(connectionCode);
+        String pairingRole = normalizePairingRole(connection, request.getPairingRole());
         String upstreamWarehouseCode = trimRequired(request.getUpstreamWarehouseCode(), "领星仓库代码不能为空");
         UpstreamWarehouseSyncItem candidate = upstreamSystemMapper.selectWarehouseSyncItem(connectionCode, upstreamWarehouseCode);
         if (candidate == null)
         {
             throw new ServiceException("领星仓库不在同步清单中，请先同步仓库");
+        }
+        if (!UpstreamSystemConstants.STATUS_ACTIVE.equals(candidate.getStatus()))
+        {
+            throw new ServiceException("领星仓库不是可配对状态");
         }
         UpstreamWarehousePairing pairing = new UpstreamWarehousePairing();
         pairing.setConnectionCode(connectionCode);
@@ -513,6 +355,7 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
         pairing.setUpstreamWarehouseName(candidate.getWarehouseName());
         pairing.setSystemWarehouseCode(trimRequired(request.getSystemWarehouseCode(), "系统仓库代码不能为空"));
         pairing.setSystemWarehouseName(trimRequired(request.getSystemWarehouseName(), "系统仓库名称不能为空"));
+        pairing.setPairingRole(pairingRole);
         pairing.setStatus(UpstreamSystemConstants.STATUS_ACTIVE);
         pairing.setCreateBy(SecurityUtils.getUsername());
         pairing.setRemark(trimOptional(request.getRemark()));
@@ -522,14 +365,15 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
         }
         catch (DuplicateKeyException ex)
         {
-            throw new ServiceException("仓库配对重复：系统仓库或领星仓库已经配对");
+            throw new ServiceException("仓库配对重复：" + pairingRoleLabel(pairingRole) + "仓已经绑定，不能重复配对");
         }
     }
 
     @Override
-    public int deleteWarehousePairing(Long warehousePairingId)
+    public int deleteWarehousePairing(String connectionCode, Long warehousePairingId)
     {
-        return upstreamSystemMapper.deleteWarehousePairing(warehousePairingId);
+        selectConnectionByCode(connectionCode);
+        return upstreamSystemMapper.deleteWarehousePairing(connectionCode, warehousePairingId);
     }
 
     @Override
@@ -550,19 +394,31 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
     @Transactional
     public int insertLogisticsChannelPairing(String connectionCode, LogisticsChannelPairingRequest request)
     {
-        selectConnectionByCode(connectionCode);
+        UpstreamSystemConnection connection = selectConnectionByCode(connectionCode);
+        String pairingRole = normalizePairingRole(connection, request.getPairingRole());
+        String upstreamWarehouseCode = trimRequired(request.getUpstreamWarehouseCode(), "领星仓库代码不能为空");
+        String systemWarehouseCode = trimRequired(request.getSystemWarehouseCode(), "系统仓库代码不能为空");
+        assertWarehousePairingExists(connectionCode, upstreamWarehouseCode, systemWarehouseCode, pairingRole);
         String upstreamChannelCode = trimRequired(request.getUpstreamChannelCode(), "领星渠道代码不能为空");
-        UpstreamLogisticsChannelSyncItem candidate = upstreamSystemMapper.selectLogisticsChannelSyncItem(connectionCode, upstreamChannelCode);
+        UpstreamLogisticsChannelSyncItem candidate = upstreamSystemMapper.selectLogisticsChannelSyncItem(connectionCode,
+            upstreamWarehouseCode, upstreamChannelCode);
         if (candidate == null)
         {
             throw new ServiceException("领星物流渠道不在同步清单中，请先同步物流渠道");
         }
+        if (!UpstreamSystemConstants.STATUS_ACTIVE.equals(candidate.getStatus()))
+        {
+            throw new ServiceException("领星物流渠道不是可配对状态");
+        }
         UpstreamLogisticsChannelPairing pairing = new UpstreamLogisticsChannelPairing();
         pairing.setConnectionCode(connectionCode);
+        pairing.setSystemWarehouseCode(systemWarehouseCode);
+        pairing.setUpstreamWarehouseCode(upstreamWarehouseCode);
         pairing.setUpstreamChannelCode(upstreamChannelCode);
         pairing.setUpstreamChannelName(candidate.getChannelName());
         pairing.setSystemChannelCode(trimRequired(request.getSystemChannelCode(), "系统渠道代码不能为空"));
         pairing.setSystemChannelName(trimRequired(request.getSystemChannelName(), "系统渠道名称不能为空"));
+        pairing.setPairingRole(pairingRole);
         pairing.setStatus(UpstreamSystemConstants.STATUS_ACTIVE);
         pairing.setCreateBy(SecurityUtils.getUsername());
         pairing.setRemark(trimOptional(request.getRemark()));
@@ -572,14 +428,15 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
         }
         catch (DuplicateKeyException ex)
         {
-            throw new ServiceException("物流渠道配对重复：系统渠道已经配对");
+            throw new ServiceException("物流渠道配对重复：" + pairingRoleLabel(pairingRole) + "渠道已经绑定，不能重复配对");
         }
     }
 
     @Override
-    public int deleteLogisticsChannelPairing(Long logisticsChannelPairingId)
+    public int deleteLogisticsChannelPairing(String connectionCode, Long logisticsChannelPairingId)
     {
-        return upstreamSystemMapper.deleteLogisticsChannelPairing(logisticsChannelPairingId);
+        selectConnectionByCode(connectionCode);
+        return upstreamSystemMapper.deleteLogisticsChannelPairing(connectionCode, logisticsChannelPairingId);
     }
 
     @Override
@@ -631,14 +488,15 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
 
     @Override
     @Transactional
-    public int deleteSkuPairing(Long skuPairingId)
+    public int deleteSkuPairing(String connectionCode, Long skuPairingId)
     {
-        UpstreamSkuPairing current = upstreamSystemMapper.selectSkuPairingById(skuPairingId);
+        selectConnectionByCode(connectionCode);
+        UpstreamSkuPairing current = upstreamSystemMapper.selectSkuPairingById(connectionCode, skuPairingId);
         if (current == null)
         {
             return 0;
         }
-        int rows = upstreamSystemMapper.deleteSkuPairing(skuPairingId);
+        int rows = upstreamSystemMapper.deleteSkuPairing(connectionCode, skuPairingId);
         insertSkuAudit("UNPAIR", current, current, null, "解除SKU配对");
         sourceProductReadModelService.rebuildOfficialMasterByConnection(current.getConnectionCode());
         return rows;
@@ -723,6 +581,10 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
             else if (UpstreamSystemConstants.SYNC_TYPE_SKU_DIMENSION.equals(syncType))
             {
                 sourceProductReadModelService.rebuildOfficialMasterByConnection(connectionCode);
+            }
+            else if (UpstreamSystemConstants.SYNC_TYPE_INVENTORY.equals(syncType))
+            {
+                sourceWarehouseStockReadModelService.rebuildOfficialMasterByConnection(connectionCode);
             }
             recordSyncState(connectionCode, syncType, UpstreamSystemConstants.SYNC_STATUS_FRESH, syncBatchId,
                 startedTime, finishedTime, finishedTime, nextSyncTime(syncType), item.getPulledCount(),
@@ -1440,12 +1302,59 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
         List<UpstreamWarehousePairing> pairings = upstreamSystemMapper.selectWarehousePairingList(connectionCode);
         for (UpstreamWarehousePairing pairing : pairings)
         {
-            if (StringUtils.isNotBlank(pairing.getUpstreamWarehouseCode()))
+            if (UpstreamSystemConstants.PAIRING_ROLE_FULFILLMENT.equals(pairing.getPairingRole())
+                && UpstreamSystemConstants.STATUS_ACTIVE.equals(pairing.getStatus())
+                && StringUtils.isNotBlank(pairing.getUpstreamWarehouseCode()))
             {
                 result.put(pairing.getUpstreamWarehouseCode(), pairing);
             }
         }
         return result;
+    }
+
+    private String normalizePairingRole(UpstreamSystemConnection connection, String requestedRole)
+    {
+        String expectedRole = pairingRoleForSettlement(connection.getSettlementType());
+        String pairingRole = StringUtils.defaultIfBlank(StringUtils.trimToEmpty(requestedRole).toUpperCase(), expectedRole);
+        if (!UpstreamSystemConstants.PAIRING_ROLE_FULFILLMENT.equals(pairingRole)
+            && !UpstreamSystemConstants.PAIRING_ROLE_QUOTE.equals(pairingRole))
+        {
+            throw new ServiceException("配对用途不正确");
+        }
+        if (!expectedRole.equals(pairingRole))
+        {
+            throw new ServiceException("结算类型与配对用途不匹配：" + connection.getMasterWarehouseName()
+                + "只能作为" + pairingRoleLabel(expectedRole) + "仓");
+        }
+        return pairingRole;
+    }
+
+    private String pairingRoleForSettlement(String settlementType)
+    {
+        if (UpstreamSystemConstants.SETTLEMENT_TYPE_SELF_OPERATED_RECEIVABLE.equals(settlementType))
+        {
+            return UpstreamSystemConstants.PAIRING_ROLE_QUOTE;
+        }
+        return UpstreamSystemConstants.PAIRING_ROLE_FULFILLMENT;
+    }
+
+    private String pairingRoleLabel(String pairingRole)
+    {
+        return UpstreamSystemConstants.PAIRING_ROLE_QUOTE.equals(pairingRole) ? "报价" : "履约";
+    }
+
+    private void assertWarehousePairingExists(String connectionCode, String upstreamWarehouseCode,
+        String systemWarehouseCode, String pairingRole)
+    {
+        boolean matched = upstreamSystemMapper.selectWarehousePairingList(connectionCode).stream()
+            .anyMatch(item -> pairingRole.equals(item.getPairingRole())
+                && UpstreamSystemConstants.STATUS_ACTIVE.equals(item.getStatus())
+                && upstreamWarehouseCode.equals(item.getUpstreamWarehouseCode())
+                && systemWarehouseCode.equals(item.getSystemWarehouseCode()));
+        if (!matched)
+        {
+            throw new ServiceException("请先完成对应" + pairingRoleLabel(pairingRole) + "仓配对，再配对物流渠道");
+        }
     }
 
     private Map<String, UpstreamWarehouseSyncItem> buildWarehouseSyncMap(String connectionCode)
@@ -1539,6 +1448,12 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
     private SourceWarehouseStockQuery normalizeSourceWarehouseStockQuery(SourceWarehouseStockQuery query)
     {
         SourceWarehouseStockQuery normalized = query == null ? new SourceWarehouseStockQuery() : query;
+        normalized.setSourceStockGroupKey(trimOptional(normalized.getSourceStockGroupKey()));
+        normalized.setRepositoryScope(trimOptional(normalized.getRepositoryScope()));
+        if (StringUtils.isBlank(normalized.getRepositoryScope()))
+        {
+            normalized.setRepositoryScope(SourceWarehouseStockReadModelService.REPOSITORY_SCOPE_OFFICIAL_MASTER);
+        }
         normalized.setConnectionCode(trimOptional(normalized.getConnectionCode()));
         normalized.setKeyword(trimOptional(normalized.getKeyword()));
         normalized.setStatus(trimOptional(normalized.getStatus()));
@@ -1546,6 +1461,8 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
         normalized.setSkuPairingStatus(trimOptional(normalized.getSkuPairingStatus()));
         normalized.setInventoryScope(trimOptional(normalized.getInventoryScope()));
         normalized.setInventoryAttribute(trimOptional(normalized.getInventoryAttribute()));
+        normalized.setMasterWarehouseName(trimOptional(normalized.getMasterWarehouseName()));
+        normalized.setUpstreamWarehouseCode(trimOptional(normalized.getUpstreamWarehouseCode()));
         normalized.setMasterWarehouseKeyword(trimOptional(normalized.getMasterWarehouseKeyword()));
         normalized.setWarehouseKeyword(trimOptional(normalized.getWarehouseKeyword()));
         return normalized;
@@ -1658,7 +1575,7 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
             entry -> insertRequestLog(connectionCode, entry));
         try
         {
-            client.listWorkOrderTypes(UUID.randomUUID().toString());
+            client.checkWarehouseAccess(UUID.randomUUID().toString());
         }
         catch (RuntimeException ex)
         {

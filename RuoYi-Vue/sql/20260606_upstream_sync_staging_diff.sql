@@ -19,76 +19,65 @@ begin
   end if;
 end//
 
+drop procedure if exists add_column_if_missing//
+create procedure add_column_if_missing(in p_table varchar(64), in p_column varchar(64), in p_definition text)
+begin
+  if not exists (
+    select 1
+    from information_schema.columns
+    where table_schema = database()
+      and table_name = p_table
+      and column_name = p_column
+  ) then
+    set @ddl = concat('alter table ', p_table, ' add column ', p_column, ' ', p_definition);
+    prepare stmt from @ddl;
+    execute stmt;
+    deallocate prepare stmt;
+  end if;
+end//
+
+drop procedure if exists assert_column_exists//
+create procedure assert_column_exists(in p_table varchar(64), in p_column varchar(64), in p_message varchar(255))
+begin
+  if not exists (
+    select 1
+    from information_schema.columns
+    where table_schema = database()
+      and table_name = p_table
+      and column_name = p_column
+  ) then
+    signal sqlstate '45000' set message_text = p_message;
+  end if;
+end//
+
 delimiter ;
 
 call assert_upstream_sync_staging_diff_confirmed();
 drop procedure if exists assert_upstream_sync_staging_diff_confirmed;
 
-set @column_exists := (
-  select count(1) from information_schema.columns
-  where table_schema = database()
-    and table_name = 'upstream_system_warehouse_candidate'
-    and column_name = 'source_payload_json'
-);
-set @sql := if(@column_exists = 0,
-  'alter table upstream_system_warehouse_candidate add column source_payload_json longtext comment ''上游仓库原始行JSON快照'' after status',
-  'select 1');
-prepare stmt from @sql; execute stmt; deallocate prepare stmt;
+call assert_column_exists('upstream_system_warehouse_candidate', 'status',
+  'upstream_system_warehouse_candidate.status column is required before upstream sync staging diff migration');
+call add_column_if_missing('upstream_system_warehouse_candidate', 'source_payload_json',
+  'longtext comment ''上游仓库原始行JSON快照'' after status');
+call add_column_if_missing('upstream_system_warehouse_candidate', 'source_payload_hash',
+  'varchar(64) default '''' comment ''上游仓库原始行JSON哈希'' after source_payload_json');
 
-set @column_exists := (
-  select count(1) from information_schema.columns
-  where table_schema = database()
-    and table_name = 'upstream_system_warehouse_candidate'
-    and column_name = 'source_payload_hash'
-);
-set @sql := if(@column_exists = 0,
-  'alter table upstream_system_warehouse_candidate add column source_payload_hash varchar(64) default '''' comment ''上游仓库原始行JSON哈希'' after source_payload_json',
-  'select 1');
-prepare stmt from @sql; execute stmt; deallocate prepare stmt;
+call assert_column_exists('upstream_system_logistics_channel_candidate', 'status',
+  'upstream_system_logistics_channel_candidate.status column is required before upstream sync staging diff migration');
+call add_column_if_missing('upstream_system_logistics_channel_candidate', 'source_payload_json',
+  'longtext comment ''上游渠道原始行JSON快照'' after status');
+call add_column_if_missing('upstream_system_logistics_channel_candidate', 'source_payload_hash',
+  'varchar(64) default '''' comment ''上游渠道原始行JSON哈希'' after source_payload_json');
 
-set @column_exists := (
-  select count(1) from information_schema.columns
-  where table_schema = database()
-    and table_name = 'upstream_system_logistics_channel_candidate'
-    and column_name = 'source_payload_json'
-);
-set @sql := if(@column_exists = 0,
-  'alter table upstream_system_logistics_channel_candidate add column source_payload_json longtext comment ''上游渠道原始行JSON快照'' after status',
-  'select 1');
-prepare stmt from @sql; execute stmt; deallocate prepare stmt;
+call assert_column_exists('upstream_system_sku_candidate', 'source_payload_hash',
+  'upstream_system_sku_candidate.source_payload_hash column is required before upstream sync staging diff migration');
+call add_column_if_missing('upstream_system_sku_candidate', 'wms_payload_json',
+  'longtext comment ''WMS尺寸重量原始行JSON快照'' after source_payload_hash');
+call add_column_if_missing('upstream_system_sku_candidate', 'wms_payload_hash',
+  'varchar(64) default '''' comment ''WMS尺寸重量原始行JSON哈希'' after wms_payload_json');
 
-set @column_exists := (
-  select count(1) from information_schema.columns
-  where table_schema = database()
-    and table_name = 'upstream_system_logistics_channel_candidate'
-    and column_name = 'source_payload_hash'
-);
-set @sql := if(@column_exists = 0,
-  'alter table upstream_system_logistics_channel_candidate add column source_payload_hash varchar(64) default '''' comment ''上游渠道原始行JSON哈希'' after source_payload_json',
-  'select 1');
-prepare stmt from @sql; execute stmt; deallocate prepare stmt;
-
-set @column_exists := (
-  select count(1) from information_schema.columns
-  where table_schema = database()
-    and table_name = 'upstream_system_sku_candidate'
-    and column_name = 'wms_payload_json'
-);
-set @sql := if(@column_exists = 0,
-  'alter table upstream_system_sku_candidate add column wms_payload_json longtext comment ''WMS尺寸重量原始行JSON快照'' after source_payload_hash',
-  'select 1');
-prepare stmt from @sql; execute stmt; deallocate prepare stmt;
-
-set @column_exists := (
-  select count(1) from information_schema.columns
-  where table_schema = database()
-    and table_name = 'upstream_system_sku_candidate'
-    and column_name = 'wms_payload_hash'
-);
-set @sql := if(@column_exists = 0,
-  'alter table upstream_system_sku_candidate add column wms_payload_hash varchar(64) default '''' comment ''WMS尺寸重量原始行JSON哈希'' after wms_payload_json',
-  'select 1');
-prepare stmt from @sql; execute stmt; deallocate prepare stmt;
+drop procedure if exists add_column_if_missing;
+drop procedure if exists assert_column_exists;
 
 create table if not exists upstream_system_sync_state (
   state_id            bigint(20)   not null auto_increment comment '同步状态ID',

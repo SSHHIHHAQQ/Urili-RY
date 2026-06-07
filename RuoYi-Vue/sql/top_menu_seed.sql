@@ -16,9 +16,155 @@ begin
   end if;
 end//
 
+drop procedure if exists assert_top_menu_sys_menu_guard//
+create procedure assert_top_menu_sys_menu_guard()
+begin
+  if exists (
+    select 1
+    from sys_menu m
+    where exists (
+        select 1
+        from tmp_top_menu_sys_menu_guard seed
+        where seed.menu_id = m.menu_id
+    )
+      and not exists (
+        select 1
+        from tmp_top_menu_sys_menu_guard seed
+        where seed.menu_id = m.menu_id
+          and coalesce(m.path, '') = coalesce(seed.path, '')
+          and coalesce(m.parent_id, -1) = seed.parent_id
+          and coalesce(m.menu_type, '') = seed.menu_type
+          and coalesce(m.component, '') = coalesce(seed.component, '')
+          and coalesce(m.route_name, '') = coalesce(seed.route_name, '')
+          and coalesce(m.perms, '') = coalesce(seed.perms, '')
+    )
+  ) then
+    signal sqlstate '45000' set message_text = 'top menu sys_menu id slot is occupied by another menu';
+  end if;
+
+  if exists (
+    select 1
+    from sys_menu m
+    join tmp_top_menu_sys_menu_guard seed
+      on m.menu_id <> seed.menu_id
+     and coalesce(m.path, '') = coalesce(seed.path, '')
+     and coalesce(m.component, '') = coalesce(seed.component, '')
+     and coalesce(m.route_name, '') = coalesce(seed.route_name, '')
+     and coalesce(m.perms, '') = coalesce(seed.perms, '')
+  ) then
+    signal sqlstate '45000' set message_text = 'top menu sys_menu signature is already used by another menu';
+  end if;
+end//
+
+drop procedure if exists assert_top_menu_legacy_cleanup_guard//
+create procedure assert_top_menu_legacy_cleanup_guard()
+begin
+  if exists (
+    select 1
+    from sys_menu m
+    where exists (
+        select 1
+        from tmp_top_menu_legacy_cleanup_guard seed
+        where seed.menu_id = m.menu_id
+    )
+      and not exists (
+        select 1
+        from tmp_top_menu_legacy_cleanup_guard seed
+        where seed.menu_id = m.menu_id
+          and (seed.parent_id is null or coalesce(m.parent_id, -1) = seed.parent_id)
+          and (seed.menu_name is null or coalesce(m.menu_name, '') = coalesce(seed.menu_name, ''))
+          and (seed.path is null or coalesce(m.path, '') = coalesce(seed.path, ''))
+          and (seed.component is null or coalesce(m.component, '') = coalesce(seed.component, ''))
+          and (seed.route_name is null or coalesce(m.route_name, '') = coalesce(seed.route_name, ''))
+          and (seed.perms is null or coalesce(m.perms, '') = coalesce(seed.perms, ''))
+          and (seed.menu_type is null or coalesce(m.menu_type, '') = coalesce(seed.menu_type, ''))
+    )
+  ) then
+    signal sqlstate '45000' set message_text = 'top menu legacy cleanup sys_menu id slot is occupied by another menu';
+  end if;
+
+  if exists (
+    select 1
+    from sys_menu target
+    join tmp_top_menu_legacy_cleanup_guard seed
+      on seed.menu_id = target.menu_id
+     and (seed.parent_id is null or coalesce(target.parent_id, -1) = seed.parent_id)
+     and (seed.menu_name is null or coalesce(target.menu_name, '') = coalesce(seed.menu_name, ''))
+     and (seed.path is null or coalesce(target.path, '') = coalesce(seed.path, ''))
+     and (seed.component is null or coalesce(target.component, '') = coalesce(seed.component, ''))
+     and (seed.route_name is null or coalesce(target.route_name, '') = coalesce(seed.route_name, ''))
+     and (seed.perms is null or coalesce(target.perms, '') = coalesce(seed.perms, ''))
+     and (seed.menu_type is null or coalesce(target.menu_type, '') = coalesce(seed.menu_type, ''))
+    join sys_menu other
+      on other.menu_id <> target.menu_id
+     and (seed.parent_id is null or coalesce(other.parent_id, -1) = seed.parent_id)
+     and (seed.menu_name is null or coalesce(other.menu_name, '') = coalesce(seed.menu_name, ''))
+     and (seed.path is null or coalesce(other.path, '') = coalesce(seed.path, ''))
+     and (seed.component is null or coalesce(other.component, '') = coalesce(seed.component, ''))
+     and (seed.route_name is null or coalesce(other.route_name, '') = coalesce(seed.route_name, ''))
+     and (seed.perms is null or coalesce(other.perms, '') = coalesce(seed.perms, ''))
+     and (seed.menu_type is null or coalesce(other.menu_type, '') = coalesce(seed.menu_type, ''))
+  ) then
+    signal sqlstate '45000' set message_text = 'top menu legacy cleanup sys_menu signature is already used by another menu';
+  end if;
+end//
+
 delimiter ;
 
 call assert_top_menu_seed_confirmed();
+drop procedure if exists assert_top_menu_seed_confirmed;
+
+create temporary table if not exists tmp_top_menu_sys_menu_guard (
+  menu_id    bigint       not null,
+  parent_id  bigint       not null,
+  menu_type  char(1)      not null,
+  path       varchar(200) not null default '',
+  component  varchar(255) not null default '',
+  route_name varchar(50)  not null default '',
+  perms      varchar(100) not null default '',
+  key idx_top_menu_sys_menu_guard_id (menu_id)
+) engine=memory;
+
+truncate table tmp_top_menu_sys_menu_guard;
+
+insert into tmp_top_menu_sys_menu_guard(menu_id, parent_id, menu_type, path, component, route_name, perms) values
+    (1, 0, 'M', 'system', '', '', ''),
+    (2, 0, 'M', 'monitor', '', '', ''),
+    (3, 0, 'M', 'tool', '', '', ''),
+    (108, 0, 'M', 'log-center', '', 'LogCenter', ''),
+    (108, 0, 'M', 'log', '', '', ''),
+    (2010, 0, 'M', 'partner', '', 'PartnerManagement', ''),
+    (2020, 0, 'M', 'warehouse', '', 'WarehouseManagement', ''),
+    (2030, 0, 'M', 'overseas-warehouse-service', '', 'OverseasWarehouseServiceManagement', ''),
+    (2050, 0, 'M', 'finance', '', 'FinanceManagement', ''),
+    (2060, 0, 'M', 'product', '', 'ProductManagement', ''),
+    (2070, 0, 'M', 'order', '', 'OrderManagement', ''),
+    (2080, 0, 'M', 'inventory', '', 'InventoryManagement', ''),
+    (2090, 0, 'M', 'basic-config', '', 'BasicConfig', ''),
+    (2100, 0, 'M', 'review-center', '', 'ReviewCenter', '');
+
+create temporary table if not exists tmp_top_menu_legacy_cleanup_guard (
+  menu_id    bigint       not null,
+  parent_id  bigint       default null,
+  menu_name  varchar(50)  default null,
+  path       varchar(200) default null,
+  component  varchar(255) default null,
+  route_name varchar(50)  default null,
+  perms      varchar(100) default null,
+  menu_type  char(1)      default null,
+  key idx_top_menu_legacy_cleanup_guard_id (menu_id)
+) engine=memory;
+
+truncate table tmp_top_menu_legacy_cleanup_guard;
+
+insert into tmp_top_menu_legacy_cleanup_guard
+    (menu_id, parent_id, menu_name, path, component, route_name, perms, menu_type)
+values
+    (2040, 0, '渠道管理', 'urili-channel', '', '', '', 'M'),
+    (2040, 0, '渠道管理', 'channel', '', '', '', 'M'),
+    (2000, 0, 'URILI运营后台', null, null, null, '', 'M');
+
+call assert_top_menu_sys_menu_guard();
 
 insert into sys_menu
     (menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
@@ -92,6 +238,8 @@ where menu_id = 2;
 
 -- The previous channel draft is not part of the requested top-level menu list.
 -- Keep it for reference, but disable it so it does not appear as an active top-level menu.
+call assert_top_menu_legacy_cleanup_guard();
+
 update sys_menu
 set order_num = 80,
     visible = '1',
@@ -111,4 +259,7 @@ set visible = '1',
     remark = '已由独立顶级菜单替代，保留历史草案'
 where menu_id = 2000;
 
-drop procedure if exists assert_top_menu_seed_confirmed;
+drop temporary table if exists tmp_top_menu_sys_menu_guard;
+drop temporary table if exists tmp_top_menu_legacy_cleanup_guard;
+drop procedure if exists assert_top_menu_sys_menu_guard;
+drop procedure if exists assert_top_menu_legacy_cleanup_guard;

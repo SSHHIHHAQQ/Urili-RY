@@ -23,9 +23,7 @@ public class BuyerAdminPermissionContractTest
             Pattern.DOTALL);
     private static final Pattern HANDLER_MAPPING = Pattern.compile("@(?:GetMapping|PostMapping|PutMapping|DeleteMapping|PatchMapping)\\b");
     private static final Pattern SENSITIVE_MAPPING = Pattern.compile("@(?:PostMapping|PutMapping|DeleteMapping|PatchMapping)\\b");
-    private static final Pattern PRE_AUTHORIZE_PERM = Pattern.compile(
-            "@PreAuthorize\\s*\\(\\s*\"@ss\\.hasPermi\\('([^']+)'\\)\"\\s*\\)",
-            Pattern.DOTALL);
+    private static final Pattern HAS_PERMI = Pattern.compile("@ss\\.hasPermi\\('([^']+)'\\)");
     private static final Pattern PUBLIC_METHOD = Pattern.compile("public\\s+[^\\(]+\\s+(\\w+)\\s*\\(");
     private static final Pattern BUYER_ADMIN_SEED_PERM = Pattern.compile("'(buyer:admin:[^']+)'");
 
@@ -57,14 +55,18 @@ public class BuyerAdminPermissionContractTest
         List<HandlerMethod> handlers = extractHandlerMethods(source);
         List<String> violations = new ArrayList<>();
 
+        assertHandlerPermission(handlers, "list", "buyer:admin:list", violations);
         assertHandlerPermission(handlers, "get", "buyer:admin:query", violations);
+        assertHandlerPermission(handlers, "add", "buyer:admin:add", violations);
+        assertHandlerPermission(handlers, "edit", "buyer:admin:edit", violations);
+        assertHandlerPermission(handlers, "changeStatus", "buyer:admin:changeStatus", violations);
         assertHandlerPermission(handlers, "accounts", "buyer:admin:account:list", violations);
         assertHandlerPermission(handlers, "accountRoles", "buyer:admin:account:role:query", violations);
+        assertHandlerPermission(handlers, "accountRoles", "buyer:admin:role:query", violations);
         assertHandlerPermission(handlers, "assignAccountRoles", "buyer:admin:account:role:edit", violations);
         assertHandlerPermission(handlers, "addAccount", "buyer:admin:account:add", violations);
         assertHandlerPermission(handlers, "editAccount", "buyer:admin:account:edit", violations);
         assertHandlerPermission(handlers, "resetPassword", "buyer:admin:account:resetPwd", violations);
-        assertHandlerPermission(handlers, "resetDefaultPassword", "buyer:admin:account:resetPwd", violations);
         assertHandlerPermission(handlers, "lockAccount", "buyer:admin:account:lock", violations);
         assertHandlerPermission(handlers, "unlockAccount", "buyer:admin:account:lock", violations);
         assertHandlerPermission(handlers, "sessions", "buyer:admin:forceLogout", violations);
@@ -88,13 +90,23 @@ public class BuyerAdminPermissionContractTest
                 "@PutMapping(\"/{buyerId}/accounts/{accountId}/roles\")", violations);
         assertHandlerRouteContains(handlers, "addAccount", "@PostMapping(\"/{buyerId}/accounts\")", violations);
         assertHandlerRouteContains(handlers, "editAccount", "@PutMapping(\"/{buyerId}/accounts\")", violations);
+        assertSourceContains(source, "@Validated @RequestBody BuyerAccount account",
+                "AdminBuyerController#editAccount must validate request body", violations);
         assertHandlerRouteContains(handlers, "lockAccount",
                 "@PutMapping(\"/{buyerId}/accounts/{accountId}/lock\")", violations);
         assertHandlerRouteContains(handlers, "unlockAccount",
                 "@PutMapping(\"/{buyerId}/accounts/{accountId}/unlock\")", violations);
         assertHandlerRouteContains(handlers, "resetPassword", "@PutMapping(\"/{buyerId}/accounts/{accountId}/resetPwd\")", violations);
-        assertHandlerRouteContains(handlers, "resetDefaultPassword",
-                "@PutMapping(\"/{buyerId}/accounts/{accountId}/resetDefaultPwd\")", violations);
+        assertHandlerMissing(handlers, "resetDefaultPassword",
+                "AdminBuyerController must not expose account default password reset", violations);
+        assertSourceNotContains(source, "resetDefaultPwd",
+                "AdminBuyerController must not expose /{buyerId}/accounts/{accountId}/resetDefaultPwd", violations);
+        assertHandlerMissing(handlers, "resetOwnerPassword",
+                "AdminBuyerController must not expose subject-level default owner password reset", violations);
+        assertSourceNotContains(source, "resetOwnerPwd",
+                "AdminBuyerController must not expose /{buyerId}/resetOwnerPwd", violations);
+        assertSourceNotContains(source, "buyer:admin:resetPwd",
+                "AdminBuyerController must use account-scoped resetPwd permission only", violations);
         assertHandlerRouteContains(handlers, "sessions", "@GetMapping(\"/{buyerId}/sessions/list\")", violations);
         assertHandlerRouteContains(handlers, "accountSessions",
                 "@GetMapping(\"/{buyerId}/accounts/{accountId}/sessions/list\")", violations);
@@ -114,6 +126,132 @@ public class BuyerAdminPermissionContractTest
         if (!violations.isEmpty())
         {
             fail("buyer account admin handlers must not reuse subject or role permissions:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    @Test
+    public void buyerRoleMenuTreeMustRequireRoleAndMenuQuery() throws IOException
+    {
+        Path backendRoot = findBackendRoot();
+        Path controller = backendRoot.resolve("buyer/src/main/java/com/ruoyi/buyer/controller/AdminBuyerMenuController.java");
+        String source = Files.readString(controller, StandardCharsets.UTF_8);
+        List<HandlerMethod> handlers = extractHandlerMethods(source);
+        List<String> violations = new ArrayList<>();
+
+        assertHandlerPermission(handlers, "roleMenuTreeselect", "buyer:admin:role:query", violations);
+        assertHandlerPermission(handlers, "roleMenuTreeselect", "buyer:admin:menu:query", violations);
+
+        if (!violations.isEmpty())
+        {
+            fail("buyer role menu tree must require both role query and menu query permissions:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    @Test
+    public void buyerRoleDeptMenuHandlersMustUseSpecificPermissionsAndRoutes() throws IOException
+    {
+        Path backendRoot = findBackendRoot();
+        List<String> violations = new ArrayList<>();
+
+        List<HandlerMethod> roleHandlers = extractHandlerMethods(Files.readString(
+                backendRoot.resolve("buyer/src/main/java/com/ruoyi/buyer/controller/AdminBuyerRoleController.java"),
+                StandardCharsets.UTF_8));
+        assertControllerHandlerPermission(roleHandlers, "AdminBuyerRoleController", "list",
+                "buyer:admin:role:list", violations);
+        assertControllerHandlerPermission(roleHandlers, "AdminBuyerRoleController", "getInfo",
+                "buyer:admin:role:query", violations);
+        assertControllerHandlerPermission(roleHandlers, "AdminBuyerRoleController", "add",
+                "buyer:admin:role:add", violations);
+        assertControllerHandlerPermission(roleHandlers, "AdminBuyerRoleController", "edit",
+                "buyer:admin:role:edit", violations);
+        assertControllerHandlerPermission(roleHandlers, "AdminBuyerRoleController", "changeStatus",
+                "buyer:admin:role:edit", violations);
+        assertControllerHandlerPermission(roleHandlers, "AdminBuyerRoleController", "remove",
+                "buyer:admin:role:remove", violations);
+        assertControllerHandlerPermission(roleHandlers, "AdminBuyerRoleController", "optionselect",
+                "buyer:admin:role:query", violations);
+        assertControllerHandlerRouteContains(roleHandlers, "AdminBuyerRoleController", "list",
+                "@GetMapping(\"/list\")", violations);
+        assertControllerHandlerRouteContains(roleHandlers, "AdminBuyerRoleController", "getInfo",
+                "@GetMapping(\"/{roleId}\")", violations);
+        assertControllerHandlerRouteContains(roleHandlers, "AdminBuyerRoleController", "add",
+                "@PostMapping", violations);
+        assertControllerHandlerRouteContains(roleHandlers, "AdminBuyerRoleController", "edit",
+                "@PutMapping", violations);
+        assertControllerHandlerRouteContains(roleHandlers, "AdminBuyerRoleController", "changeStatus",
+                "@PutMapping(\"/changeStatus\")", violations);
+        assertControllerHandlerRouteContains(roleHandlers, "AdminBuyerRoleController", "remove",
+                "@DeleteMapping(\"/{roleIds}\")", violations);
+        assertControllerHandlerRouteContains(roleHandlers, "AdminBuyerRoleController", "optionselect",
+                "@GetMapping(\"/optionselect\")", violations);
+
+        List<HandlerMethod> deptHandlers = extractHandlerMethods(Files.readString(
+                backendRoot.resolve("buyer/src/main/java/com/ruoyi/buyer/controller/AdminBuyerDeptController.java"),
+                StandardCharsets.UTF_8));
+        assertControllerHandlerPermission(deptHandlers, "AdminBuyerDeptController", "list",
+                "buyer:admin:dept:list", violations);
+        assertControllerHandlerPermission(deptHandlers, "AdminBuyerDeptController", "getInfo",
+                "buyer:admin:dept:query", violations);
+        assertControllerHandlerPermission(deptHandlers, "AdminBuyerDeptController", "treeselect",
+                "buyer:admin:dept:query", violations);
+        assertControllerHandlerPermission(deptHandlers, "AdminBuyerDeptController", "add",
+                "buyer:admin:dept:add", violations);
+        assertControllerHandlerPermission(deptHandlers, "AdminBuyerDeptController", "edit",
+                "buyer:admin:dept:edit", violations);
+        assertControllerHandlerPermission(deptHandlers, "AdminBuyerDeptController", "remove",
+                "buyer:admin:dept:remove", violations);
+        assertControllerHandlerRouteContains(deptHandlers, "AdminBuyerDeptController", "list",
+                "@GetMapping(\"/list\")", violations);
+        assertControllerHandlerRouteContains(deptHandlers, "AdminBuyerDeptController", "getInfo",
+                "@GetMapping(\"/{deptId}\")", violations);
+        assertControllerHandlerRouteContains(deptHandlers, "AdminBuyerDeptController", "treeselect",
+                "@GetMapping(\"/treeselect\")", violations);
+        assertControllerHandlerRouteContains(deptHandlers, "AdminBuyerDeptController", "add",
+                "@PostMapping", violations);
+        assertControllerHandlerRouteContains(deptHandlers, "AdminBuyerDeptController", "edit",
+                "@PutMapping", violations);
+        assertControllerHandlerRouteContains(deptHandlers, "AdminBuyerDeptController", "remove",
+                "@DeleteMapping(\"/{deptId}\")", violations);
+
+        List<HandlerMethod> menuHandlers = extractHandlerMethods(Files.readString(
+                backendRoot.resolve("buyer/src/main/java/com/ruoyi/buyer/controller/AdminBuyerMenuController.java"),
+                StandardCharsets.UTF_8));
+        assertControllerHandlerPermission(menuHandlers, "AdminBuyerMenuController", "list",
+                "buyer:admin:menu:list", violations);
+        assertControllerHandlerPermission(menuHandlers, "AdminBuyerMenuController", "getInfo",
+                "buyer:admin:menu:query", violations);
+        assertControllerHandlerPermission(menuHandlers, "AdminBuyerMenuController", "treeselect",
+                "buyer:admin:menu:query", violations);
+        assertControllerHandlerPermission(menuHandlers, "AdminBuyerMenuController", "roleMenuTreeselect",
+                "buyer:admin:role:query", violations);
+        assertControllerHandlerPermission(menuHandlers, "AdminBuyerMenuController", "roleMenuTreeselect",
+                "buyer:admin:menu:query", violations);
+        assertControllerHandlerPermission(menuHandlers, "AdminBuyerMenuController", "add",
+                "buyer:admin:menu:add", violations);
+        assertControllerHandlerPermission(menuHandlers, "AdminBuyerMenuController", "edit",
+                "buyer:admin:menu:edit", violations);
+        assertControllerHandlerPermission(menuHandlers, "AdminBuyerMenuController", "remove",
+                "buyer:admin:menu:remove", violations);
+        assertControllerHandlerRouteContains(menuHandlers, "AdminBuyerMenuController", "list",
+                "@GetMapping(\"/list\")", violations);
+        assertControllerHandlerRouteContains(menuHandlers, "AdminBuyerMenuController", "getInfo",
+                "@GetMapping(\"/{menuId}\")", violations);
+        assertControllerHandlerRouteContains(menuHandlers, "AdminBuyerMenuController", "treeselect",
+                "@GetMapping(\"/treeselect\")", violations);
+        assertControllerHandlerRouteContains(menuHandlers, "AdminBuyerMenuController", "roleMenuTreeselect",
+                "@GetMapping(\"/roleMenuTreeselect/{buyerId}/{roleId}\")", violations);
+        assertControllerHandlerRouteContains(menuHandlers, "AdminBuyerMenuController", "add",
+                "@PostMapping", violations);
+        assertControllerHandlerRouteContains(menuHandlers, "AdminBuyerMenuController", "edit",
+                "@PutMapping", violations);
+        assertControllerHandlerRouteContains(menuHandlers, "AdminBuyerMenuController", "remove",
+                "@DeleteMapping(\"/{menuId}\")", violations);
+
+        if (!violations.isEmpty())
+        {
+            fail("buyer role/dept/menu admin handlers must use their precise permissions:\n"
                     + String.join("\n", violations));
         }
     }
@@ -173,21 +311,30 @@ public class BuyerAdminPermissionContractTest
             List<String> violations)
     {
         String prefix = relativePath + "#" + handler.name;
-        Matcher matcher = PRE_AUTHORIZE_PERM.matcher(handler.annotations);
-        if (!matcher.find())
+        if (!handler.annotations.contains("@PreAuthorize"))
         {
             violations.add(prefix + " must declare @PreAuthorize(\"@ss.hasPermi('buyer:admin:...')\")");
             return;
         }
 
-        String perm = matcher.group(1);
-        if (!perm.startsWith("buyer:admin:"))
+        Matcher matcher = HAS_PERMI.matcher(handler.annotations);
+        boolean hasPerm = false;
+        while (matcher.find())
         {
-            violations.add(prefix + " permission must use buyer:admin:* but was " + perm);
+            hasPerm = true;
+            String perm = matcher.group(1);
+            if (!perm.startsWith("buyer:admin:"))
+            {
+                violations.add(prefix + " permission must use buyer:admin:* but was " + perm);
+            }
+            if (!seededPerms.contains(perm))
+            {
+                violations.add(prefix + " permission " + perm + " must exist in seller_buyer_management_seed.sql");
+            }
         }
-        if (!seededPerms.contains(perm))
+        if (!hasPerm)
         {
-            violations.add(prefix + " permission " + perm + " must exist in seller_buyer_management_seed.sql");
+            violations.add(prefix + " must declare @ss.hasPermi('buyer:admin:...')");
         }
         if (SENSITIVE_MAPPING.matcher(handler.annotations).find() && !handler.annotations.contains("@Log"))
         {
@@ -198,23 +345,12 @@ public class BuyerAdminPermissionContractTest
     private void assertHandlerPermission(List<HandlerMethod> handlers, String methodName, String expectedPermission,
             List<String> violations)
     {
-        HandlerMethod target = handlers.stream()
-                .filter(handler -> methodName.equals(handler.name))
-                .findFirst()
-                .orElse(null);
-        if (target == null)
-        {
-            violations.add("AdminBuyerController#" + methodName + " must exist");
-            return;
-        }
-        if (!target.annotations.contains("@PreAuthorize(\"@ss.hasPermi('" + expectedPermission + "')\")"))
-        {
-            violations.add("AdminBuyerController#" + methodName + " must require " + expectedPermission);
-        }
+        assertControllerHandlerPermission(handlers, "AdminBuyerController", methodName, expectedPermission,
+                violations);
     }
 
-    private void assertHandlerRouteContains(List<HandlerMethod> handlers, String methodName, String expectedRoute,
-            List<String> violations)
+    private void assertControllerHandlerPermission(List<HandlerMethod> handlers, String controllerName,
+            String methodName, String expectedPermission, List<String> violations)
     {
         HandlerMethod target = handlers.stream()
                 .filter(handler -> methodName.equals(handler.name))
@@ -222,13 +358,63 @@ public class BuyerAdminPermissionContractTest
                 .orElse(null);
         if (target == null)
         {
-            violations.add("AdminBuyerController#" + methodName + " must exist");
+            violations.add(controllerName + "#" + methodName + " must exist");
+            return;
+        }
+        if (!target.annotations.contains("@ss.hasPermi('" + expectedPermission + "')"))
+        {
+            violations.add(controllerName + "#" + methodName + " must require " + expectedPermission);
+        }
+    }
+
+    private void assertHandlerMissing(List<HandlerMethod> handlers, String methodName, String message,
+            List<String> violations)
+    {
+        boolean exists = handlers.stream().anyMatch(handler -> methodName.equals(handler.name));
+        if (exists)
+        {
+            violations.add(message);
+        }
+    }
+
+    private void assertHandlerRouteContains(List<HandlerMethod> handlers, String methodName, String expectedRoute,
+            List<String> violations)
+    {
+        assertControllerHandlerRouteContains(handlers, "AdminBuyerController", methodName, expectedRoute,
+                violations);
+    }
+
+    private void assertControllerHandlerRouteContains(List<HandlerMethod> handlers, String controllerName,
+            String methodName, String expectedRoute, List<String> violations)
+    {
+        HandlerMethod target = handlers.stream()
+                .filter(handler -> methodName.equals(handler.name))
+                .findFirst()
+                .orElse(null);
+        if (target == null)
+        {
+            violations.add(controllerName + "#" + methodName + " must exist");
             return;
         }
         if (!target.annotations.contains(expectedRoute))
         {
-            violations.add("AdminBuyerController#" + methodName + " must keep subject/account scoped route "
-                    + expectedRoute);
+            violations.add(controllerName + "#" + methodName + " must keep admin route " + expectedRoute);
+        }
+    }
+
+    private void assertSourceContains(String source, String expected, String message, List<String> violations)
+    {
+        if (!source.contains(expected))
+        {
+            violations.add(message + ": missing " + expected);
+        }
+    }
+
+    private void assertSourceNotContains(String source, String forbidden, String message, List<String> violations)
+    {
+        if (source.contains(forbidden))
+        {
+            violations.add(message + ": found " + forbidden);
         }
     }
 

@@ -1,46 +1,55 @@
 import { createIcon } from '@/utils/IconUtil';
+import { getRemoteMenuStorageKey, type RemoteMenuScope } from '@/utils/remoteMenuStorage';
 import { MenuDataItem } from '@ant-design/pro-components';
 import { request, useAccess } from '@umijs/max';
 import { Result } from 'antd';
 import React, { lazy } from 'react';
 
 
-const REMOTE_MENU_STORAGE_KEY = 'admin_remote_menu';
+export { getRemoteMenuStorageKey } from '@/utils/remoteMenuStorage';
 
-function readStoredRemoteMenu() {
+function readStoredRemoteMenu(scope: RemoteMenuScope = 'admin') {
   if (typeof window === 'undefined') {
     return null;
   }
-  const rawMenu = window.sessionStorage.getItem(REMOTE_MENU_STORAGE_KEY);
+  const storageKey = getRemoteMenuStorageKey(scope);
+  const rawMenu = window.sessionStorage.getItem(storageKey);
   if (!rawMenu) {
     return null;
   }
   try {
     return JSON.parse(rawMenu);
   } catch {
-    window.sessionStorage.removeItem(REMOTE_MENU_STORAGE_KEY);
+    window.sessionStorage.removeItem(storageKey);
     return null;
   }
 }
 
-let remoteMenu: any = readStoredRemoteMenu();
+let remoteMenuScope: RemoteMenuScope = 'admin';
+let remoteMenu: any = readStoredRemoteMenu(remoteMenuScope);
 
 const PLANNED_PAGE_COMPONENT = 'Common/PlannedPage/index.tsx';
 
-export function getRemoteMenu() {
+export function getRemoteMenu(scope: RemoteMenuScope = remoteMenuScope) {
+  if (scope !== remoteMenuScope) {
+    remoteMenuScope = scope;
+    remoteMenu = readStoredRemoteMenu(scope);
+  }
   return remoteMenu;
 }
 
-export function setRemoteMenu(data: any) {
+export function setRemoteMenu(data: any, scope: RemoteMenuScope = remoteMenuScope) {
+  remoteMenuScope = scope;
   remoteMenu = data;
   if (typeof window === 'undefined') {
     return;
   }
+  const storageKey = getRemoteMenuStorageKey(scope);
   if (data === null || data === undefined) {
-    window.sessionStorage.removeItem(REMOTE_MENU_STORAGE_KEY);
+    window.sessionStorage.removeItem(storageKey);
     return;
   }
-  window.sessionStorage.setItem(REMOTE_MENU_STORAGE_KEY, JSON.stringify(data));
+  window.sessionStorage.setItem(storageKey, JSON.stringify(data));
 }
 
 function toPageComponentPath(component?: string) {
@@ -93,10 +102,10 @@ function normalizeAuthority(authority: unknown): string[] {
   return typeof authority === 'string' && authority.length > 0 ? [authority] : [];
 }
 
-function RemoteMenuRouteGuard({ authority, children }: { authority?: unknown; children?: React.ReactNode }) {
+export function RemoteMenuRouteGuard({ authority, children }: { authority?: unknown; children?: React.ReactNode }) {
   const permissions = normalizeAuthority(authority);
   const access = useAccess();
-  const allowed = permissions.length === 0 || permissions.some((permission) => access.hasPerms(permission));
+  const allowed = permissions.length > 0 && permissions.some((permission) => access.hasPerms(permission));
 
   if (!allowed) {
     return React.createElement(Result, {

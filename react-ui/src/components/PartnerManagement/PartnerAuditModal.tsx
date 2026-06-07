@@ -7,12 +7,17 @@ import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 import type { PartnerModuleConfig } from './PartnerManagementPage';
 
 type PartnerRecord = Record<string, any>;
-type AuditRecord = Record<string, any>;
+type AccountRecord = API.Partner.PortalAccountBase & Record<string, any>;
+type LoginAuditRecord = API.Partner.PortalLoginLog;
+type OperAuditRecord = API.Partner.PortalOperLog;
+type TicketAuditRecord = API.Partner.PortalDirectLoginTicket;
+type AuditRecord = LoginAuditRecord | OperAuditRecord | TicketAuditRecord;
 
 type PartnerAuditModalProps = {
   config: PartnerModuleConfig;
   open: boolean;
   partner?: PartnerRecord;
+  account?: AccountRecord;
   onOpenChange: (open: boolean) => void;
 };
 
@@ -60,6 +65,10 @@ function getValue(record: PartnerRecord | undefined, field: string) {
   return record ? record[field] : undefined;
 }
 
+function getAccountId(config: PartnerModuleConfig, account?: AccountRecord) {
+  return account ? account[config.accountIdField] || account.accountId : undefined;
+}
+
 function renderCompactText(value: unknown) {
   const text = value == null || value === '' ? '-' : String(value);
   return <Typography.Text style={compactCellTextStyle} title={text}>{text}</Typography.Text>;
@@ -85,7 +94,7 @@ function renderDateTime(value: unknown) {
   return renderCompactText(formatDateTimeText(value));
 }
 
-function getTableScrollX(columns: ProColumns<AuditRecord>[]) {
+function getTableScrollX<T extends AuditRecord>(columns: ProColumns<T>[]) {
   return columns.reduce((total, column) => {
     if (column.hideInTable) {
       return total;
@@ -101,12 +110,27 @@ function getTableScrollX(columns: ProColumns<AuditRecord>[]) {
   }, 0);
 }
 
-function buildAuditParams(
+function getAuditRowKey(record: AuditRecord) {
+  if ('infoId' in record && record.infoId) {
+    return `login-${record.infoId}`;
+  }
+  if ('operId' in record && record.operId) {
+    return `oper-${record.operId}`;
+  }
+  if ('ticketId' in record && record.ticketId) {
+    return `ticket-${record.ticketId}`;
+  }
+  return JSON.stringify(record);
+}
+
+export function buildAuditParams(
   params: Record<string, any>,
   current: number | undefined,
   pageSize: number | undefined,
   partnerId: number | undefined,
+  accountId: number | undefined,
   subjectField: 'subjectId' | 'targetSubjectId',
+  accountField: 'accountId' | 'targetAccountId',
 ) {
   const { timeRange, ...rest } = params;
   const range = Array.isArray(timeRange) ? timeRange : [];
@@ -118,6 +142,9 @@ function buildAuditParams(
 
   if (partnerId) {
     next[subjectField] = partnerId;
+    if (accountId) {
+      next[accountField] = accountId;
+    }
   }
   if (range[0]) {
     next['params[beginTime]'] = range[0];
@@ -133,16 +160,20 @@ const PartnerAuditModal: React.FC<PartnerAuditModalProps> = ({
   config,
   open,
   partner,
+  account,
   onOpenChange,
 }) => {
   const access = useAccess();
   const permPrefix = `${config.moduleKey}:admin`;
   const partnerId = getValue(partner, config.idField);
+  const accountId = getAccountId(config, account);
   const partnerTitle = partnerId
     ? `${getValue(partner, config.nameField) || getValue(partner, config.noField) || partnerId}`
     : `全部${config.label}`;
+  const accountTitle = accountId ? `${account?.userName || account?.nickName || accountId}` : undefined;
+  const auditScopeKey = accountId ? `account:${accountId}` : partnerId ? `subject:${partnerId}` : 'all';
 
-  const renderLoginDetail = (record: AuditRecord) => (
+  const renderLoginDetail = (record: LoginAuditRecord) => (
     <Descriptions size="small" column={{ xs: 1, sm: 2, md: 3 }}>
       <Descriptions.Item label="登录地点">{renderDetailText(record.loginLocation)}</Descriptions.Item>
       <Descriptions.Item label="浏览器">{renderDetailText(record.browser)}</Descriptions.Item>
@@ -151,7 +182,7 @@ const PartnerAuditModal: React.FC<PartnerAuditModalProps> = ({
     </Descriptions>
   );
 
-  const renderOperDetail = (record: AuditRecord) => (
+  const renderOperDetail = (record: OperAuditRecord) => (
     <Descriptions size="small" column={{ xs: 1, sm: 2, md: 3 }}>
       <Descriptions.Item label="请求地址">{renderDetailText(record.operUrl)}</Descriptions.Item>
       <Descriptions.Item label="操作IP">{renderDetailText(record.operIp)}</Descriptions.Item>
@@ -161,7 +192,7 @@ const PartnerAuditModal: React.FC<PartnerAuditModalProps> = ({
     </Descriptions>
   );
 
-  const renderTicketDetail = (record: AuditRecord) => (
+  const renderTicketDetail = (record: TicketAuditRecord) => (
     <Descriptions size="small" column={{ xs: 1, sm: 2, md: 3 }}>
       <Descriptions.Item label="目标端">{renderDetailText(record.terminal)}</Descriptions.Item>
       <Descriptions.Item label="签发人ID">{renderDetailText(record.actingAdminId)}</Descriptions.Item>
@@ -174,7 +205,7 @@ const PartnerAuditModal: React.FC<PartnerAuditModalProps> = ({
     </Descriptions>
   );
 
-  const loginLogColumns: ProColumns<AuditRecord>[] = [
+  const loginLogColumns: ProColumns<LoginAuditRecord>[] = [
     {
       title: `${config.label}ID`,
       dataIndex: 'subjectId',
@@ -193,6 +224,7 @@ const PartnerAuditModal: React.FC<PartnerAuditModalProps> = ({
       title: '登录账号',
       dataIndex: 'userName',
       width: 140,
+      search: accountId ? false : undefined,
       render: (_, record) => renderCompactText(record.userName),
     },
     {
@@ -232,7 +264,7 @@ const PartnerAuditModal: React.FC<PartnerAuditModalProps> = ({
     },
   ];
 
-  const operLogColumns: ProColumns<AuditRecord>[] = [
+  const operLogColumns: ProColumns<OperAuditRecord>[] = [
     {
       title: `${config.label}ID`,
       dataIndex: 'subjectId',
@@ -257,6 +289,7 @@ const PartnerAuditModal: React.FC<PartnerAuditModalProps> = ({
       title: '操作人',
       dataIndex: 'operName',
       width: 130,
+      search: accountId ? false : undefined,
       render: (_, record) => renderCompactText(record.operName),
     },
     {
@@ -297,7 +330,7 @@ const PartnerAuditModal: React.FC<PartnerAuditModalProps> = ({
     },
   ];
 
-  const ticketColumns: ProColumns<AuditRecord>[] = [
+  const ticketColumns: ProColumns<TicketAuditRecord>[] = [
     {
       title: `${config.label}ID`,
       dataIndex: 'targetSubjectId',
@@ -309,6 +342,7 @@ const PartnerAuditModal: React.FC<PartnerAuditModalProps> = ({
       title: '内部编号',
       dataIndex: 'targetSubjectNo',
       width: 120,
+      search: accountId ? false : undefined,
       render: (_, record) => renderCompactText(record.targetSubjectNo),
     },
     {
@@ -322,6 +356,7 @@ const PartnerAuditModal: React.FC<PartnerAuditModalProps> = ({
       title: '登录账号',
       dataIndex: 'targetUserName',
       width: 140,
+      search: accountId ? false : undefined,
       render: (_, record) => renderCompactText(record.targetUserName),
     },
     {
@@ -368,18 +403,19 @@ const PartnerAuditModal: React.FC<PartnerAuditModalProps> = ({
     },
   ];
 
-  const renderTable = (
+  const renderTable = <T extends AuditRecord,>(
     tableKey: string,
-    columns: ProColumns<AuditRecord>[],
-    request: (params?: Record<string, any>) => Promise<API.Partner.PortalAuditPageResult<any>>,
+    columns: ProColumns<T>[],
+    request: (params?: Record<string, any>) => Promise<API.Partner.PortalAuditPageResult<T>>,
     subjectField: 'subjectId' | 'targetSubjectId',
-    expandedRowRender: (record: AuditRecord) => React.ReactNode,
+    accountField: 'accountId' | 'targetAccountId',
+    expandedRowRender: (record: T) => React.ReactNode,
   ) => (
     <div style={auditTableWrapperStyle}>
-      <ProTable<AuditRecord>
-        rowKey={(record) => String(record.infoId || record.operId || record.ticketId)}
+      <ProTable<T>
+        rowKey={(record) => getAuditRowKey(record)}
         columns={columns}
-        search={getPersistedProTableSearch({ labelWidth: 88 }, `${config.moduleKey}:audit:${tableKey}`)}
+        search={getPersistedProTableSearch({ labelWidth: 88 }, `${config.moduleKey}:audit:${tableKey}:${auditScopeKey}`)}
         tableLayout="fixed"
         scroll={{ x: getTableScrollX(columns) }}
         pagination={getProTablePagination(10)}
@@ -389,7 +425,7 @@ const PartnerAuditModal: React.FC<PartnerAuditModalProps> = ({
         }}
         request={(params) => {
           const { current, pageSize, ...rest } = params;
-          return request(buildAuditParams(rest, current, pageSize, partnerId, subjectField))
+          return request(buildAuditParams(rest, current, pageSize, partnerId, accountId, subjectField, accountField))
             .then((res) => ({
               data: res.rows || [],
               total: res.total || 0,
@@ -410,6 +446,7 @@ const PartnerAuditModal: React.FC<PartnerAuditModalProps> = ({
             loginLogColumns,
             config.services.listLoginLogs,
             'subjectId',
+            'accountId',
             renderLoginDetail,
           ),
         }
@@ -423,6 +460,7 @@ const PartnerAuditModal: React.FC<PartnerAuditModalProps> = ({
             operLogColumns,
             config.services.listOperLogs,
             'subjectId',
+            'accountId',
             renderOperDetail,
           ),
         }
@@ -436,6 +474,7 @@ const PartnerAuditModal: React.FC<PartnerAuditModalProps> = ({
             ticketColumns,
             config.services.listDirectLoginTickets,
             'targetSubjectId',
+            'targetAccountId',
             renderTicketDetail,
           ),
         }
@@ -445,7 +484,7 @@ const PartnerAuditModal: React.FC<PartnerAuditModalProps> = ({
   return (
     <Modal
       width={auditModalWidth}
-      title={`${config.label}审计 - ${partnerTitle}`}
+      title={`${config.label}审计 - ${partnerTitle}${accountTitle ? ` / ${accountTitle}` : ''}`}
       open={open}
       destroyOnHidden
       footer={null}
@@ -455,6 +494,7 @@ const PartnerAuditModal: React.FC<PartnerAuditModalProps> = ({
         <Space size={8} style={{ marginBottom: 12 }}>
           <Tag>{getValue(partner, config.noField) || '-'}</Tag>
           <Typography.Text>{getValue(partner, config.nameField) || '-'}</Typography.Text>
+          {accountTitle ? <Tag>{accountTitle}</Tag> : null}
         </Space>
       ) : null}
       {tabItems.length > 0 ? <Tabs items={tabItems as any[]} style={auditTabsStyle} /> : <Typography.Text type="secondary">暂无审计权限</Typography.Text>}

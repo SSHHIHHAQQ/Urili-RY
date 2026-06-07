@@ -160,8 +160,23 @@
 }
 
 .ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-table-search .ant-pro-query-filter-actions > .ant-form-item {
+  display: flex;
+  align-items: center;
+  flex-direction: row;
+  height: var(--urili-list-search-actions-height);
   width: auto;
   margin-block-end: 0;
+}
+
+.ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-table-search .ant-pro-query-filter-actions .ant-form-item-label {
+  display: none;
+  padding: 0;
+}
+
+.ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-table-search .ant-pro-query-filter-actions .ant-form-item-control {
+  flex: none;
+  width: auto;
+  max-width: none;
 }
 
 .ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-table-search .ant-pro-query-filter-actions .ant-form-item-control-input {
@@ -170,6 +185,7 @@
 
 .ant-pro-page-container .ant-pro-page-container-children-container .ant-pro-table > .ant-pro-table-search .ant-pro-query-filter-actions .ant-form-item-control-input-content {
   display: flex;
+  width: auto;
   justify-content: flex-end;
 }
 

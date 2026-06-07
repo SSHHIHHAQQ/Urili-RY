@@ -181,6 +181,7 @@ public class SysMenuServiceImpl implements ISysMenuService
             router.setPath(getRouterPath(menu));
             router.setComponent(getComponent(menu));
             router.setQuery(menu.getQuery());
+            router.setPerms(menu.getPerms());
             router.setMeta(new MetaVo(menu.getMenuName(), menu.getIcon(), StringUtils.equals("1", menu.getIsCache()), menu.getPath()));
             List<SysMenu> cMenus = menu.getChildren();
             if (StringUtils.isNotEmpty(cMenus) && UserConstants.TYPE_DIR.equals(menu.getMenuType()))
@@ -199,6 +200,7 @@ public class SysMenuServiceImpl implements ISysMenuService
                 children.setName(getRouteName(menu.getRouteName(), menu.getPath()));
                 children.setMeta(new MetaVo(menu.getMenuName(), menu.getIcon(), StringUtils.equals("1", menu.getIsCache()), menu.getPath()));
                 children.setQuery(menu.getQuery());
+                children.setPerms(menu.getPerms());
                 childrenList.add(children);
                 router.setChildren(childrenList);
             }
@@ -213,6 +215,7 @@ public class SysMenuServiceImpl implements ISysMenuService
                 children.setComponent(UserConstants.INNER_LINK);
                 children.setName(getRouteName(menu.getRouteName(), routerPath));
                 children.setMeta(new MetaVo(menu.getMenuName(), menu.getIcon(), menu.getPath()));
+                children.setPerms(menu.getPerms());
                 childrenList.add(children);
                 router.setChildren(childrenList);
             }

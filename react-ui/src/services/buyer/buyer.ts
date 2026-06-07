@@ -251,26 +251,14 @@ export async function removeAdminBuyerDept(buyerId: number, deptId: number) {
 export async function resetAdminBuyerAccountPassword(
   buyerId: number,
   buyerAccountId: number,
-  data: Pick<API.Partner.BuyerAccountPayload, 'password'>,
+  password: string,
 ) {
   return request<API.Result>(`/api/buyer/admin/buyers/${buyerId}/accounts/${buyerAccountId}/resetPwd`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json;charset=UTF-8',
     },
-    data,
-  });
-}
-
-export async function resetAdminBuyerAccountDefaultPassword(buyerId: number, buyerAccountId: number) {
-  return request<API.Result>(`/api/buyer/admin/buyers/${buyerId}/accounts/${buyerAccountId}/resetDefaultPwd`, {
-    method: 'PUT',
-  });
-}
-
-export async function resetAdminBuyerOwnerPassword(buyerId: number) {
-  return request<API.Result>(`/api/buyer/admin/buyers/${buyerId}/resetOwnerPwd`, {
-    method: 'PUT',
+    data: { password },
   });
 }
 

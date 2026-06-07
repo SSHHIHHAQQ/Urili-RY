@@ -8,11 +8,15 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         insert into seller_oper_log(
             seller_id, seller_account_id, title, business_type, method,
             request_method, oper_name, oper_url, oper_ip, oper_location,
-            oper_param, json_result, status, error_msg, cost_time, oper_time
+            oper_param, json_result, direct_login, direct_login_ticket_id,
+            acting_admin_id, acting_admin_name, direct_login_reason,
+            status, error_msg, cost_time, oper_time
         ) values (
             #{subjectId}, #{accountId}, #{title}, #{businessType}, #{method},
             #{requestMethod}, #{operName}, #{operUrl}, #{operIp}, #{operLocation},
-            #{operParam}, #{jsonResult}, #{status}, #{errorMsg}, #{costTime}, sysdate()
+            #{operParam}, #{jsonResult}, coalesce(#{directLogin}, 0), #{directLoginTicketId},
+            #{actingAdminId}, #{actingAdminName}, #{directLoginReason},
+            #{status}, #{errorMsg}, #{costTime}, sysdate()
         )
     </insert>
 
@@ -20,11 +24,15 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         insert into buyer_oper_log(
             buyer_id, buyer_account_id, title, business_type, method,
             request_method, oper_name, oper_url, oper_ip, oper_location,
-            oper_param, json_result, status, error_msg, cost_time, oper_time
+            oper_param, json_result, direct_login, direct_login_ticket_id,
+            acting_admin_id, acting_admin_name, direct_login_reason,
+            status, error_msg, cost_time, oper_time
         ) values (
             #{subjectId}, #{accountId}, #{title}, #{businessType}, #{method},
             #{requestMethod}, #{operName}, #{operUrl}, #{operIp}, #{operLocation},
-            #{operParam}, #{jsonResult}, #{status}, #{errorMsg}, #{costTime}, sysdate()
+            #{operParam}, #{jsonResult}, coalesce(#{directLogin}, 0), #{directLoginTicketId},
+            #{actingAdminId}, #{actingAdminName}, #{directLoginReason},
+            #{status}, #{errorMsg}, #{costTime}, sysdate()
         )
     </insert>
 </mapper>

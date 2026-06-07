@@ -66,6 +66,8 @@ cd E:\Urili-Ruoyi
 
 - 当前初始化脚本来自 `RuoYi-Vue/sql/ry_20260417.sql` 和 `RuoYi-Vue/sql/quartz.sql`。
 - 初始化脚本只代表若依官方建库基线，不代表当前运行库一定是本地 `ry-vue`；当前运行库必须以激活数据源配置为准。
+- `ry_20260417.sql` 和 `quartz.sql` 是 bootstrap-only 建库基线，包含破坏性 `DROP TABLE`；只允许用于全新数据库初始化，不得作为已有本地库或远程库的增量迁移回放。
+- 这两份官方基线脚本不纳入普通增量 SQL 的确认 token 机制，但必须保留 `URILI_BOOTSTRAP_ONLY_SQL` 哨兵注释，并由 `SqlExecutionGuardContractTest` 固定“初始化基线”和“增量脚本”边界。
 - 当前还没有 URILI 商品、库存、订单、履约、财务、领星等业务表。
 - 若依主库当前主要包含：
   - 用户、部门、岗位、角色、菜单、权限关联表
@@ -96,6 +98,7 @@ cd E:\Urili-Ruoyi
   - 金额、库存、流水、外部请求日志是否需要只追加
   - 权限点、菜单、按钮、审计日志、导入导出是否受影响
   - 初始化数据、迁移方式、回滚方式
+- 日期前缀增量 SQL（例如 `20xxxxxx*.sql`）必须纳入 `SqlExecutionGuardContractTest` 自动发现；包含 dynamic DDL helper 的脚本，例如 `set @ddl = concat('alter table ...')` / `prepare stmt from @ddl`，也必须被视为高影响 SQL，保留确认 token、`45000` fail-closed 和确认调用在执行前的合同。
 - 数据表确认通过后，才能进入后端、前端和 SQL 实现。
 
 ## 复用台账与重复代码规则
@@ -126,6 +129,7 @@ cd E:\Urili-Ruoyi
 - React 前端新增页面、按钮、批量操作、导出、删除、审核等操作时，必须同步前端权限控制。
 - 新增功能至少验证：有权限用户可访问，无权限用户不可访问，菜单/按钮权限缺失时前端不展示或后端拒绝。
 - 不允许只在前端隐藏按钮而不加后端权限。
+- 管理端 `sys_menu` seed 必须明确菜单所有权；同一个 `menu_id` 的最终签名默认只能由一个 seed 负责。通用菜单 seed 不得回放覆盖已由专用业务 seed 接管的菜单；专用 seed 可以显式允许旧占位签名用于历史库迁移，但必须在写入前做 slot/signature guard。同 ID guard 必须覆盖 `parent_id` 和 `menu_type`，避免历史菜单挂错父级或类型时被静默改写。`2010` 主体管理顶级目录只能由 `top_menu_seed.sql` 写入，`seller_buyer_management_seed.sql` 和 `20260606_admin_partner_page_direct_login_seed.sql` 只能断言该顶级目录已存在且签名正确，不得再 upsert `2010`。确需保留历史兼容增量 seed 时，只允许重复写入已明确记录的同一最终签名，并必须先做 slot/signature guard；不得借兼容 seed 改变最终 owner 或扩散到新的 `menu_id`。
 
 ## 模块边界
 
@@ -159,7 +163,20 @@ cd E:\Urili-Ruoyi
 - 管理端不通过混用账号体系获得控制权，而是通过平台管理接口、主体状态、账号状态、菜单/角色配置、免密代入、强制踢出和审计日志保留控制权。
 - 三端登录入口、token/session、Redis key、权限校验和数据范围必须能明确区分 `admin` / `seller` / `buyer`。
 - 卖家端接口不能相信前端传入的 `sellerId`，必须从当前卖家端 token 身份推导；买家端接口不能相信前端传入的 `buyerId`，必须从当前买家端 token 身份推导。
+- 卖家/买家账号查询必须下推到 SQL 层同时带 `seller_id/buyer_id + account_id` 约束；管理端登录日志、操作日志和免密票据审计列表按账号筛选时也必须显式提供对应主体 ID，不允许通过裸 `select*AccountById(accountId)` 反查主体 ID。Mapper 接口和 XML 不得保留裸 `select*AccountById(accountId)` 声明，生产代码中的裸 accountId mapper 调用必须被静态契约拦截。
 - 管理端免密代入卖家端或买家端必须短时、一次性、可审计，必须记录 acting admin、目标端、目标主体、目标账号、原因、过期时间、使用时间和 IP；不能无痕冒充端内员工。
+- 管理端免密代入打开 seller/buyer 端窗口后，前端成功提示必须等待目标 portal 端完成 `/direct-login` 消费并通过 `PORTAL_DIRECT_LOGIN_RESULT_MESSAGE` 回传成功；不能只收到 `READY` 或只发出 token 就提示成功。
+- `portal.seller.web.url` / `portal.buyer.web.url` 属于环境配置；seed 脚本只允许在缺失时插入本地验证占位地址，不得无条件覆盖已有值，避免远端回放把真实端地址改回 `127.0.0.1:8001`。
+- 管理端强制踢出、账号锁定导致的强退、密码重置导致的强退等后台控制动作，登录日志里的 `actingAdminId` / `actingAdminName` 必须记录当前执行控制动作的管理端账号；如果被控制的是免密代入会话，可以保留 `directLogin` / `directLoginTicketId` 标记会话来源，但不得把原票据签发人误写成本次操作人。
+- 管理端重置卖家/买家端账号密码时，“重置密码”默认语义是人工输入 5-20 位临时密码并调用端账号 `resetPwd` 接口；不得把该入口静默退回默认密码 `U12346`。当前实现不保留 `resetDefaultPwd` 默认密码重置接口；如未来确需恢复默认密码能力，必须重新确认，并作为独立操作入口继续使用 `*:admin:account:resetPwd` 权限和端账号密码表。
+- 免密代入 Redis payload key 必须使用 `portal_direct_login:{terminal}:{token_hash}`；认证链路不得读取旧 `portal_direct_login:{token_hash}`，旧 key 只允许作为历史残留清理目标，不得新增依赖。
+- 卖家端、买家端消费免密票据时，如果票据 `terminal` 与当前端不匹配，不得把外端票据的 `ticketId`、`actingAdmin*`、`reason`、目标主体或目标账号写入当前端登录日志、操作日志或会话；应按当前端普通失败记录或直接拒绝。
+- `seller_oper_log` / `buyer_oper_log` 的免密代入审计必须落结构化字段，至少包含 `direct_login`、`direct_login_ticket_id`、`acting_admin_id`、`acting_admin_name`、`direct_login_reason`；`oper_param` 文本前缀只能作为兼容信息，不能作为唯一审计来源。
+- 卖家端、买家端自助日志接口不得直接返回 `PortalLoginLog` / `PortalOperLog` 内部审计模型；必须映射为 `PortalOwnLoginLogProfile` / `PortalOwnOperLogProfile` 等端内可见 DTO，不返回 `subjectId`、`accountId`、`directLoginTicketId`、`actingAdminId`、`actingAdminName`、`directLoginReason`、`operParam`、`jsonResult`、`tokenId` 或 Redis key。管理端审计接口继续返回完整结构化审计字段。
+- 卖家端、买家端端内菜单写入必须 fail-closed：页面菜单 `C` 和按钮菜单 `F` 的 `perms` 必填，必须使用当前端前缀 `seller:` / `buyer:`，禁止 `*` 通配和 `seller:admin:` / `buyer:admin:` 管理端命名空间；页面菜单 `C` 的 `component` 必填，并且必须使用当前端页面根路径，不得为空回退到共享占位页。
+- 当前 `seller_menu` / `buyer_menu` 是端级共享菜单模板，不是单个卖家/买家的主体私有菜单；端内角色绑定菜单时，后端必须先全量校验提交的 `menuIds` 均存在于当前端对应菜单表，任何不存在或跨端菜单 ID 都必须在写 `seller_role_menu` / `buyer_role_menu` 前 fail-closed。
+- `seller_menu` / `buyer_menu` 的数字 ID 空间必须保持不重叠：seller 端菜单使用 `100000-199999`，buyer 端菜单使用 `200000-299999`。fresh seed 和三端隔离迁移必须分别从 `auto_increment=100000` / `auto_increment=200000` 开始；已运行库重排必须使用 guarded 迁移脚本并同步更新 role-menu 与 `parent_id`，不得手写无 guard 的主键重排 SQL。
+- React 远程菜单路由 guard 必须对空 `authority` 拒绝访问，不能把空权限当作允许；涉及三端 token、代理、菜单和权限的 `.ts/.tsx` 与 `.js` 镜像必须纳入 guard 脚本，尤其是 `access.js`、`proxy.js` 这类运行入口镜像。
 
 ## 文件大小与拆分判断规则
 
@@ -193,6 +210,8 @@ cd E:\Urili-Ruoyi
 - 同一业务指标的最小值/最大值筛选，例如余额最小/余额最大、金额区间、库存区间，不得拆成两个独立筛选字段；前端应合并为一个区间输入字段，优先使用 Ant Design 原生组合控件和默认输入框样式，不自定义特殊容器，不使用假的禁用输入框，并在提交参数时转换为后端需要的最小/最大参数。
 - 三端前端表格操作列如果同一行超过 2 个操作，最多保留 2 个高频操作按钮直接展示，其余操作必须使用 Ant Design `Dropdown` 收进“更多”下拉菜单；不要在一行里平铺 3 个及以上文字按钮。
 - 三端前端表格操作列的行内操作和“更多”下拉菜单项默认只展示文字，不加操作图标；“更多”作为下拉触发器必须使用 Ant Design 小下箭头提示可展开。
+- 三端 portal 401 处理必须按端隔离：`/api/seller/**`、`/api/buyer/**` 的非 admin 请求只能清当前端 token，并跳转到对应 `/seller/login` 或 `/buyer/login`，且必须带当前 portal 路由的 `redirect` 参数；`/api/seller/admin/**`、`/api/buyer/admin/**` 仍按管理端 401 处理。
+- React 全局响应拦截器发现响应体 `code/errorCode = 401` 后，完成清 token 和跳登录后必须 reject/throw，不能继续把原 response 交给业务页面当成功结果处理。
 
 ## 外部系统与领星接入边界
 
@@ -305,6 +324,12 @@ cd E:\Urili-Ruoyi
 - “完成”不能包含静默跳过的关键事项。
 - 默认暴露不确定性，而不是隐藏问题。
 - 如果只完成了方案或草稿，必须明确说这是方案或草稿，不是已落地实现。
+
+### 子 Agent 使用规则
+
+- 需要并行检查或大型任务拆分时，子 Agent 模型优先使用 GPT-5.3 Codex（工具模型 `gpt-5.3-codex-spark`）；如果不可用，再回退 `gpt-5.4`。
+- 回退模型时，必须在阶段记录或最终回复中写明不可用原因、实际使用的模型和子 Agent 数量。
+- 子 Agent 的读写范围必须由主 Agent 明确；用完必须关闭，主 Agent 负责合并结论、复核冲突和执行最终验证。
 
 ## 代码审查交付清单
 

@@ -31,7 +31,8 @@ public interface SellerMapper
 
     public List<SellerAccount> selectSellerAccountList(@Param("sellerId") Long sellerId);
 
-    public SellerAccount selectSellerAccountById(Long sellerAccountId);
+    public SellerAccount selectSellerAccountByIdAndSellerId(@Param("sellerId") Long sellerId,
+            @Param("sellerAccountId") Long sellerAccountId);
 
     public SellerAccount selectSellerAccountByUserName(String userName);
 

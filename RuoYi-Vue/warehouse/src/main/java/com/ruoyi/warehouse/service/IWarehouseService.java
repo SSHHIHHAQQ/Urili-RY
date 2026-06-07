@@ -8,6 +8,7 @@ import com.ruoyi.warehouse.domain.Warehouse;
 import com.ruoyi.warehouse.domain.WarehouseOption;
 import com.ruoyi.warehouse.domain.WarehouseSyncCandidate;
 import com.ruoyi.warehouse.domain.WarehouseSyncConnection;
+import com.ruoyi.warehouse.domain.request.OfficialWarehousePairingRequest;
 import com.ruoyi.warehouse.domain.request.OfficialWarehouseSyncRequest;
 import com.ruoyi.warehouse.domain.request.WarehouseStatusRequest;
 
@@ -43,6 +44,12 @@ public interface IWarehouseService
     List<WarehouseSyncCandidate> selectSyncCandidates(String connectionCode, String keyword);
 
     int syncOfficialWarehouse(OfficialWarehouseSyncRequest request);
+
+    List<WarehouseSyncConnection> selectPairingConnections(String pairingRole, String keyword);
+
+    List<WarehouseSyncCandidate> selectPairingCandidates(String pairingRole, String connectionCode, String keyword);
+
+    int pairOfficialWarehouse(Long warehouseId, OfficialWarehousePairingRequest request);
 
     List<UsState> selectUsStateList(String keyword);
 

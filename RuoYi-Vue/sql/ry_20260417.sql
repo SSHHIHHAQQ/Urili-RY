@@ -1,3 +1,6 @@
+-- URILI_BOOTSTRAP_ONLY_SQL: bootstrap-only baseline initialization; fresh database initialization only.
+-- This script drops and recreates tables; must not be treated as an incremental migration.
+
 SET NAMES utf8mb4;
 
 -- ----------------------------

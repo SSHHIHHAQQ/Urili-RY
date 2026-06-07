@@ -23,6 +23,7 @@ import { openPortalDirectLoginWindow } from '@/utils/portalDirectLoginMessage';
 import { SEARCHABLE_SELECT_PROPS, SEARCHABLE_TREE_SELECT_PROPS } from '@/utils/selectSearch';
 import type { PartnerModuleConfig } from './PartnerManagementPage';
 import PartnerAccountRoleModal from './PartnerAccountRoleModal';
+import PartnerAuditModal from './PartnerAuditModal';
 import PartnerSessionModal from './PartnerSessionModal';
 
 type PartnerRecord = Record<string, any>;
@@ -60,7 +61,14 @@ type AccountFormValues = {
   remark?: string;
 };
 
+type ResetPasswordFormValues = {
+  password?: string;
+  confirmPassword?: string;
+};
+
 const DEFAULT_ACCOUNT_PASSWORD = 'U12346';
+const PASSWORD_MIN_LENGTH = 5;
+const PASSWORD_MAX_LENGTH = 20;
 
 const fallbackAccountRoleOptions: SelectOption[] = [
   { label: '负责人', value: 'OWNER', searchText: 'owner 负责人' },
@@ -194,6 +202,7 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
   const { message, modal } = App.useApp();
   const access = useAccess();
   const [accountForm] = Form.useForm<AccountFormValues>();
+  const [resetPasswordForm] = Form.useForm<ResetPasswordFormValues>();
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -207,6 +216,8 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
   const [roleAccount, setRoleAccount] = useState<AccountRecord>();
   const [sessionModalOpen, setSessionModalOpen] = useState(false);
   const [sessionAccount, setSessionAccount] = useState<AccountRecord>();
+  const [auditModalOpen, setAuditModalOpen] = useState(false);
+  const [auditAccount, setAuditAccount] = useState<AccountRecord>();
 
   const partnerId = Number(getValue(partner, config.idField) || 0);
   const partnerName = getValue(partner, config.nameField) || getValue(partner, config.codeField) || '';
@@ -222,6 +233,9 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
   const canAssignAccountRoles = access.hasPerms(accountPermissions.roleQuery)
     && access.hasPerms(accountPermissions.roleEdit);
   const canQueryDept = access.hasPerms(`${permPrefix}:dept:query`);
+  const canViewAccountAudit = access.hasPerms(`${permPrefix}:loginLog:list`)
+    || access.hasPerms(`${permPrefix}:operLog:list`)
+    || access.hasPerms(`${permPrefix}:ticket:list`);
   const accountLockEnabled = Boolean(config.services.lockAccount && config.services.unlockAccount);
   const canLockAccount = accountLockEnabled
     && Boolean(accountPermissions.lock)
@@ -343,16 +357,65 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
     if (!partnerId || !accountId) {
       return;
     }
+    resetPasswordForm.resetFields();
     modal.confirm({
       title: `确认重置账号 ${account.userName || account.nickName || accountId} 的密码吗？`,
-      content: `密码将重置为默认密码 ${DEFAULT_ACCOUNT_PASSWORD}。`,
+      okText: '重置',
+      content: (
+        <Form form={resetPasswordForm} layout="vertical">
+          <Typography.Text type="secondary">
+            请输入临时密码。重置后该账号当前在线会话会立即失效。
+          </Typography.Text>
+          <Form.Item
+            label="临时密码"
+            name="password"
+            rules={[
+              { required: true, message: '请输入临时密码' },
+              {
+                validator: (_, value) => {
+                  const password = String(value || '');
+                  if (!password.trim()) {
+                    return Promise.reject(new Error('请输入临时密码'));
+                  }
+                  if (password.length < PASSWORD_MIN_LENGTH || password.length > PASSWORD_MAX_LENGTH) {
+                    return Promise.reject(new Error('密码长度必须在5到20个字符之间'));
+                  }
+                  return Promise.resolve();
+                },
+              },
+            ]}
+          >
+            <Input.Password placeholder="请输入5-20位临时密码" />
+          </Form.Item>
+          <Form.Item
+            dependencies={['password']}
+            label="确认密码"
+            name="confirmPassword"
+            rules={[
+              { required: true, message: '请再次输入临时密码' },
+              ({ getFieldValue }) => ({
+                validator: (_, value) => {
+                  if (!value || getFieldValue('password') === value) {
+                    return Promise.resolve();
+                  }
+                  return Promise.reject(new Error('两次密码输入不一致'));
+                },
+              }),
+            ]}
+          >
+            <Input.Password placeholder="请再次输入临时密码" />
+          </Form.Item>
+        </Form>
+      ),
       onOk: async () => {
-        const resp = await config.services.resetAccountDefaultPassword(partnerId, accountId);
+        const values = await resetPasswordForm.validateFields();
+        const resp = await config.services.resetAccountPassword(partnerId, accountId, values.password || '');
         if (resp.code === 200) {
-          message.success(`密码已重置为 ${DEFAULT_ACCOUNT_PASSWORD}`);
+          message.success('账号密码已重置');
           return;
         }
         message.error(resp.msg || '密码重置失败');
+        throw new Error('RESET_ACCOUNT_PASSWORD_FAILED');
       },
     });
   };
@@ -441,7 +504,8 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
 
   const handleDirectLoginAccount = (account: AccountRecord) => {
     const accountId = getAccountId(config, account);
-    if (!partnerId || !accountId || !config.services.directLoginAccount) {
+    const directLoginAccount = config.services.directLoginAccount;
+    if (!partnerId || !accountId || !directLoginAccount) {
       return;
     }
     let reason = '';
@@ -470,13 +534,16 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
         }
         const hide = message.loading('正在生成免密登录链接');
         try {
-          const resp = await config.services.directLoginAccount?.(
+          const resp = await directLoginAccount(
             partnerId,
             accountId,
             normalizedReason,
           );
-          if (resp?.code === 200 && openPortalDirectLoginWindow(resp.data, config.moduleKey)) {
-            message.success(`免密登录链接已生成，有效期 ${resp.data.expireMinutes || 30} 分钟`);
+          const bridgeResult = resp?.code === 200
+            ? await openPortalDirectLoginWindow(resp.data, config.moduleKey)
+            : false;
+          if (bridgeResult) {
+            message.success(`${config.label}端账号免密登录已确认，有效期 ${resp.data.expireMinutes || 30} 分钟`);
             return;
           }
           message.error(resp?.msg || '免密登录链接生成失败');
@@ -566,6 +633,9 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
           access.hasPerms(`${permPrefix}:forceLogout`) && config.services.listAccountSessions
             ? { key: 'sessions', label: '会话' }
             : null,
+          canViewAccountAudit
+            ? { key: 'audit', label: '审计' }
+            : null,
           access.hasPerms(`${permPrefix}:forceLogout`)
             ? { key: 'forceLogout', label: '强制踢出' }
             : null,
@@ -609,6 +679,10 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
                     if (key === 'sessions') {
                       setSessionAccount(record);
                       setSessionModalOpen(true);
+                    }
+                    if (key === 'audit') {
+                      setAuditAccount(record);
+                      setAuditModalOpen(true);
                     }
                     if (key === 'forceLogout') {
                       handleForceLogoutAccount(record);
@@ -672,6 +746,19 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
         }}
       />
 
+      <PartnerAuditModal
+        config={config}
+        open={auditModalOpen}
+        partner={partner}
+        account={auditAccount}
+        onOpenChange={(nextOpen) => {
+          setAuditModalOpen(nextOpen);
+          if (!nextOpen) {
+            setAuditAccount(undefined);
+          }
+        }}
+      />
+
       <PartnerAccountRoleModal
         config={config}
         partnerId={partnerId}
@@ -712,8 +799,9 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
             <TreeSelect
               {...SEARCHABLE_TREE_SELECT_PROPS}
               allowClear
+              disabled={!canQueryDept}
               treeDefaultExpandAll
-              placeholder="请选择"
+              placeholder={canQueryDept ? '请选择' : '无部门查询权限'}
               treeData={deptTree}
               fieldNames={{ label: 'label', value: 'id', children: 'children' }}
             />

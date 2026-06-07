@@ -1,7 +1,7 @@
 -- Upstream WMS dimension and SKU inventory sync.
 -- Scope:
 -- 1. Create source warehouse inventory snapshot tables.
--- 2. Add upstream dimension/inventory permissions.
+-- 2. Grant upstream dimension/inventory permissions from the upstream-system menu owner.
 -- 3. Register the RuoYi sys_job entry for 10-minute inventory sync.
 
 set names utf8mb4;
@@ -19,10 +19,49 @@ begin
   end if;
 end//
 
+drop procedure if exists assert_upstream_inventory_menu_owner_ready//
+create procedure assert_upstream_inventory_menu_owner_ready()
+begin
+  if not exists (
+      select 1
+      from sys_menu
+      where menu_id = 2307
+        and parent_id = 2031
+        and menu_type = 'F'
+        and perms = 'integration:upstream:dimensionSync'
+  ) then
+    signal sqlstate '45000' set message_text = 'upstream inventory dimension sync requires upstream_system_management_seed.sql to own menu 2307';
+  end if;
+
+  if not exists (
+      select 1
+      from sys_menu
+      where menu_id = 2308
+        and parent_id = 2031
+        and menu_type = 'F'
+        and perms = 'integration:upstream:inventoryQuery'
+  ) then
+    signal sqlstate '45000' set message_text = 'upstream inventory dimension sync requires upstream_system_management_seed.sql to own menu 2308';
+  end if;
+
+  if not exists (
+      select 1
+      from sys_menu
+      where menu_id = 2309
+        and parent_id = 2031
+        and menu_type = 'F'
+        and perms = 'integration:upstream:inventorySync'
+  ) then
+    signal sqlstate '45000' set message_text = 'upstream inventory dimension sync requires upstream_system_management_seed.sql to own menu 2309';
+  end if;
+end//
+
 delimiter ;
 
 call assert_upstream_inventory_dimension_sync_confirmed();
+call assert_upstream_inventory_menu_owner_ready();
 drop procedure if exists assert_upstream_inventory_dimension_sync_confirmed;
+drop procedure if exists assert_upstream_inventory_menu_owner_ready;
 
 create table if not exists upstream_system_sku_inventory_snapshot (
   inventory_snapshot_id bigint(20)   not null auto_increment comment '库存快照ID',
@@ -79,39 +118,6 @@ create table if not exists upstream_system_inventory_sync_state (
   update_time         datetime                             comment '更新时间',
   primary key (connection_code)
 ) engine=innodb comment='上游库存同步状态';
-
-insert into sys_menu
-    (menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
-     is_frame, is_cache, menu_type, visible, status, perms, icon, create_by,
-     create_time, update_by, update_time, remark)
-values
-    (2307, '仓库尺寸重量同步', 2031, 40, '#', '', '', '',
-     1, 0, 'F', '0', '0', 'integration:upstream:dimensionSync', '#', 'admin',
-     sysdate(), '', null, '上游系统管理：同步WMS尺寸重量'),
-    (2308, 'SKU库存查看', 2031, 45, '#', '', '', '',
-     1, 0, 'F', '0', '0', 'integration:upstream:inventoryQuery', '#', 'admin',
-     sysdate(), '', null, '上游系统管理：查看SKU库存同步清单'),
-    (2309, 'SKU库存同步', 2031, 50, '#', '', '', '',
-     1, 0, 'F', '0', '0', 'integration:upstream:inventorySync', '#', 'admin',
-     sysdate(), '', null, '上游系统管理：同步SKU库存')
-on duplicate key update
-    menu_name = values(menu_name),
-    parent_id = values(parent_id),
-    order_num = values(order_num),
-    path = values(path),
-    component = values(component),
-    query = values(query),
-    route_name = values(route_name),
-    is_frame = values(is_frame),
-    is_cache = values(is_cache),
-    menu_type = values(menu_type),
-    visible = values(visible),
-    status = values(status),
-    perms = values(perms),
-    icon = values(icon),
-    update_by = 'admin',
-    update_time = sysdate(),
-    remark = values(remark);
 
 insert into sys_role_menu(role_id, menu_id)
 select distinct source_role.role_id, target_menu.menu_id

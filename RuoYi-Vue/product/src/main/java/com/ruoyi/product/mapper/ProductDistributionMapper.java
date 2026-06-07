@@ -6,6 +6,7 @@ import java.math.BigDecimal;
 import com.ruoyi.product.domain.ProductAttributeValue;
 import com.ruoyi.product.domain.ProductImage;
 import com.ruoyi.product.domain.ProductSku;
+import com.ruoyi.product.domain.ProductSkuSourceBinding;
 import com.ruoyi.product.domain.ProductSpu;
 import com.ruoyi.product.domain.ProductSpuWarehouse;
 
@@ -82,4 +83,32 @@ public interface ProductDistributionMapper
     int insertSpuWarehouse(ProductSpuWarehouse warehouse);
 
     int deleteWarehousesBySpuId(@Param("spuId") Long spuId);
+
+    ProductSkuSourceBinding selectSourceBindingSnapshot(@Param("sourceDimensionGroupKey") String sourceDimensionGroupKey);
+
+    ProductSkuSourceBinding selectActiveSourceBindingBySkuId(@Param("skuId") Long skuId);
+
+    ProductSkuSourceBinding selectActiveSourceBindingBySourceSkuGroupKey(@Param("sourceSkuGroupKey") String sourceSkuGroupKey);
+
+    List<ProductSpuWarehouse> selectOfficialWarehousesBySourceDimensionGroup(
+        @Param("sourceDimensionGroupKey") String sourceDimensionGroupKey);
+
+    List<String> selectSourceConnectionCodesByDimensionGroup(
+        @Param("sourceDimensionGroupKey") String sourceDimensionGroupKey);
+
+    int insertSourceBinding(ProductSkuSourceBinding binding);
+
+    int updateActiveSourceBinding(ProductSkuSourceBinding binding);
+
+    int markSourceBindingReplaced(@Param("bindingId") Long bindingId, @Param("reason") String reason,
+        @Param("updateBy") String updateBy);
+
+    int releaseActiveSourceBindingBySkuId(@Param("skuId") Long skuId, @Param("reason") String reason,
+        @Param("updateBy") String updateBy);
+
+    int lockActiveSourceBindingBySkuId(@Param("skuId") Long skuId, @Param("lockedBy") String lockedBy);
+
+    int deleteUpstreamSkuPairingsBySystemSku(@Param("systemSku") String systemSku);
+
+    int upsertUpstreamSkuPairingsForBinding(ProductSkuSourceBinding binding);
 }

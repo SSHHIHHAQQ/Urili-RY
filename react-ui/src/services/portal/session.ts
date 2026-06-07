@@ -122,7 +122,7 @@ export async function getPortalRoles(terminal: PortalTerminal) {
 }
 
 export async function getPortalLoginLogs(terminal: PortalTerminal, params?: Record<string, any>) {
-  return request<API.Partner.PortalAuditPageResult<API.Partner.PortalLoginLog>>(
+  return request<API.Partner.PortalAuditPageResult<API.Partner.PortalOwnLoginLogProfile>>(
     buildPortalUrl(terminal, '/account/login-logs'),
     {
       method: 'GET',
@@ -133,7 +133,7 @@ export async function getPortalLoginLogs(terminal: PortalTerminal, params?: Reco
 }
 
 export async function getPortalOperLogs(terminal: PortalTerminal, params?: Record<string, any>) {
-  return request<API.Partner.PortalAuditPageResult<API.Partner.PortalOperLog>>(
+  return request<API.Partner.PortalAuditPageResult<API.Partner.PortalOwnOperLogProfile>>(
     buildPortalUrl(terminal, '/account/oper-logs'),
     {
       method: 'GET',

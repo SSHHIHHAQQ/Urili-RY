@@ -1,9 +1,11 @@
 package com.ruoyi.seller.service.impl;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import com.github.pagehelper.Page;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,10 +30,14 @@ import com.ruoyi.system.domain.PortalLoginLog;
 import com.ruoyi.system.domain.PortalLoginResult;
 import com.ruoyi.system.domain.PortalLoginSession;
 import com.ruoyi.system.domain.PortalOperLog;
+import com.ruoyi.system.domain.PortalOwnLoginLogProfile;
+import com.ruoyi.system.domain.PortalOwnOperLogProfile;
+import com.ruoyi.system.domain.PortalOwnSessionProfile;
 import com.ruoyi.system.domain.PortalPasswordChangeRequest;
 import com.ruoyi.system.domain.PortalSessionProfile;
 import com.ruoyi.system.mapper.PortalDirectLoginTicketMapper;
 import com.ruoyi.system.service.ISysConfigService;
+import com.ruoyi.system.service.ISysDictTypeService;
 import com.ruoyi.system.service.support.PortalDirectLoginSupport;
 import com.ruoyi.system.service.support.PortalTokenSupport;
 import com.ruoyi.system.service.support.PartnerSupport;
@@ -63,6 +69,9 @@ public class SellerServiceImpl implements ISellerService
 
     @Autowired
     private ISysConfigService configService;
+
+    @Autowired
+    private ISysDictTypeService dictTypeService;
 
     @Override
     public List<Seller> selectSellerList(Seller seller)
@@ -142,8 +151,8 @@ public class SellerServiceImpl implements ISellerService
     public SellerAccount selectSellerAccountById(Long sellerId, Long sellerAccountId)
     {
         selectSellerById(sellerId);
-        SellerAccount account = sellerMapper.selectSellerAccountById(sellerAccountId);
-        if (account == null || !Objects.equals(account.getSellerId(), sellerId))
+        SellerAccount account = sellerMapper.selectSellerAccountByIdAndSellerId(sellerId, sellerAccountId);
+        if (account == null)
         {
             throw new ServiceException("卖家账号不存在");
         }
@@ -173,8 +182,8 @@ public class SellerServiceImpl implements ISellerService
     public int updateSellerAccount(Long sellerId, SellerAccount account)
     {
         selectSellerById(sellerId);
-        SellerAccount current = selectSellerAccountByPayload(account);
-        if (current == null || !sellerId.equals(current.getSellerId()))
+        SellerAccount current = selectSellerAccountByPayload(sellerId, account);
+        if (current == null)
         {
             throw new ServiceException("Seller account does not belong to this seller");
         }
@@ -229,41 +238,11 @@ public class SellerServiceImpl implements ISellerService
     @Transactional
     public int resetSellerAccountPassword(Long sellerId, Long sellerAccountId, String password)
     {
-        if (StringUtils.isBlank(password))
-        {
-            throw new ServiceException("新密码不能为空");
-        }
+        String normalizedPassword = PartnerSupport.normalizeTemporaryPassword(password);
         SellerAccount current = selectSellerAccountById(sellerId, sellerAccountId);
         int rows = sellerMapper.resetSellerAccountPassword(current.getSellerId(), current.getSellerAccountId(),
-            SecurityUtils.encryptPassword(password), SecurityUtils.getUsername());
+            SecurityUtils.encryptPassword(normalizedPassword), SecurityUtils.getUsername());
         forceLogoutSellerAccountSessionsAfterPasswordReset(rows, current.getSellerId(), current.getSellerAccountId());
-        return rows;
-    }
-
-    @Override
-    @Transactional
-    public int resetSellerAccountDefaultPassword(Long sellerId, Long sellerAccountId)
-    {
-        SellerAccount current = selectSellerAccountById(sellerId, sellerAccountId);
-        int rows = sellerMapper.resetSellerAccountPassword(current.getSellerId(), current.getSellerAccountId(),
-            SecurityUtils.encryptPassword(PartnerSupport.DEFAULT_OWNER_PASSWORD), SecurityUtils.getUsername());
-        forceLogoutSellerAccountSessionsAfterPasswordReset(rows, current.getSellerId(), current.getSellerAccountId());
-        return rows;
-    }
-
-    @Override
-    @Transactional
-    public int resetSellerOwnerPassword(Long sellerId)
-    {
-        selectSellerById(sellerId);
-        SellerAccount owner = sellerMapper.selectOwnerSellerAccountBySellerId(sellerId);
-        if (owner == null || owner.getSellerAccountId() == null)
-        {
-            throw new ServiceException("卖家主账号不存在");
-        }
-        int rows = sellerMapper.resetSellerAccountPassword(sellerId, owner.getSellerAccountId(),
-            SecurityUtils.encryptPassword(PartnerSupport.DEFAULT_OWNER_PASSWORD), SecurityUtils.getUsername());
-        forceLogoutSellerAccountSessionsAfterPasswordReset(rows, sellerId, owner.getSellerAccountId());
         return rows;
     }
 
@@ -293,8 +272,8 @@ public class SellerServiceImpl implements ISellerService
     @Transactional
     public int forceLogoutSellerAccountSessions(Long sellerId, Long sellerAccountId)
     {
-        SellerAccount account = sellerMapper.selectSellerAccountById(sellerAccountId);
-        if (account == null || !sellerId.equals(account.getSellerId()))
+        SellerAccount account = sellerMapper.selectSellerAccountByIdAndSellerId(sellerId, sellerAccountId);
+        if (account == null)
         {
             throw new ServiceException("卖家端账号不存在");
         }
@@ -319,8 +298,8 @@ public class SellerServiceImpl implements ISellerService
     public PortalDirectLoginResult createSellerAccountDirectLogin(Long sellerId, Long sellerAccountId, String reason)
     {
         Seller seller = selectSellerById(sellerId);
-        SellerAccount account = sellerMapper.selectSellerAccountById(sellerAccountId);
-        if (account == null || !sellerId.equals(account.getSellerId()))
+        SellerAccount account = sellerMapper.selectSellerAccountByIdAndSellerId(sellerId, sellerAccountId);
+        if (account == null)
         {
             throw new ServiceException("卖家账号不存在");
         }
@@ -348,30 +327,149 @@ public class SellerServiceImpl implements ISellerService
     }
 
     @Override
-    public List<PortalLoginLog> selectSellerOwnLoginLogList(PortalLoginSession session, PortalLoginLog log)
+    public List<PortalOwnLoginLogProfile> selectSellerOwnLoginLogList(PortalLoginSession session, PortalLoginLog log)
     {
         assertSellerSessionAccount(session);
-        return sellerMapper.selectSellerLoginLogList(buildSellerOwnLoginLogQuery(session, log));
+        List<PortalLoginLog> logs = sellerMapper.selectSellerLoginLogList(buildSellerOwnLoginLogQuery(session, log));
+        List<PortalOwnLoginLogProfile> profiles = newOwnLoginLogProfileList(logs);
+        for (PortalLoginLog item : logs)
+        {
+            profiles.add(buildOwnLoginLogProfile(item));
+        }
+        return profiles;
     }
 
     @Override
-    public List<PortalOperLog> selectSellerOwnOperLogList(PortalLoginSession session, PortalOperLog log)
+    public List<PortalOwnOperLogProfile> selectSellerOwnOperLogList(PortalLoginSession session, PortalOperLog log)
     {
         assertSellerSessionAccount(session);
-        return sellerMapper.selectSellerOperLogList(buildSellerOwnOperLogQuery(session, log));
+        List<PortalOperLog> logs = sellerMapper.selectSellerOperLogList(buildSellerOwnOperLogQuery(session, log));
+        List<PortalOwnOperLogProfile> profiles = newOwnOperLogProfileList(logs);
+        for (PortalOperLog item : logs)
+        {
+            profiles.add(buildOwnOperLogProfile(item));
+        }
+        return profiles;
     }
 
     @Override
-    public List<PortalSessionProfile> selectSellerOwnSessionList(PortalLoginSession session)
+    public List<PortalOwnSessionProfile> selectSellerOwnSessionList(PortalLoginSession session)
     {
         assertSellerSessionAccount(session);
         List<PortalSessionProfile> sessions = sellerMapper.selectSellerSessionProfileList(
             session.getSubjectId(), session.getAccountId());
+        List<PortalOwnSessionProfile> profiles = newOwnSessionProfileList(sessions);
         for (PortalSessionProfile profile : sessions)
         {
             profile.setCurrent(Objects.equals(session.getTokenId(), profile.getTokenId()));
+            profiles.add(buildOwnSessionProfile(profile));
         }
-        return sessions;
+        return profiles;
+    }
+
+    private List<PortalOwnLoginLogProfile> newOwnLoginLogProfileList(List<PortalLoginLog> logs)
+    {
+        if (logs instanceof Page)
+        {
+            Page<?> source = (Page<?>) logs;
+            Page<PortalOwnLoginLogProfile> result = new Page<>(source.getPageNum(), source.getPageSize(),
+                source.isCount());
+            copyPageMetadata(source, result);
+            return result;
+        }
+        return new ArrayList<>();
+    }
+
+    private PortalOwnLoginLogProfile buildOwnLoginLogProfile(PortalLoginLog source)
+    {
+        PortalOwnLoginLogProfile profile = new PortalOwnLoginLogProfile();
+        profile.setUserName(source.getUserName());
+        profile.setIpaddr(source.getIpaddr());
+        profile.setLoginLocation(source.getLoginLocation());
+        profile.setBrowser(source.getBrowser());
+        profile.setOs(source.getOs());
+        profile.setStatus(source.getStatus());
+        profile.setMsg(buildOwnLoginLogMessage(source));
+        profile.setLoginTime(source.getLoginTime());
+        return profile;
+    }
+
+    private String buildOwnLoginLogMessage(PortalLoginLog source)
+    {
+        if (!Boolean.TRUE.equals(source.getDirectLogin()))
+        {
+            return source.getMsg();
+        }
+        return Constants.FAIL.equals(source.getStatus()) ? "免密登录失败" : "免密登录成功";
+    }
+
+    private List<PortalOwnOperLogProfile> newOwnOperLogProfileList(List<PortalOperLog> logs)
+    {
+        if (logs instanceof Page)
+        {
+            Page<?> source = (Page<?>) logs;
+            Page<PortalOwnOperLogProfile> result = new Page<>(source.getPageNum(), source.getPageSize(),
+                source.isCount());
+            copyPageMetadata(source, result);
+            return result;
+        }
+        return new ArrayList<>();
+    }
+
+    private PortalOwnOperLogProfile buildOwnOperLogProfile(PortalOperLog source)
+    {
+        PortalOwnOperLogProfile profile = new PortalOwnOperLogProfile();
+        profile.setTitle(source.getTitle());
+        profile.setBusinessType(source.getBusinessType());
+        profile.setRequestMethod(source.getRequestMethod());
+        profile.setOperName(source.getOperName());
+        profile.setOperUrl(source.getOperUrl());
+        profile.setOperIp(source.getOperIp());
+        profile.setOperLocation(source.getOperLocation());
+        profile.setStatus(source.getStatus());
+        profile.setErrorMsg(source.getErrorMsg());
+        profile.setOperTime(source.getOperTime());
+        profile.setCostTime(source.getCostTime());
+        return profile;
+    }
+
+    private List<PortalOwnSessionProfile> newOwnSessionProfileList(List<PortalSessionProfile> sessions)
+    {
+        if (sessions instanceof Page)
+        {
+            Page<?> source = (Page<?>) sessions;
+            Page<PortalOwnSessionProfile> result = new Page<>(source.getPageNum(), source.getPageSize(),
+                source.isCount());
+            copyPageMetadata(source, result);
+            return result;
+        }
+        return new ArrayList<>();
+    }
+
+    private PortalOwnSessionProfile buildOwnSessionProfile(PortalSessionProfile source)
+    {
+        PortalOwnSessionProfile profile = new PortalOwnSessionProfile();
+        profile.setUserName(source.getUserName());
+        profile.setLoginIp(source.getLoginIp());
+        profile.setLoginTime(source.getLoginTime());
+        profile.setExpireTime(source.getExpireTime());
+        profile.setLogoutTime(source.getLogoutTime());
+        profile.setStatus(source.getStatus());
+        profile.setCurrent(source.getCurrent());
+        return profile;
+    }
+
+    private void copyPageMetadata(Page<?> source, Page<?> result)
+    {
+        result.setTotal(source.getTotal());
+        result.setPages(source.getPages());
+        result.setStartRow(source.getStartRow());
+        result.setEndRow(source.getEndRow());
+        result.setReasonable(source.getReasonable());
+        result.setPageSizeZero(source.getPageSizeZero());
+        result.setOrderBy(source.getOrderBy());
+        result.setOrderByOnly(source.isOrderByOnly());
+        result.setCount(source.isCount());
     }
 
     private void normalizeSellerAdminLoginLogScope(PortalLoginLog log)
@@ -396,16 +494,16 @@ public class SellerServiceImpl implements ISellerService
     {
         if (sellerAccountId != null)
         {
-            SellerAccount account = sellerMapper.selectSellerAccountById(sellerAccountId);
+            if (sellerId == null)
+            {
+                throw new ServiceException("查询卖家账号日志必须指定卖家主体");
+            }
+            SellerAccount account = sellerMapper.selectSellerAccountByIdAndSellerId(sellerId, sellerAccountId);
             if (account == null)
             {
                 throw new ServiceException("Seller account does not exist");
             }
-            if (sellerId != null && !sellerId.equals(account.getSellerId()))
-            {
-                throw new ServiceException("Seller log account does not belong to this seller");
-            }
-            return account.getSellerId();
+            return sellerId;
         }
         if (sellerId != null)
         {
@@ -476,8 +574,32 @@ public class SellerServiceImpl implements ISellerService
     public List<PortalDirectLoginTicket> selectSellerDirectLoginTicketList(PortalDirectLoginTicket ticket)
     {
         PortalDirectLoginTicket query = ticket == null ? new PortalDirectLoginTicket() : ticket;
+        normalizeSellerDirectLoginTicketScope(query);
         query.setTerminal("seller");
         return ticketMapper.selectPortalDirectLoginTicketList(query);
+    }
+
+    private void normalizeSellerDirectLoginTicketScope(PortalDirectLoginTicket ticket)
+    {
+        Long sellerId = ticket.getTargetSubjectId();
+        Long sellerAccountId = ticket.getTargetAccountId();
+        if (sellerAccountId != null)
+        {
+            if (sellerId == null)
+            {
+                throw new ServiceException("查询卖家免密票据必须指定卖家主体");
+            }
+            SellerAccount account = sellerMapper.selectSellerAccountByIdAndSellerId(sellerId, sellerAccountId);
+            if (account == null)
+            {
+                throw new ServiceException("Seller account does not exist");
+            }
+            return;
+        }
+        if (sellerId != null)
+        {
+            selectSellerById(sellerId);
+        }
     }
 
     @Override
@@ -553,8 +675,8 @@ public class SellerServiceImpl implements ISellerService
     {
         PortalDirectLoginToken token = consumeSellerDirectLoginToken(directLoginToken);
         Seller seller = sellerMapper.selectSellerById(token.getPartnerId());
-        SellerAccount account = sellerMapper.selectSellerAccountById(token.getAccountId());
-        if (account == null || !token.getPartnerId().equals(account.getSellerId()))
+        SellerAccount account = sellerMapper.selectSellerAccountByIdAndSellerId(token.getPartnerId(), token.getAccountId());
+        if (account == null)
         {
             recordSellerDirectLoginFailure(token, token.getPartnerId(), null, token.getUsername(), "免密登录目标账号不存在");
             throw new ServiceException("免密登录目标账号不存在");
@@ -605,15 +727,14 @@ public class SellerServiceImpl implements ISellerService
 
     private SellerAccount selectSellerDirectLoginAccount(PortalDirectLoginToken token)
     {
-        SellerAccount account = sellerMapper.selectSellerAccountById(token.getAccountId());
-        return account != null && token.getPartnerId().equals(account.getSellerId()) ? account : null;
+        return sellerMapper.selectSellerAccountByIdAndSellerId(token.getPartnerId(), token.getAccountId());
     }
 
     private void recordSellerDirectLoginTokenFailure(PortalDirectLoginToken token, ServiceException e)
     {
         if (!StringUtils.equals("seller", token.getPortalType()))
         {
-            recordSellerDirectLoginFailure(token, null, null, token.getUsername(), e.getMessage());
+            recordSellerLoginFailure(null, null, null, e.getMessage());
             return;
         }
         SellerAccount account = selectSellerDirectLoginAccount(token);
@@ -625,6 +746,7 @@ public class SellerServiceImpl implements ISellerService
         String message = e.getMessage();
         return StringUtils.equals(message, "免密登录 token 不能为空")
             || StringUtils.equals(message, "免密登录票据不存在")
+            || StringUtils.equals(message, "免密登录票据端类型不匹配")
             || StringUtils.equals(message, "免密登录 token 校验器不能为空");
     }
 
@@ -655,8 +777,8 @@ public class SellerServiceImpl implements ISellerService
             request == null ? null : request.getConfirmPassword());
 
         Seller seller = sellerMapper.selectSellerById(session.getSubjectId());
-        SellerAccount account = sellerMapper.selectSellerAccountById(session.getAccountId());
-        if (account == null || !session.getSubjectId().equals(account.getSellerId()))
+        SellerAccount account = sellerMapper.selectSellerAccountByIdAndSellerId(session.getSubjectId(), session.getAccountId());
+        if (account == null)
         {
             throw new ServiceException("卖家账号不存在");
         }
@@ -682,7 +804,8 @@ public class SellerServiceImpl implements ISellerService
         }
         int rows = sellerMapper.resetSellerAccountPassword(account.getSellerId(), account.getSellerAccountId(),
             SecurityUtils.encryptPassword(newPassword), session.getUserName());
-        forceLogoutSellerAccountSessionsAfterPasswordReset(rows, account.getSellerId(), account.getSellerAccountId());
+        forceLogoutSellerAccountSessionsAfterPasswordReset(rows, account.getSellerId(), account.getSellerAccountId(),
+            false);
         return rows;
     }
 
@@ -699,6 +822,8 @@ public class SellerServiceImpl implements ISellerService
         seller.setSellerType(PartnerSupport.normalizeSubjectType(seller.getSellerType()));
         seller.setSellerLevel(PartnerSupport.normalizeLevel(seller.getSellerLevel(), "卖家等级不能为空"));
         PartnerSupport.normalizeCommonProfile(seller, unchangedLegacyAttachmentUrl);
+        PartnerSupport.assertCountryRegionCode(seller.getCountryCode(),
+            dictTypeService.selectDictDataByType(PartnerSupport.COUNTRY_REGION_DICT_TYPE));
     }
 
     private void createOwnerAccountIfNeeded(Seller seller)
@@ -790,16 +915,22 @@ public class SellerServiceImpl implements ISellerService
 
     private int forceLogoutSellerSessionScope(Long sellerId, Long sellerAccountId)
     {
-        return forceLogoutSellerSessionScope(sellerId, sellerAccountId, "FORCE_LOGOUT");
+        return forceLogoutSellerSessionScope(sellerId, sellerAccountId, "FORCE_LOGOUT", true);
     }
 
     private int forceLogoutSellerSessionScope(Long sellerId, Long sellerAccountId, String reason)
+    {
+        return forceLogoutSellerSessionScope(sellerId, sellerAccountId, reason, true);
+    }
+
+    private int forceLogoutSellerSessionScope(Long sellerId, Long sellerAccountId, String reason,
+            boolean auditCurrentAdmin)
     {
         List<PortalLoginSession> sessions = sellerMapper.selectOnlineSellerSessionList(sellerId, sellerAccountId);
         int rows = sellerMapper.forceLogoutSellerSessions(sellerId, sellerAccountId);
         if (rows > 0)
         {
-            recordSellerForceLogoutAudit(sellerId, sellerAccountId, reason, sessions);
+            recordSellerForceLogoutAudit(sellerId, sellerAccountId, reason, sessions, auditCurrentAdmin);
         }
         List<String> tokenIds = sessions == null ? List.of()
             : sessions.stream().map(PortalLoginSession::getTokenId).filter(StringUtils::isNotEmpty).toList();
@@ -809,47 +940,71 @@ public class SellerServiceImpl implements ISellerService
 
     private void forceLogoutSellerAccountSessionsAfterPasswordReset(int resetRows, Long sellerId, Long sellerAccountId)
     {
+        forceLogoutSellerAccountSessionsAfterPasswordReset(resetRows, sellerId, sellerAccountId, true);
+    }
+
+    private void forceLogoutSellerAccountSessionsAfterPasswordReset(int resetRows, Long sellerId, Long sellerAccountId,
+            boolean auditCurrentAdmin)
+    {
         if (resetRows > 0)
         {
-            forceLogoutSellerSessionScope(sellerId, sellerAccountId, "PASSWORD_RESET_FORCE_LOGOUT");
+            forceLogoutSellerSessionScope(sellerId, sellerAccountId, "PASSWORD_RESET_FORCE_LOGOUT",
+                auditCurrentAdmin);
         }
     }
 
     private void recordSellerForceLogoutAudit(Long sellerId, Long sellerAccountId, String reason,
-            List<PortalLoginSession> sessions)
+            List<PortalLoginSession> sessions, boolean auditCurrentAdmin)
     {
         if (sessions != null && !sessions.isEmpty())
         {
             for (PortalLoginSession session : sessions)
             {
-                recordSellerForceLogoutSessionAudit(session, reason);
+                recordSellerForceLogoutSessionAudit(session, reason, auditCurrentAdmin);
             }
             return;
         }
-        SellerAccount account = sellerAccountId == null ? null : sellerMapper.selectSellerAccountById(sellerAccountId);
+        SellerAccount account = sellerAccountId == null ? null
+            : sellerMapper.selectSellerAccountByIdAndSellerId(sellerId, sellerAccountId);
         String userName = account == null ? null : account.getUserName();
-        sellerMapper.insertSellerLoginLog(portalTokenSupport.buildLoginLog(
-            sellerId, sellerAccountId, userName, Constants.SUCCESS, reason));
+        PortalLoginLog log = portalTokenSupport.buildLoginLog(
+            sellerId, sellerAccountId, userName, Constants.SUCCESS, reason);
+        if (auditCurrentAdmin)
+        {
+            applyCurrentAdminAudit(log);
+        }
+        sellerMapper.insertSellerLoginLog(log);
     }
 
-    private void recordSellerForceLogoutSessionAudit(PortalLoginSession session, String reason)
+    private void recordSellerForceLogoutSessionAudit(PortalLoginSession session, String reason,
+            boolean auditCurrentAdmin)
     {
         PortalLoginLog log = Boolean.TRUE.equals(session.getDirectLogin())
             ? portalTokenSupport.buildDirectLoginLog(session.getSubjectId(), session.getAccountId(),
                 session.getUserName(), Constants.SUCCESS, reason, session)
             : portalTokenSupport.buildLoginLog(session.getSubjectId(), session.getAccountId(),
                 session.getUserName(), Constants.SUCCESS, reason);
+        if (auditCurrentAdmin)
+        {
+            applyCurrentAdminAudit(log);
+        }
         sellerMapper.insertSellerLoginLog(log);
     }
 
-    private SellerAccount selectSellerAccountByPayload(SellerAccount account)
+    private void applyCurrentAdminAudit(PortalLoginLog log)
+    {
+        log.setActingAdminId(SecurityUtils.getUserId());
+        log.setActingAdminName(SecurityUtils.getUsername());
+    }
+
+    private SellerAccount selectSellerAccountByPayload(Long sellerId, SellerAccount account)
     {
         Long accountId = account.getSellerAccountId() != null ? account.getSellerAccountId() : account.getAccountId();
         if (accountId == null)
         {
             throw new ServiceException("卖家账号ID不能为空");
         }
-        return sellerMapper.selectSellerAccountById(accountId);
+        return sellerMapper.selectSellerAccountByIdAndSellerId(sellerId, accountId);
     }
 
     private void assertSellerCanLogin(Seller seller, SellerAccount account, String username)
@@ -933,10 +1088,7 @@ public class SellerServiceImpl implements ISellerService
 
     private String buildDirectLoginSuccessMessage(PortalDirectLoginToken token)
     {
-        return "免密登录成功; ticketId=" + token.getTicketId()
-            + "; actingAdminId=" + token.getActingAdminId()
-            + "; actingAdminName=" + safeAuditValue(token.getActingAdminName())
-            + "; reason=" + safeAuditValue(token.getDirectLoginReason());
+        return "免密登录成功";
     }
 
     private String safeAuditValue(String value)

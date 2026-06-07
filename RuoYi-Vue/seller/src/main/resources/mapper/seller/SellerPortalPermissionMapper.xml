@@ -321,6 +321,18 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         </foreach>
     </select>
 
+    <select id="countSellerMenusByIds" resultType="Integer">
+        select count(1)
+        from seller_menu
+        where seller_menu_id &gt;= 100000
+          and seller_menu_id &lt; 200000
+          and status = '0'
+          and seller_menu_id in
+        <foreach collection="menuIds" item="menuId" open="(" separator="," close=")">
+            #{menuId}
+        </foreach>
+    </select>
+
     <delete id="deleteSellerAccountRoles">
         delete ar
         from seller_account_role ar
@@ -359,6 +371,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <foreach collection="menuIds" item="menuId" open="(" separator="," close=")">
             #{menuId}
         </foreach>
+          and m.status = '0'
         where r.seller_id = #{sellerId}
           and r.seller_role_id = #{roleId}
     </insert>

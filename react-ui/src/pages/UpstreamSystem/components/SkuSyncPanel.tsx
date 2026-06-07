@@ -123,7 +123,7 @@ export default function SkuSyncPanel({
                 onConfirm={async () => {
                   if (!record.skuPairingId) return;
                   const ok = resultOk(
-                    await deleteSkuPairing(record.skuPairingId),
+                    await deleteSkuPairing(selectedCode, record.skuPairingId),
                     '已解除配对',
                   );
                   if (ok) actionRef.current?.reload();

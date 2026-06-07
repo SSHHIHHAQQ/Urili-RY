@@ -15,6 +15,7 @@ public class UpstreamWarehousePairing extends BaseEntity
     private String upstreamWarehouseName;
     private String systemWarehouseCode;
     private String systemWarehouseName;
+    private String pairingRole;
     private String status;
 
     public Long getWarehousePairingId() { return warehousePairingId; }
@@ -29,6 +30,8 @@ public class UpstreamWarehousePairing extends BaseEntity
     public void setSystemWarehouseCode(String systemWarehouseCode) { this.systemWarehouseCode = systemWarehouseCode; }
     public String getSystemWarehouseName() { return systemWarehouseName; }
     public void setSystemWarehouseName(String systemWarehouseName) { this.systemWarehouseName = systemWarehouseName; }
+    public String getPairingRole() { return pairingRole; }
+    public void setPairingRole(String pairingRole) { this.pairingRole = pairingRole; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
 }

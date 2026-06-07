@@ -1,4 +1,4 @@
-import { PlusOutlined, SyncOutlined } from '@ant-design/icons';
+import { DownOutlined, PlusOutlined, SyncOutlined } from '@ant-design/icons';
 import {
   type ActionType,
   PageContainer,
@@ -6,16 +6,19 @@ import {
   ProTable,
 } from '@ant-design/pro-components';
 import { useAccess } from '@umijs/max';
-import { Button, Modal, Space, Tag, Typography } from 'antd';
+import { Button, Dropdown, Modal, Space, Tag, Typography } from 'antd';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { getDictSelectOption } from '@/services/system/dict';
 import {
   addOfficialWarehouse,
   addThirdPartyWarehouse,
+  getOfficialWarehouse,
   getOfficialWarehouseList,
+  getThirdPartyWarehouse,
   getThirdPartyWarehouseList,
   getWarehouseCurrencyOptions,
   getWarehouseSellerOptions,
+  pairOfficialWarehouse,
   syncOfficialWarehouse,
   updateOfficialWarehouse,
   updateOfficialWarehouseStatus,
@@ -29,6 +32,7 @@ import {
   getProTableScroll,
 } from '@/utils/proTableSearch';
 import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
+import type { MenuProps } from 'antd';
 import {
   statusColor,
   statusText,
@@ -37,6 +41,7 @@ import {
 } from './constants';
 import OfficialSyncModal from './components/OfficialSyncModal';
 import WarehouseFormModal from './components/WarehouseFormModal';
+import WarehousePairingModal from './components/WarehousePairingModal';
 
 type WarehouseKind = 'official' | 'third_party';
 
@@ -46,6 +51,7 @@ interface WarehouseManagementPageProps {
 
 type WarehouseServiceSet = {
   list: typeof getOfficialWarehouseList;
+  get: typeof getOfficialWarehouse;
   add: typeof addOfficialWarehouse;
   update: typeof updateOfficialWarehouse;
   updateStatus: typeof updateOfficialWarehouseStatus;
@@ -54,12 +60,14 @@ type WarehouseServiceSet = {
 const serviceMap: Record<WarehouseKind, WarehouseServiceSet> = {
   official: {
     list: getOfficialWarehouseList,
+    get: getOfficialWarehouse,
     add: addOfficialWarehouse,
     update: updateOfficialWarehouse,
     updateStatus: updateOfficialWarehouseStatus,
   },
   third_party: {
     list: getThirdPartyWarehouseList,
+    get: getThirdPartyWarehouse,
     add: addThirdPartyWarehouse,
     update: updateThirdPartyWarehouse,
     updateStatus: updateThirdPartyWarehouseStatus,
@@ -107,7 +115,9 @@ export default function WarehouseManagementPage({ kind }: WarehouseManagementPag
   const [sellerOptions, setSellerOptions] = useState<any[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [syncOpen, setSyncOpen] = useState(false);
+  const [pairingOpen, setPairingOpen] = useState(false);
   const [currentWarehouse, setCurrentWarehouse] = useState<API.Warehouse.Warehouse>();
+  const [pairingWarehouse, setPairingWarehouse] = useState<API.Warehouse.Warehouse>();
 
   const isOfficial = kind === 'official';
   const services = serviceMap[kind];
@@ -135,9 +145,32 @@ export default function WarehouseManagementPage({ kind }: WarehouseManagementPag
     setModalOpen(true);
   };
 
-  const openEdit = (record: API.Warehouse.Warehouse) => {
-    setCurrentWarehouse(record);
+  const openEdit = async (record: API.Warehouse.Warehouse) => {
+    if (!record.warehouseId) {
+      message.error('仓库ID不能为空');
+      return;
+    }
+    const resp = await services.get(record.warehouseId);
+    if (resp.code !== 200 || !resp.data) {
+      message.error(resp.msg || '获取仓库详情失败');
+      return;
+    }
+    setCurrentWarehouse(resp.data);
     setModalOpen(true);
+  };
+
+  const openPairing = async (record: API.Warehouse.Warehouse) => {
+    if (!record.warehouseId) {
+      message.error('仓库ID不能为空');
+      return;
+    }
+    const resp = await getOfficialWarehouse(record.warehouseId);
+    if (resp.code !== 200 || !resp.data) {
+      message.error(resp.msg || '获取仓库详情失败');
+      return;
+    }
+    setPairingWarehouse(resp.data);
+    setPairingOpen(true);
   };
 
   const saveWarehouse = async (values: API.Warehouse.Warehouse) => {
@@ -175,13 +208,69 @@ export default function WarehouseManagementPage({ kind }: WarehouseManagementPag
   };
 
   const submitSync = async (values: API.Warehouse.OfficialSyncRequest) => {
-    const ok = resultOk(await syncOfficialWarehouse(values), '官方仓库已同步并配对');
+    const ok = resultOk(await syncOfficialWarehouse(values), '官方仓库已同步并绑定履约仓');
     if (ok) {
       setSyncOpen(false);
       actionRef.current?.reload();
       return true;
     }
     return false;
+  };
+
+  const submitPairing = async (values: API.Warehouse.OfficialPairingRequest) => {
+    if (!pairingWarehouse?.warehouseId) {
+      message.error('仓库ID不能为空');
+      return false;
+    }
+    const ok = resultOk(
+      await pairOfficialWarehouse(pairingWarehouse.warehouseId, values),
+      '仓库配对已保存',
+    );
+    if (ok) {
+      setPairingOpen(false);
+      actionRef.current?.reload();
+      return true;
+    }
+    return false;
+  };
+
+  const renderActions = (record: API.Warehouse.Warehouse) => {
+    const actions: { key: string; label: string; onClick: () => void }[] = [];
+    if (access.hasPerms(permissions.edit)) {
+      actions.push({ key: 'edit', label: '编辑', onClick: () => openEdit(record) });
+    }
+    if (isOfficial && access.hasPerms(permissionMap.official.sync)) {
+      actions.push({ key: 'pairing', label: '配对', onClick: () => openPairing(record) });
+    }
+    if (access.hasPerms(permissions.status)) {
+      actions.push({
+        key: 'status',
+        label: record.status === '0' ? '停用' : '启用',
+        onClick: () => toggleStatus(record),
+      });
+    }
+
+    const directActions = actions.slice(0, 2);
+    const moreActions = actions.slice(2);
+    const moreMenu: MenuProps = {
+      items: moreActions.map((item) => ({ key: item.key, label: item.label })),
+      onClick: ({ key }) => moreActions.find((item) => item.key === String(key))?.onClick(),
+    };
+
+    return [
+      ...directActions.map((item) => (
+        <Button key={item.key} type="link" size="small" onClick={item.onClick}>
+          {item.label}
+        </Button>
+      )),
+      moreActions.length ? (
+        <Dropdown key="more" menu={moreMenu}>
+          <Button type="link" size="small">
+            更多 <DownOutlined />
+          </Button>
+        </Dropdown>
+      ) : null,
+    ];
   };
 
   const countryValueEnum = useMemo(
@@ -287,7 +376,7 @@ export default function WarehouseManagementPage({ kind }: WarehouseManagementPag
 
   if (isOfficial) {
     columns.push({
-      title: '上游配对',
+      title: '履约仓',
       dataIndex: 'upstreamWarehouseName',
       width: 220,
       search: false,
@@ -299,6 +388,25 @@ export default function WarehouseManagementPage({ kind }: WarehouseManagementPag
             </Typography.Text>
             <Typography.Text type="secondary">
               {displayText(record.upstreamWarehouseName)} / {displayText(record.upstreamWarehouseCode)}
+            </Typography.Text>
+          </Space>
+        ) : (
+          <Tag>未配对</Tag>
+        ),
+    });
+    columns.push({
+      title: '报价仓',
+      dataIndex: 'quoteUpstreamWarehouseName',
+      width: 220,
+      search: false,
+      render: (_, record) =>
+        record.quoteWarehousePairingId ? (
+          <Space direction="vertical" size={0}>
+            <Typography.Text>
+              {displayText(record.quoteMasterWarehouseName || record.quoteConnectionCode)}
+            </Typography.Text>
+            <Typography.Text type="secondary">
+              {displayText(record.quoteUpstreamWarehouseName)} / {displayText(record.quoteUpstreamWarehouseCode)}
             </Typography.Text>
           </Space>
         ) : (
@@ -331,20 +439,9 @@ export default function WarehouseManagementPage({ kind }: WarehouseManagementPag
   columns.push({
     title: '操作',
     valueType: 'option',
-    width: 130,
+    width: isOfficial ? 180 : 130,
     fixed: 'right',
-    render: (_, record) => [
-      access.hasPerms(permissions.edit) ? (
-        <Button key="edit" type="link" size="small" onClick={() => openEdit(record)}>
-          编辑
-        </Button>
-      ) : null,
-      access.hasPerms(permissions.status) ? (
-        <Button key="status" type="link" size="small" onClick={() => toggleStatus(record)}>
-          {record.status === '0' ? '停用' : '启用'}
-        </Button>
-      ) : null,
-    ],
+    render: (_, record) => renderActions(record),
   });
 
   return (
@@ -359,7 +456,7 @@ export default function WarehouseManagementPage({ kind }: WarehouseManagementPag
           `warehouse-${kind}`,
         )}
         pagination={getProTablePagination(20)}
-        scroll={getProTableScroll(isOfficial ? 1540 : 1640)}
+        scroll={getProTableScroll(isOfficial ? 1760 : 1640)}
         request={async (params) => {
           const resp = await services.list(cleanParams(params));
           return {
@@ -399,6 +496,14 @@ export default function WarehouseManagementPage({ kind }: WarehouseManagementPag
           currencyOptions={currencyOptions}
           onOpenChange={setSyncOpen}
           onSubmit={submitSync}
+        />
+      ) : null}
+      {isOfficial ? (
+        <WarehousePairingModal
+          open={pairingOpen}
+          current={pairingWarehouse}
+          onOpenChange={setPairingOpen}
+          onSubmit={submitPairing}
         />
       ) : null}
     </PageContainer>

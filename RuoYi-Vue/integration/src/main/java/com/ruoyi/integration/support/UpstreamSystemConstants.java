@@ -13,6 +13,10 @@ public final class UpstreamSystemConstants
 
     public static final String SETTLEMENT_TYPE_SELF_OPERATED_RECEIVABLE = "self-operated-receivable";
 
+    public static final String PAIRING_ROLE_FULFILLMENT = "FULFILLMENT";
+
+    public static final String PAIRING_ROLE_QUOTE = "QUOTE";
+
     public static final String STATUS_ENABLED = "ENABLED";
 
     public static final String STATUS_DISABLED = "DISABLED";

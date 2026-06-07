@@ -7,8 +7,11 @@ import { getDictSelectOption } from '@/services/system/dict';
 import { openPortalDirectLoginWindow } from '@/utils/portalDirectLoginMessage';
 import { SEARCHABLE_SELECT_PROPS, SEARCHABLE_TREE_SELECT_PROPS } from '@/utils/selectSearch';
 import PartnerAccountRoleModal from './PartnerAccountRoleModal';
+import PartnerAuditModal from './PartnerAuditModal';
 import PartnerSessionModal from './PartnerSessionModal';
 const DEFAULT_ACCOUNT_PASSWORD = 'U12346';
+const PASSWORD_MIN_LENGTH = 5;
+const PASSWORD_MAX_LENGTH = 20;
 const fallbackAccountRoleOptions = [
     { label: '负责人', value: 'OWNER', searchText: 'owner 负责人' },
     { label: '管理员', value: 'ADMIN', searchText: 'admin 管理员' },
@@ -113,6 +116,7 @@ const PartnerAccountModal = ({ config, open, partner, onOpenChange, }) => {
     const { message, modal } = App.useApp();
     const access = useAccess();
     const [accountForm] = Form.useForm();
+    const [resetPasswordForm] = Form.useForm();
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [accounts, setAccounts] = useState([]);
@@ -125,6 +129,8 @@ const PartnerAccountModal = ({ config, open, partner, onOpenChange, }) => {
     const [roleAccount, setRoleAccount] = useState();
     const [sessionModalOpen, setSessionModalOpen] = useState(false);
     const [sessionAccount, setSessionAccount] = useState();
+    const [auditModalOpen, setAuditModalOpen] = useState(false);
+    const [auditAccount, setAuditAccount] = useState();
     const partnerId = Number(getValue(partner, config.idField) || 0);
     const partnerName = getValue(partner, config.nameField) || getValue(partner, config.codeField) || '';
     const permPrefix = `${config.moduleKey}:admin`;
@@ -139,6 +145,9 @@ const PartnerAccountModal = ({ config, open, partner, onOpenChange, }) => {
     const canAssignAccountRoles = access.hasPerms(accountPermissions.roleQuery)
         && access.hasPerms(accountPermissions.roleEdit);
     const canQueryDept = access.hasPerms(`${permPrefix}:dept:query`);
+    const canViewAccountAudit = access.hasPerms(`${permPrefix}:loginLog:list`)
+        || access.hasPerms(`${permPrefix}:operLog:list`)
+        || access.hasPerms(`${permPrefix}:ticket:list`);
     const accountLockEnabled = Boolean(config.services.lockAccount && config.services.unlockAccount);
     const canLockAccount = accountLockEnabled
         && Boolean(accountPermissions.lock)
@@ -251,16 +260,44 @@ const PartnerAccountModal = ({ config, open, partner, onOpenChange, }) => {
         if (!partnerId || !accountId) {
             return;
         }
+        resetPasswordForm.resetFields();
         modal.confirm({
             title: `确认重置账号 ${account.userName || account.nickName || accountId} 的密码吗？`,
-            content: `密码将重置为默认密码 ${DEFAULT_ACCOUNT_PASSWORD}。`,
+            okText: '重置',
+            content: (_jsxs(Form, { form: resetPasswordForm, layout: "vertical", children: [_jsx(Typography.Text, { type: "secondary", children: "\u8BF7\u8F93\u5165\u4E34\u65F6\u5BC6\u7801\u3002\u91CD\u7F6E\u540E\u8BE5\u8D26\u53F7\u5F53\u524D\u5728\u7EBF\u4F1A\u8BDD\u4F1A\u7ACB\u5373\u5931\u6548\u3002" }), _jsx(Form.Item, { label: "\u4E34\u65F6\u5BC6\u7801", name: "password", rules: [
+                            { required: true, message: '请输入临时密码' },
+                            {
+                                validator: (_, value) => {
+                                    const password = String(value || '');
+                                    if (!password.trim()) {
+                                        return Promise.reject(new Error('请输入临时密码'));
+                                    }
+                                    if (password.length < PASSWORD_MIN_LENGTH || password.length > PASSWORD_MAX_LENGTH) {
+                                        return Promise.reject(new Error('密码长度必须在5到20个字符之间'));
+                                    }
+                                    return Promise.resolve();
+                                },
+                            },
+                        ], children: _jsx(Input.Password, { placeholder: "\u8BF7\u8F93\u51655-20\u4F4D\u4E34\u65F6\u5BC6\u7801" }) }), _jsx(Form.Item, { dependencies: ['password'], label: "\u786E\u8BA4\u5BC6\u7801", name: "confirmPassword", rules: [
+                            { required: true, message: '请再次输入临时密码' },
+                            ({ getFieldValue }) => ({
+                                validator: (_, value) => {
+                                    if (!value || getFieldValue('password') === value) {
+                                        return Promise.resolve();
+                                    }
+                                    return Promise.reject(new Error('两次密码输入不一致'));
+                                },
+                            }),
+                        ], children: _jsx(Input.Password, { placeholder: "\u8BF7\u518D\u6B21\u8F93\u5165\u4E34\u65F6\u5BC6\u7801" }) })] })),
             onOk: async () => {
-                const resp = await config.services.resetAccountDefaultPassword(partnerId, accountId);
+                const values = await resetPasswordForm.validateFields();
+                const resp = await config.services.resetAccountPassword(partnerId, accountId, values.password || '');
                 if (resp.code === 200) {
-                    message.success(`密码已重置为 ${DEFAULT_ACCOUNT_PASSWORD}`);
+                    message.success('账号密码已重置');
                     return;
                 }
                 message.error(resp.msg || '密码重置失败');
+                throw new Error('RESET_ACCOUNT_PASSWORD_FAILED');
             },
         });
     };
@@ -333,7 +370,8 @@ const PartnerAccountModal = ({ config, open, partner, onOpenChange, }) => {
     };
     const handleDirectLoginAccount = (account) => {
         const accountId = getAccountId(config, account);
-        if (!partnerId || !accountId || !config.services.directLoginAccount) {
+        const directLoginAccount = config.services.directLoginAccount;
+        if (!partnerId || !accountId || !directLoginAccount) {
             return;
         }
         let reason = '';
@@ -351,9 +389,12 @@ const PartnerAccountModal = ({ config, open, partner, onOpenChange, }) => {
                 }
                 const hide = message.loading('正在生成免密登录链接');
                 try {
-                    const resp = await config.services.directLoginAccount?.(partnerId, accountId, normalizedReason);
-                    if (resp?.code === 200 && openPortalDirectLoginWindow(resp.data, config.moduleKey)) {
-                        message.success(`免密登录链接已生成，有效期 ${resp.data.expireMinutes || 30} 分钟`);
+                    const resp = await directLoginAccount(partnerId, accountId, normalizedReason);
+                    const bridgeResult = resp?.code === 200
+                        ? await openPortalDirectLoginWindow(resp.data, config.moduleKey)
+                        : false;
+                    if (bridgeResult) {
+                        message.success(`${config.label}端账号免密登录已确认，有效期 ${resp.data.expireMinutes || 30} 分钟`);
                         return;
                     }
                     message.error(resp?.msg || '免密登录链接生成失败');
@@ -433,6 +474,9 @@ const PartnerAccountModal = ({ config, open, partner, onOpenChange, }) => {
                     access.hasPerms(`${permPrefix}:forceLogout`) && config.services.listAccountSessions
                         ? { key: 'sessions', label: '会话' }
                         : null,
+                    canViewAccountAudit
+                        ? { key: 'audit', label: '审计' }
+                        : null,
                     access.hasPerms(`${permPrefix}:forceLogout`)
                         ? { key: 'forceLogout', label: '强制踢出' }
                         : null,
@@ -456,6 +500,10 @@ const PartnerAccountModal = ({ config, open, partner, onOpenChange, }) => {
                                         setSessionAccount(record);
                                         setSessionModalOpen(true);
                                     }
+                                    if (key === 'audit') {
+                                        setAuditAccount(record);
+                                        setAuditModalOpen(true);
+                                    }
                                     if (key === 'forceLogout') {
                                         handleForceLogoutAccount(record);
                                     }
@@ -469,12 +517,17 @@ const PartnerAccountModal = ({ config, open, partner, onOpenChange, }) => {
                     if (!nextOpen) {
                         setSessionAccount(undefined);
                     }
+                } }), _jsx(PartnerAuditModal, { config: config, open: auditModalOpen, partner: partner, account: auditAccount, onOpenChange: (nextOpen) => {
+                    setAuditModalOpen(nextOpen);
+                    if (!nextOpen) {
+                        setAuditAccount(undefined);
+                    }
                 } }), _jsx(PartnerAccountRoleModal, { config: config, partnerId: partnerId, account: roleAccount, open: roleModalOpen, onOpenChange: (nextOpen) => {
                     if (nextOpen) {
                         setRoleModalOpen(true);
                         return;
                     }
                     closeAccountRoleModal();
-                } }), _jsx(Modal, { width: 640, title: currentAccountId ? '编辑账号' : '新增账号', open: accountFormOpen, destroyOnHidden: true, forceRender: true, confirmLoading: saving, onOk: handleAccountSubmit, onCancel: closeAccountForm, children: _jsxs(Form, { form: accountForm, layout: "vertical", children: [_jsx(Form.Item, { label: "\u767B\u5F55\u8D26\u53F7", name: "userName", rules: [{ required: true, message: '请输入登录账号' }], children: _jsx(Input, { disabled: Boolean(currentAccountId), placeholder: "\u8BF7\u8F93\u5165" }) }), _jsx(Form.Item, { label: "\u59D3\u540D", name: "nickName", rules: [{ required: true, message: '请输入姓名' }], children: _jsx(Input, { placeholder: "\u8BF7\u8F93\u5165" }) }), !currentAccountId ? (_jsx(Form.Item, { label: "\u521D\u59CB\u5BC6\u7801", name: "password", rules: [{ required: true, message: '请输入初始密码' }], children: _jsx(Input.Password, { placeholder: "\u8BF7\u8F93\u5165" }) })) : null, _jsx(Form.Item, { label: "\u90E8\u95E8", name: "deptId", children: _jsx(TreeSelect, { ...SEARCHABLE_TREE_SELECT_PROPS, allowClear: true, treeDefaultExpandAll: true, placeholder: "\u8BF7\u9009\u62E9", treeData: deptTree, fieldNames: { label: 'label', value: 'id', children: 'children' } }) }), _jsx(Form.Item, { label: "\u8D26\u53F7\u89D2\u8272", name: "accountRole", rules: [{ required: true, message: '请选择账号角色' }], children: _jsx(Select, { ...SEARCHABLE_SELECT_PROPS, options: roleSelectOptions }) }), _jsx(Form.Item, { label: "\u72B6\u6001", name: "status", rules: [{ required: true, message: '请选择状态' }], children: _jsx(Select, { ...SEARCHABLE_SELECT_PROPS, options: statusOptions }) }), _jsx(Form.Item, { label: "\u624B\u673A", name: "phonenumber", children: _jsx(Input, { placeholder: "\u8BF7\u8F93\u5165" }) }), _jsx(Form.Item, { label: "\u90AE\u7BB1", name: "email", children: _jsx(Input, { placeholder: "\u8BF7\u8F93\u5165" }) }), _jsx(Form.Item, { label: "\u5907\u6CE8", name: "remark", children: _jsx(Input.TextArea, { rows: 3, placeholder: "\u8BF7\u8F93\u5165" }) })] }) })] }));
+        } }), _jsx(Modal, { width: 640, title: currentAccountId ? '编辑账号' : '新增账号', open: accountFormOpen, destroyOnHidden: true, forceRender: true, confirmLoading: saving, onOk: handleAccountSubmit, onCancel: closeAccountForm, children: _jsxs(Form, { form: accountForm, layout: "vertical", children: [_jsx(Form.Item, { label: "\u767B\u5F55\u8D26\u53F7", name: "userName", rules: [{ required: true, message: '请输入登录账号' }], children: _jsx(Input, { disabled: Boolean(currentAccountId), placeholder: "\u8BF7\u8F93\u5165" }) }), _jsx(Form.Item, { label: "\u59D3\u540D", name: "nickName", rules: [{ required: true, message: '请输入姓名' }], children: _jsx(Input, { placeholder: "\u8BF7\u8F93\u5165" }) }), !currentAccountId ? (_jsx(Form.Item, { label: "\u521D\u59CB\u5BC6\u7801", name: "password", rules: [{ required: true, message: '请输入初始密码' }], children: _jsx(Input.Password, { placeholder: "\u8BF7\u8F93\u5165" }) })) : null, _jsx(Form.Item, { label: "\u90E8\u95E8", name: "deptId", children: _jsx(TreeSelect, { ...SEARCHABLE_TREE_SELECT_PROPS, allowClear: true, disabled: !canQueryDept, treeDefaultExpandAll: true, placeholder: canQueryDept ? '\u8BF7\u9009\u62E9' : '\u65E0\u90E8\u95E8\u67E5\u8BE2\u6743\u9650', treeData: deptTree, fieldNames: { label: 'label', value: 'id', children: 'children' } }) }), _jsx(Form.Item, { label: "\u8D26\u53F7\u89D2\u8272", name: "accountRole", rules: [{ required: true, message: '请选择账号角色' }], children: _jsx(Select, { ...SEARCHABLE_SELECT_PROPS, options: roleSelectOptions }) }), _jsx(Form.Item, { label: "\u72B6\u6001", name: "status", rules: [{ required: true, message: '请选择状态' }], children: _jsx(Select, { ...SEARCHABLE_SELECT_PROPS, options: statusOptions }) }), _jsx(Form.Item, { label: "\u624B\u673A", name: "phonenumber", children: _jsx(Input, { placeholder: "\u8BF7\u8F93\u5165" }) }), _jsx(Form.Item, { label: "\u90AE\u7BB1", name: "email", children: _jsx(Input, { placeholder: "\u8BF7\u8F93\u5165" }) }), _jsx(Form.Item, { label: "\u5907\u6CE8", name: "remark", children: _jsx(Input.TextArea, { rows: 3, placeholder: "\u8BF7\u8F93\u5165" }) })] }) })] }));
 };
 export default PartnerAccountModal;

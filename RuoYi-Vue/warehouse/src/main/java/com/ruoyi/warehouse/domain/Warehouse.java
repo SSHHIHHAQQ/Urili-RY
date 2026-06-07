@@ -44,6 +44,14 @@ public class Warehouse extends BaseEntity
     private String upstreamWarehouseCode;
     private String upstreamWarehouseName;
     private String pairingStatus;
+    private String pairingRole;
+
+    private Long quoteWarehousePairingId;
+    private String quoteConnectionCode;
+    private String quoteMasterWarehouseName;
+    private String quoteUpstreamWarehouseCode;
+    private String quoteUpstreamWarehouseName;
+    private String quotePairingStatus;
 
     public Long getWarehouseId()
     {
@@ -347,6 +355,76 @@ public class Warehouse extends BaseEntity
     public void setPairingStatus(String pairingStatus)
     {
         this.pairingStatus = pairingStatus;
+    }
+
+    public String getPairingRole()
+    {
+        return pairingRole;
+    }
+
+    public void setPairingRole(String pairingRole)
+    {
+        this.pairingRole = pairingRole;
+    }
+
+    public Long getQuoteWarehousePairingId()
+    {
+        return quoteWarehousePairingId;
+    }
+
+    public void setQuoteWarehousePairingId(Long quoteWarehousePairingId)
+    {
+        this.quoteWarehousePairingId = quoteWarehousePairingId;
+    }
+
+    public String getQuoteConnectionCode()
+    {
+        return quoteConnectionCode;
+    }
+
+    public void setQuoteConnectionCode(String quoteConnectionCode)
+    {
+        this.quoteConnectionCode = quoteConnectionCode;
+    }
+
+    public String getQuoteMasterWarehouseName()
+    {
+        return quoteMasterWarehouseName;
+    }
+
+    public void setQuoteMasterWarehouseName(String quoteMasterWarehouseName)
+    {
+        this.quoteMasterWarehouseName = quoteMasterWarehouseName;
+    }
+
+    public String getQuoteUpstreamWarehouseCode()
+    {
+        return quoteUpstreamWarehouseCode;
+    }
+
+    public void setQuoteUpstreamWarehouseCode(String quoteUpstreamWarehouseCode)
+    {
+        this.quoteUpstreamWarehouseCode = quoteUpstreamWarehouseCode;
+    }
+
+    public String getQuoteUpstreamWarehouseName()
+    {
+        return quoteUpstreamWarehouseName;
+    }
+
+    public void setQuoteUpstreamWarehouseName(String quoteUpstreamWarehouseName)
+    {
+        this.quoteUpstreamWarehouseName = quoteUpstreamWarehouseName;
+    }
+
+    public String getQuotePairingStatus()
+    {
+        return quotePairingStatus;
+    }
+
+    public void setQuotePairingStatus(String quotePairingStatus)
+    {
+        this.quotePairingStatus = quotePairingStatus;
     }
 
     @Override

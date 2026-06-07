@@ -1,7 +1,7 @@
 import { ArrowLeftOutlined, SaveOutlined } from '@ant-design/icons';
-import { PageContainer } from '@ant-design/pro-components';
-import { history, useParams } from '@umijs/max';
-import { Affix, Button, Card, DatePicker, Form, Input, InputNumber, Radio, Select, Space, TreeSelect } from 'antd';
+import { PageContainer, ProTable, type ProColumns } from '@ant-design/pro-components';
+import { history, useAccess, useParams } from '@umijs/max';
+import { Affix, Button, Card, DatePicker, Form, Input, InputNumber, Modal, Radio, Select, Space, TreeSelect, Typography } from 'antd';
 import dayjs from 'dayjs';
 import { useEffect, useMemo, useState } from 'react';
 import { getCategoryList, getCategorySchema } from '@/services/product/product';
@@ -10,6 +10,7 @@ import {
   getDistributionProduct,
   updateDistributionProduct,
 } from '@/services/product/distributionProduct';
+import { getSourceProductList } from '@/services/integration/sourceProduct';
 import { getAdminSellerList } from '@/services/seller/seller';
 import {
   getOfficialWarehouseList,
@@ -86,6 +87,84 @@ function stripSkuRows(rows: (API.ProductDistribution.Sku & { rowKey?: string })[
   return rows.map(({ rowKey: _rowKey, ...row }) => row);
 }
 
+function formatNumber(value?: number, digits = 2) {
+  return typeof value === 'number' && Number.isFinite(value) ? value.toFixed(digits) : undefined;
+}
+
+function hasWmsMeasurement(item: API.Integration.SourceProductItem) {
+  return [item.wmsLength, item.wmsWidth, item.wmsHeight, item.wmsWeight]
+    .every((value) => typeof value === 'number' && Number.isFinite(value));
+}
+
+function pickSourceMeasurement(item: API.Integration.SourceProductItem) {
+  const useWms = hasWmsMeasurement(item);
+  return {
+    length: useWms ? item.wmsLength : item.length,
+    width: useWms ? item.wmsWidth : item.width,
+    height: useWms ? item.wmsHeight : item.height,
+    weight: useWms ? item.wmsWeight : item.weight,
+    source: useWms ? 'WMS' : 'PRODUCT',
+  };
+}
+
+function formatSourceDimension(item: API.Integration.SourceProductItem) {
+  const measurement = pickSourceMeasurement(item);
+  const length = formatNumber(measurement.length);
+  const width = formatNumber(measurement.width);
+  const height = formatNumber(measurement.height);
+  const weight = formatNumber(measurement.weight);
+  if (!length || !width || !height || !weight) return '-';
+  return `${length} x ${width} x ${height} cm  ${weight} kg`;
+}
+
+function toMeasurementText(value: number | undefined, unit: string) {
+  const text = formatNumber(value);
+  return text ? `${text} ${unit}` : undefined;
+}
+
+function hasSkuContent(row?: API.ProductDistribution.Sku & { rowKey?: string }) {
+  if (!row) return false;
+  return !!(
+    row.skuId
+    || row.sourceDimensionGroupKey
+    || row.sellerSkuCode
+    || row.color
+    || row.size
+    || row.supplyPrice !== undefined
+  );
+}
+
+function toSourceSkuRow(
+  item: API.Integration.SourceProductItem,
+  sortOrder: number,
+): API.ProductDistribution.Sku & { rowKey?: string } {
+  const measurement = pickSourceMeasurement(item);
+  return {
+    rowKey: `source-${item.sourceDimensionGroupKey || item.sourceSkuGroupKey}-${Date.now()}`,
+    skuStatus: 'DRAFT',
+    sortOrder,
+    sourceScope: 'OFFICIAL_MASTER',
+    sourceSkuGroupKey: item.sourceSkuGroupKey,
+    sourceDimensionGroupKey: item.sourceDimensionGroupKey,
+    masterSku: item.masterSku,
+    masterProductNameSnapshot: item.masterProductName,
+    sourcePayloadHash: item.sourcePayloadHash,
+    measureLengthCm: measurement.length,
+    measureWidthCm: measurement.width,
+    measureHeightCm: measurement.height,
+    measureWeightKg: measurement.weight,
+    measureSource: measurement.source,
+    sourceWarehouseNames: item.sourceWarehouseNames,
+    sourceWarehouseCount: item.warehouseCount,
+    lengthValue: toMeasurementText(measurement.length, 'cm'),
+    widthValue: toMeasurementText(measurement.width, 'cm'),
+    heightValue: toMeasurementText(measurement.height, 'cm'),
+    weight: toMeasurementText(measurement.weight, 'kg'),
+    currencyCode: item.currencyCode,
+    skuImageUrl: item.imageUrl,
+  };
+}
+
 function toWarehouseOption(warehouse: API.Warehouse.Warehouse): WarehouseOption | undefined {
   const value = Number(warehouse.warehouseId);
   if (!Number.isFinite(value)) return undefined;
@@ -135,6 +214,7 @@ function mergeWarehouseOptions(options: WarehouseOption[], boundWarehouses?: API
 }
 
 export default function ProductDistributionEditPage() {
+  const access = useAccess();
   const params = useParams<{ spuId?: string }>();
   const spuId = params.spuId ? Number(params.spuId) : undefined;
   const focusSkuId = useMemo(() => {
@@ -157,9 +237,13 @@ export default function ProductDistributionEditPage() {
   const [detailBlocks, setDetailBlocks] = useState<DetailContentBlock[]>([]);
   const [selectedWarehouseKind, setSelectedWarehouseKind] = useState<string>();
   const [selectedWarehouseIds, setSelectedWarehouseIds] = useState<number[]>([]);
+  const [sourceSelectorOpen, setSourceSelectorOpen] = useState(false);
   const [skuRows, setSkuRows] = useState<(API.ProductDistribution.Sku & { rowKey?: string })[]>([
     { rowKey: 'sku-new-0', skuStatus: 'DRAFT', sortOrder: 0 },
   ]);
+  const canQuerySourceProducts = access.hasPerms('product:list:list');
+  const canQueryOfficialWarehouses = access.hasPerms('warehouse:official:list');
+  const canQueryThirdPartyWarehouses = access.hasPerms('warehouse:thirdParty:list');
 
   const categoryTreeData = useMemo(
     () => toPublishCategoryTreeData(buildCategoryTree(categories)),
@@ -197,11 +281,16 @@ export default function ProductDistributionEditPage() {
   }, []);
 
   useEffect(() => {
+    const officialWarehouseRequest = canQueryOfficialWarehouses
+      ? getOfficialWarehouseList({ pageNum: 1, pageSize: 500, status: '0' })
+      : Promise.resolve({ code: 200, msg: 'ok', total: 0, rows: [] } satisfies API.Warehouse.WarehousePageResult);
+    const thirdPartyWarehouseRequest = selectedSellerId && canQueryThirdPartyWarehouses
+      ? getThirdPartyWarehouseList({ pageNum: 1, pageSize: 500, status: '0', sellerId: selectedSellerId })
+      : Promise.resolve({ code: 200, msg: 'ok', total: 0, rows: [] } satisfies API.Warehouse.WarehousePageResult);
+
     Promise.all([
-      getOfficialWarehouseList({ pageNum: 1, pageSize: 500, status: '0' }),
-      selectedSellerId
-        ? getThirdPartyWarehouseList({ pageNum: 1, pageSize: 500, status: '0', sellerId: selectedSellerId })
-        : Promise.resolve({ code: 200, msg: 'ok', total: 0, rows: [] } satisfies API.Warehouse.WarehousePageResult),
+      officialWarehouseRequest,
+      thirdPartyWarehouseRequest,
     ]).then(([officialWarehouseResp, thirdPartyWarehouseResp]) => {
       const options = [
         ...(officialWarehouseResp.code === 200 ? officialWarehouseResp.rows || [] : []),
@@ -213,7 +302,7 @@ export default function ProductDistributionEditPage() {
       const boundWarehouses = selectedSellerId === product?.sellerId ? product?.warehouses : undefined;
       setWarehouseOptions(mergeWarehouseOptions([], boundWarehouses));
     });
-  }, [product?.warehouses, selectedSellerId]);
+  }, [canQueryOfficialWarehouses, canQueryThirdPartyWarehouses, product?.warehouses, selectedSellerId]);
 
   useEffect(() => {
     if (!spuId) {
@@ -288,6 +377,7 @@ export default function ProductDistributionEditPage() {
 
   const derivedCurrencyCode = selectedWarehouses[0]?.currencyCode;
   const derivedCurrencyLabel = selectedWarehouses[0]?.currencyLabel;
+  const isOfficialWarehouse = selectedWarehouseKind === 'official';
 
   const handleWarehouseChange = (nextIds: number[]) => {
     const nextWarehouses = nextIds
@@ -317,6 +407,92 @@ export default function ProductDistributionEditPage() {
     }
     setSelectedWarehouseIds(nextIds);
   };
+
+  const openSourceSelector = () => {
+    if (!canQuerySourceProducts) {
+      message.warning('缺少来源 SKU 查询权限');
+      return;
+    }
+    setSourceSelectorOpen(true);
+  };
+
+  const handleSelectSourceSku = (item: API.Integration.SourceProductItem) => {
+    if (!canQuerySourceProducts) {
+      message.warning('缺少来源 SKU 查询权限');
+      setSourceSelectorOpen(false);
+      return;
+    }
+    const sourceSkuGroupKey = item.sourceSkuGroupKey;
+    const sourceDimensionGroupKey = item.sourceDimensionGroupKey;
+    if (!sourceSkuGroupKey || !sourceDimensionGroupKey) {
+      message.error('来源 SKU 缺少稳定绑定键');
+      return;
+    }
+    if (skuRows.some((row) => row.sourceSkuGroupKey === sourceSkuGroupKey)) {
+      message.warning('该来源 SKU 已在当前商品中选择');
+      return;
+    }
+    const baseRows = skuRows.length === 1 && !hasSkuContent(skuRows[0]) ? [] : skuRows;
+    setSkuRows([...baseRows, toSourceSkuRow(item, baseRows.length)]);
+    setSourceSelectorOpen(false);
+  };
+
+  const sourceColumns: ProColumns<API.Integration.SourceProductItem>[] = [
+    {
+      title: '关键词',
+      dataIndex: 'keyword',
+      hideInTable: true,
+    },
+    {
+      title: '来源SKU',
+      dataIndex: 'masterSku',
+      width: 160,
+      ellipsis: true,
+    },
+    {
+      title: '来源商品',
+      dataIndex: 'masterProductName',
+      width: 260,
+      ellipsis: true,
+    },
+    {
+      title: '尺寸重量',
+      dataIndex: 'sourceDimensionGroupKey',
+      width: 220,
+      search: false,
+      renderText: (_, record) => formatSourceDimension(record),
+    },
+    {
+      title: '来源仓',
+      dataIndex: 'sourceWarehouseNames',
+      width: 220,
+      ellipsis: true,
+      search: false,
+    },
+    {
+      title: '仓库数',
+      dataIndex: 'warehouseCount',
+      width: 80,
+      search: false,
+    },
+    {
+      title: '状态',
+      dataIndex: 'pairingStatus',
+      width: 90,
+      search: false,
+      renderText: (value) => (value === 'UNASSIGNED' ? '未配对' : value === 'PAIRED' ? '已配对' : value || '-'),
+    },
+    {
+      title: '操作',
+      width: 80,
+      search: false,
+      render: (_, record) => (
+        <Button type="link" size="small" onClick={() => handleSelectSourceSku(record)}>
+          选择
+        </Button>
+      ),
+    },
+  ];
 
   const buildAttributeValues = (values: ProductEditValues): API.ProductDistribution.AttributeValue[] =>
     schema
@@ -427,7 +603,7 @@ export default function ProductDistributionEditPage() {
       message.error('请选择仓库类型');
       return;
     }
-    if (!selectedWarehouseIds.length) {
+    if (!isOfficialWarehouse && !selectedWarehouseIds.length) {
       message.error('请选择发货仓库');
       return;
     }
@@ -436,17 +612,21 @@ export default function ProductDistributionEditPage() {
       : targetStatus || values.spuStatus || 'DRAFT';
     const cleanSkus = stripSkuRows(skuRows).map((sku) => ({
       ...sku,
-      currencyCode: derivedCurrencyCode || sku.currencyCode,
+      currencyCode: isOfficialWarehouse ? sku.currencyCode : derivedCurrencyCode || sku.currencyCode,
       skuStatus: targetStatus === 'READY' && (!sku.skuStatus || sku.skuStatus === 'DRAFT')
         ? 'READY'
         : sku.skuStatus || 'DRAFT',
     }));
+    if (isOfficialWarehouse && cleanSkus.some((sku) => !sku.sourceDimensionGroupKey)) {
+      message.error('官方仓 SKU 必须从来源商品库选择');
+      return;
+    }
     const invalidPriceSku = cleanSkus.find((sku) => sku.supplyPrice === undefined);
     if (invalidPriceSku) {
       message.error('请补齐 SKU 的供货价');
       return;
     }
-    const missingCurrencySku = cleanSkus.find((sku) => !sku.currencyCode);
+    const missingCurrencySku = !isOfficialWarehouse && cleanSkus.find((sku) => !sku.currencyCode);
     if (missingCurrencySku) {
       message.error('请选择发货仓库以确定 SKU 币种');
       return;
@@ -456,7 +636,8 @@ export default function ProductDistributionEditPage() {
       ...values,
       detailContent: serializeDetailContent(detailBlocks),
       spuStatus: nextSpuStatus,
-      warehouseIds: selectedWarehouseIds,
+      warehouseKind: selectedWarehouseKind,
+      warehouseIds: isOfficialWarehouse ? [] : selectedWarehouseIds,
       skus: cleanSkus,
       attributeValues: buildAttributeValues(values),
       images: [
@@ -534,25 +715,31 @@ export default function ProductDistributionEditPage() {
                   <Radio.Button value="third_party">三方仓</Radio.Button>
                 </Radio.Group>
               </Form.Item>
-              <Form.Item label="发货仓库" required>
-                <Select
-                  {...SEARCHABLE_SELECT_PROPS}
-                  mode="multiple"
-                  value={selectedWarehouseIds}
-                  options={availableWarehouseOptions}
-                  placeholder={
-                    selectedWarehouseKind
-                      ? selectedWarehouseKind === 'third_party' && !selectedSellerId
-                        ? '请先选择卖家'
-                        : '选择同币种的发货仓库'
-                      : '请先选择仓库类型'
-                  }
-                  disabled={!selectedWarehouseKind || (selectedWarehouseKind === 'third_party' && !selectedSellerId)}
-                  onChange={handleWarehouseChange}
-                />
-              </Form.Item>
+              {isOfficialWarehouse ? (
+                <Form.Item label="发货仓库">
+                  <Input value="由来源 SKU 的官方履约仓自动派生" disabled />
+                </Form.Item>
+              ) : (
+                <Form.Item label="发货仓库" required>
+                  <Select
+                    {...SEARCHABLE_SELECT_PROPS}
+                    mode="multiple"
+                    value={selectedWarehouseIds}
+                    options={availableWarehouseOptions}
+                    placeholder={
+                      selectedWarehouseKind
+                        ? selectedWarehouseKind === 'third_party' && !selectedSellerId
+                          ? '请先选择卖家'
+                          : '选择同币种的发货仓库'
+                        : '请先选择仓库类型'
+                    }
+                    disabled={!selectedWarehouseKind || (selectedWarehouseKind === 'third_party' && !selectedSellerId)}
+                    onChange={handleWarehouseChange}
+                  />
+                </Form.Item>
+              )}
               <Form.Item label="币种">
-                <Input value={derivedCurrencyLabel || derivedCurrencyCode || '-'} disabled />
+                <Input value={isOfficialWarehouse ? '由官方履约仓派生' : derivedCurrencyLabel || derivedCurrencyCode || '-'} disabled />
               </Form.Item>
             </div>
             <Form.Item name="sellingPoint" label="商品卖点">
@@ -585,11 +772,24 @@ export default function ProductDistributionEditPage() {
           </section>
 
           <section className={styles.formSection}>
+            {isOfficialWarehouse ? (
+              <div className={styles.sourceSkuToolbar}>
+                <Space>
+                  <Button type="primary" disabled={!canQuerySourceProducts} onClick={openSourceSelector}>
+                    选择来源 SKU
+                  </Button>
+                  <Typography.Text type="secondary">
+                    官方仓商品的尺寸重量和发货仓库由来源 SKU 派生。
+                  </Typography.Text>
+                </Space>
+              </div>
+            ) : null}
             <SkuMatrixEditor
               value={skuRows}
               focusSkuId={focusSkuId}
-              currencyCode={derivedCurrencyCode}
-              currencyLabel={derivedCurrencyLabel}
+              currencyCode={isOfficialWarehouse ? undefined : derivedCurrencyCode}
+              currencyLabel={isOfficialWarehouse ? '由官方履约仓派生' : derivedCurrencyLabel}
+              sourceMode={isOfficialWarehouse}
               onChange={setSkuRows}
             />
           </section>
@@ -612,6 +812,46 @@ export default function ProductDistributionEditPage() {
             </Space>
           </Card>
         </Affix>
+
+        <Modal
+          title="选择来源 SKU"
+          open={sourceSelectorOpen}
+          width={1120}
+          footer={null}
+          destroyOnClose
+          onCancel={() => setSourceSelectorOpen(false)}
+        >
+          <ProTable<API.Integration.SourceProductItem>
+            rowKey={(record) => record.sourceDimensionGroupKey || record.sourceSkuGroupKey || record.masterSku}
+            columns={sourceColumns}
+            size="small"
+            search={{ labelWidth: 70, span: 8 }}
+            options={false}
+            pagination={{ pageSize: 10 }}
+            request={async (params) => {
+              if (!canQuerySourceProducts) {
+                return {
+                  data: [],
+                  total: 0,
+                  success: true,
+                };
+              }
+              const resp = await getSourceProductList({
+                ...params,
+                pageNum: params.current,
+                pageSize: params.pageSize,
+                repositoryScope: 'OFFICIAL_MASTER',
+                status: 'ACTIVE',
+                pairingStatus: 'UNASSIGNED',
+              });
+              return {
+                data: resp.rows || [],
+                total: resp.total || 0,
+                success: resp.code === 200,
+              };
+            }}
+          />
+        </Modal>
       </div>
     </PageContainer>
   );

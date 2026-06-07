@@ -47,18 +47,26 @@ export default [
   },
   {
     path: '/seller',
+    authority: ['seller:admin:list'],
+    wrappers: ['@/wrappers/RemoteMenuRouteGuard'],
     component: './Seller',
   },
   {
     path: '/buyer',
+    authority: ['buyer:admin:list'],
+    wrappers: ['@/wrappers/RemoteMenuRouteGuard'],
     component: './Buyer',
   },
   {
     path: '/product/distribution/create',
+    authority: ['product:distribution:add'],
+    wrappers: ['@/wrappers/RemoteMenuRouteGuard'],
     component: './Product/Distribution/EditPage',
   },
   {
     path: '/product/distribution/edit/:spuId',
+    authority: ['product:distribution:edit'],
+    wrappers: ['@/wrappers/RemoteMenuRouteGuard'],
     component: './Product/Distribution/EditPage',
   },
   {

@@ -1,5 +1,5 @@
 import { request } from '@umijs/max';
-const baseUrl = '/api/warehouse';
+const baseUrl = '/api/warehouse/admin';
 function withRuoYiPage(params) {
     if (!params) {
         return params;

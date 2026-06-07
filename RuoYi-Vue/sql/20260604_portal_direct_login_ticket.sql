@@ -160,6 +160,83 @@ begin
   end if;
 end//
 
+drop procedure if exists modify_portal_direct_login_ticket_columns_if_needed//
+create procedure modify_portal_direct_login_ticket_columns_if_needed()
+begin
+  declare v_missing_count int default 0;
+  declare v_mismatch_count int default 0;
+
+  select count(1)
+    into v_missing_count
+  from (
+    select 'terminal' as expected_column
+    union all select 'target_subject_id'
+    union all select 'target_subject_no'
+    union all select 'target_account_id'
+    union all select 'target_user_name'
+    union all select 'acting_admin_id'
+    union all select 'acting_admin_name'
+    union all select 'reason'
+    union all select 'token_hash'
+    union all select 'expire_time'
+    union all select 'used_time'
+    union all select 'used_ip'
+    union all select 'status'
+    union all select 'create_by'
+    union all select 'create_time'
+    union all select 'update_by'
+    union all select 'update_time'
+    union all select 'remark'
+  ) expected
+  left join information_schema.columns c
+    on c.table_schema = database()
+   and c.table_name = 'portal_direct_login_ticket'
+   and c.column_name = expected.expected_column
+  where c.column_name is null;
+
+  if v_missing_count > 0 then
+    signal sqlstate '45000' set message_text = 'portal_direct_login_ticket expected columns are required before ticket column modify';
+  end if;
+
+  select count(1)
+    into v_mismatch_count
+  from (
+    select 'terminal' as expected_column, 'varchar' as expected_type, 20 as expected_length, 'NO' as expected_nullable, cast(null as char) as expected_default
+    union all select 'target_subject_id', 'bigint', null, 'NO', null
+    union all select 'target_subject_no', 'varchar', 64, 'YES', ''
+    union all select 'target_account_id', 'bigint', null, 'NO', null
+    union all select 'target_user_name', 'varchar', 64, 'NO', null
+    union all select 'acting_admin_id', 'bigint', null, 'NO', null
+    union all select 'acting_admin_name', 'varchar', 64, 'NO', null
+    union all select 'reason', 'varchar', 255, 'YES', ''
+    union all select 'token_hash', 'varchar', 64, 'NO', null
+    union all select 'expire_time', 'datetime', null, 'NO', null
+    union all select 'used_time', 'datetime', null, 'YES', null
+    union all select 'used_ip', 'varchar', 128, 'YES', ''
+    union all select 'status', 'varchar', 20, 'NO', 'ISSUED'
+    union all select 'create_by', 'varchar', 64, 'YES', ''
+    union all select 'create_time', 'datetime', null, 'YES', null
+    union all select 'update_by', 'varchar', 64, 'YES', ''
+    union all select 'update_time', 'datetime', null, 'YES', null
+    union all select 'remark', 'varchar', 500, 'YES', ''
+  ) expected
+  join information_schema.columns c
+    on c.table_schema = database()
+   and c.table_name = 'portal_direct_login_ticket'
+   and c.column_name = expected.expected_column
+  where lower(c.data_type) <> expected.expected_type
+     or (expected.expected_length is not null and coalesce(c.character_maximum_length, -1) <> expected.expected_length)
+     or c.is_nullable <> expected.expected_nullable
+     or coalesce(c.column_default, '<NULL>') <> coalesce(expected.expected_default, '<NULL>');
+
+  if v_mismatch_count > 0 then
+    set @ddl = 'alter table portal_direct_login_ticket modify terminal varchar(20) not null, modify target_subject_id bigint(20) not null, modify target_subject_no varchar(64) default '''', modify target_account_id bigint(20) not null, modify target_user_name varchar(64) not null, modify acting_admin_id bigint(20) not null, modify acting_admin_name varchar(64) not null, modify reason varchar(255) default '''', modify token_hash varchar(64) not null, modify expire_time datetime not null, modify used_time datetime default null, modify used_ip varchar(128) default '''', modify status varchar(20) not null default ''ISSUED'', modify create_by varchar(64) default '''', modify create_time datetime, modify update_by varchar(64) default '''', modify update_time datetime, modify remark varchar(500) default ''''';
+    prepare stmt from @ddl;
+    execute stmt;
+    deallocate prepare stmt;
+  end if;
+end//
+
 delimiter ;
 
 call assert_column_exists('portal_direct_login_ticket', 'ticket_id', 'portal_direct_login_ticket.ticket_id is required');
@@ -193,25 +270,7 @@ update portal_direct_login_ticket set remark = '' where remark is null;
 
 call assert_no_invalid_direct_login_ticket_rows();
 
-alter table portal_direct_login_ticket
-  modify terminal varchar(20) not null,
-  modify target_subject_id bigint(20) not null,
-  modify target_subject_no varchar(64) default '',
-  modify target_account_id bigint(20) not null,
-  modify target_user_name varchar(64) not null,
-  modify acting_admin_id bigint(20) not null,
-  modify acting_admin_name varchar(64) not null,
-  modify reason varchar(255) default '',
-  modify token_hash varchar(64) not null,
-  modify expire_time datetime not null,
-  modify used_time datetime default null,
-  modify used_ip varchar(128) default '',
-  modify status varchar(20) not null default 'ISSUED',
-  modify create_by varchar(64) default '',
-  modify create_time datetime,
-  modify update_by varchar(64) default '',
-  modify update_time datetime,
-  modify remark varchar(500) default '';
+call modify_portal_direct_login_ticket_columns_if_needed();
 
 call recreate_index_if_mismatch('portal_direct_login_ticket', 'uk_portal_direct_login_ticket_hash',
   'token_hash', 0, 'unique key uk_portal_direct_login_ticket_hash (token_hash)');
@@ -239,3 +298,4 @@ drop procedure if exists recreate_index_if_mismatch;
 drop procedure if exists assert_index_definition;
 drop procedure if exists assert_no_invalid_direct_login_ticket_rows;
 drop procedure if exists assert_column_exists;
+drop procedure if exists modify_portal_direct_login_ticket_columns_if_needed;

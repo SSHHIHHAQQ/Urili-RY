@@ -195,3 +195,37 @@ codegraph sync .
 - 图片上传复用现有通用上传接口。
 - 状态和来源展示首版在商品列表目录集中维护，未散落到多个页面。
 - 详情图文模块统一通过 `detailContent.ts` 做解析和序列化，新增/编辑页与详情预览不各自拼 JSON。
+
+## 15. 2026-06-07 权限 Guard 校正记录
+
+本节为首版实现后的 P0/P1 权限 guard 校正，详细记录见 `docs/plans/2026-06-07-three-terminal-p0p1-product-distribution-permission-guard-record.md`。
+
+已校正：
+
+- `react-ui/config/routes.ts` 和 `routes.js` 中，`/product/distribution/create` 已增加 `product:distribution:add` 和 `RemoteMenuRouteGuard`。
+- `react-ui/config/routes.ts` 和 `routes.js` 中，`/product/distribution/edit/:spuId` 已增加 `product:distribution:edit` 和 `RemoteMenuRouteGuard`。
+- `EditPage.tsx` 中，来源 SKU 选择和 `getSourceProductList(...)` 请求已先检查 `product:list:list`。
+- `EditPage.tsx` / `EditPage.js` 中，官方仓、三方仓列表请求已分别先检查 `warehouse:official:list` / `warehouse:thirdParty:list`。
+- 新增 `react-ui/tests/product-distribution-permission-guard.test.ts` 并纳入 `verify-three-terminal.mjs`，固定上述权限 guard 不回退。
+
+验证：
+
+```powershell
+cd E:\Urili-Ruoyi\react-ui
+npm run test:unit -- --runTestsByPath tests/product-distribution-permission-guard.test.ts --runInBand
+npm run tsc
+node --check scripts\verify-three-terminal.mjs
+npm run verify:three-terminal
+```
+
+结果：
+
+- 新增权限 guard 测试通过，`1` 个 suite / `3` 个测试通过。
+- React TypeScript 检查通过。
+- `verify-three-terminal` 通过，前端 `7` 个 Jest suite / `33` 个测试通过；后端 ruoyi-system `143`、ruoyi-framework `15`、integration `4`、product `2`、seller `89`、buyer `90` 个测试通过。
+
+边界：
+
+- 本轮未执行远程 MySQL DDL/DML，未读取或写入 Redis。
+- 本轮未启动或重启后端。
+- 本轮未做浏览器、截图、DOM 或 UI 细调验收。

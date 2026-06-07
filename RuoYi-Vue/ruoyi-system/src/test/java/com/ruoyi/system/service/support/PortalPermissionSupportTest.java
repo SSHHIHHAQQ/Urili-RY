@@ -41,14 +41,14 @@ public class PortalPermissionSupportTest
     }
 
     @Test
-    public void allPermissionWildcardPassesChecks()
+    public void allPermissionWildcardDoesNotPassPortalChecks()
     {
         Set<String> permissions = new LinkedHashSet<>();
         permissions.add(Constants.ALL_PERMISSION);
 
-        assertTrue(PortalPermissionSupport.hasAllPermissions(permissions,
+        assertFalse(PortalPermissionSupport.hasAllPermissions(permissions,
                 new String[] { "seller:anything:view", "buyer:anything:view" }));
-        assertTrue(PortalPermissionSupport.hasAnyPermission(permissions,
+        assertFalse(PortalPermissionSupport.hasAnyPermission(permissions,
                 new String[] { "seller:anything:view" }));
     }
 }

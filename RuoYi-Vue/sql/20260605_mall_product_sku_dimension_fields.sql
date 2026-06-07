@@ -17,15 +17,34 @@ begin
   end if;
 end//
 
+drop procedure if exists add_column_if_missing//
+create procedure add_column_if_missing(in p_table varchar(64), in p_column varchar(64), in p_definition text)
+begin
+  if not exists (
+    select 1
+    from information_schema.columns
+    where table_schema = database()
+      and table_name = p_table
+      and column_name = p_column
+  ) then
+    set @ddl = concat('alter table ', p_table, ' add column ', p_column, ' ', p_definition);
+    prepare stmt from @ddl;
+    execute stmt;
+    deallocate prepare stmt;
+  end if;
+end//
+
 delimiter ;
 
 call assert_mall_product_sku_dimension_fields_confirmed();
 drop procedure if exists assert_mall_product_sku_dimension_fields_confirmed;
 
-alter table product_sku
-  add column length_value varchar(128) default '' comment '长度，含单位文本' after size,
-  add column width_value varchar(128) default '' comment '宽度，含单位文本' after length_value,
-  add column height_value varchar(128) default '' comment '高度，含单位文本' after width_value;
+call add_column_if_missing('product_sku', 'length_value',
+  'varchar(128) default '''' comment ''长度，含单位文本'' after size');
+call add_column_if_missing('product_sku', 'width_value',
+  'varchar(128) default '''' comment ''宽度，含单位文本'' after length_value');
+call add_column_if_missing('product_sku', 'height_value',
+  'varchar(128) default '''' comment ''高度，含单位文本'' after width_value');
 
 update product_sku
 set length_value = '24cm', width_value = '18cm', height_value = '2cm'
@@ -42,3 +61,5 @@ where system_sku_code = 'SKUDEMO202606050005';
 update product_sku
 set length_value = '28cm', width_value = '20cm', height_value = '3cm'
 where system_sku_code in ('SKUDEMO202606050006', 'SKUDEMO202606050007');
+
+drop procedure if exists add_column_if_missing;

@@ -48,7 +48,7 @@
 - `cd E:\Urili-Ruoyi\react-ui; npm test -- --runInBand`：通过；包含 `verify:three-terminal`、前端 typecheck、后端三端 contract/service 测试；Jest 当前无业务测试并以 code 0 退出。
 - `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-admin -am -DskipTests compile`：通过。
 - `cd E:\Urili-Ruoyi; git diff --check`：通过；只有 LF/CRLF 工作区换行提示，无空白错误。
-- 静态搜索确认：库存 HTTP 映射、库存 tab、库存请求 URL、库存 DDL、基础 seed admin 授权块均无活入口命中；`20260606_upstream_inventory_dimension_sync.sql` 中库存权限仅作为 cleanup/disable 文本保留。
+- 2026-06-07 追记：本条为 2026-06-06 当时的历史口径。当前 `20260606_upstream_inventory_dimension_sync.sql` 仍承载库存 schema、job 和 `sys_role_menu` 授权继承，但已在后续检查点退出 `2307/2308/2309` 的 `sys_menu` owner。
 
 ## 未验证原因
 

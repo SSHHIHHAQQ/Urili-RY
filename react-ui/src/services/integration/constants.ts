@@ -18,6 +18,16 @@ export const pairingStatusText: Record<string, string> = {
   UNASSIGNED: '未配对',
 };
 
+export const pairingRoleText: Record<string, string> = {
+  FULFILLMENT: '履约',
+  QUOTE: '报价',
+};
+
+export const pairingRoleTagColor: Record<string, string> = {
+  FULFILLMENT: 'blue',
+  QUOTE: 'orange',
+};
+
 export const skuPairingStatusOptions = [
   { label: '已配对', value: 'PAIRED' },
   { label: '未配对', value: 'UNASSIGNED' },
@@ -53,6 +63,21 @@ export const inventoryScopeOptions = Object.entries(inventoryScopeText).map(([va
 export const inventoryScopeSearchOptions = [
   { label: '全部库存口径', value: '' },
   ...inventoryScopeOptions,
+];
+
+export const inventoryAttributeText: Record<string, string> = {
+  '0': '正品',
+  '1': '次品',
+};
+
+export const inventoryAttributeOptions = Object.entries(inventoryAttributeText).map(([value, label]) => ({
+  label,
+  value,
+}));
+
+export const inventoryAttributeSearchOptions = [
+  { label: '全部库存属性', value: '' },
+  ...inventoryAttributeOptions,
 ];
 
 export const inventoryPairingStatusOptions = skuPairingStatusSearchOptions;

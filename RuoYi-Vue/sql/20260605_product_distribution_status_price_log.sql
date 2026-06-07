@@ -16,27 +16,102 @@ begin
   end if;
 end//
 
+drop procedure if exists add_column_if_missing//
+create procedure add_column_if_missing(in p_table varchar(64), in p_column varchar(64), in p_definition text)
+begin
+  if not exists (
+    select 1
+    from information_schema.columns
+    where table_schema = database()
+      and table_name = p_table
+      and column_name = p_column
+  ) then
+    set @ddl = concat('alter table ', p_table, ' add column ', p_column, ' ', p_definition);
+    prepare stmt from @ddl;
+    execute stmt;
+    deallocate prepare stmt;
+  end if;
+end//
+
+drop procedure if exists modify_product_sku_sale_price_if_needed//
+create procedure modify_product_sku_sale_price_if_needed()
+begin
+  if not exists (
+    select 1
+    from information_schema.columns
+    where table_schema = database()
+      and table_name = 'product_sku'
+      and column_name = 'sale_price'
+  ) then
+    signal sqlstate '45000' set message_text = 'product_sku.sale_price column is required before product distribution status price migration';
+  end if;
+
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = database()
+      and table_name = 'product_sku'
+      and column_name = 'sale_price'
+      and (
+        data_type <> 'decimal'
+        or numeric_precision <> 18
+        or numeric_scale <> 4
+        or is_nullable <> 'YES'
+        or column_comment <> '销售价'
+      )
+  ) then
+    alter table product_sku modify column sale_price decimal(18,4) null comment '销售价';
+  end if;
+end//
+
+drop procedure if exists create_index_if_missing//
+create procedure create_index_if_missing(in p_table varchar(64), in p_index varchar(64), in p_definition text)
+begin
+  if not exists (
+    select 1
+    from information_schema.statistics
+    where table_schema = database()
+      and table_name = p_table
+      and index_name = p_index
+  ) then
+    set @ddl = concat('create index ', p_index, ' on ', p_table, ' ', p_definition);
+    prepare stmt from @ddl;
+    execute stmt;
+    deallocate prepare stmt;
+  end if;
+end//
+
 delimiter ;
 
 call assert_product_distribution_status_price_log_confirmed();
 drop procedure if exists assert_product_distribution_status_price_log_confirmed;
 
-alter table product_spu
-    add column control_status varchar(32) not null default 'NORMAL' comment 'SPU管控状态：NORMAL正常，DISABLED停用' after spu_status,
-    add column control_reason varchar(500) null comment '最近一次停用原因' after control_status,
-    add column control_by varchar(64) null comment '最近一次停用操作人' after control_reason,
-    add column control_time datetime null comment '最近一次停用时间' after control_by,
-    add column recover_by varchar(64) null comment '最近一次恢复操作人' after control_time,
-    add column recover_time datetime null comment '最近一次恢复时间' after recover_by;
+call add_column_if_missing('product_spu', 'control_status',
+  'varchar(32) not null default ''NORMAL'' comment ''SPU管控状态：NORMAL正常，DISABLED停用'' after spu_status');
+call add_column_if_missing('product_spu', 'control_reason',
+  'varchar(500) null comment ''最近一次停用原因'' after control_status');
+call add_column_if_missing('product_spu', 'control_by',
+  'varchar(64) null comment ''最近一次停用操作人'' after control_reason');
+call add_column_if_missing('product_spu', 'control_time',
+  'datetime null comment ''最近一次停用时间'' after control_by');
+call add_column_if_missing('product_spu', 'recover_by',
+  'varchar(64) null comment ''最近一次恢复操作人'' after control_time');
+call add_column_if_missing('product_spu', 'recover_time',
+  'datetime null comment ''最近一次恢复时间'' after recover_by');
 
-alter table product_sku
-    add column control_status varchar(32) not null default 'NORMAL' comment 'SKU管控状态：NORMAL正常，DISABLED停用' after sku_status,
-    add column control_reason varchar(500) null comment '最近一次停用原因' after control_status,
-    add column control_by varchar(64) null comment '最近一次停用操作人' after control_reason,
-    add column control_time datetime null comment '最近一次停用时间' after control_by,
-    add column recover_by varchar(64) null comment '最近一次恢复操作人' after control_time,
-    add column recover_time datetime null comment '最近一次恢复时间' after recover_by,
-    modify column sale_price decimal(18,4) null comment '销售价';
+call add_column_if_missing('product_sku', 'control_status',
+  'varchar(32) not null default ''NORMAL'' comment ''SKU管控状态：NORMAL正常，DISABLED停用'' after sku_status');
+call add_column_if_missing('product_sku', 'control_reason',
+  'varchar(500) null comment ''最近一次停用原因'' after control_status');
+call add_column_if_missing('product_sku', 'control_by',
+  'varchar(64) null comment ''最近一次停用操作人'' after control_reason');
+call add_column_if_missing('product_sku', 'control_time',
+  'datetime null comment ''最近一次停用时间'' after control_by');
+call add_column_if_missing('product_sku', 'recover_by',
+  'varchar(64) null comment ''最近一次恢复操作人'' after control_time');
+call add_column_if_missing('product_sku', 'recover_time',
+  'datetime null comment ''最近一次恢复时间'' after recover_by');
+call modify_product_sku_sale_price_if_needed();
 
 update product_spu
 set control_status = 'DISABLED',
@@ -50,10 +125,10 @@ set control_status = 'DISABLED',
     sku_status = 'OFF_SALE'
 where sku_status = 'DISABLED';
 
-create index idx_product_spu_control_status on product_spu(control_status);
-create index idx_product_spu_status_control on product_spu(spu_status, control_status);
-create index idx_product_sku_control_status on product_sku(control_status);
-create index idx_product_sku_status_control on product_sku(sku_status, control_status);
+call create_index_if_missing('product_spu', 'idx_product_spu_control_status', '(control_status)');
+call create_index_if_missing('product_spu', 'idx_product_spu_status_control', '(spu_status, control_status)');
+call create_index_if_missing('product_sku', 'idx_product_sku_control_status', '(control_status)');
+call create_index_if_missing('product_sku', 'idx_product_sku_status_control', '(sku_status, control_status)');
 
 create table if not exists product_distribution_operation_log (
   log_id bigint not null auto_increment comment '日志ID',
@@ -110,16 +185,6 @@ from (
 ) seed
 where not exists (select 1 from sys_dict_data d where d.dict_type = 'product_control_status' and d.dict_value = seed.dict_value);
 
-insert into sys_menu
-    (menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
-     is_frame, is_cache, menu_type, visible, status, perms, icon, create_by,
-     create_time, update_by, update_time, remark)
-select seed.menu_id, seed.menu_name, 2402, seed.order_num, '#', '', '', '',
-       1, 0, 'F', '0', '0', seed.perms, '#', 'admin',
-       sysdate(), '', null, seed.remark
-from (
-    select 2485 as menu_id, '商城商品调价' as menu_name, 5 as order_num, 'product:distribution:price' as perms, '商城商品按钮：调整销售价' as remark
-    union all select 2486, '商城商品操作日志', 6, 'product:distribution:log', '商城商品按钮：操作日志'
-) seed
-where not exists (select 1 from sys_menu m where m.menu_id = seed.menu_id)
-  and not exists (select 1 from sys_menu p where p.perms = seed.perms);
+drop procedure if exists create_index_if_missing;
+drop procedure if exists modify_product_sku_sale_price_if_needed;
+drop procedure if exists add_column_if_missing;

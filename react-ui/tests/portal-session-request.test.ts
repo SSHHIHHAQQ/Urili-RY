@@ -37,6 +37,8 @@ describe('portal request isolation', () => {
     );
     expect(getPortalTerminalFromApiUrl('/api/seller/admin/list')).toBeUndefined();
     expect(getPortalTerminalFromApiUrl('/api/buyer/admin/list')).toBeUndefined();
+    expect(getPortalTerminalFromApiUrl('/seller')).toBeUndefined();
+    expect(getPortalTerminalFromApiUrl('/buyer')).toBeUndefined();
     expect(getPortalTerminalFromApiUrl('/api/system/user/list')).toBeUndefined();
   });
 

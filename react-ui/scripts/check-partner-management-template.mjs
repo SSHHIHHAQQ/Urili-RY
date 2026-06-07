@@ -12,6 +12,14 @@ const files = {
   sellerServiceJs: path.join(root, 'src', 'services', 'seller', 'seller.js'),
   buyerService: path.join(root, 'src', 'services', 'buyer', 'buyer.ts'),
   buyerServiceJs: path.join(root, 'src', 'services', 'buyer', 'buyer.js'),
+  routes: path.join(root, 'config', 'routes.ts'),
+  routesJs: path.join(root, 'config', 'routes.js'),
+  sessionService: path.join(root, 'src', 'services', 'session.ts'),
+  sessionServiceJs: path.join(root, 'src', 'services', 'session.js'),
+  routeGuardWrapper: path.join(root, 'src', 'wrappers', 'RemoteMenuRouteGuard.tsx'),
+  routeGuardWrapperJs: path.join(root, 'src', 'wrappers', 'RemoteMenuRouteGuard.js'),
+  remoteMenuStorage: path.join(root, 'src', 'utils', 'remoteMenuStorage.ts'),
+  remoteMenuStorageJs: path.join(root, 'src', 'utils', 'remoteMenuStorage.js'),
   pageTemplate: path.join(
     root,
     'src',
@@ -175,14 +183,13 @@ const modules = [
       'updateAdminSellerRole',
       'changeAdminSellerRoleStatus',
       'removeAdminSellerRoles',
-      'resetAdminSellerAccountDefaultPassword',
+      'resetAdminSellerAccountPassword',
       'forceLogoutAdminSellerSessions',
       'getAdminSellerSessions',
       'forceLogoutAdminSellerAccountSessions',
       'getAdminSellerAccountSessions',
       'getAdminSellerAccountRoles',
       'assignAdminSellerAccountRoles',
-      'resetAdminSellerOwnerPassword',
       'createAdminSellerDirectLogin',
       'createAdminSellerAccountDirectLogin',
       'getAdminSellerLoginLogs',
@@ -196,7 +203,6 @@ const modules = [
       `/api/seller/admin/sellers/${templatePlaceholder('sellerId')}/accounts/${templatePlaceholder('sellerAccountId')}/unlock`,
       `/api/seller/admin/sellers/${templatePlaceholder('sellerId')}/accounts/${templatePlaceholder('sellerAccountId')}/roles`,
       '/api/seller/admin/sellers/${sellerId}/accounts/${sellerAccountId}/resetPwd',
-      '/api/seller/admin/sellers/${sellerId}/accounts/${sellerAccountId}/resetDefaultPwd',
       '/api/seller/admin/menus/list',
       `/api/seller/admin/sellers/${templatePlaceholder('sellerId')}/roles/list`,
       `/api/seller/admin/sellers/${templatePlaceholder('sellerId')}/depts/list`,
@@ -254,14 +260,13 @@ const modules = [
       'updateAdminBuyerRole',
       'changeAdminBuyerRoleStatus',
       'removeAdminBuyerRoles',
-      'resetAdminBuyerAccountDefaultPassword',
+      'resetAdminBuyerAccountPassword',
       'forceLogoutAdminBuyerSessions',
       'getAdminBuyerSessions',
       'forceLogoutAdminBuyerAccountSessions',
       'getAdminBuyerAccountSessions',
       'getAdminBuyerAccountRoles',
       'assignAdminBuyerAccountRoles',
-      'resetAdminBuyerOwnerPassword',
       'createAdminBuyerDirectLogin',
       'createAdminBuyerAccountDirectLogin',
       'getAdminBuyerLoginLogs',
@@ -275,7 +280,6 @@ const modules = [
       `/api/buyer/admin/buyers/${templatePlaceholder('buyerId')}/accounts/${templatePlaceholder('buyerAccountId')}/unlock`,
       `/api/buyer/admin/buyers/${templatePlaceholder('buyerId')}/accounts/${templatePlaceholder('buyerAccountId')}/roles`,
       '/api/buyer/admin/buyers/${buyerId}/accounts/${buyerAccountId}/resetPwd',
-      '/api/buyer/admin/buyers/${buyerId}/accounts/${buyerAccountId}/resetDefaultPwd',
       '/api/buyer/admin/menus/list',
       `/api/buyer/admin/buyers/${templatePlaceholder('buyerId')}/roles/list`,
       `/api/buyer/admin/buyers/${templatePlaceholder('buyerId')}/depts/list`,
@@ -394,6 +398,31 @@ function extractInterfaceBlock(source, interfaceName) {
   return '';
 }
 
+function extractRouteBlock(source, routePath) {
+  const marker = `path: '${routePath}',`;
+  const pathIndex = source.indexOf(marker);
+  if (pathIndex < 0) {
+    return '';
+  }
+  const openBrace = source.lastIndexOf('{', pathIndex);
+  if (openBrace < 0) {
+    return '';
+  }
+  let depth = 0;
+  for (let index = openBrace; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === '{') {
+      depth += 1;
+    } else if (char === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return source.slice(openBrace, index + 1);
+      }
+    }
+  }
+  return '';
+}
+
 function checkPage(module) {
   const file = files[module.pageKey];
   const source = readRequired(file);
@@ -413,6 +442,12 @@ function checkPage(module) {
     relativePath,
     `from '${module.serviceImport}'`,
     `must import only ${module.key} admin services`,
+  );
+  assertNotIncludes(
+    source,
+    relativePath,
+    `resetAdmin${capitalize(module.key)}OwnerPassword`,
+    'must not import subject-level owner password reset service',
   );
   assertNoPattern(
     source,
@@ -500,6 +535,12 @@ function checkPage(module) {
     `unlockAccount: unlockAdmin${capitalize(module.key)}Account`,
     `must wire ${module.key} unlockAccount service`,
   );
+  assertNotIncludes(
+    configBlock,
+    relativePath,
+    'resetOwnerPassword',
+    'must not wire subject-level owner password reset',
+  );
 
   for (const serviceName of module.requiredServices) {
     assertIncludes(
@@ -525,6 +566,12 @@ function checkPage(module) {
       jsRelativePath,
       `from '${module.serviceImport}'`,
       `must import only ${module.key} admin services`,
+    );
+    assertNotIncludes(
+      jsSource,
+      jsRelativePath,
+      `resetAdmin${capitalize(module.key)}OwnerPassword`,
+      'must not import subject-level owner password reset service',
     );
     assertNoPattern(
       jsSource,
@@ -568,6 +615,12 @@ function checkPage(module) {
           `must configure ${fieldName}: '${value}'`,
         );
       }
+      assertNotIncludes(
+        jsConfigBlock,
+        jsRelativePath,
+        'resetOwnerPassword',
+        'must not wire subject-level owner password reset',
+      );
     }
   }
 }
@@ -588,6 +641,30 @@ function checkServiceSource(module, source, relativePath) {
   for (const url of module.requiredServiceUrls) {
     assertIncludes(source, relativePath, url, `must call ${url}`);
   }
+  assertNotIncludes(
+    source,
+    relativePath,
+    `resetAdmin${capitalize(module.key)}OwnerPassword`,
+    'must not export subject-level owner password reset service',
+  );
+  assertNotIncludes(
+    source,
+    relativePath,
+    'resetOwnerPwd',
+    'must not call subject-level owner password reset API',
+  );
+  assertNotIncludes(
+    source,
+    relativePath,
+    `resetAdmin${capitalize(module.key)}AccountDefaultPassword`,
+    'must not export account default password reset service',
+  );
+  assertNotIncludes(
+    source,
+    relativePath,
+    'resetDefaultPwd',
+    'must not call account default password reset API',
+  );
   assertNoPattern(
     source,
     relativePath,
@@ -773,6 +850,10 @@ function checkAccountModalFailSoft(source, relativePath) {
     'const canQueryDept = access.hasPerms(`${permPrefix}:dept:query`)',
     'must derive dept tree query permission before loading account dept tree',
   );
+  assertIncludesAny(source, relativePath, ['disabled={!canQueryDept}', 'disabled: !canQueryDept'],
+    'must disable account department field when dept:query is missing');
+  assertIncludesAny(source, relativePath, ["placeholder={canQueryDept ? '请选择' : '无部门查询权限'}", "placeholder: canQueryDept ? '\\u8BF7\\u9009\\u62E9' : '\\u65E0\\u90E8\\u95E8\\u67E5\\u8BE2\\u6743\\u9650'"],
+    'must explain account department field when dept:query is missing');
   assertIncludes(
     source,
     relativePath,
@@ -808,14 +889,22 @@ function checkAccountModalSource(source, relativePath) {
     'config.services.getDeptTree',
     'config.services.addAccount',
     'config.services.updateAccount',
-    'config.services.resetAccountDefaultPassword',
+    'config.services.resetAccountPassword',
+    'resetPasswordForm.validateFields()',
+    'Input.Password',
     'config.services.lockAccount',
     'config.services.unlockAccount',
     'config.services.forceLogoutAccount',
     'config.services.directLoginAccount',
     'PartnerAccountRoleModal',
     'PartnerSessionModal',
+    'PartnerAuditModal',
     'accountPermissions',
+    'const canViewAccountAudit = access.hasPerms(`${permPrefix}:loginLog:list`)',
+    '|| access.hasPerms(`${permPrefix}:operLog:list`)',
+    '|| access.hasPerms(`${permPrefix}:ticket:list`)',
+    'setAuditAccount(record)',
+    'setAuditModalOpen(true)',
   ]) {
     assertIncludes(
       source,
@@ -830,6 +919,10 @@ function checkAccountModalSource(source, relativePath) {
     /\/api\/(?:seller|buyer|system)\//,
     'must not hardcode API paths inside account modal',
   );
+  assertIncludesAny(source, relativePath, ["key: 'audit', label: '审计'", "key: 'audit', label: '\\u5BA1\\u8BA1'"],
+    'must expose account row audit action from the More menu');
+  assertIncludesAny(source, relativePath, ['account={auditAccount}', 'account: auditAccount'],
+    'must pass the selected account into PartnerAuditModal');
   checkAccountModalFailSoft(source, relativePath);
 }
 
@@ -1041,12 +1134,22 @@ function checkMenuModalSource(source, relativePath) {
     'validateMenuPathForTerminal',
     'validateMenuComponentForTerminal',
     'validateMenuPermsForTerminal',
-    'normalized.startsWith(`${moduleKey}:`)',
+    'function normalizeMenuTarget',
+    "replace(/^(?:\\.\\/|\\/)+/, '')",
+    "const normalizedLower = normalized.toLowerCase()",
+    'menu component is required for page menus',
+    'menu component must use the current terminal root',
+    'const permissions = normalized.split',
+    'menu permission is required for page and button menus',
+    'terminal menu cannot use wildcard permissions',
+    'permission.startsWith(`${moduleKey}:`)',
     'forbiddenPathRoots',
     'forbiddenComponentRoots',
-    'normalized.startsWith(`${moduleKey}:admin:`)',
+    "forbiddenComponentRoots = new Set(['admin', 'common', 'shared', 'system', 'user', 'monitor', 'tool'])",
+    'permission.startsWith(`${moduleKey}:admin:`)',
     'const canEditMenu = access.hasPerms(`${permPrefix}:menu:edit`) && access.hasPerms(`${permPrefix}:menu:query`)',
     'hidden={!canEditMenu}',
+    'permissions.some((permission) => permission === `${moduleKey}:admin` || permission.startsWith(`${moduleKey}:admin:`))',
   ]) {
     assertIncludes(
       source,
@@ -1066,6 +1169,16 @@ function checkAuditModalSource(source, relativePath, requireTabLabels) {
     'config.services.listOperLogs',
     'config.services.listDirectLoginTickets',
     'getPersistedProTableSearch',
+    'next[accountField] = accountId',
+    'request(buildAuditParams(rest, current, pageSize, partnerId, accountId, subjectField, accountField))',
+    "dataIndex: 'accountId'",
+    'render: (_, record) => renderCompactText(record.accountId)',
+    "dataIndex: 'targetAccountId'",
+    'render: (_, record) => renderCompactText(record.targetAccountId)',
+    "dataIndex: 'actingAdminName'",
+    'render: (_, record) => renderCompactText(record.actingAdminName)',
+    'renderDetailText(record.actingAdminId)',
+    'renderDetailText(record.reason)',
   ]) {
     assertIncludes(
       source,
@@ -1093,6 +1206,14 @@ function checkAuditModalSource(source, relativePath, requireTabLabels) {
     relativePath,
     /\btokenHash\b|\bdirectLoginToken\b|\bloginUrl\b/,
     'must not render direct-login sensitive token fields',
+  );
+  assertIncludesAny(source, relativePath, ['暂无审计权限', '\\u6682\\u65E0\\u5BA1\\u8BA1\\u6743\\u9650'],
+    'must keep deny-by-default no audit permission text');
+  assertNoPattern(
+    source,
+    relativePath,
+    /renderDetailText\(record\.(?:operParam|jsonResult)\)/,
+    'must not render raw operation request/response payloads in audit modal',
   );
 }
 
@@ -1160,6 +1281,142 @@ function checkSharedTemplate() {
   }
 }
 
+function checkStaticPartnerRoutes() {
+  const routeSources = [
+    { file: files.routes, source: readRequired(files.routes) },
+    { file: files.routesJs, source: readRequired(files.routesJs) },
+  ];
+  const routeGuardWrapperSource = readRequired(files.routeGuardWrapper);
+  const routeGuardWrapperJsSource = readRequired(files.routeGuardWrapperJs);
+  const sessionServiceSource = readRequired(files.sessionService);
+  const sessionServiceJsSource = readRequired(files.sessionServiceJs);
+  const remoteMenuStorageSource = readRequired(files.remoteMenuStorage);
+  const remoteMenuStorageJsSource = readRequired(files.remoteMenuStorageJs);
+
+  for (const { file, source } of routeSources) {
+    const relativePath = toRelative(file);
+    if (!source) {
+      continue;
+    }
+    for (const module of modules) {
+      const routePath = `/${module.key}`;
+      const routeBlock = extractRouteBlock(source, routePath);
+      if (!routeBlock) {
+        violations.push(`${relativePath} must keep static ${routePath} fallback route`);
+        continue;
+      }
+      assertIncludes(
+        routeBlock,
+        relativePath,
+        `authority: ['${module.key}:admin:list']`,
+        `must guard static ${routePath} route by ${module.key}:admin:list`,
+      );
+      assertIncludes(
+        routeBlock,
+        relativePath,
+        "wrappers: ['@/wrappers/RemoteMenuRouteGuard']",
+        `must wrap static ${routePath} route with RemoteMenuRouteGuard`,
+      );
+      assertIncludes(
+        routeBlock,
+        relativePath,
+        `component: './${capitalize(module.key)}'`,
+        `must route static ${routePath} to ${capitalize(module.key)} page`,
+      );
+    }
+  }
+
+  if (sessionServiceSource) {
+    assertIncludes(
+      sessionServiceSource,
+      toRelative(files.sessionService),
+      'export function RemoteMenuRouteGuard',
+      'must export RemoteMenuRouteGuard for static fallback wrappers',
+    );
+    assertIncludes(
+      sessionServiceSource,
+      toRelative(files.sessionService),
+      'getRemoteMenuStorageKey',
+      'must use scoped remote menu cache keys',
+    );
+    assertNotIncludes(
+      sessionServiceSource,
+      toRelative(files.sessionService),
+      "const REMOTE_MENU_STORAGE_KEY = 'admin_remote_menu'",
+      'must not use a global remote menu cache key',
+    );
+    assertIncludes(
+      sessionServiceSource,
+      toRelative(files.sessionService),
+      'permissions.length > 0 && permissions.some',
+      'must fail closed when a remote menu route has no authority',
+    );
+  }
+  if (sessionServiceJsSource) {
+    assertIncludes(
+      sessionServiceJsSource,
+      toRelative(files.sessionServiceJs),
+      "export * from './session.ts';",
+      'must keep the JavaScript session mirror exporting RemoteMenuRouteGuard',
+    );
+  }
+
+  for (const { file, source } of [
+    { file: files.remoteMenuStorage, source: remoteMenuStorageSource },
+    { file: files.remoteMenuStorageJs, source: remoteMenuStorageJsSource },
+  ]) {
+    const relativePath = toRelative(file);
+    if (!source) {
+      continue;
+    }
+    for (const expected of [
+      "['admin', 'seller', 'buyer']",
+      'getRemoteMenuStorageKey',
+      'admin_remote_menu:${scope}',
+    ]) {
+      assertIncludes(
+        source,
+        relativePath,
+        expected,
+        `must keep scoped remote menu storage support for ${expected}`,
+      );
+    }
+  }
+
+  for (const { file, source } of [
+    { file: files.routeGuardWrapper, source: routeGuardWrapperSource },
+    { file: files.routeGuardWrapperJs, source: routeGuardWrapperJsSource },
+  ]) {
+    const relativePath = toRelative(file);
+    if (!source) {
+      continue;
+    }
+    for (const expected of [
+      'RemoteMenuRouteGuard',
+      'useLocation',
+      'STATIC_ROUTE_AUTHORITIES',
+      'PUBLIC_PORTAL_ROUTE_PATHS',
+      'getStaticRouteAuthority',
+      "route?.authority",
+      'normalizePathname',
+      'startsWith',
+      "'/seller': ['seller:admin:list']",
+      "'/buyer': ['buyer:admin:list']",
+      "'/seller/direct-login'",
+      "'/buyer/direct-login'",
+      "'/seller/portal'",
+      "'/buyer/portal'",
+    ]) {
+      assertIncludes(
+        source,
+        relativePath,
+        expected,
+        `must keep static partner route guard support for ${expected}`,
+      );
+    }
+  }
+}
+
 for (const module of modules) {
   checkPage(module);
   checkService(module);
@@ -1167,6 +1424,7 @@ for (const module of modules) {
 checkPartnerTypes();
 checkPartnerReadTypes();
 checkSharedTemplate();
+checkStaticPartnerRoutes();
 
 if (violations.length > 0) {
   console.error('Partner management template guard failed:');

@@ -88,7 +88,7 @@ public class AdminBuyerController extends BaseController
         return success(buyerService.selectBuyerAccountList(buyerId));
     }
 
-    @PreAuthorize("@ss.hasPermi('buyer:admin:account:role:query')")
+    @PreAuthorize("@ss.hasPermi('buyer:admin:account:role:query') and @ss.hasPermi('buyer:admin:role:query')")
     @GetMapping("/{buyerId}/accounts/{accountId}/roles")
     public AjaxResult accountRoles(@PathVariable("buyerId") Long buyerId, @PathVariable("accountId") Long accountId)
     {
@@ -118,7 +118,7 @@ public class AdminBuyerController extends BaseController
     @PreAuthorize("@ss.hasPermi('buyer:admin:account:edit')")
     @Log(title = "买家账号", businessType = BusinessType.UPDATE)
     @PutMapping("/{buyerId}/accounts")
-    public AjaxResult editAccount(@PathVariable("buyerId") Long buyerId, @RequestBody BuyerAccount account)
+    public AjaxResult editAccount(@PathVariable("buyerId") Long buyerId, @Validated @RequestBody BuyerAccount account)
     {
         return toAjax(buyerService.updateBuyerAccount(buyerId, account));
     }
@@ -147,23 +147,6 @@ public class AdminBuyerController extends BaseController
             @RequestBody BuyerAccount account)
     {
         return toAjax(buyerService.resetBuyerAccountPassword(buyerId, accountId, account == null ? null : account.getPassword()));
-    }
-
-    @PreAuthorize("@ss.hasPermi('buyer:admin:account:resetPwd')")
-    @Log(title = "买家账号", businessType = BusinessType.UPDATE)
-    @PutMapping("/{buyerId}/accounts/{accountId}/resetDefaultPwd")
-    public AjaxResult resetDefaultPassword(@PathVariable("buyerId") Long buyerId,
-            @PathVariable("accountId") Long accountId)
-    {
-        return toAjax(buyerService.resetBuyerAccountDefaultPassword(buyerId, accountId));
-    }
-
-    @PreAuthorize("@ss.hasPermi('buyer:admin:resetPwd')")
-    @Log(title = "买家主账号", businessType = BusinessType.UPDATE)
-    @PutMapping("/{buyerId}/resetOwnerPwd")
-    public AjaxResult resetOwnerPassword(@PathVariable("buyerId") Long buyerId)
-    {
-        return toAjax(buyerService.resetBuyerOwnerPassword(buyerId));
     }
 
     @PreAuthorize("@ss.hasPermi('buyer:admin:forceLogout')")

@@ -47,7 +47,8 @@ public class BuyerPortalPermissionServiceImplMenuTreeTest
         BuyerAccount account = account(22L, 11L);
         RecordingBuyerMapper buyerMapper = recordingBuyerMapper(1, account);
         RecordingBuyerPortalPermissionMapper permissionMapper = new RecordingBuyerPortalPermissionMapper()
-                .withMenus(menu(100L, 0L, "采购中心"), menu(101L, 100L, "商品列表"));
+                .withMenus(menu(200000L, 0L, "采购中心"),
+                        buyerPageMenu(200001L, 200000L, "商品列表", "buyer:product:list"));
         BuyerPortalPermissionServiceImpl service = service(buyerService(buyer), buyerMapper.proxy(),
                 permissionMapper.proxy());
 
@@ -56,11 +57,37 @@ public class BuyerPortalPermissionServiceImplMenuTreeTest
         assertOnlineBuyerSessionLookup(buyerMapper);
         assertBuyerMenuLookup(permissionMapper);
         assertEquals(1, menuTree.size());
-        assertEquals(Long.valueOf(100L), menuTree.get(0).getMenuId());
+        assertEquals(Long.valueOf(200000L), menuTree.get(0).getMenuId());
         assertEquals("采购中心", menuTree.get(0).getMenuName());
         assertEquals(1, menuTree.get(0).getChildren().size());
-        assertEquals(Long.valueOf(101L), menuTree.get(0).getChildren().get(0).getMenuId());
+        assertEquals(Long.valueOf(200001L), menuTree.get(0).getChildren().get(0).getMenuId());
         assertEquals("商品列表", menuTree.get(0).getChildren().get(0).getMenuName());
+    }
+
+    @Test
+    public void selectPortalMenuTreeRejectsDirtyBuyerTerminalMenus()
+    {
+        assertBuyerPortalMenuRejected(buyerPageMenu(100000L, 0L, "wrong id", "buyer:product:list"));
+        assertBuyerPortalMenuRejected(buyerPageMenu(200000L, 0L, "cross perms", "seller:product:list"));
+        assertBuyerPortalMenuRejected(buyerPageMenu(200000L, 0L, "admin perms", "buyer:admin:list"));
+        assertBuyerPortalMenuRejected(buyerPageMenu(200000L, 0L, "wildcard perms", "*:*:*"));
+        assertBuyerPortalMenuRejected(buyerPageMenu(200000L, 0L, "blank perms", ""));
+
+        PortalMenu crossComponent = buyerPageMenu(200000L, 0L, "cross component", "buyer:product:list");
+        crossComponent.setComponent("seller/product/list");
+        assertBuyerPortalMenuRejected(crossComponent);
+
+        PortalMenu commonComponent = buyerPageMenu(200000L, 0L, "common component", "buyer:product:list");
+        commonComponent.setComponent("common/placeholder");
+        assertBuyerPortalMenuRejected(commonComponent);
+
+        PortalMenu blankComponent = buyerPageMenu(200000L, 0L, "blank component", "buyer:product:list");
+        blankComponent.setComponent("");
+        assertBuyerPortalMenuRejected(blankComponent);
+
+        PortalMenu blankType = buyerPageMenu(200000L, 0L, "blank type", "buyer:product:list");
+        blankType.setMenuType("");
+        assertBuyerPortalMenuRejected(blankType);
     }
 
     @Test
@@ -73,8 +100,109 @@ public class BuyerPortalPermissionServiceImplMenuTreeTest
         BuyerPortalPermissionServiceImpl service = service(buyerService(buyer), recordingBuyerMapper(1, account).proxy(),
                 permissionMapper.proxy());
         PortalMenu payload = menu(10L, 11L, "采购中心");
+        markValidBuyerPageMenu(payload, "buyer:product:list");
 
         assertServiceException(() -> service.updateMenu(payload));
+
+        assertEquals(0, permissionMapper.updateMenuCallCount);
+    }
+
+    @Test
+    public void insertMenuRejectsWildcardAdminAndCrossTerminalPermsBeforeMapperWrite()
+    {
+        Buyer buyer = buyer(11L);
+        BuyerAccount account = account(22L, 11L);
+        RecordingBuyerPortalPermissionMapper permissionMapper = new RecordingBuyerPortalPermissionMapper();
+        BuyerPortalPermissionServiceImpl service = service(buyerService(buyer), recordingBuyerMapper(1, account).proxy(),
+                permissionMapper.proxy());
+
+        for (String invalidPerm : new String[] { "*:*:*", "buyer:admin:list", "seller:account:list" })
+        {
+            PortalMenu payload = menu(null, 0L, "invalid " + invalidPerm);
+            markValidBuyerPageMenu(payload, invalidPerm);
+            payload.setPerms(invalidPerm);
+            assertServiceException(() -> service.insertMenu(payload));
+        }
+
+        assertEquals(0, permissionMapper.insertMenuCallCount);
+    }
+
+    @Test
+    public void insertMenuRejectsBlankPermsAndInvalidComponentBeforeMapperWrite()
+    {
+        Buyer buyer = buyer(11L);
+        BuyerAccount account = account(22L, 11L);
+        RecordingBuyerPortalPermissionMapper permissionMapper = new RecordingBuyerPortalPermissionMapper();
+        BuyerPortalPermissionServiceImpl service = service(buyerService(buyer), recordingBuyerMapper(1, account).proxy(),
+                permissionMapper.proxy());
+
+        for (String invalidComponent : new String[] { "", "seller/product/list", "admin/system/list", "Product/List" })
+        {
+            PortalMenu payload = menu(null, 0L, "invalid component");
+            markValidBuyerPageMenu(payload, "buyer:product:list");
+            payload.setComponent(invalidComponent);
+            assertServiceException(() -> service.insertMenu(payload));
+        }
+
+        PortalMenu blankPagePerms = menu(null, 0L, "blank page perms");
+        markValidBuyerPageMenu(blankPagePerms, "");
+        assertServiceException(() -> service.insertMenu(blankPagePerms));
+
+        PortalMenu blankButtonPerms = menu(null, 0L, "blank button perms");
+        blankButtonPerms.setMenuType("F");
+        blankButtonPerms.setPerms("");
+        assertServiceException(() -> service.insertMenu(blankButtonPerms));
+
+        assertEquals(0, permissionMapper.insertMenuCallCount);
+    }
+
+    @Test
+    public void updateMenuRejectsWildcardAdminAndCrossTerminalPermsBeforeMapperWrite()
+    {
+        Buyer buyer = buyer(11L);
+        BuyerAccount account = account(22L, 11L);
+        RecordingBuyerPortalPermissionMapper permissionMapper = new RecordingBuyerPortalPermissionMapper()
+                .withMenuIndex(menu(10L, 0L, "采购中心"));
+        BuyerPortalPermissionServiceImpl service = service(buyerService(buyer), recordingBuyerMapper(1, account).proxy(),
+                permissionMapper.proxy());
+
+        for (String invalidPerm : new String[] { "*:*:*", "buyer:admin:list", "seller:account:list" })
+        {
+            PortalMenu payload = menu(10L, 0L, "invalid " + invalidPerm);
+            markValidBuyerPageMenu(payload, invalidPerm);
+            payload.setPerms(invalidPerm);
+            assertServiceException(() -> service.updateMenu(payload));
+        }
+
+        assertEquals(0, permissionMapper.updateMenuCallCount);
+    }
+
+    @Test
+    public void updateMenuRejectsBlankPermsAndInvalidComponentBeforeMapperWrite()
+    {
+        Buyer buyer = buyer(11L);
+        BuyerAccount account = account(22L, 11L);
+        RecordingBuyerPortalPermissionMapper permissionMapper = new RecordingBuyerPortalPermissionMapper()
+                .withMenuIndex(menu(10L, 0L, "采购中心"));
+        BuyerPortalPermissionServiceImpl service = service(buyerService(buyer), recordingBuyerMapper(1, account).proxy(),
+                permissionMapper.proxy());
+
+        for (String invalidComponent : new String[] { "", "seller/product/list", "admin/system/list", "Product/List" })
+        {
+            PortalMenu payload = menu(10L, 0L, "invalid component");
+            markValidBuyerPageMenu(payload, "buyer:product:list");
+            payload.setComponent(invalidComponent);
+            assertServiceException(() -> service.updateMenu(payload));
+        }
+
+        PortalMenu blankPagePerms = menu(10L, 0L, "blank page perms");
+        markValidBuyerPageMenu(blankPagePerms, "");
+        assertServiceException(() -> service.updateMenu(blankPagePerms));
+
+        PortalMenu blankButtonPerms = menu(10L, 0L, "blank button perms");
+        blankButtonPerms.setMenuType("F");
+        blankButtonPerms.setPerms("");
+        assertServiceException(() -> service.updateMenu(blankButtonPerms));
 
         assertEquals(0, permissionMapper.updateMenuCallCount);
     }
@@ -123,7 +251,38 @@ public class BuyerPortalPermissionServiceImplMenuTreeTest
         menu.setMenuId(menuId);
         menu.setParentId(parentId);
         menu.setMenuName(menuName);
+        menu.setMenuType("M");
         return menu;
+    }
+
+    private PortalMenu buyerPageMenu(Long menuId, Long parentId, String menuName, String perms)
+    {
+        PortalMenu menu = menu(menuId, parentId, menuName);
+        markValidBuyerPageMenu(menu, perms);
+        return menu;
+    }
+
+    private void markValidBuyerPageMenu(PortalMenu menu, String perms)
+    {
+        menu.setMenuType("C");
+        menu.setComponent("buyer/product/list");
+        menu.setPerms(perms);
+    }
+
+    private void assertBuyerPortalMenuRejected(PortalMenu dirtyMenu)
+    {
+        Buyer buyer = buyer(11L);
+        BuyerAccount account = account(22L, 11L);
+        RecordingBuyerMapper buyerMapper = recordingBuyerMapper(1, account);
+        RecordingBuyerPortalPermissionMapper permissionMapper = new RecordingBuyerPortalPermissionMapper()
+                .withMenus(dirtyMenu);
+        BuyerPortalPermissionServiceImpl service = service(buyerService(buyer), buyerMapper.proxy(),
+                permissionMapper.proxy());
+
+        assertServiceException(() -> service.selectPortalMenuTree(session(11L, 22L)));
+
+        assertOnlineBuyerSessionLookup(buyerMapper);
+        assertBuyerMenuLookup(permissionMapper);
     }
 
     private IBuyerService buyerService(Buyer buyer)
@@ -203,6 +362,12 @@ public class BuyerPortalPermissionServiceImplMenuTreeTest
                 if ("selectBuyerAccountById".equals(methodName))
                 {
                     return accountById.get((Long) args[0]);
+                }
+                if ("selectBuyerAccountByIdAndBuyerId".equals(methodName))
+                {
+                    Long buyerId = (Long) args[0];
+                    BuyerAccount account = accountById.get((Long) args[1]);
+                    return account != null && buyerId.equals(account.getBuyerId()) ? account : null;
                 }
                 if ("countOnlineBuyerSession".equals(methodName))
                 {
@@ -319,6 +484,8 @@ public class BuyerPortalPermissionServiceImplMenuTreeTest
 
         private int updateMenuCallCount;
 
+        private int insertMenuCallCount;
+
         private RecordingBuyerPortalPermissionMapper withMenus(PortalMenu... menus)
         {
             this.menus = Arrays.asList(menus);
@@ -352,6 +519,11 @@ public class BuyerPortalPermissionServiceImplMenuTreeTest
                 if ("updateBuyerMenu".equals(methodName))
                 {
                     updateMenuCallCount++;
+                    return 1;
+                }
+                if ("insertBuyerMenu".equals(methodName))
+                {
+                    insertMenuCallCount++;
                     return 1;
                 }
                 if ("toString".equals(methodName))

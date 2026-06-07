@@ -181,6 +181,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="upstreamWarehouseName" column="upstream_warehouse_name" />
         <result property="systemWarehouseCode" column="system_warehouse_code"  />
         <result property="systemWarehouseName" column="system_warehouse_name"  />
+        <result property="pairingRole"         column="pairing_role"           />
         <result property="status"              column="status"                 />
         <result property="createBy"            column="create_by"              />
         <result property="createTime"          column="create_time"            />
@@ -192,10 +193,13 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <resultMap type="UpstreamLogisticsChannelPairing" id="LogisticsChannelPairingResult">
         <id     property="logisticsChannelPairingId" column="logistics_channel_pairing_id" />
         <result property="connectionCode"            column="connection_code"              />
+        <result property="systemWarehouseCode"       column="system_warehouse_code"        />
+        <result property="upstreamWarehouseCode"     column="upstream_warehouse_code"      />
         <result property="upstreamChannelCode"       column="upstream_channel_code"        />
         <result property="upstreamChannelName"       column="upstream_channel_name"        />
         <result property="systemChannelCode"         column="system_channel_code"          />
         <result property="systemChannelName"         column="system_channel_name"          />
+        <result property="pairingRole"               column="pairing_role"                 />
         <result property="status"                    column="status"                       />
         <result property="createBy"                  column="create_by"                    />
         <result property="createTime"                column="create_time"                  />
@@ -300,6 +304,53 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="firstSeenTime" column="first_seen_time" />
         <result property="lastSeenTime" column="last_seen_time" />
         <result property="updateTime" column="update_time" />
+    </resultMap>
+
+    <resultMap type="SourceWarehouseStockGroupItem" id="SourceWarehouseStockGroupResult">
+        <id     property="sourceStockGroupKey" column="source_stock_group_key" />
+        <result property="repositoryScope" column="repository_scope" />
+        <result property="inventoryScope" column="inventory_scope" />
+        <result property="masterSku" column="master_sku" />
+        <result property="masterProductName" column="master_product_name" />
+        <result property="inventoryAttributeCodes" column="inventory_attribute_codes" />
+        <result property="inventoryAttributeLabels" column="inventory_attribute_labels" />
+        <result property="inventoryAttributeCount" column="inventory_attribute_count" />
+        <result property="sourceConnectionCodes" column="source_connection_codes" />
+        <result property="masterWarehouseNames" column="master_warehouse_names" />
+        <result property="masterWarehouseCount" column="master_warehouse_count" />
+        <result property="upstreamWarehouseCodes" column="upstream_warehouse_codes" />
+        <result property="upstreamWarehouseNames" column="upstream_warehouse_names" />
+        <result property="upstreamWarehouseCount" column="upstream_warehouse_count" />
+        <result property="detailRowCount" column="detail_row_count" />
+        <result property="activeDetailCount" column="active_detail_count" />
+        <result property="missingDetailCount" column="missing_detail_count" />
+        <result property="totalQuantity" column="total_quantity" />
+        <result property="availableQuantity" column="available_quantity" />
+        <result property="lockedQuantity" column="locked_quantity" />
+        <result property="inTransitQuantity" column="in_transit_quantity" />
+        <result property="boxedQuantity" column="boxed_quantity" />
+        <result property="unboxedQuantity" column="unboxed_quantity" />
+        <result property="systemWarehouseCodes" column="system_warehouse_codes" />
+        <result property="systemWarehouseNames" column="system_warehouse_names" />
+        <result property="systemSkus" column="system_skus" />
+        <result property="systemSkuNames" column="system_sku_names" />
+        <result property="customerNames" column="customer_names" />
+        <result property="warehousePairingStatus" column="warehouse_pairing_status" />
+        <result property="skuPairingStatus" column="sku_pairing_status" />
+        <result property="status" column="status" />
+        <result property="latestSyncBatchId" column="latest_sync_batch_id" />
+        <result property="firstSeenTime" column="first_seen_time" />
+        <result property="lastSeenTime" column="last_seen_time" />
+        <result property="latestUpdateTime" column="latest_update_time" />
+        <result property="rebuildTime" column="rebuild_time" />
+    </resultMap>
+
+    <resultMap type="IntegrationOption" id="IntegrationOptionResult">
+        <result property="label" column="label" />
+        <result property="value" column="value" />
+        <result property="code" column="code" />
+        <result property="name" column="name" />
+        <result property="searchText" column="searchText" />
     </resultMap>
 
     <resultMap type="UpstreamInventorySyncState" id="InventorySyncStateResult">
@@ -651,17 +702,19 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <insert id="insertWarehousePairing" parameterType="UpstreamWarehousePairing" useGeneratedKeys="true" keyProperty="warehousePairingId">
         insert into upstream_system_warehouse_pairing(
             connection_code, upstream_warehouse_code, upstream_warehouse_name,
-            system_warehouse_code, system_warehouse_name, status,
+            system_warehouse_code, system_warehouse_name, pairing_role, status,
             create_by, create_time, remark
         ) values (
             #{connectionCode}, #{upstreamWarehouseCode}, #{upstreamWarehouseName},
-            #{systemWarehouseCode}, #{systemWarehouseName}, #{status},
+            #{systemWarehouseCode}, #{systemWarehouseName}, #{pairingRole}, #{status},
             #{createBy}, sysdate(), #{remark}
         )
     </insert>
 
     <delete id="deleteWarehousePairing">
-        delete from upstream_system_warehouse_pairing where warehouse_pairing_id = #{warehousePairingId}
+        delete from upstream_system_warehouse_pairing
+        where connection_code = #{connectionCode}
+          and warehouse_pairing_id = #{warehousePairingId}
     </delete>
 
     <insert id="batchInsertLogisticsChannelStage">
@@ -795,8 +848,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         select *
         from upstream_system_logistics_channel_candidate
         where connection_code = #{connectionCode}
+          and warehouse_code = #{warehouseCode}
           and channel_code = #{channelCode}
-        order by status asc, warehouse_code asc
         limit 1
     </select>
 
@@ -804,23 +857,27 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         select *
         from upstream_system_logistics_channel_pairing
         where connection_code = #{connectionCode}
-        order by upstream_channel_code asc, create_time desc
+        order by upstream_warehouse_code asc, upstream_channel_code asc, create_time desc
     </select>
 
     <insert id="insertLogisticsChannelPairing" parameterType="UpstreamLogisticsChannelPairing" useGeneratedKeys="true" keyProperty="logisticsChannelPairingId">
         insert into upstream_system_logistics_channel_pairing(
-            connection_code, upstream_channel_code, upstream_channel_name,
-            system_channel_code, system_channel_name, status,
+            connection_code, system_warehouse_code, upstream_warehouse_code,
+            upstream_channel_code, upstream_channel_name,
+            system_channel_code, system_channel_name, pairing_role, status,
             create_by, create_time, remark
         ) values (
-            #{connectionCode}, #{upstreamChannelCode}, #{upstreamChannelName},
-            #{systemChannelCode}, #{systemChannelName}, #{status},
+            #{connectionCode}, #{systemWarehouseCode}, #{upstreamWarehouseCode},
+            #{upstreamChannelCode}, #{upstreamChannelName},
+            #{systemChannelCode}, #{systemChannelName}, #{pairingRole}, #{status},
             #{createBy}, sysdate(), #{remark}
         )
     </insert>
 
     <delete id="deleteLogisticsChannelPairing">
-        delete from upstream_system_logistics_channel_pairing where logistics_channel_pairing_id = #{logisticsChannelPairingId}
+        delete from upstream_system_logistics_channel_pairing
+        where connection_code = #{connectionCode}
+          and logistics_channel_pairing_id = #{logisticsChannelPairingId}
     </delete>
 
     <insert id="batchInsertSkuStage">
@@ -2009,6 +2066,672 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <include refid="InsertSourceProductWarehouseDetailsSql" />
     </insert>
 
+    <sql id="SourceWarehouseStockGroupKeyExpression">
+        concat(
+            'SOURCE_STOCK:',
+            sha2(
+                concat(
+                    'OFFICIAL_MASTER|',
+                    coalesce(s.inventory_scope, ''),
+                    '|',
+                    char_length(trim(coalesce(s.master_sku, ''))),
+                    ':',
+                    trim(coalesce(s.master_sku, '')),
+                    '|',
+                    char_length(trim(coalesce(s.master_product_name, ''))),
+                    ':',
+                    trim(coalesce(s.master_product_name, ''))
+                ),
+                256
+            )
+        )
+    </sql>
+
+    <sql id="SourceWarehouseStockAffectedGroupKeys">
+        select affected.source_stock_group_key
+        from (
+            select distinct <include refid="SourceWarehouseStockGroupKeyExpression" /> as source_stock_group_key
+            from upstream_system_sku_inventory_snapshot s
+            where s.connection_code = #{connectionCode}
+            union
+            select distinct d.source_stock_group_key
+            from source_warehouse_stock_detail d
+            where d.connection_code = #{connectionCode}
+        ) affected
+    </sql>
+
+    <sql id="SourceWarehouseStockGroupReadModelFilter">
+        where g.repository_scope = #{repositoryScope}
+        <if test="sourceStockGroupKey != null and sourceStockGroupKey != ''">
+            and g.source_stock_group_key = #{sourceStockGroupKey}
+        </if>
+        <if test="connectionCode != null and connectionCode != ''">
+            and g.source_stock_group_key in (
+                <include refid="SourceWarehouseStockAffectedGroupKeys" />
+            )
+        </if>
+        <if test="inventoryScope != null and inventoryScope != ''">
+            and g.inventory_scope = #{inventoryScope}
+        </if>
+        <if test="status != null and status != ''">
+            and g.status = #{status}
+        </if>
+        <if test="warehousePairingStatus != null and warehousePairingStatus != ''">
+            and g.warehouse_pairing_status = #{warehousePairingStatus}
+        </if>
+        <if test="skuPairingStatus != null and skuPairingStatus != ''">
+            and g.sku_pairing_status = #{skuPairingStatus}
+        </if>
+        <if test="inventoryAttribute != null and inventoryAttribute != ''">
+            and exists (
+                select 1
+                from source_warehouse_stock_filter_metric fm
+                where fm.source_stock_group_key = g.source_stock_group_key
+                  and fm.filter_type = 'INVENTORY_ATTRIBUTE'
+                  and fm.filter_value = #{inventoryAttribute}
+            )
+        </if>
+        <if test="masterWarehouseName != null and masterWarehouseName != ''">
+            and exists (
+                select 1
+                from source_warehouse_stock_filter_metric fm
+                where fm.source_stock_group_key = g.source_stock_group_key
+                  and fm.filter_type = 'MASTER_WAREHOUSE'
+                  and fm.filter_value = #{masterWarehouseName}
+            )
+        </if>
+        <if test="upstreamWarehouseCode != null and upstreamWarehouseCode != ''">
+            and exists (
+                select 1
+                from source_warehouse_stock_filter_metric fm
+                where fm.source_stock_group_key = g.source_stock_group_key
+                  and fm.filter_type = 'UPSTREAM_WAREHOUSE'
+                  and fm.filter_value = #{upstreamWarehouseCode}
+            )
+        </if>
+        <if test="masterWarehouseKeyword != null and masterWarehouseKeyword != ''">
+            and (
+                g.master_warehouse_names like concat('%', #{masterWarehouseKeyword}, '%')
+                or exists (
+                    select 1
+                    from source_warehouse_stock_filter_metric fm
+                    where fm.source_stock_group_key = g.source_stock_group_key
+                      and fm.filter_type = 'MASTER_WAREHOUSE'
+                      and fm.filter_label like concat('%', #{masterWarehouseKeyword}, '%')
+                )
+            )
+        </if>
+        <if test="warehouseKeyword != null and warehouseKeyword != ''">
+            and (
+                g.upstream_warehouse_codes like concat('%', #{warehouseKeyword}, '%')
+                or g.upstream_warehouse_names like concat('%', #{warehouseKeyword}, '%')
+                or g.system_warehouse_codes like concat('%', #{warehouseKeyword}, '%')
+                or g.system_warehouse_names like concat('%', #{warehouseKeyword}, '%')
+            )
+        </if>
+        <if test="keyword != null and keyword != ''">
+            and (
+                g.search_text like concat('%', #{keyword}, '%')
+                or g.master_sku like concat('%', #{keyword}, '%')
+                or g.master_product_name like concat('%', #{keyword}, '%')
+            )
+        </if>
+        <if test="totalQuantityMin != null">
+            and g.total_quantity &gt;= #{totalQuantityMin}
+        </if>
+        <if test="totalQuantityMax != null">
+            and g.total_quantity &lt;= #{totalQuantityMax}
+        </if>
+        <if test="availableQuantityMin != null">
+            and g.available_quantity &gt;= #{availableQuantityMin}
+        </if>
+        <if test="availableQuantityMax != null">
+            and g.available_quantity &lt;= #{availableQuantityMax}
+        </if>
+        <if test="lockedQuantityMin != null">
+            and g.locked_quantity &gt;= #{lockedQuantityMin}
+        </if>
+        <if test="lockedQuantityMax != null">
+            and g.locked_quantity &lt;= #{lockedQuantityMax}
+        </if>
+        <if test="inTransitQuantityMin != null">
+            and g.in_transit_quantity &gt;= #{inTransitQuantityMin}
+        </if>
+        <if test="inTransitQuantityMax != null">
+            and g.in_transit_quantity &lt;= #{inTransitQuantityMax}
+        </if>
+    </sql>
+
+    <select id="countSourceWarehouseStockGroupList" parameterType="SourceWarehouseStockQuery" resultType="long">
+        select count(1)
+        from source_warehouse_stock_group g
+        <include refid="SourceWarehouseStockGroupReadModelFilter" />
+    </select>
+
+    <select id="selectSourceWarehouseStockGroupList" parameterType="SourceWarehouseStockQuery" resultMap="SourceWarehouseStockGroupResult">
+        select g.*
+        from source_warehouse_stock_group g
+        <include refid="SourceWarehouseStockGroupReadModelFilter" />
+        order by g.latest_update_time desc, g.source_stock_group_key asc
+    </select>
+
+    <select id="selectSourceWarehouseStockGroupDetailList" parameterType="SourceWarehouseStockQuery" resultMap="SourceWarehouseStockResult">
+        select d.inventory_snapshot_id,
+               d.connection_code,
+               d.system_kind,
+               d.master_warehouse_name,
+               d.upstream_warehouse_code,
+               d.upstream_warehouse_name,
+               d.master_sku,
+               d.master_product_name,
+               d.inventory_scope,
+               d.inventory_attribute,
+               d.batch_no,
+               d.location_code,
+               d.total_quantity,
+               d.available_quantity,
+               d.locked_quantity,
+               d.in_transit_quantity,
+               d.boxed_quantity,
+               d.unboxed_quantity,
+               d.system_warehouse_code,
+               d.system_warehouse_name,
+               d.system_sku,
+               d.system_sku_name,
+               d.customer_name,
+               d.warehouse_pairing_status,
+               d.sku_pairing_status,
+               d.status,
+               d.sync_batch_id,
+               null as source_payload_json,
+               d.source_payload_hash,
+               d.first_seen_time,
+               d.last_seen_time,
+               d.update_time
+        from source_warehouse_stock_detail d
+        where d.repository_scope = #{repositoryScope}
+        <if test="sourceStockGroupKey != null and sourceStockGroupKey != ''">
+            and d.source_stock_group_key = #{sourceStockGroupKey}
+        </if>
+        <if test="connectionCode != null and connectionCode != ''">
+            and d.connection_code = #{connectionCode}
+        </if>
+        <if test="inventoryScope != null and inventoryScope != ''">
+            and d.inventory_scope = #{inventoryScope}
+        </if>
+        <if test="inventoryAttribute != null and inventoryAttribute != ''">
+            and d.inventory_attribute = #{inventoryAttribute}
+        </if>
+        <if test="masterWarehouseName != null and masterWarehouseName != ''">
+            and d.master_warehouse_name = #{masterWarehouseName}
+        </if>
+        <if test="upstreamWarehouseCode != null and upstreamWarehouseCode != ''">
+            and d.upstream_warehouse_code = #{upstreamWarehouseCode}
+        </if>
+        <if test="masterWarehouseKeyword != null and masterWarehouseKeyword != ''">
+            and d.master_warehouse_name like concat('%', #{masterWarehouseKeyword}, '%')
+        </if>
+        <if test="warehouseKeyword != null and warehouseKeyword != ''">
+            and (
+                d.upstream_warehouse_code like concat('%', #{warehouseKeyword}, '%')
+                or d.upstream_warehouse_name like concat('%', #{warehouseKeyword}, '%')
+                or d.system_warehouse_code like concat('%', #{warehouseKeyword}, '%')
+                or d.system_warehouse_name like concat('%', #{warehouseKeyword}, '%')
+            )
+        </if>
+        <if test="status != null and status != ''">
+            and d.status = #{status}
+        </if>
+        <if test="warehousePairingStatus != null and warehousePairingStatus != ''">
+            and d.warehouse_pairing_status = #{warehousePairingStatus}
+        </if>
+        <if test="skuPairingStatus != null and skuPairingStatus != ''">
+            and d.sku_pairing_status = #{skuPairingStatus}
+        </if>
+        <if test="keyword != null and keyword != ''">
+            and (
+                d.master_sku like concat('%', #{keyword}, '%')
+                or d.master_product_name like concat('%', #{keyword}, '%')
+                or d.system_sku like concat('%', #{keyword}, '%')
+                or d.system_sku_name like concat('%', #{keyword}, '%')
+                or d.customer_name like concat('%', #{keyword}, '%')
+            )
+        </if>
+        order by d.master_warehouse_name asc,
+                 d.upstream_warehouse_code asc,
+                 d.inventory_attribute asc,
+                 d.batch_no asc,
+                 d.location_code asc,
+                 d.inventory_snapshot_id asc
+    </select>
+
+    <select id="selectSourceWarehouseStockMasterWarehouseOptions" parameterType="SourceWarehouseStockQuery" resultMap="IntegrationOptionResult">
+        select fm.filter_value as label,
+               fm.filter_value as value,
+               fm.filter_value as code,
+               fm.filter_value as name,
+               fm.filter_value as searchText
+        from source_warehouse_stock_filter_metric fm
+        where fm.repository_scope = #{repositoryScope}
+          and fm.filter_type = 'MASTER_WAREHOUSE'
+          and nullif(fm.filter_value, '') is not null
+        <if test="inventoryScope != null and inventoryScope != ''">
+          and fm.inventory_scope = #{inventoryScope}
+        </if>
+        group by fm.filter_value
+        order by fm.filter_value asc
+    </select>
+
+    <select id="selectSourceWarehouseStockUpstreamWarehouseOptions" parameterType="SourceWarehouseStockQuery" resultMap="IntegrationOptionResult">
+        select case
+                   when nullif(max(fm.filter_label), '') is null or max(fm.filter_label) = fm.filter_value
+                       then fm.filter_value
+                   else concat(fm.filter_value, ' / ', max(fm.filter_label))
+               end as label,
+               fm.filter_value as value,
+               fm.filter_value as code,
+               max(fm.filter_label) as name,
+               concat(fm.filter_value, ' ', coalesce(max(fm.filter_label), '')) as searchText
+        from source_warehouse_stock_filter_metric fm
+        where fm.repository_scope = #{repositoryScope}
+          and fm.filter_type = 'UPSTREAM_WAREHOUSE'
+          and nullif(fm.filter_value, '') is not null
+        <if test="inventoryScope != null and inventoryScope != ''">
+          and fm.inventory_scope = #{inventoryScope}
+        </if>
+        group by fm.filter_value
+        order by label asc
+    </select>
+
+    <delete id="deleteAllSourceWarehouseStockFilterMetrics">
+        delete from source_warehouse_stock_filter_metric
+        where repository_scope = 'OFFICIAL_MASTER'
+    </delete>
+
+    <delete id="deleteAllSourceWarehouseStockGroups">
+        delete from source_warehouse_stock_group
+        where repository_scope = 'OFFICIAL_MASTER'
+    </delete>
+
+    <delete id="deleteAllSourceWarehouseStockDetails">
+        delete from source_warehouse_stock_detail
+        where repository_scope = 'OFFICIAL_MASTER'
+    </delete>
+
+    <delete id="deleteSourceWarehouseStockFilterMetricsByConnection">
+        delete from source_warehouse_stock_filter_metric
+        where repository_scope = 'OFFICIAL_MASTER'
+          and source_stock_group_key in (
+              <include refid="SourceWarehouseStockAffectedGroupKeys" />
+          )
+    </delete>
+
+    <delete id="deleteSourceWarehouseStockGroupsByConnection">
+        delete from source_warehouse_stock_group
+        where repository_scope = 'OFFICIAL_MASTER'
+          and source_stock_group_key in (
+              <include refid="SourceWarehouseStockAffectedGroupKeys" />
+          )
+    </delete>
+
+    <delete id="deleteSourceWarehouseStockDetailsByConnection">
+        delete from source_warehouse_stock_detail
+        where repository_scope = 'OFFICIAL_MASTER'
+          and connection_code = #{connectionCode}
+    </delete>
+
+    <sql id="SourceWarehouseStockSnapshotWhere">
+        where 1 = 1
+        <if test="connectionCode != null and connectionCode != ''">
+            and s.connection_code = #{connectionCode}
+        </if>
+    </sql>
+
+    <sql id="SourceWarehouseStockAffectedDetailWhere">
+        where d.repository_scope = 'OFFICIAL_MASTER'
+        <if test="connectionCode != null and connectionCode != ''">
+            and d.source_stock_group_key in (
+                <include refid="SourceWarehouseStockAffectedGroupKeys" />
+            )
+        </if>
+    </sql>
+
+    <insert id="insertAllSourceWarehouseStockDetails">
+        insert into source_warehouse_stock_detail(
+            inventory_snapshot_id, source_stock_group_key, repository_scope, connection_code, system_kind,
+            master_warehouse_name, upstream_warehouse_code, upstream_warehouse_name, master_sku, master_product_name,
+            inventory_scope, inventory_attribute, inventory_attribute_label, batch_no, location_code,
+            total_quantity, available_quantity, locked_quantity, in_transit_quantity, boxed_quantity, unboxed_quantity,
+            system_warehouse_code, system_warehouse_name, system_sku, system_sku_name, customer_name,
+            warehouse_pairing_status, sku_pairing_status, status, sync_batch_id, source_payload_hash,
+            first_seen_time, last_seen_time, update_time, rebuild_time
+        )
+        select s.inventory_snapshot_id,
+               <include refid="SourceWarehouseStockGroupKeyExpression" /> as source_stock_group_key,
+               'OFFICIAL_MASTER' as repository_scope,
+               s.connection_code,
+               case when c.system_kind = 'LINGXING_WMS' then 'lingxing-wms' else coalesce(c.system_kind, '') end as system_kind,
+               coalesce(c.master_warehouse_name, '') as master_warehouse_name,
+               s.upstream_warehouse_code,
+               coalesce(s.upstream_warehouse_name, '') as upstream_warehouse_name,
+               s.master_sku,
+               coalesce(s.master_product_name, '') as master_product_name,
+               s.inventory_scope,
+               s.inventory_attribute,
+               case
+                   when s.inventory_attribute = '0' then '正品'
+                   when s.inventory_attribute = '1' then '次品'
+                   when nullif(s.inventory_attribute, '') is null then ''
+                   else s.inventory_attribute
+               end as inventory_attribute_label,
+               s.batch_no,
+               s.location_code,
+               s.total_quantity,
+               s.available_quantity,
+               s.locked_quantity,
+               s.in_transit_quantity,
+               s.boxed_quantity,
+               s.unboxed_quantity,
+               coalesce(s.system_warehouse_code, '') as system_warehouse_code,
+               coalesce(s.system_warehouse_name, '') as system_warehouse_name,
+               coalesce(s.system_sku, '') as system_sku,
+               coalesce(s.system_sku_name, '') as system_sku_name,
+               coalesce(s.customer_name, '') as customer_name,
+               case when nullif(s.system_warehouse_code, '') is null then 'UNASSIGNED' else 'PAIRED' end as warehouse_pairing_status,
+               case when nullif(s.system_sku, '') is null then 'UNASSIGNED' else 'PAIRED' end as sku_pairing_status,
+               s.status,
+               s.sync_batch_id,
+               coalesce(s.source_payload_hash, '') as source_payload_hash,
+               s.first_seen_time,
+               s.last_seen_time,
+               s.update_time,
+               sysdate() as rebuild_time
+        from upstream_system_sku_inventory_snapshot s
+        left join upstream_system_connection c on c.connection_code = s.connection_code
+        <include refid="SourceWarehouseStockSnapshotWhere" />
+        on duplicate key update
+            source_stock_group_key = values(source_stock_group_key),
+            system_kind = values(system_kind),
+            master_warehouse_name = values(master_warehouse_name),
+            upstream_warehouse_name = values(upstream_warehouse_name),
+            master_product_name = values(master_product_name),
+            inventory_scope = values(inventory_scope),
+            inventory_attribute = values(inventory_attribute),
+            inventory_attribute_label = values(inventory_attribute_label),
+            batch_no = values(batch_no),
+            location_code = values(location_code),
+            total_quantity = values(total_quantity),
+            available_quantity = values(available_quantity),
+            locked_quantity = values(locked_quantity),
+            in_transit_quantity = values(in_transit_quantity),
+            boxed_quantity = values(boxed_quantity),
+            unboxed_quantity = values(unboxed_quantity),
+            system_warehouse_code = values(system_warehouse_code),
+            system_warehouse_name = values(system_warehouse_name),
+            system_sku = values(system_sku),
+            system_sku_name = values(system_sku_name),
+            customer_name = values(customer_name),
+            warehouse_pairing_status = values(warehouse_pairing_status),
+            sku_pairing_status = values(sku_pairing_status),
+            status = values(status),
+            sync_batch_id = values(sync_batch_id),
+            source_payload_hash = values(source_payload_hash),
+            first_seen_time = values(first_seen_time),
+            last_seen_time = values(last_seen_time),
+            update_time = values(update_time),
+            rebuild_time = values(rebuild_time)
+    </insert>
+
+    <insert id="insertAllSourceWarehouseStockGroups">
+        insert into source_warehouse_stock_group(
+            source_stock_group_key, repository_scope, inventory_scope, master_sku, master_product_name,
+            inventory_attribute_codes, inventory_attribute_labels, inventory_attribute_count,
+            source_connection_codes, master_warehouse_names, master_warehouse_count,
+            upstream_warehouse_codes, upstream_warehouse_names, upstream_warehouse_count,
+            detail_row_count, active_detail_count, missing_detail_count,
+            total_quantity, available_quantity, locked_quantity, in_transit_quantity, boxed_quantity, unboxed_quantity,
+            system_warehouse_codes, system_warehouse_names, system_skus, system_sku_names, customer_names,
+            warehouse_pairing_status, sku_pairing_status, status, latest_sync_batch_id,
+            first_seen_time, last_seen_time, latest_update_time, search_text, rebuild_time
+        )
+        select d.source_stock_group_key,
+               max(d.repository_scope) as repository_scope,
+               max(d.inventory_scope) as inventory_scope,
+               max(d.master_sku) as master_sku,
+               max(d.master_product_name) as master_product_name,
+               coalesce(group_concat(distinct nullif(d.inventory_attribute, '') order by d.inventory_attribute separator ','), '') as inventory_attribute_codes,
+               coalesce(group_concat(distinct nullif(d.inventory_attribute_label, '') order by d.inventory_attribute_label separator ' / '), '') as inventory_attribute_labels,
+               count(distinct nullif(d.inventory_attribute, '')) as inventory_attribute_count,
+               coalesce(group_concat(distinct d.connection_code order by d.connection_code separator ','), '') as source_connection_codes,
+               coalesce(group_concat(distinct nullif(d.master_warehouse_name, '') order by d.master_warehouse_name separator ' / '), '') as master_warehouse_names,
+               count(distinct nullif(d.master_warehouse_name, '')) as master_warehouse_count,
+               coalesce(group_concat(distinct nullif(d.upstream_warehouse_code, '') order by d.upstream_warehouse_code separator ','), '') as upstream_warehouse_codes,
+               coalesce(group_concat(distinct nullif(d.upstream_warehouse_name, '') order by d.upstream_warehouse_name separator ' / '), '') as upstream_warehouse_names,
+               count(distinct nullif(d.upstream_warehouse_code, '')) as upstream_warehouse_count,
+               count(1) as detail_row_count,
+               sum(case when d.status = 'ACTIVE' then 1 else 0 end) as active_detail_count,
+               sum(case when d.status = 'MISSING' then 1 else 0 end) as missing_detail_count,
+               sum(coalesce(d.total_quantity, 0)) as total_quantity,
+               sum(coalesce(d.available_quantity, 0)) as available_quantity,
+               sum(coalesce(d.locked_quantity, 0)) as locked_quantity,
+               sum(coalesce(d.in_transit_quantity, 0)) as in_transit_quantity,
+               case when sum(case when d.boxed_quantity is not null then 1 else 0 end) = 0 then null else sum(coalesce(d.boxed_quantity, 0)) end as boxed_quantity,
+               case when sum(case when d.unboxed_quantity is not null then 1 else 0 end) = 0 then null else sum(coalesce(d.unboxed_quantity, 0)) end as unboxed_quantity,
+               coalesce(group_concat(distinct nullif(d.system_warehouse_code, '') order by d.system_warehouse_code separator ','), '') as system_warehouse_codes,
+               coalesce(group_concat(distinct nullif(d.system_warehouse_name, '') order by d.system_warehouse_name separator ' / '), '') as system_warehouse_names,
+               coalesce(group_concat(distinct nullif(d.system_sku, '') order by d.system_sku separator ' / '), '') as system_skus,
+               coalesce(group_concat(distinct nullif(d.system_sku_name, '') order by d.system_sku_name separator ' / '), '') as system_sku_names,
+               coalesce(group_concat(distinct nullif(d.customer_name, '') order by d.customer_name separator ' / '), '') as customer_names,
+               case
+                   when sum(case when d.warehouse_pairing_status = 'PAIRED' then 1 else 0 end) = 0 then 'UNASSIGNED'
+                   when sum(case when d.warehouse_pairing_status = 'PAIRED' then 1 else 0 end) = count(1) then 'PAIRED'
+                   else 'PARTIAL'
+               end as warehouse_pairing_status,
+               case
+                   when sum(case when d.sku_pairing_status = 'PAIRED' then 1 else 0 end) = 0 then 'UNASSIGNED'
+                   when sum(case when d.sku_pairing_status = 'PAIRED' then 1 else 0 end) = count(1) then 'PAIRED'
+                   else 'PARTIAL'
+               end as sku_pairing_status,
+               case when count(distinct d.status) = 1 then max(d.status) else 'MIXED' end as status,
+               max(d.sync_batch_id) as latest_sync_batch_id,
+               min(d.first_seen_time) as first_seen_time,
+               max(d.last_seen_time) as last_seen_time,
+               max(d.update_time) as latest_update_time,
+               concat_ws(' ',
+                   max(d.master_sku),
+                   max(d.master_product_name),
+                   coalesce(group_concat(distinct nullif(d.master_warehouse_name, '') separator ' '), ''),
+                   coalesce(group_concat(distinct nullif(d.upstream_warehouse_code, '') separator ' '), ''),
+                   coalesce(group_concat(distinct nullif(d.upstream_warehouse_name, '') separator ' '), ''),
+                   coalesce(group_concat(distinct nullif(d.system_warehouse_code, '') separator ' '), ''),
+                   coalesce(group_concat(distinct nullif(d.system_warehouse_name, '') separator ' '), ''),
+                   coalesce(group_concat(distinct nullif(d.system_sku, '') separator ' '), ''),
+                   coalesce(group_concat(distinct nullif(d.system_sku_name, '') separator ' '), ''),
+                   coalesce(group_concat(distinct nullif(d.customer_name, '') separator ' '), '')
+               ) as search_text,
+               sysdate() as rebuild_time
+        from source_warehouse_stock_detail d
+        <include refid="SourceWarehouseStockAffectedDetailWhere" />
+        group by d.source_stock_group_key
+        on duplicate key update
+            inventory_attribute_codes = values(inventory_attribute_codes),
+            inventory_attribute_labels = values(inventory_attribute_labels),
+            inventory_attribute_count = values(inventory_attribute_count),
+            source_connection_codes = values(source_connection_codes),
+            master_warehouse_names = values(master_warehouse_names),
+            master_warehouse_count = values(master_warehouse_count),
+            upstream_warehouse_codes = values(upstream_warehouse_codes),
+            upstream_warehouse_names = values(upstream_warehouse_names),
+            upstream_warehouse_count = values(upstream_warehouse_count),
+            detail_row_count = values(detail_row_count),
+            active_detail_count = values(active_detail_count),
+            missing_detail_count = values(missing_detail_count),
+            total_quantity = values(total_quantity),
+            available_quantity = values(available_quantity),
+            locked_quantity = values(locked_quantity),
+            in_transit_quantity = values(in_transit_quantity),
+            boxed_quantity = values(boxed_quantity),
+            unboxed_quantity = values(unboxed_quantity),
+            system_warehouse_codes = values(system_warehouse_codes),
+            system_warehouse_names = values(system_warehouse_names),
+            system_skus = values(system_skus),
+            system_sku_names = values(system_sku_names),
+            customer_names = values(customer_names),
+            warehouse_pairing_status = values(warehouse_pairing_status),
+            sku_pairing_status = values(sku_pairing_status),
+            status = values(status),
+            latest_sync_batch_id = values(latest_sync_batch_id),
+            first_seen_time = values(first_seen_time),
+            last_seen_time = values(last_seen_time),
+            latest_update_time = values(latest_update_time),
+            search_text = values(search_text),
+            rebuild_time = values(rebuild_time)
+    </insert>
+
+    <insert id="insertAllSourceWarehouseStockFilterMetrics">
+        insert into source_warehouse_stock_filter_metric(
+            metric_key, source_stock_group_key, repository_scope, inventory_scope, filter_type, filter_value,
+            filter_label, detail_row_count, total_quantity, available_quantity, locked_quantity, in_transit_quantity,
+            boxed_quantity, unboxed_quantity, latest_update_time, rebuild_time
+        )
+        select concat('SOURCE_STOCK_METRIC:', sha2(concat(m.source_stock_group_key, '|', m.filter_type, '|', m.filter_value), 256)) as metric_key,
+               m.source_stock_group_key,
+               m.repository_scope,
+               m.inventory_scope,
+               m.filter_type,
+               m.filter_value,
+               m.filter_label,
+               m.detail_row_count,
+               m.total_quantity,
+               m.available_quantity,
+               m.locked_quantity,
+               m.in_transit_quantity,
+               m.boxed_quantity,
+               m.unboxed_quantity,
+               m.latest_update_time,
+               sysdate() as rebuild_time
+        from (
+            select d.source_stock_group_key, max(d.repository_scope) as repository_scope, max(d.inventory_scope) as inventory_scope,
+                   'INVENTORY_ATTRIBUTE' as filter_type, d.inventory_attribute as filter_value, max(d.inventory_attribute_label) as filter_label,
+                   count(1) as detail_row_count, sum(coalesce(d.total_quantity, 0)) as total_quantity,
+                   sum(coalesce(d.available_quantity, 0)) as available_quantity, sum(coalesce(d.locked_quantity, 0)) as locked_quantity,
+                   sum(coalesce(d.in_transit_quantity, 0)) as in_transit_quantity,
+                   case when sum(case when d.boxed_quantity is not null then 1 else 0 end) = 0 then null else sum(coalesce(d.boxed_quantity, 0)) end as boxed_quantity,
+                   case when sum(case when d.unboxed_quantity is not null then 1 else 0 end) = 0 then null else sum(coalesce(d.unboxed_quantity, 0)) end as unboxed_quantity,
+                   max(d.update_time) as latest_update_time
+            from source_warehouse_stock_detail d
+            <include refid="SourceWarehouseStockAffectedDetailWhere" />
+              and nullif(d.inventory_attribute, '') is not null
+            group by d.source_stock_group_key, d.inventory_attribute
+            union all
+            select d.source_stock_group_key, max(d.repository_scope), max(d.inventory_scope),
+                   'MASTER_WAREHOUSE', d.master_warehouse_name, d.master_warehouse_name,
+                   count(1), sum(coalesce(d.total_quantity, 0)), sum(coalesce(d.available_quantity, 0)),
+                   sum(coalesce(d.locked_quantity, 0)), sum(coalesce(d.in_transit_quantity, 0)),
+                   case when sum(case when d.boxed_quantity is not null then 1 else 0 end) = 0 then null else sum(coalesce(d.boxed_quantity, 0)) end,
+                   case when sum(case when d.unboxed_quantity is not null then 1 else 0 end) = 0 then null else sum(coalesce(d.unboxed_quantity, 0)) end,
+                   max(d.update_time)
+            from source_warehouse_stock_detail d
+            <include refid="SourceWarehouseStockAffectedDetailWhere" />
+              and nullif(d.master_warehouse_name, '') is not null
+            group by d.source_stock_group_key, d.master_warehouse_name
+            union all
+            select d.source_stock_group_key, max(d.repository_scope), max(d.inventory_scope),
+                   'UPSTREAM_WAREHOUSE', d.upstream_warehouse_code, max(d.upstream_warehouse_name),
+                   count(1), sum(coalesce(d.total_quantity, 0)), sum(coalesce(d.available_quantity, 0)),
+                   sum(coalesce(d.locked_quantity, 0)), sum(coalesce(d.in_transit_quantity, 0)),
+                   case when sum(case when d.boxed_quantity is not null then 1 else 0 end) = 0 then null else sum(coalesce(d.boxed_quantity, 0)) end,
+                   case when sum(case when d.unboxed_quantity is not null then 1 else 0 end) = 0 then null else sum(coalesce(d.unboxed_quantity, 0)) end,
+                   max(d.update_time)
+            from source_warehouse_stock_detail d
+            <include refid="SourceWarehouseStockAffectedDetailWhere" />
+              and nullif(d.upstream_warehouse_code, '') is not null
+            group by d.source_stock_group_key, d.upstream_warehouse_code
+            union all
+            select d.source_stock_group_key, max(d.repository_scope), max(d.inventory_scope),
+                   'SYSTEM_WAREHOUSE', d.system_warehouse_code, max(d.system_warehouse_name),
+                   count(1), sum(coalesce(d.total_quantity, 0)), sum(coalesce(d.available_quantity, 0)),
+                   sum(coalesce(d.locked_quantity, 0)), sum(coalesce(d.in_transit_quantity, 0)),
+                   case when sum(case when d.boxed_quantity is not null then 1 else 0 end) = 0 then null else sum(coalesce(d.boxed_quantity, 0)) end,
+                   case when sum(case when d.unboxed_quantity is not null then 1 else 0 end) = 0 then null else sum(coalesce(d.unboxed_quantity, 0)) end,
+                   max(d.update_time)
+            from source_warehouse_stock_detail d
+            <include refid="SourceWarehouseStockAffectedDetailWhere" />
+              and nullif(d.system_warehouse_code, '') is not null
+            group by d.source_stock_group_key, d.system_warehouse_code
+            union all
+            select d.source_stock_group_key, max(d.repository_scope), max(d.inventory_scope),
+                   'SYSTEM_SKU', d.system_sku, max(d.system_sku_name),
+                   count(1), sum(coalesce(d.total_quantity, 0)), sum(coalesce(d.available_quantity, 0)),
+                   sum(coalesce(d.locked_quantity, 0)), sum(coalesce(d.in_transit_quantity, 0)),
+                   case when sum(case when d.boxed_quantity is not null then 1 else 0 end) = 0 then null else sum(coalesce(d.boxed_quantity, 0)) end,
+                   case when sum(case when d.unboxed_quantity is not null then 1 else 0 end) = 0 then null else sum(coalesce(d.unboxed_quantity, 0)) end,
+                   max(d.update_time)
+            from source_warehouse_stock_detail d
+            <include refid="SourceWarehouseStockAffectedDetailWhere" />
+              and nullif(d.system_sku, '') is not null
+            group by d.source_stock_group_key, d.system_sku
+            union all
+            select d.source_stock_group_key, max(d.repository_scope), max(d.inventory_scope),
+                   'CUSTOMER', d.customer_name, d.customer_name,
+                   count(1), sum(coalesce(d.total_quantity, 0)), sum(coalesce(d.available_quantity, 0)),
+                   sum(coalesce(d.locked_quantity, 0)), sum(coalesce(d.in_transit_quantity, 0)),
+                   case when sum(case when d.boxed_quantity is not null then 1 else 0 end) = 0 then null else sum(coalesce(d.boxed_quantity, 0)) end,
+                   case when sum(case when d.unboxed_quantity is not null then 1 else 0 end) = 0 then null else sum(coalesce(d.unboxed_quantity, 0)) end,
+                   max(d.update_time)
+            from source_warehouse_stock_detail d
+            <include refid="SourceWarehouseStockAffectedDetailWhere" />
+              and nullif(d.customer_name, '') is not null
+            group by d.source_stock_group_key, d.customer_name
+            union all
+            select d.source_stock_group_key, max(d.repository_scope), max(d.inventory_scope),
+                   'STATUS', d.status, d.status,
+                   count(1), sum(coalesce(d.total_quantity, 0)), sum(coalesce(d.available_quantity, 0)),
+                   sum(coalesce(d.locked_quantity, 0)), sum(coalesce(d.in_transit_quantity, 0)),
+                   case when sum(case when d.boxed_quantity is not null then 1 else 0 end) = 0 then null else sum(coalesce(d.boxed_quantity, 0)) end,
+                   case when sum(case when d.unboxed_quantity is not null then 1 else 0 end) = 0 then null else sum(coalesce(d.unboxed_quantity, 0)) end,
+                   max(d.update_time)
+            from source_warehouse_stock_detail d
+            <include refid="SourceWarehouseStockAffectedDetailWhere" />
+            group by d.source_stock_group_key, d.status
+            union all
+            select d.source_stock_group_key, max(d.repository_scope), max(d.inventory_scope),
+                   'WAREHOUSE_PAIRING_STATUS', d.warehouse_pairing_status, d.warehouse_pairing_status,
+                   count(1), sum(coalesce(d.total_quantity, 0)), sum(coalesce(d.available_quantity, 0)),
+                   sum(coalesce(d.locked_quantity, 0)), sum(coalesce(d.in_transit_quantity, 0)),
+                   case when sum(case when d.boxed_quantity is not null then 1 else 0 end) = 0 then null else sum(coalesce(d.boxed_quantity, 0)) end,
+                   case when sum(case when d.unboxed_quantity is not null then 1 else 0 end) = 0 then null else sum(coalesce(d.unboxed_quantity, 0)) end,
+                   max(d.update_time)
+            from source_warehouse_stock_detail d
+            <include refid="SourceWarehouseStockAffectedDetailWhere" />
+            group by d.source_stock_group_key, d.warehouse_pairing_status
+            union all
+            select d.source_stock_group_key, max(d.repository_scope), max(d.inventory_scope),
+                   'SKU_PAIRING_STATUS', d.sku_pairing_status, d.sku_pairing_status,
+                   count(1), sum(coalesce(d.total_quantity, 0)), sum(coalesce(d.available_quantity, 0)),
+                   sum(coalesce(d.locked_quantity, 0)), sum(coalesce(d.in_transit_quantity, 0)),
+                   case when sum(case when d.boxed_quantity is not null then 1 else 0 end) = 0 then null else sum(coalesce(d.boxed_quantity, 0)) end,
+                   case when sum(case when d.unboxed_quantity is not null then 1 else 0 end) = 0 then null else sum(coalesce(d.unboxed_quantity, 0)) end,
+                   max(d.update_time)
+            from source_warehouse_stock_detail d
+            <include refid="SourceWarehouseStockAffectedDetailWhere" />
+            group by d.source_stock_group_key, d.sku_pairing_status
+        ) m
+        on duplicate key update
+            repository_scope = values(repository_scope),
+            inventory_scope = values(inventory_scope),
+            filter_label = values(filter_label),
+            detail_row_count = values(detail_row_count),
+            total_quantity = values(total_quantity),
+            available_quantity = values(available_quantity),
+            locked_quantity = values(locked_quantity),
+            in_transit_quantity = values(in_transit_quantity),
+            boxed_quantity = values(boxed_quantity),
+            unboxed_quantity = values(unboxed_quantity),
+            latest_update_time = values(latest_update_time),
+            rebuild_time = values(rebuild_time)
+    </insert>
+
     <insert id="upsertSourceWarehouseStock" parameterType="SourceWarehouseStockItem">
         insert into upstream_system_sku_inventory_snapshot(
             connection_code, upstream_warehouse_code, upstream_warehouse_name, master_sku, master_product_name,
@@ -2076,6 +2799,12 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <if test="inventoryAttribute != null and inventoryAttribute != ''">
             and s.inventory_attribute = #{inventoryAttribute}
         </if>
+        <if test="masterWarehouseName != null and masterWarehouseName != ''">
+            and c.master_warehouse_name = #{masterWarehouseName}
+        </if>
+        <if test="upstreamWarehouseCode != null and upstreamWarehouseCode != ''">
+            and s.upstream_warehouse_code = #{upstreamWarehouseCode}
+        </if>
         <if test="masterWarehouseKeyword != null and masterWarehouseKeyword != ''">
             and c.master_warehouse_name like concat('%', #{masterWarehouseKeyword}, '%')
         </if>
@@ -2115,6 +2844,30 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                 or s.system_sku_name like concat('%', #{keyword}, '%')
                 or s.customer_name like concat('%', #{keyword}, '%')
             )
+        </if>
+        <if test="totalQuantityMin != null">
+            and s.total_quantity &gt;= #{totalQuantityMin}
+        </if>
+        <if test="totalQuantityMax != null">
+            and s.total_quantity &lt;= #{totalQuantityMax}
+        </if>
+        <if test="availableQuantityMin != null">
+            and s.available_quantity &gt;= #{availableQuantityMin}
+        </if>
+        <if test="availableQuantityMax != null">
+            and s.available_quantity &lt;= #{availableQuantityMax}
+        </if>
+        <if test="lockedQuantityMin != null">
+            and s.locked_quantity &gt;= #{lockedQuantityMin}
+        </if>
+        <if test="lockedQuantityMax != null">
+            and s.locked_quantity &lt;= #{lockedQuantityMax}
+        </if>
+        <if test="inTransitQuantityMin != null">
+            and s.in_transit_quantity &gt;= #{inTransitQuantityMin}
+        </if>
+        <if test="inTransitQuantityMax != null">
+            and s.in_transit_quantity &lt;= #{inTransitQuantityMax}
         </if>
         order by s.update_time desc, s.upstream_warehouse_code asc, s.master_sku asc
     </select>
@@ -2168,7 +2921,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <select id="selectSkuPairingById" resultMap="SkuPairingResult">
         select *
         from upstream_system_sku_pairing
-        where sku_pairing_id = #{skuPairingId}
+        where connection_code = #{connectionCode}
+          and sku_pairing_id = #{skuPairingId}
         limit 1
     </select>
 
@@ -2183,7 +2937,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </insert>
 
     <delete id="deleteSkuPairing">
-        delete from upstream_system_sku_pairing where sku_pairing_id = #{skuPairingId}
+        delete from upstream_system_sku_pairing
+        where connection_code = #{connectionCode}
+          and sku_pairing_id = #{skuPairingId}
     </delete>
 
     <insert id="upsertSkuSyncState" parameterType="UpstreamSkuSyncState">

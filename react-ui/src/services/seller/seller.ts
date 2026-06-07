@@ -251,26 +251,14 @@ export async function removeAdminSellerRoles(sellerId: number, roleIds: number[]
 export async function resetAdminSellerAccountPassword(
   sellerId: number,
   sellerAccountId: number,
-  data: Pick<API.Partner.SellerAccountPayload, 'password'>,
+  password: string,
 ) {
   return request<API.Result>(`/api/seller/admin/sellers/${sellerId}/accounts/${sellerAccountId}/resetPwd`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json;charset=UTF-8',
     },
-    data,
-  });
-}
-
-export async function resetAdminSellerAccountDefaultPassword(sellerId: number, sellerAccountId: number) {
-  return request<API.Result>(`/api/seller/admin/sellers/${sellerId}/accounts/${sellerAccountId}/resetDefaultPwd`, {
-    method: 'PUT',
-  });
-}
-
-export async function resetAdminSellerOwnerPassword(sellerId: number) {
-  return request<API.Result>(`/api/seller/admin/sellers/${sellerId}/resetOwnerPwd`, {
-    method: 'PUT',
+    data: { password },
   });
 }
 

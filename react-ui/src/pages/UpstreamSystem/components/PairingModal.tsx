@@ -1,5 +1,5 @@
 import { Form, Input, Modal } from 'antd';
-import { useEffect } from 'react';
+import { type ReactNode, useEffect } from 'react';
 
 interface PairingModalProps {
   open: boolean;
@@ -11,6 +11,8 @@ interface PairingModalProps {
   upstreamLabel: string;
   upstreamValue?: string;
   showCustomerName?: boolean;
+  extraItems?: ReactNode;
+  customPairingItems?: ReactNode;
   onCancel: () => void;
   onSubmit: (values: any) => Promise<boolean>;
 }
@@ -25,6 +27,8 @@ export default function PairingModal({
   upstreamLabel,
   upstreamValue,
   showCustomerName,
+  extraItems,
+  customPairingItems,
   onCancel,
   onSubmit,
 }: PairingModalProps) {
@@ -54,20 +58,25 @@ export default function PairingModal({
         <Form.Item label={upstreamLabel}>
           <Input value={upstreamValue} disabled />
         </Form.Item>
-        <Form.Item
-          name={codeName}
-          label={codeLabel}
-          rules={[{ required: true, message: `请输入${codeLabel}` }]}
-        >
-          <Input maxLength={128} />
-        </Form.Item>
-        <Form.Item
-          name={nameName}
-          label={nameLabel}
-          rules={[{ required: true, message: `请输入${nameLabel}` }]}
-        >
-          <Input maxLength={255} />
-        </Form.Item>
+        {extraItems}
+        {customPairingItems || (
+          <>
+            <Form.Item
+              name={codeName}
+              label={codeLabel}
+              rules={[{ required: true, message: `请输入${codeLabel}` }]}
+            >
+              <Input maxLength={128} />
+            </Form.Item>
+            <Form.Item
+              name={nameName}
+              label={nameLabel}
+              rules={[{ required: true, message: `请输入${nameLabel}` }]}
+            >
+              <Input maxLength={255} />
+            </Form.Item>
+          </>
+        )}
         {showCustomerName ? (
           <Form.Item name="customerName" label="客户名称">
             <Input maxLength={255} />

@@ -1,4 +1,5 @@
 import { checkRole, matchPermission } from './utils/permission';
+import { getRemoteMenuStorageKey, REMOTE_MENU_SCOPES } from './utils/remoteMenuStorage';
 /**
  * @see https://umijs.org/zh-CN/plugins/plugin-access
  * */
@@ -114,6 +115,6 @@ export function getTokenExpireTime() {
 export function clearSessionToken() {
   clearTerminalSessionToken('admin');
   if (typeof sessionStorage !== 'undefined') {
-    sessionStorage.removeItem('admin_remote_menu');
+    REMOTE_MENU_SCOPES.forEach((scope) => sessionStorage.removeItem(getRemoteMenuStorageKey(scope)));
   }
 }

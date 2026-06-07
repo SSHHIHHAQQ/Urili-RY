@@ -35,6 +35,9 @@ RuoYi-Vue/sql/20260607_source_product_read_model.sql
 - `source_product_group` 承载来源 SKU 组。
 - `source_product_dimension_group` 承载来源商品库列表行。
 - `source_product_warehouse_detail` 承载来源 SKU 组对应的仓库明细。
+- SQL 已增加源表/源列前置校验：确认 `upstream_system_sku_candidate` / `upstream_system_connection` / `upstream_system_sku_pairing` 及关键列存在后，才允许创建、定向删除和回填读模型。
+- `source_product_warehouse_detail` 唯一键包含 `source_dimension_group_key`，避免同一连接和来源 SKU 的多尺寸候选行互相覆盖。
+- `source_product_group.search_text` / `source_product_dimension_group.search_text` 中的 `group_concat` 使用 `order by`，避免同批源数据重放后摘要顺序抖动。
 
 ### 2. 列表和详情接口切换读模型
 
@@ -129,6 +132,38 @@ elapsedMs=2089
 - 清空并回填 `OFFICIAL_MASTER` 范围的读模型数据。
 - 未修改 `upstream_system_sku_candidate`、`upstream_system_sku_pairing`、`upstream_system_connection` 源表数据。
 - 未执行本地 Docker 数据库。
+
+## SQL 合同收口
+
+后续已补充专项 replay-safe 合同：
+
+- `RuoYi-Vue/ruoyi-system/src/test/java/com/ruoyi/system/architecture/SqlExecutionGuardContractTest.java`
+  - `sourceProductReadModelMustStayReplaySafeAndScoped()`
+
+合同锁定：
+
+- `20260607_source_product_read_model.sql` 必须显式登记到高影响 SQL guard 清单。
+- 确认 token 必须早于首个高影响 DDL/DML。
+- 必须保留源表/源列前置校验，且校验必须早于创建、删除和回填读模型。
+- 必须保留三张 `create table if not exists` 读模型表。
+- 必须保留 `repository_scope = 'OFFICIAL_MASTER'` 定向删除和回填。
+- 必须禁止 `truncate table`、`drop table`、无作用域 `delete from source_product_*`。
+- 必须保留包含 `source_dimension_group_key` 的 `source_product_warehouse_detail` 唯一键。
+- 必须保留有序 `search_text` 聚合。
+
+验证命令：
+
+```powershell
+cd E:\Urili-Ruoyi\RuoYi-Vue
+mvn -pl ruoyi-system "-Dtest=SqlExecutionGuardContractTest" test
+```
+
+结果：通过，`SqlExecutionGuardContractTest` 31 个测试通过。
+
+未变更边界：
+
+- 本次合同收口未重新执行远程 SQL。
+- 本次合同收口未解决读模型 staging/swap 原子切换策略；当前增量脚本仍是确认后定向刷新正式读模型，后续如要进一步降低回填中途失败窗口，需要单独设计。
 
 ## 数据回填核对
 

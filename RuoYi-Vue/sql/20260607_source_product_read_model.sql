@@ -17,10 +17,161 @@ begin
   end if;
 end//
 
+drop procedure if exists assert_table_exists//
+create procedure assert_table_exists(in p_table varchar(64), in p_message varchar(255))
+begin
+  if not exists (
+    select 1
+    from information_schema.tables
+    where table_schema = database()
+      and table_name = p_table
+  ) then
+    signal sqlstate '45000' set message_text = p_message;
+  end if;
+end//
+
+drop procedure if exists assert_column_exists//
+create procedure assert_column_exists(in p_table varchar(64), in p_column varchar(64), in p_message varchar(255))
+begin
+  if not exists (
+    select 1
+    from information_schema.columns
+    where table_schema = database()
+      and table_name = p_table
+      and column_name = p_column
+  ) then
+    signal sqlstate '45000' set message_text = p_message;
+  end if;
+end//
+
 delimiter ;
 
 call assert_source_product_read_model_confirmed();
+call assert_table_exists('upstream_system_sku_candidate',
+  'source product read model requires upstream_system_sku_candidate');
+call assert_table_exists('upstream_system_connection',
+  'source product read model requires upstream_system_connection');
+call assert_table_exists('upstream_system_sku_pairing',
+  'source product read model requires upstream_system_sku_pairing');
+
+call assert_column_exists('upstream_system_sku_candidate', 'connection_code',
+  'source product read model requires upstream_system_sku_candidate.connection_code');
+call assert_column_exists('upstream_system_sku_candidate', 'master_sku',
+  'source product read model requires upstream_system_sku_candidate.master_sku');
+call assert_column_exists('upstream_system_sku_candidate', 'master_product_name',
+  'source product read model requires upstream_system_sku_candidate.master_product_name');
+call assert_column_exists('upstream_system_sku_candidate', 'status',
+  'source product read model requires upstream_system_sku_candidate.status');
+call assert_column_exists('upstream_system_sku_candidate', 'update_time',
+  'source product read model requires upstream_system_sku_candidate.update_time');
+call assert_column_exists('upstream_system_sku_candidate', 'search_text',
+  'source product read model requires upstream_system_sku_candidate.search_text');
+call assert_column_exists('upstream_system_sku_candidate', 'product_alias_name',
+  'source product read model requires upstream_system_sku_candidate.product_alias_name');
+call assert_column_exists('upstream_system_sku_candidate', 'approve_status',
+  'source product read model requires upstream_system_sku_candidate.approve_status');
+call assert_column_exists('upstream_system_sku_candidate', 'product_type',
+  'source product read model requires upstream_system_sku_candidate.product_type');
+call assert_column_exists('upstream_system_sku_candidate', 'product_description',
+  'source product read model requires upstream_system_sku_candidate.product_description');
+call assert_column_exists('upstream_system_sku_candidate', 'image_url',
+  'source product read model requires upstream_system_sku_candidate.image_url');
+call assert_column_exists('upstream_system_sku_candidate', 'main_code',
+  'source product read model requires upstream_system_sku_candidate.main_code');
+call assert_column_exists('upstream_system_sku_candidate', 'other_code',
+  'source product read model requires upstream_system_sku_candidate.other_code');
+call assert_column_exists('upstream_system_sku_candidate', 'fnsku',
+  'source product read model requires upstream_system_sku_candidate.fnsku');
+call assert_column_exists('upstream_system_sku_candidate', 'country_of_origin_name',
+  'source product read model requires upstream_system_sku_candidate.country_of_origin_name');
+call assert_column_exists('upstream_system_sku_candidate', 'currency_code',
+  'source product read model requires upstream_system_sku_candidate.currency_code');
+call assert_column_exists('upstream_system_sku_candidate', 'customhouse_code',
+  'source product read model requires upstream_system_sku_candidate.customhouse_code');
+call assert_column_exists('upstream_system_sku_candidate', 'dangerous_cargo',
+  'source product read model requires upstream_system_sku_candidate.dangerous_cargo');
+call assert_column_exists('upstream_system_sku_candidate', 'declare_name_cn',
+  'source product read model requires upstream_system_sku_candidate.declare_name_cn');
+call assert_column_exists('upstream_system_sku_candidate', 'declare_name_en',
+  'source product read model requires upstream_system_sku_candidate.declare_name_en');
+call assert_column_exists('upstream_system_sku_candidate', 'declare_price',
+  'source product read model requires upstream_system_sku_candidate.declare_price');
+call assert_column_exists('upstream_system_sku_candidate', 'product_height',
+  'source product read model requires upstream_system_sku_candidate.product_height');
+call assert_column_exists('upstream_system_sku_candidate', 'product_height_bs',
+  'source product read model requires upstream_system_sku_candidate.product_height_bs');
+call assert_column_exists('upstream_system_sku_candidate', 'product_length',
+  'source product read model requires upstream_system_sku_candidate.product_length');
+call assert_column_exists('upstream_system_sku_candidate', 'product_length_bs',
+  'source product read model requires upstream_system_sku_candidate.product_length_bs');
+call assert_column_exists('upstream_system_sku_candidate', 'product_weight',
+  'source product read model requires upstream_system_sku_candidate.product_weight');
+call assert_column_exists('upstream_system_sku_candidate', 'product_weight_bs',
+  'source product read model requires upstream_system_sku_candidate.product_weight_bs');
+call assert_column_exists('upstream_system_sku_candidate', 'product_width',
+  'source product read model requires upstream_system_sku_candidate.product_width');
+call assert_column_exists('upstream_system_sku_candidate', 'product_width_bs',
+  'source product read model requires upstream_system_sku_candidate.product_width_bs');
+call assert_column_exists('upstream_system_sku_candidate', 'wms_height',
+  'source product read model requires upstream_system_sku_candidate.wms_height');
+call assert_column_exists('upstream_system_sku_candidate', 'wms_height_bs',
+  'source product read model requires upstream_system_sku_candidate.wms_height_bs');
+call assert_column_exists('upstream_system_sku_candidate', 'wms_length',
+  'source product read model requires upstream_system_sku_candidate.wms_length');
+call assert_column_exists('upstream_system_sku_candidate', 'wms_length_bs',
+  'source product read model requires upstream_system_sku_candidate.wms_length_bs');
+call assert_column_exists('upstream_system_sku_candidate', 'wms_weight',
+  'source product read model requires upstream_system_sku_candidate.wms_weight');
+call assert_column_exists('upstream_system_sku_candidate', 'wms_weight_bs',
+  'source product read model requires upstream_system_sku_candidate.wms_weight_bs');
+call assert_column_exists('upstream_system_sku_candidate', 'wms_width',
+  'source product read model requires upstream_system_sku_candidate.wms_width');
+call assert_column_exists('upstream_system_sku_candidate', 'wms_width_bs',
+  'source product read model requires upstream_system_sku_candidate.wms_width_bs');
+call assert_column_exists('upstream_system_sku_candidate', 'cat1_name',
+  'source product read model requires upstream_system_sku_candidate.cat1_name');
+call assert_column_exists('upstream_system_sku_candidate', 'cat2_name',
+  'source product read model requires upstream_system_sku_candidate.cat2_name');
+call assert_column_exists('upstream_system_sku_candidate', 'cat3_name',
+  'source product read model requires upstream_system_sku_candidate.cat3_name');
+call assert_column_exists('upstream_system_sku_candidate', 'platform_sku_info_json',
+  'source product read model requires upstream_system_sku_candidate.platform_sku_info_json');
+call assert_column_exists('upstream_system_sku_candidate', 'brazil_tax_info_json',
+  'source product read model requires upstream_system_sku_candidate.brazil_tax_info_json');
+call assert_column_exists('upstream_system_sku_candidate', 'source_payload_hash',
+  'source product read model requires upstream_system_sku_candidate.source_payload_hash');
+call assert_column_exists('upstream_system_sku_candidate', 'wms_payload_hash',
+  'source product read model requires upstream_system_sku_candidate.wms_payload_hash');
+call assert_column_exists('upstream_system_sku_candidate', 'sync_batch_id',
+  'source product read model requires upstream_system_sku_candidate.sync_batch_id');
+call assert_column_exists('upstream_system_sku_candidate', 'first_seen_time',
+  'source product read model requires upstream_system_sku_candidate.first_seen_time');
+call assert_column_exists('upstream_system_sku_candidate', 'last_seen_time',
+  'source product read model requires upstream_system_sku_candidate.last_seen_time');
+
+call assert_column_exists('upstream_system_connection', 'connection_code',
+  'source product read model requires upstream_system_connection.connection_code');
+call assert_column_exists('upstream_system_connection', 'system_kind',
+  'source product read model requires upstream_system_connection.system_kind');
+call assert_column_exists('upstream_system_connection', 'master_warehouse_name',
+  'source product read model requires upstream_system_connection.master_warehouse_name');
+
+call assert_column_exists('upstream_system_sku_pairing', 'connection_code',
+  'source product read model requires upstream_system_sku_pairing.connection_code');
+call assert_column_exists('upstream_system_sku_pairing', 'master_sku',
+  'source product read model requires upstream_system_sku_pairing.master_sku');
+call assert_column_exists('upstream_system_sku_pairing', 'sku_pairing_id',
+  'source product read model requires upstream_system_sku_pairing.sku_pairing_id');
+call assert_column_exists('upstream_system_sku_pairing', 'system_sku',
+  'source product read model requires upstream_system_sku_pairing.system_sku');
+call assert_column_exists('upstream_system_sku_pairing', 'system_sku_name',
+  'source product read model requires upstream_system_sku_pairing.system_sku_name');
+call assert_column_exists('upstream_system_sku_pairing', 'customer_name',
+  'source product read model requires upstream_system_sku_pairing.customer_name');
+
 drop procedure if exists assert_source_product_read_model_confirmed;
+drop procedure if exists assert_table_exists;
+drop procedure if exists assert_column_exists;
 
 create table if not exists source_product_group (
   source_sku_group_key    varchar(96)   not null                 comment '稳定来源SKU组key',
@@ -153,7 +304,8 @@ create table if not exists source_product_warehouse_detail (
   update_time                datetime      not null                 comment '更新时间',
   rebuild_time               datetime      not null                 comment '读模型构建时间',
   primary key (id),
-  unique key uk_source_product_warehouse_row (repository_scope, connection_code, master_sku),
+  unique key uk_source_product_warehouse_row
+    (repository_scope, connection_code, master_sku, source_dimension_group_key),
   key idx_source_product_warehouse_sku_group (source_sku_group_key),
   key idx_source_product_warehouse_dimension_group (source_dimension_group_key),
   key idx_source_product_warehouse_master_sku (repository_scope, master_sku),
@@ -162,11 +314,15 @@ create table if not exists source_product_warehouse_detail (
 
 set group_concat_max_len = 1048576;
 
-delete from source_product_warehouse_detail where repository_scope = 'OFFICIAL_MASTER';
-delete from source_product_dimension_group where repository_scope = 'OFFICIAL_MASTER';
-delete from source_product_group where repository_scope = 'OFFICIAL_MASTER';
+drop temporary table if exists tmp_source_product_group;
+drop temporary table if exists tmp_source_product_dimension_group;
+drop temporary table if exists tmp_source_product_warehouse_detail;
 
-insert into source_product_group(
+create temporary table tmp_source_product_group like source_product_group;
+create temporary table tmp_source_product_dimension_group like source_product_dimension_group;
+create temporary table tmp_source_product_warehouse_detail like source_product_warehouse_detail;
+
+insert into tmp_source_product_group(
   source_sku_group_key, repository_scope, master_sku, master_product_name, system_kind,
   source_connection_codes, source_warehouse_names, warehouse_count, source_row_count,
   pairing_status, status, latest_update_time, search_text, rebuild_time
@@ -195,10 +351,10 @@ select concat('OFFICIAL_MASTER:', sha2(concat(
        concat_ws(' ',
          c.master_sku,
          c.master_product_name,
-         coalesce(group_concat(distinct conn.master_warehouse_name separator ' '), ''),
-         coalesce(group_concat(distinct nullif(p.system_sku, '') separator ' '), ''),
-         coalesce(group_concat(distinct nullif(p.system_sku_name, '') separator ' '), ''),
-         coalesce(group_concat(distinct nullif(p.customer_name, '') separator ' '), ''),
+         coalesce(group_concat(distinct conn.master_warehouse_name order by conn.master_warehouse_name separator ' '), ''),
+         coalesce(group_concat(distinct nullif(p.system_sku, '') order by p.system_sku separator ' '), ''),
+         coalesce(group_concat(distinct nullif(p.system_sku_name, '') order by p.system_sku_name separator ' '), ''),
+         coalesce(group_concat(distinct nullif(p.customer_name, '') order by p.customer_name separator ' '), ''),
          coalesce(max(c.search_text), '')
        ) as search_text,
        sysdate() as rebuild_time
@@ -222,7 +378,7 @@ on duplicate key update
   search_text = values(search_text),
   rebuild_time = values(rebuild_time);
 
-insert into source_product_dimension_group(
+insert into tmp_source_product_dimension_group(
   source_dimension_group_key, source_sku_group_key, repository_scope, system_kind,
   source_connection_codes, source_warehouse_names, master_warehouse_name, warehouse_count, source_row_count,
   master_sku, master_product_name, product_alias_name, approve_status, product_type, product_description,
@@ -311,11 +467,11 @@ select concat(
        concat_ws(' ',
          c.master_sku,
          c.master_product_name,
-         coalesce(group_concat(distinct c.connection_code separator ' '), ''),
-         coalesce(group_concat(distinct conn.master_warehouse_name separator ' '), ''),
-         coalesce(group_concat(distinct nullif(p.system_sku, '') separator ' '), ''),
-         coalesce(group_concat(distinct nullif(p.system_sku_name, '') separator ' '), ''),
-         coalesce(group_concat(distinct nullif(p.customer_name, '') separator ' '), ''),
+         coalesce(group_concat(distinct c.connection_code order by c.connection_code separator ' '), ''),
+         coalesce(group_concat(distinct conn.master_warehouse_name order by conn.master_warehouse_name separator ' '), ''),
+         coalesce(group_concat(distinct nullif(p.system_sku, '') order by p.system_sku separator ' '), ''),
+         coalesce(group_concat(distinct nullif(p.system_sku_name, '') order by p.system_sku_name separator ' '), ''),
+         coalesce(group_concat(distinct nullif(p.customer_name, '') order by p.customer_name separator ' '), ''),
          coalesce(max(c.search_text), '')
        ) as search_text,
        max(c.sync_batch_id) as sync_batch_id,
@@ -391,7 +547,7 @@ on duplicate key update
   customer_name = values(customer_name),
   rebuild_time = values(rebuild_time);
 
-insert into source_product_warehouse_detail(
+insert into tmp_source_product_warehouse_detail(
   source_sku_group_key, source_dimension_group_key, repository_scope, connection_code,
   master_warehouse_name, system_kind, master_sku, master_product_name,
   product_height, product_height_bs, product_length, product_length_bs,
@@ -501,3 +657,41 @@ on duplicate key update
   last_seen_time = values(last_seen_time),
   update_time = values(update_time),
   rebuild_time = values(rebuild_time);
+
+start transaction;
+
+delete from source_product_warehouse_detail where repository_scope = 'OFFICIAL_MASTER';
+delete from source_product_dimension_group where repository_scope = 'OFFICIAL_MASTER';
+delete from source_product_group where repository_scope = 'OFFICIAL_MASTER';
+
+insert into source_product_group
+select * from tmp_source_product_group;
+
+insert into source_product_dimension_group
+select * from tmp_source_product_dimension_group;
+
+insert into source_product_warehouse_detail(
+  source_sku_group_key, source_dimension_group_key, repository_scope, connection_code,
+  master_warehouse_name, system_kind, master_sku, master_product_name,
+  product_height, product_height_bs, product_length, product_length_bs,
+  product_weight, product_weight_bs, product_width, product_width_bs,
+  wms_height, wms_height_bs, wms_length, wms_length_bs,
+  wms_weight, wms_weight_bs, wms_width, wms_width_bs,
+  status, pairing_status, sku_pairing_id, system_sku, system_sku_name, customer_name,
+  source_payload_hash, wms_payload_hash, first_seen_time, last_seen_time, update_time, rebuild_time
+)
+select source_sku_group_key, source_dimension_group_key, repository_scope, connection_code,
+       master_warehouse_name, system_kind, master_sku, master_product_name,
+       product_height, product_height_bs, product_length, product_length_bs,
+       product_weight, product_weight_bs, product_width, product_width_bs,
+       wms_height, wms_height_bs, wms_length, wms_length_bs,
+       wms_weight, wms_weight_bs, wms_width, wms_width_bs,
+       status, pairing_status, sku_pairing_id, system_sku, system_sku_name, customer_name,
+       source_payload_hash, wms_payload_hash, first_seen_time, last_seen_time, update_time, rebuild_time
+from tmp_source_product_warehouse_detail;
+
+commit;
+
+drop temporary table if exists tmp_source_product_warehouse_detail;
+drop temporary table if exists tmp_source_product_dimension_group;
+drop temporary table if exists tmp_source_product_group;

@@ -58,6 +58,8 @@ public interface BuyerPortalPermissionMapper
 
     public int countBuyerRolesByIds(@Param("buyerId") Long buyerId, @Param("roleIds") Long[] roleIds);
 
+    public int countBuyerMenusByIds(@Param("menuIds") Long[] menuIds);
+
     public int deleteBuyerAccountRoles(@Param("buyerId") Long buyerId, @Param("accountId") Long accountId);
 
     public int batchBuyerAccountRoles(@Param("buyerId") Long buyerId, @Param("accountId") Long accountId,

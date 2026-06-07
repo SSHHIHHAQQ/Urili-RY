@@ -1,8 +1,10 @@
 package com.ruoyi.integration.mapper;
 
 import java.util.List;
+import com.ruoyi.integration.domain.IntegrationOption;
 import org.apache.ibatis.annotations.Param;
 import com.ruoyi.integration.domain.SourceProductItem;
+import com.ruoyi.integration.domain.SourceWarehouseStockGroupItem;
 import com.ruoyi.integration.domain.SourceWarehouseStockItem;
 import com.ruoyi.integration.domain.UpstreamLogisticsChannelPairing;
 import com.ruoyi.integration.domain.UpstreamLogisticsChannelSyncItem;
@@ -91,7 +93,8 @@ public interface UpstreamSystemMapper
 
     int insertWarehousePairing(UpstreamWarehousePairing pairing);
 
-    int deleteWarehousePairing(@Param("warehousePairingId") Long warehousePairingId);
+    int deleteWarehousePairing(@Param("connectionCode") String connectionCode,
+        @Param("warehousePairingId") Long warehousePairingId);
 
     int upsertLogisticsChannelSyncItem(UpstreamLogisticsChannelSyncItem item);
 
@@ -118,13 +121,14 @@ public interface UpstreamSystemMapper
         @Param("status") String status);
 
     UpstreamLogisticsChannelSyncItem selectLogisticsChannelSyncItem(@Param("connectionCode") String connectionCode,
-        @Param("channelCode") String channelCode);
+        @Param("warehouseCode") String warehouseCode, @Param("channelCode") String channelCode);
 
     List<UpstreamLogisticsChannelPairing> selectLogisticsChannelPairingList(@Param("connectionCode") String connectionCode);
 
     int insertLogisticsChannelPairing(UpstreamLogisticsChannelPairing pairing);
 
-    int deleteLogisticsChannelPairing(@Param("logisticsChannelPairingId") Long logisticsChannelPairingId);
+    int deleteLogisticsChannelPairing(@Param("connectionCode") String connectionCode,
+        @Param("logisticsChannelPairingId") Long logisticsChannelPairingId);
 
     int upsertSkuSyncItem(UpstreamSkuSyncItem item);
 
@@ -209,6 +213,34 @@ public interface UpstreamSystemMapper
 
     List<SourceWarehouseStockItem> selectSourceWarehouseStockList(SourceWarehouseStockQuery query);
 
+    long countSourceWarehouseStockGroupList(SourceWarehouseStockQuery query);
+
+    List<SourceWarehouseStockGroupItem> selectSourceWarehouseStockGroupList(SourceWarehouseStockQuery query);
+
+    List<SourceWarehouseStockItem> selectSourceWarehouseStockGroupDetailList(SourceWarehouseStockQuery query);
+
+    List<IntegrationOption> selectSourceWarehouseStockMasterWarehouseOptions(SourceWarehouseStockQuery query);
+
+    List<IntegrationOption> selectSourceWarehouseStockUpstreamWarehouseOptions(SourceWarehouseStockQuery query);
+
+    int deleteAllSourceWarehouseStockFilterMetrics();
+
+    int deleteAllSourceWarehouseStockGroups();
+
+    int deleteAllSourceWarehouseStockDetails();
+
+    int deleteSourceWarehouseStockFilterMetricsByConnection(@Param("connectionCode") String connectionCode);
+
+    int deleteSourceWarehouseStockGroupsByConnection(@Param("connectionCode") String connectionCode);
+
+    int deleteSourceWarehouseStockDetailsByConnection(@Param("connectionCode") String connectionCode);
+
+    int insertAllSourceWarehouseStockDetails(@Param("connectionCode") String connectionCode);
+
+    int insertAllSourceWarehouseStockGroups(@Param("connectionCode") String connectionCode);
+
+    int insertAllSourceWarehouseStockFilterMetrics(@Param("connectionCode") String connectionCode);
+
     int upsertInventorySyncState(UpstreamInventorySyncState state);
 
     UpstreamInventorySyncState selectInventorySyncState(@Param("connectionCode") String connectionCode);
@@ -217,11 +249,12 @@ public interface UpstreamSystemMapper
 
     List<UpstreamSkuPairing> selectSkuPairingList(@Param("connectionCode") String connectionCode);
 
-    UpstreamSkuPairing selectSkuPairingById(@Param("skuPairingId") Long skuPairingId);
+    UpstreamSkuPairing selectSkuPairingById(@Param("connectionCode") String connectionCode,
+        @Param("skuPairingId") Long skuPairingId);
 
     int insertSkuPairing(UpstreamSkuPairing pairing);
 
-    int deleteSkuPairing(@Param("skuPairingId") Long skuPairingId);
+    int deleteSkuPairing(@Param("connectionCode") String connectionCode, @Param("skuPairingId") Long skuPairingId);
 
     int upsertSkuSyncState(UpstreamSkuSyncState state);
 

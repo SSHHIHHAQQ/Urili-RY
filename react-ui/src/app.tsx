@@ -28,6 +28,16 @@ function redirectToLogin(includePortal = false) {
   history.replace(`${PageEnum.LOGIN}?redirect=${encodeURIComponent(redirect)}`);
 }
 
+function redirectToPortalLogin(portalTerminal: NonNullable<ReturnType<typeof getPortalTerminalFromApiUrl>>) {
+  const { pathname, search, hash } = history.location;
+  const loginPath = getPortalLoginPath(portalTerminal);
+  if (pathname === loginPath) {
+    return;
+  }
+  const redirect = `${pathname}${search || ''}${hash || ''}`;
+  history.replace(`${loginPath}?redirect=${encodeURIComponent(redirect)}`);
+}
+
 function clearAdminSession() {
   clearSessionToken();
   setRemoteMenu(null);
@@ -49,7 +59,7 @@ function handleUnauthorizedResponse(requestUrl?: string) {
   const portalTerminal = getPortalTerminalFromApiUrl(requestUrl);
   if (portalTerminal) {
     clearTerminalSessionToken(portalTerminal);
-    history.replace(getPortalLoginPath(portalTerminal));
+    redirectToPortalLogin(portalTerminal);
     return;
   }
   clearAdminSession();
@@ -299,6 +309,7 @@ export const request: any = {
     (response: any) => {
       if (isUnauthorizedCode(getResponseCode(response?.data))) {
         handleUnauthorizedResponse(response?.config?.url);
+        return Promise.reject(response);
       }
       return response;
     },

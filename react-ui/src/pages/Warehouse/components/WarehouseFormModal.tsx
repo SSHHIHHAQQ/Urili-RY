@@ -1,5 +1,4 @@
-import { ModalForm, type ProFormInstance } from '@ant-design/pro-components';
-import { useEffect, useRef } from 'react';
+import { ModalForm } from '@ant-design/pro-components';
 import WarehouseFields from './WarehouseFields';
 
 interface WarehouseFormModalProps {
@@ -25,22 +24,15 @@ export default function WarehouseFormModal({
   onOpenChange,
   onSubmit,
 }: WarehouseFormModalProps) {
-  const formRef = useRef<ProFormInstance<API.Warehouse.Warehouse> | undefined>(undefined);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue(current || { countryCode: 'US', status: '0' });
-  }, [current, open]);
+  const initialValues = current || { countryCode: 'US', status: '0' };
 
   return (
     <ModalForm<API.Warehouse.Warehouse>
-      formRef={formRef}
+      key={current?.warehouseId || 'warehouse-create'}
       title={title}
       open={open}
       width={760}
+      initialValues={initialValues}
       modalProps={{ destroyOnClose: true }}
       onOpenChange={onOpenChange}
       onFinish={async (values) =>

@@ -19,7 +19,7 @@ import org.junit.Test;
 public class StandalonePartnerSeedMenuContractTest
 {
     @Test
-    public void standalonePartnerSeedMustKeepClosedMenuTreeAndDirectLoginButtons() throws IOException
+    public void standalonePartnerSeedMustKeepDependentMenuTreeAndDirectLoginButtons() throws IOException
     {
         Path backendRoot = findBackendRoot();
         Path seed = backendRoot.resolve("sql/20260606_admin_partner_page_direct_login_seed.sql");
@@ -32,8 +32,13 @@ public class StandalonePartnerSeedMenuContractTest
                 "create procedure assert_sys_menu_signature_available");
         requireContains(violations, seed.getFileName().toString(), sql,
                 "signal sqlstate '45000' set message_text = p_message");
+        requireContains(violations, seed.getFileName().toString(), sql,
+                "create procedure assert_partner_root_menu_exists");
+        requireContains(violations, seed.getFileName().toString(), sql,
+                "admin direct-login seed requires top_menu_seed partner root 2010");
+        requireContains(violations, seed.getFileName().toString(), sql,
+                "call assert_partner_root_menu_exists();");
 
-        requireRow(rows, 2010L, "主体管理", 0L, "partner", null, "PartnerManagement", "", violations);
         requireRow(rows, 2011L, "卖家管理", 2010L, "seller", "Seller/index", "Seller",
                 "seller:admin:list", violations);
         requireRow(rows, 2012L, "买家管理", 2010L, "buyer", "Buyer/index", "Buyer",
@@ -43,17 +48,13 @@ public class StandalonePartnerSeedMenuContractTest
         requireRow(rows, 2215L, "买家免密登录", 2012L, "#", "", "", "buyer:admin:directLogin",
                 violations);
         requireContains(violations, seed.getFileName().toString(), sql,
-                "call assert_sys_menu_slot(2010, 'partner', '', 'PartnerManagement', ''");
+                "call assert_sys_menu_slot(2011, 2010, 'C', 'seller', 'Seller/index', 'Seller', 'seller:admin:list'");
         requireContains(violations, seed.getFileName().toString(), sql,
-                "call assert_sys_menu_slot(2011, 'seller', 'Seller/index', 'Seller', 'seller:admin:list'");
+                "call assert_sys_menu_slot(2012, 2010, 'C', 'buyer', 'Buyer/index', 'Buyer', 'buyer:admin:list'");
         requireContains(violations, seed.getFileName().toString(), sql,
-                "call assert_sys_menu_slot(2012, 'buyer', 'Buyer/index', 'Buyer', 'buyer:admin:list'");
+                "call assert_sys_menu_slot(2205, 2011, 'F', '#', '', '', 'seller:admin:directLogin'");
         requireContains(violations, seed.getFileName().toString(), sql,
-                "call assert_sys_menu_slot(2205, '#', '', '', 'seller:admin:directLogin'");
-        requireContains(violations, seed.getFileName().toString(), sql,
-                "call assert_sys_menu_slot(2215, '#', '', '', 'buyer:admin:directLogin'");
-        requireContains(violations, seed.getFileName().toString(), sql,
-                "call assert_sys_menu_signature_available(2010, 'partner', '', 'PartnerManagement', ''");
+                "call assert_sys_menu_slot(2215, 2012, 'F', '#', '', '', 'buyer:admin:directLogin'");
         requireContains(violations, seed.getFileName().toString(), sql,
                 "call assert_sys_menu_signature_available(2011, 'seller', 'Seller/index', 'Seller', 'seller:admin:list'");
         requireContains(violations, seed.getFileName().toString(), sql,
@@ -62,6 +63,12 @@ public class StandalonePartnerSeedMenuContractTest
                 "call assert_sys_menu_signature_available(2205, '#', '', '', 'seller:admin:directLogin'");
         requireContains(violations, seed.getFileName().toString(), sql,
                 "call assert_sys_menu_signature_available(2215, '#', '', '', 'buyer:admin:directLogin'");
+        requireNotContains(violations, seed.getFileName().toString(), sql,
+                "(2010, '主体管理', 0, 5, 'partner', null, '', 'PartnerManagement'");
+        requireNotContains(violations, seed.getFileName().toString(), sql,
+                "call assert_sys_menu_slot(2010");
+        requireNotContains(violations, seed.getFileName().toString(), sql,
+                "call assert_sys_menu_signature_available(2010");
 
         for (MenuSeedRow row : rows.values())
         {
@@ -74,7 +81,7 @@ public class StandalonePartnerSeedMenuContractTest
 
         if (!violations.isEmpty())
         {
-            fail("standalone partner menu seed must keep a closed, readable sys_menu tree:\n"
+            fail("standalone partner menu seed must keep a readable sys_menu tree under top-owned 2010:\n"
                     + String.join("\n", violations));
         }
     }
@@ -331,6 +338,10 @@ public class StandalonePartnerSeedMenuContractTest
                 violations.add("standalone seed has a parent cycle at menu_id " + current.id);
                 return;
             }
+            if (current.parentId == 2010L)
+            {
+                return;
+            }
             current = rows.get(current.parentId);
             if (current == null)
             {
@@ -382,6 +393,14 @@ public class StandalonePartnerSeedMenuContractTest
         if (!source.contains(expected))
         {
             violations.add(fileName + " must contain: " + expected);
+        }
+    }
+
+    private void requireNotContains(List<String> violations, String fileName, String source, String unexpected)
+    {
+        if (source.contains(unexpected))
+        {
+            violations.add(fileName + " must not contain: " + unexpected);
         }
     }
 

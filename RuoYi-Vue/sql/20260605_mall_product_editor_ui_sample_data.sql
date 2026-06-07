@@ -17,16 +17,32 @@ begin
   end if;
 end//
 
+drop procedure if exists add_column_if_missing//
+create procedure add_column_if_missing(in p_table varchar(64), in p_column varchar(64), in p_definition text)
+begin
+  if not exists (
+    select 1
+    from information_schema.columns
+    where table_schema = database()
+      and table_name = p_table
+      and column_name = p_column
+  ) then
+    set @ddl = concat('alter table ', p_table, ' add column ', p_column, ' ', p_definition);
+    prepare stmt from @ddl;
+    execute stmt;
+    deallocate prepare stmt;
+  end if;
+end//
+
 delimiter ;
 
 call assert_mall_product_editor_ui_sample_data_confirmed();
 drop procedure if exists assert_mall_product_editor_ui_sample_data_confirmed;
 
-alter table product_spu
-  add column product_name_en varchar(255) not null default '' comment '商品英文标题' after product_name;
-
-alter table product_spu
-  add column detail_content text comment '商品详情文本' after main_image_url;
+call add_column_if_missing('product_spu', 'product_name_en',
+  'varchar(255) not null default '''' comment ''商品英文标题'' after product_name');
+call add_column_if_missing('product_spu', 'detail_content',
+  'text comment ''商品详情文本'' after main_image_url');
 
 update product_spu
 set product_name_en = product_name
@@ -205,3 +221,5 @@ select 'SKU', s.sku_id, s.spu_id, s.sku_id, s.sku_image_url, 'SKU_MAIN', s.sort_
 from product_sku s
 where s.system_sku_code like 'SKUDEMO20260605%'
   and not exists (select 1 from product_image i where i.owner_type='SKU' and i.owner_id=s.sku_id and i.image_role='SKU_MAIN');
+
+drop procedure if exists add_column_if_missing;

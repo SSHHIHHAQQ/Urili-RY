@@ -1,4 +1,4 @@
-import { Descriptions, Drawer, Image, Table, Tag } from 'antd';
+import { Descriptions, Drawer, Image, Space, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
   buildSkuDimensionText,
@@ -34,6 +34,19 @@ function controlStatusTag(record: API.ProductDistribution.Sku) {
 
 function amountText(value?: number | null) {
   return value === undefined || value === null ? '--' : String(value);
+}
+
+function renderSourceSku(record: API.ProductDistribution.Sku) {
+  if (!record.masterSku) return '--';
+  return (
+    <div>
+      <Space size={4}>
+        <span>{record.masterSku}</span>
+        {record.lockStatus === 'LOCKED' ? <Tag color="blue">已锁定</Tag> : null}
+      </Space>
+      <div className={styles.mutedText}>{record.masterProductNameSnapshot || '--'}</div>
+    </div>
+  );
 }
 
 function parseJsonArrayText(value?: string) {
@@ -77,6 +90,11 @@ export default function ProductDetailDrawer({
     },
     { title: '系统SKU', dataIndex: 'systemSkuCode', width: 160 },
     { title: '客户SKU', dataIndex: 'sellerSkuCode', width: 160 },
+    {
+      title: '来源SKU',
+      width: 220,
+      render: (_, record) => renderSourceSku(record),
+    },
     {
       title: 'SKU规格',
       width: 220,
@@ -149,7 +167,7 @@ export default function ProductDetailDrawer({
             pagination={false}
             columns={skuColumns}
             dataSource={product.skus || []}
-            scroll={{ x: 1320 }}
+            scroll={{ x: 1540 }}
           />
 
           <Descriptions bordered size="small" column={1} title="类目属性">

@@ -15,6 +15,8 @@
 
 本文件作为三端独立改造的开发方向文件。2026-06-04 已开始进入实施阶段，具体代码、SQL、远程库执行和验证记录以 `docs/plans/2026-06-04-three-terminal-isolation-goal-tracker.md` 为准。
 
+当前快速推进口径：本文件中的阶段 4/5 属于长期路线图和终态验收，不属于当前三端账号权限 P0/P1 快速推进的完成条件。当前 P0/P1 只处理编译、guard、接口、权限、串端、service/字段缺失，以 `verify-three-terminal`、模块编译、合同/单测和权限/串端 fail-closed 校验为准；浏览器运行态、截图、DOM 检测和 UI 细调不作为本轮阻塞项。
+
 ## 设计边界
 
 ### 三端边界
@@ -24,6 +26,8 @@
 | 管理端 | `sys_user` | `sys_role` | `sys_menu` | `sys_dept` | `sys_oper_log` / `sys_logininfor` |
 | 卖家端 | `seller_account` | `seller_role` | `seller_menu` | `seller_dept` | `seller_oper_log` / `seller_login_log` |
 | 买家端 | `buyer_account` | `buyer_role` | `buyer_menu` | `buyer_dept` | `buyer_oper_log` / `buyer_login_log` |
+
+端内登录日志和操作日志都必须保存免密代入结构化审计字段：`direct_login`、`direct_login_ticket_id`、`acting_admin_id`、`acting_admin_name`、`direct_login_reason`。其中 `acting_admin_*` 表示原免密票据签发的管理端账号；`oper_param` 中的文本前缀只能作为兼容信息，不能替代结构化字段。
 
 ### 平台共享能力
 
@@ -466,6 +470,7 @@ buyer-ui/
 - 密码字段只能存 BCrypt 密文，不能在备注、日志、SQL、前端响应里保存默认密码明文。
 - 管理端免密代入必须审计，不能无痕冒充端内员工。
 - 卖家/买家端数据范围必须后端强制，不能只靠前端隐藏。
+- 卖家/买家账号查询在已有主体上下文时必须使用 SQL scoped Mapper，同时约束 `seller_id/buyer_id + account_id`；不能先裸按 `accountId` 查账号再在 Java 层补主体比对。裸 `select*AccountById(accountId)` 仅保留为管理端日志 account-only 反查主体 ID 的例外。
 - 公共字典和业务事实表不要盲目复制三份，否则后续维护成本会很高。
 
 ## 下一步建议

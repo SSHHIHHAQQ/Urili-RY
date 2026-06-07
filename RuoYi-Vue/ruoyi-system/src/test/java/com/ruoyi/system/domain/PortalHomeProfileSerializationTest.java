@@ -41,6 +41,8 @@ public class PortalHomeProfileSerializationTest
         String json = mapper.writeValueAsString(profile);
 
         assertInternalScopeHidden(json);
+        assertFalse(json.contains("accountBalance"));
+        assertFalse(json.contains("balanceCurrency"));
         assertTrue(json.contains("\"subjectNo\":\"BAA010001\""));
         assertTrue(json.contains("\"subjectName\":\"Buyer Co\""));
     }
@@ -97,6 +99,10 @@ public class PortalHomeProfileSerializationTest
 
         assertInternalScopeHidden(json);
         assertFalse(json.contains("tokenId"));
+        assertFalse(json.contains("directLoginTicketId"));
+        assertFalse(json.contains("actingAdminId"));
+        assertFalse(json.contains("actingAdminName"));
+        assertFalse(json.contains("directLoginReason"));
         assertTrue(json.contains("\"userName\":\"seller-owner\""));
         assertTrue(json.contains("\"current\":true"));
     }

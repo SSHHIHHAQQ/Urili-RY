@@ -79,7 +79,7 @@ export default function SkuSyncPanel({ access, actionRef, onSynced, selectedCode
                     _jsx(Popconfirm, { title: "\u786E\u8BA4\u89E3\u9664SKU\u914D\u5BF9\uFF1F", onConfirm: async () => {
                             if (!record.skuPairingId)
                                 return;
-                            const ok = resultOk(await deleteSkuPairing(record.skuPairingId), '已解除配对');
+                            const ok = resultOk(await deleteSkuPairing(selectedCode, record.skuPairingId), '已解除配对');
                             if (ok)
                                 actionRef.current?.reload();
                         }, children: _jsx(Button, { type: "link", size: "small", hidden: !access.hasPerms('integration:upstream:pair'), children: "\u89E3\u9664" }) }, "unpair"),
