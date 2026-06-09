@@ -1,6 +1,13 @@
-import { Empty, Modal, Space, Table, Tag, Typography } from 'antd';
+import { Empty, Modal, Space, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import type { ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { getCategorySchema } from '@/services/product/product';
+import {
+  buildAttributeLabelMap,
+  buildOptionLabelMap,
+  formatAttributeValue,
+  resolveAttributeLabel,
+} from '@/pages/Product/utils/attributeDisplay';
 import {
   buildSkuDimensionText,
   buildSkuSpecText,
@@ -19,6 +26,7 @@ type ProductDetailDrawerProps = {
   open: boolean;
   product?: API.ProductDistribution.Spu;
   categoryPath?: string;
+  canPreviewCategorySchema?: boolean;
   onClose: () => void;
 };
 
@@ -28,6 +36,16 @@ type ReadonlyFieldProps = {
   span?: 1 | 2 | 3;
   multiline?: boolean;
 };
+
+const GALLERY_SLOT_KEYS = [
+  'gallery-slot-1',
+  'gallery-slot-2',
+  'gallery-slot-3',
+  'gallery-slot-4',
+  'gallery-slot-5',
+  'gallery-slot-6',
+  'gallery-slot-7',
+];
 
 function displayText(value?: ReactNode) {
   if (value === undefined || value === null || value === '') {
@@ -104,32 +122,6 @@ function renderInventoryStatus(record: API.ProductDistribution.Sku) {
   );
 }
 
-function parseJsonArrayText(value?: string) {
-  if (!value) return '';
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed.filter(Boolean).join(' / ') : '';
-  } catch {
-    return value;
-  }
-}
-
-function formatAttributeValue(item: API.ProductDistribution.AttributeValue) {
-  if (item.attributeType === 'BOOLEAN') {
-    if (item.valueCode === 'Y') return '是';
-    if (item.valueCode === 'N') return '否';
-  }
-  if (item.attributeType === 'MULTI_SELECT') {
-    return parseJsonArrayText(item.valueJson) || '--';
-  }
-  return item.valueText
-    || item.valueCode
-    || (item.valueNumber !== undefined && item.valueNumber !== null ? String(item.valueNumber) : '')
-    || item.valueDate
-    || item.valueJson
-    || '--';
-}
-
 function ReadonlyField({ label, value, span = 1, multiline }: ReadonlyFieldProps) {
   return (
     <div className={styles.readonlyField} data-span={span}>
@@ -172,9 +164,10 @@ function ReadonlyImageSlot({
 function getGalleryUrls(product?: API.ProductDistribution.Spu) {
   const images = product?.images || [];
   return images
-    .filter((image) => image.imageRole === 'GALLERY' && image.imageUrl)
+    .filter((image): image is API.ProductDistribution.ProductImage & { imageUrl: string } =>
+      image.imageRole === 'GALLERY' && !!image.imageUrl)
     .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
-    .map((image) => image.imageUrl!)
+    .map((image) => image.imageUrl)
     .slice(0, 7);
 }
 
@@ -182,10 +175,43 @@ export default function ProductDetailDrawer({
   open,
   product,
   categoryPath,
+  canPreviewCategorySchema,
   onClose,
 }: ProductDetailDrawerProps) {
+  const [categorySchema, setCategorySchema] = useState<API.Product.CategoryAttribute[]>([]);
   const galleryUrls = getGalleryUrls(product);
-  const normalizedGalleryUrls = Array.from({ length: 7 }, (_, index) => galleryUrls[index] || '');
+  const normalizedGallerySlots = GALLERY_SLOT_KEYS.map((slotKey, index) => ({
+    slotKey,
+    url: galleryUrls[index] || '',
+  }));
+  const attributeLabelMap = useMemo(() => {
+    return buildAttributeLabelMap(categorySchema);
+  }, [categorySchema]);
+  const optionLabelMap = useMemo(() => {
+    return buildOptionLabelMap(categorySchema);
+  }, [categorySchema]);
+
+  useEffect(() => {
+    if (!open || !product?.categoryId || !canPreviewCategorySchema) {
+      setCategorySchema([]);
+      return undefined;
+    }
+    let cancelled = false;
+    getCategorySchema(product.categoryId)
+      .then((resp) => {
+        if (!cancelled) {
+          setCategorySchema(resp.data || []);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCategorySchema([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canPreviewCategorySchema, open, product?.categoryId]);
 
   const skuColumns: ColumnsType<API.ProductDistribution.Sku> = [
     {
@@ -292,7 +318,6 @@ export default function ProductDetailDrawer({
               <ReadonlyField label="系统SPU" value={product.systemSpuCode} />
               <ReadonlyField label="创建时间" value={product.createTime} />
               <ReadonlyField label="更新时间" value={product.updateTime} />
-              <ReadonlyField label="备注" value={product.remark} span={3} multiline />
             </div>
           </section>
 
@@ -306,12 +331,12 @@ export default function ProductDetailDrawer({
               </div>
               <div className={styles.imageGrid}>
                 <ReadonlyImageSlot label="主图" required url={product.mainImageUrl} />
-                {normalizedGalleryUrls.map((url, index) => (
+                {normalizedGallerySlots.map((slot, index) => (
                   <ReadonlyImageSlot
-                    key={`gallery-${index}`}
+                    key={slot.slotKey}
                     label={index === 0 ? '尺寸图' : undefined}
                     reserveLabelSpace
-                    url={url}
+                    url={slot.url}
                   />
                 ))}
               </div>
@@ -325,8 +350,8 @@ export default function ProductDetailDrawer({
                 {(product.attributeValues || []).map((item) => (
                   <ReadonlyField
                     key={item.valueId || item.attributeId}
-                    label={item.attributeName || item.attributeCode || '属性'}
-                    value={formatAttributeValue(item)}
+                    label={resolveAttributeLabel(item, attributeLabelMap)}
+                    value={formatAttributeValue(item, optionLabelMap)}
                   />
                 ))}
               </div>

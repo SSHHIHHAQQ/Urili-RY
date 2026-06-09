@@ -2,6 +2,8 @@
 
 日期：2026-06-07
 
+> 当前口径追补（2026-06-09）：本文件中的“后续新建子 Agent 优先使用 `gpt-5.3-codex-spark`”、`ruoyi-admin` 固定编译门和前端测试发现收窄到 `react-ui/tests` 都是历史口径，不再作为当前规则。当前 `AGENTS.md` 已收紧为子 Agent 默认且只能使用 `gpt-5.4`，不得再使用 GPT-5.3 Codex；当前 gate 已从 `RuoYi-Vue/pom.xml` 动态派生 reactor 模块，并从 `react-ui` 根做仓库级关键测试发现。
+
 ## 目标
 
 本轮继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为参考方向，在快速推进模式下只处理 P0/P1：编译、guard、接口、权限、串端、service/字段缺失。
@@ -17,15 +19,15 @@
 
 本切片实际并行使用 6 个只读子 Agent，模型为 `gpt-5.4`，分别审计前端 Jest 发现范围、后端 matcher、后端 reactor 编译门、surefire report、验证命令和 Markdown 同步范围。
 
-6 个子 Agent 均未修改文件，均已关闭。最新用户规则已确认：后续新建子 Agent 优先使用 `gpt-5.3-codex-spark`，不可用或受限时再回退 `gpt-5.4`。
+6 个子 Agent 均未修改文件，均已关闭。历史口径：当时记录为后续新建子 Agent 优先使用 `gpt-5.3-codex-spark`，不可用或受限时再回退 `gpt-5.4`；该模型规则已在 2026-06-09 过期，当前只能使用 `gpt-5.4`。
 
 ## 已完成
 
 - `backendReportModules` 改为从 `RuoYi-Vue/pom.xml` 动态读取 reactor 模块。
-- 新增后端编译门：`mvn -pl ruoyi-admin -am -DskipTests test-compile`。
+- 历史实现：当时新增后端编译门 `mvn -pl ruoyi-admin -am -DskipTests test-compile`；当前 gate 已改为从 reactor/manifest 动态派生模块。
 - 后端关键测试自动发现移除裸 `Seller|Buyer`，改为三端、Portal、权限、DirectLogin、SQL Guard、菜单、日志、会话等关键家族。
 - 当前 seller/buyer 服务类关键测试通过显式集合保留在 `backendTestClasses` 中，不依赖宽泛类名匹配。
-- 前端测试发现范围收窄到 `react-ui/tests`。
+- 历史实现：当时前端测试发现范围收窄到 `react-ui/tests`；当前 gate 已改为从 `react-ui` 根做仓库级关键测试发现。
 - 前端只对 terminal、portal、partner、remote-menu、direct-login、unauthorized、redirect、three-terminal 等关键测试文件 fail-closed。
 - `frontendTestPaths` 中配置的文件不存在时直接失败。
 - `docs/architecture/reuse-ledger.md` 已同步新口径：全 reactor 编译门 + 关键测试显式清单 + 收窄发现。
@@ -37,7 +39,7 @@
 - 前端 guard：portal token、partner management、seller portal product、buyer portal product 均通过。
 - React typecheck：通过。
 - 前端 Jest：6 个 suite / 30 个测试通过。
-- 后端 reactor 编译门：`mvn -pl ruoyi-admin -am -DskipTests test-compile` 通过，覆盖 `ruoyi-admin` 及其依赖链。
+- 后端 reactor 编译门历史快照：`mvn -pl ruoyi-admin -am -DskipTests test-compile` 通过，覆盖 `ruoyi-admin` 及其依赖链；当前 gate 已改为动态模块口径。
 - 后端三端合同测试：`ruoyi-system` 136 个、`ruoyi-framework` 15 个、`product` 1 个、`seller` 91 个、`buyer` 92 个测试通过。
 - `three-terminal verification passed.` 已输出。
 

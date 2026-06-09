@@ -65,6 +65,9 @@ public interface ProductDistributionMapper
     int updateSkuSalePrice(@Param("skuId") Long skuId, @Param("salePrice") BigDecimal salePrice,
         @Param("updateBy") String updateBy);
 
+    int updateSkuSupplyPrice(@Param("skuId") Long skuId, @Param("supplyPrice") BigDecimal supplyPrice,
+        @Param("updateBy") String updateBy);
+
     int deleteSkuById(@Param("spuId") Long spuId, @Param("skuId") Long skuId, @Param("updateBy") String updateBy);
 
     int deleteSkusBySpuId(@Param("spuId") Long spuId, @Param("updateBy") String updateBy);

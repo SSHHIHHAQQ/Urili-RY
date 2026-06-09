@@ -156,6 +156,17 @@ function resultOk(resp: { code: number; msg?: string }, successText: string) {
   return false;
 }
 
+function validateSalesWindowText(value?: string) {
+  const days = String(value || '')
+    .replace(/\[/g, '')
+    .replace(/\]/g, '')
+    .replace(/"/g, '')
+    .split(',')
+    .map((item) => Number(item.trim()))
+    .filter((item) => Number.isInteger(item) && item > 0);
+  return days.length > 0;
+}
+
 export default function InventoryAdjustmentReviewPage() {
   const access = useAccess();
   const canList = access.hasPerms('review:inventoryAdjustment:list');
@@ -837,7 +848,21 @@ export default function InventoryAdjustmentReviewPage() {
             </Form.Item>
           </Space>
           <Space size={16} style={{ width: '100%' }} align="start">
-            <Form.Item label="销量窗口" name="salesWindowDays" rules={[{ required: true }]} style={{ width: 170 }}>
+            <Form.Item
+              label="销量窗口"
+              name="salesWindowDays"
+              rules={[
+                { required: true, message: '请输入销量窗口' },
+                {
+                  validator: (_, value) => (
+                    validateSalesWindowText(value)
+                      ? Promise.resolve()
+                      : Promise.reject(new Error('销量窗口必须至少包含一个正整数天数'))
+                  ),
+                },
+              ]}
+              style={{ width: 170 }}
+            >
               <Input placeholder="[7,30]" />
             </Form.Item>
             <Form.Item label="保留天数" name="reserveDays" rules={[{ required: true }]} style={{ width: 150 }}>
@@ -890,8 +915,26 @@ export default function InventoryAdjustmentReviewPage() {
               { label: '卖家', value: 'SELLER' },
             ]} />
           </Form.Item>
-          <Form.Item label="绑定对象ID" name="bindingIdValue">
-            <InputNumber min={0} precision={0} style={{ width: '100%' }} />
+          <Form.Item noStyle shouldUpdate={(prev, next) => prev.bindingType !== next.bindingType}>
+            {({ getFieldValue }) => {
+              const bindingType = getFieldValue('bindingType');
+              return (
+                <Form.Item
+                  label="绑定对象ID"
+                  name="bindingIdValue"
+                  rules={bindingType === 'SELLER'
+                    ? [{ required: true, message: '请输入卖家ID' }]
+                    : []}
+                >
+                  <InputNumber
+                    min={bindingType === 'SELLER' ? 1 : 0}
+                    precision={0}
+                    disabled={bindingType === 'GLOBAL'}
+                    style={{ width: '100%' }}
+                  />
+                </Form.Item>
+              );
+            }}
           </Form.Item>
           <Form.Item label="优先级" name="priority">
             <InputNumber min={1} precision={0} style={{ width: '100%' }} />

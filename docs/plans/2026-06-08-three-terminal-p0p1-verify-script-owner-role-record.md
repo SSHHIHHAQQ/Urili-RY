@@ -2,12 +2,14 @@
 
 本记录继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为参考方向。
 
+> 当前口径追补（2026-06-09）：本文件中的 GPT-5.3 Codex 相关描述仅代表历史执行事实，当前规则已收紧为子 Agent 默认且只能使用 `gpt-5.4`，不得再使用 GPT-5.3 Codex。本文件验证结果里的“4 个前端 guard”也只是当时快照；当前 `react-ui/tests/three-terminal.manifest.json` 已登记 5 个 frontend guard，`npm run verify:three-terminal` 以当前 manifest 为准。
+
 当前只处理 P0/P1：编译、guard、接口、权限、串端、service/字段缺失；不做浏览器运行态验收、截图、DOM 检测或 UI 细调。
 
 ## 子 Agent 情况
 
 - 本轮收口的是已启动的 6 个 `gpt-5.4` 只读子 Agent，均已关闭。
-- 历史记录（已过期口径）：当时旧规则曾要求后续新增子 Agent 优先使用 GPT-5.3 Codex（工具模型 `gpt-5.3-codex-spark`），不可用时再回退 `gpt-5.4`；现行规则已改为默认使用 `gpt-5.4`，除非用户在当前任务中重新明确要求，否则不要再把 GPT-5.3 Codex 作为首选。
+- 历史记录（已过期口径）：当时旧规则曾要求后续新增子 Agent 优先使用 GPT-5.3 Codex（工具模型 `gpt-5.3-codex-spark`），不可用时再回退 `gpt-5.4`；现行规则已改为默认且只能使用 `gpt-5.4`，不得再使用 GPT-5.3 Codex。
 - 采纳的 P1：
   - `react-ui/package.json` 公开 `test:unit` 仍可直接跑 raw Jest，绕过 `verify:three-terminal` 的 manifest、guard、typecheck 和后端合同闭环。
   - `seller_buyer_management_seed.sql` 在 `PATCH_EXISTING` 场景下可能遇到 active seller/buyer 下已有失活或删除态 `owner` 角色，seed 不新建可用 owner，后续 owner 账号/角色菜单授权静默缺失。
@@ -37,7 +39,7 @@
 - `cd E:\Urili-Ruoyi\react-ui; node scripts\verify-three-terminal.mjs --check-manifest`：通过。
 - `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system -Dtest=SqlExecutionGuardContractTest test`：通过，55 个测试。
 - `cd E:\Urili-Ruoyi\react-ui; npm run verify:three-terminal`：通过。
-  - 4 个前端 guard 通过。
+  - 当时快照为 4 个前端 guard 通过；当前 manifest 已扩展为 5 个 frontend guard。
   - React typecheck 通过。
   - 12 个 Jest suite / 66 个测试通过，并生成 `node_modules\.cache\three-terminal-jest-results.json`。
   - 后端 reactor `test-compile` 通过。

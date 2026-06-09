@@ -244,9 +244,12 @@ begin
     select 1
     from seller_menu
     where menu_type = 'C'
-      and coalesce(component, '') = ''
+      and (
+        coalesce(trim(component), '') = ''
+        or coalesce(trim(component), '') not like 'Seller/%'
+      )
   ) then
-    signal sqlstate '45000' set message_text = 'seller_menu page menus require component';
+    signal sqlstate '45000' set message_text = 'seller_menu page menus require component under Seller/';
   end if;
 
   if exists (
@@ -316,9 +319,12 @@ begin
     select 1
     from buyer_menu
     where menu_type = 'C'
-      and coalesce(component, '') = ''
+      and (
+        coalesce(trim(component), '') = ''
+        or coalesce(trim(component), '') not like 'Buyer/%'
+      )
   ) then
-    signal sqlstate '45000' set message_text = 'buyer_menu page menus require component';
+    signal sqlstate '45000' set message_text = 'buyer_menu page menus require component under Buyer/';
   end if;
 
   if exists (

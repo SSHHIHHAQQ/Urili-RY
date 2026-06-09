@@ -27,7 +27,14 @@ import {
 import { message } from '@/utils/feedback';
 import { getPersistedProTableSearch, getProTablePagination, getProTableScroll } from '@/utils/proTableSearch';
 import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
-import { resolveResourceUrl } from '../Distribution/constants';
+import {
+  getControlStatusText,
+  getSalesStatusText,
+  inventoryStatusText,
+  resolveResourceUrl,
+  warehouseKindText,
+} from '../Distribution/constants';
+import ProductReviewBusinessPreview from './components/ProductReviewBusinessPreview';
 
 type ActionKind = 'APPROVE' | 'REJECT';
 type ActionState = {
@@ -84,10 +91,11 @@ const DEFAULT_RISK_LEVEL_ENUM: Record<string, ValueEnumItem> = {
 const TERMINAL_VALUE_ENUM: Record<string, ValueEnumItem> = {
   ADMIN: { text: '管理端' },
   SELLER: { text: '卖家端' },
+  BUYER: { text: '买家端' },
 };
 
 const ITEM_TYPE_TEXT: Record<string, string> = {
-  SPU: 'SPU',
+  SPU: '商品',
   SKU: 'SKU',
 };
 
@@ -104,7 +112,44 @@ const OPERATION_TYPE_TEXT: Record<string, string> = {
   WITHDRAW: '撤回',
 };
 
-const TABLE_SCROLL_X = 2180;
+const SNAPSHOT_ROLE_TEXT: Record<string, string> = {
+  BEFORE: '修改前',
+  AFTER: '修改后',
+};
+
+const PAYLOAD_TYPE_TEXT: Record<string, string> = {
+  SPU: '商品',
+  SKU: 'SKU',
+  PRICE: '价格',
+  OBJECT: '对象',
+  UNKNOWN: '未知',
+};
+
+const ATTRIBUTE_TYPE_TEXT: Record<string, string> = {
+  TEXT: '文本',
+  NUMBER: '数字',
+  DATE: '日期',
+  SINGLE_SELECT: '单选',
+  MULTI_SELECT: '多选',
+  BOOLEAN: '是/否',
+};
+
+const IMAGE_ROLE_TEXT: Record<string, string> = {
+  MAIN: '主图',
+  GALLERY: '图库',
+};
+
+const LOCK_STATUS_TEXT: Record<string, string> = {
+  LOCKED: '已锁定',
+  UNLOCKED: '未锁定',
+};
+
+const BINDING_STATUS_TEXT: Record<string, string> = {
+  BOUND: '已绑定',
+  UNBOUND: '未绑定',
+};
+
+const TABLE_SCROLL_X = 2300;
 
 function resultOk(resp: API.Result, successText: string) {
   if (resp.code === 200) {
@@ -115,11 +160,11 @@ function resultOk(resp: API.Result, successText: string) {
   return false;
 }
 
-function valueEnumText(valueEnum: Record<string, ValueEnumItem>, value?: string) {
+function valueEnumText(valueEnum: Record<string, ValueEnumItem>, value?: string, unknownText = '未知') {
   if (!value) {
     return '--';
   }
-  return valueEnum[value]?.text || value;
+  return valueEnum[value]?.text || unknownText;
 }
 
 function normalizeValueEnum(data: Record<string, ValueEnumItem>, fallback: Record<string, ValueEnumItem>) {
@@ -154,6 +199,84 @@ function formatPriceTransition(record: API.ProductReview.Review) {
 
 function formatCount(value?: number, unit = '个') {
   return value == null ? '--' : `${value}${unit}`;
+}
+
+function normalizeWarehouseKind(value?: string) {
+  if (!value) {
+    return '';
+  }
+  if (warehouseKindText[value]) {
+    return value;
+  }
+  if (value === '官方仓') {
+    return 'official';
+  }
+  if (value === '三方仓' || value === '混合') {
+    return value === '混合' ? 'MIXED' : 'third_party';
+  }
+  return 'third_party';
+}
+
+function formatWarehouseKindLabel(value?: string) {
+  const normalized = normalizeWarehouseKind(value);
+  if (!normalized) {
+    return '--';
+  }
+  return warehouseKindText[normalized] || normalized;
+}
+
+function formatSalesStatusLabel(value?: string) {
+  if (!value) {
+    return '--';
+  }
+  if (value === 'DISABLED') {
+    return '停用';
+  }
+  const label = getSalesStatusText(value);
+  return label === value ? '未知状态' : label;
+}
+
+function formatControlStatusLabel(value?: string) {
+  if (!value) {
+    return '--';
+  }
+  const label = getControlStatusText(value);
+  return label === value ? '未知状态' : label;
+}
+
+function formatSnapshotRoleLabel(value?: string) {
+  return value ? SNAPSHOT_ROLE_TEXT[value] || '未知快照' : '--';
+}
+
+function formatPayloadTypeLabel(value?: string) {
+  return value ? PAYLOAD_TYPE_TEXT[value] || '未知载荷' : '--';
+}
+
+function formatItemTypeLabel(value?: string) {
+  return value ? ITEM_TYPE_TEXT[value] || '未知对象' : '--';
+}
+
+function formatChangeTypeLabel(value?: string) {
+  return value ? CHANGE_TYPE_TEXT[value] || '未知变化' : '--';
+}
+
+function formatOperationTypeLabel(value?: string) {
+  return value ? OPERATION_TYPE_TEXT[value] || '未知操作' : '--';
+}
+
+function formatReviewOrSalesStatusLabel(value?: string) {
+  if (!value) {
+    return '--';
+  }
+  const reviewStatus = valueEnumText(DEFAULT_REVIEW_STATUS_ENUM, value, '');
+  if (reviewStatus) {
+    return reviewStatus;
+  }
+  return formatSalesStatusLabel(value);
+}
+
+function isOfficialWarehouseKind(value?: string) {
+  return normalizeWarehouseKind(value) === 'official';
 }
 
 function resolveReviewSkuCount(record: API.ProductReview.Review) {
@@ -195,6 +318,74 @@ function safeParseJson(value?: string) {
   }
 }
 
+function localizeSnapshotScalar(key: string, value: unknown) {
+  if (typeof value !== 'string') {
+    return value;
+  }
+  switch (key) {
+    case 'spuStatus':
+    case 'skuStatus':
+      return formatSalesStatusLabel(value);
+    case 'controlStatus':
+    case 'spuControlStatus':
+      return formatControlStatusLabel(value);
+    case 'warehouseKind':
+    case 'warehouseKindSummary':
+      return formatWarehouseKindLabel(value);
+    case 'attributeType':
+      return ATTRIBUTE_TYPE_TEXT[value] || '未知属性类型';
+    case 'ownerType':
+      return formatItemTypeLabel(value);
+    case 'imageRole':
+      return IMAGE_ROLE_TEXT[value] || '未知图片类型';
+    case 'inventoryStatus':
+      return inventoryStatusText[value] || '未知库存状态';
+    case 'lockStatus':
+      return LOCK_STATUS_TEXT[value] || '未知锁定状态';
+    case 'bindingStatus':
+      return BINDING_STATUS_TEXT[value] || '未知绑定状态';
+    case 'valueCode':
+      if (value === 'Y') return '是';
+      if (value === 'N') return '否';
+      return value;
+    case 'snapshotRole':
+      return formatSnapshotRoleLabel(value);
+    case 'payloadType':
+      return formatPayloadTypeLabel(value);
+    case 'itemType':
+      return formatItemTypeLabel(value);
+    case 'changeType':
+      return formatChangeTypeLabel(value);
+    case 'reviewStatus':
+    case 'itemStatus':
+      return valueEnumText(DEFAULT_REVIEW_STATUS_ENUM, value, '未知状态');
+    case 'reviewType':
+      return valueEnumText(DEFAULT_REVIEW_TYPE_ENUM, value, '未知类型');
+    case 'riskLevel':
+      return valueEnumText(DEFAULT_RISK_LEVEL_ENUM, value, '未知风险');
+    case 'submitTerminal':
+    case 'operatorTerminal':
+      return valueEnumText(TERMINAL_VALUE_ENUM, value, '未知端');
+    default:
+      return value;
+  }
+}
+
+function localizeSnapshotPayload(payload: unknown, key = ''): unknown {
+  if (Array.isArray(payload)) {
+    return payload.map((item) => localizeSnapshotPayload(item));
+  }
+  if (payload && typeof payload === 'object') {
+    return Object.fromEntries(
+      Object.entries(payload as Record<string, unknown>).map(([entryKey, entryValue]) => [
+        entryKey,
+        localizeSnapshotPayload(entryValue, entryKey),
+      ]),
+    );
+  }
+  return localizeSnapshotScalar(key, payload);
+}
+
 function stringifyPayload(payload: unknown) {
   if (payload == null || payload === '') {
     return '--';
@@ -203,7 +394,7 @@ function stringifyPayload(payload: unknown) {
     return payload;
   }
   try {
-    return JSON.stringify(payload, null, 2);
+    return JSON.stringify(localizeSnapshotPayload(payload), null, 2);
   } catch {
     return String(payload);
   }
@@ -235,25 +426,27 @@ function renderReviewFocus(record: API.ProductReview.Review) {
   switch (record.reviewType) {
     case 'NEW_PRODUCT':
       return (
-        <Space direction="vertical" size={2}>
+        <Space orientation="vertical" size={2}>
           {renderFocusLine('新增范围', `${formatCount(record.itemCount, '个对象')} / ${formatCount(resolveReviewSkuCount(record), '个SKU')}`)}
           {renderFocusLine('价格区间', formatPriceRange(record))}
-          {renderFocusLine('发货仓库', record.warehouseSummary || '--')}
+          {!isOfficialWarehouseKind(record.warehouseSummary)
+            ? renderFocusLine('发货仓库', formatWarehouseKindLabel(record.warehouseSummary))
+            : null}
           {renderFocusLine('类目', record.categoryName || '--')}
         </Space>
       );
     case 'ADD_SKU':
       return (
-        <Space direction="vertical" size={2}>
+        <Space orientation="vertical" size={2}>
           {renderFocusLine('新增SKU', formatCount(resolveReviewSkuCount(record), '个SKU'))}
           {renderFocusLine('价格区间', formatPriceRange(record))}
-          {renderFocusLine('发货仓库', record.warehouseSummary || '--')}
+          {renderFocusLine('仓库类型', formatWarehouseKindLabel(record.warehouseSummary))}
           {renderFocusLine('变化摘要', record.diffSummary || '--')}
         </Space>
       );
     case 'EDIT_PRODUCT_INFO':
       return (
-        <Space direction="vertical" size={2}>
+        <Space orientation="vertical" size={2}>
           {renderFocusLine('标题变化', formatTitleTransition(record))}
           {renderFocusLine('主图变化', formatMainImageChange(record))}
           {renderFocusLine('类目', record.categoryName || '--')}
@@ -262,16 +455,16 @@ function renderReviewFocus(record: API.ProductReview.Review) {
       );
     case 'EDIT_SKU_INFO':
       return (
-        <Space direction="vertical" size={2}>
+        <Space orientation="vertical" size={2}>
           {renderFocusLine('影响SKU', formatCount(resolveReviewSkuCount(record), '个SKU'))}
-          {renderFocusLine('价格区间', formatPriceTransition(record))}
+          {renderFocusLine('销售价区间', formatPriceRange(record))}
           {renderFocusLine('变化摘要', record.diffSummary || '--')}
         </Space>
       );
     case 'EDIT_PRICE':
       return (
-        <Space direction="vertical" size={2}>
-          {renderFocusLine('价格变化', formatPriceTransition(record))}
+        <Space orientation="vertical" size={2}>
+          {renderFocusLine('供货价变化', formatPriceTransition(record))}
           {renderFocusLine('影响SKU', formatCount(resolveReviewSkuCount(record), '个SKU'))}
           {renderFocusLine('币种', record.currencySummary || '--')}
           {renderFocusLine('变化摘要', record.diffSummary || '--')}
@@ -279,7 +472,7 @@ function renderReviewFocus(record: API.ProductReview.Review) {
       );
     default:
       return (
-        <Space direction="vertical" size={2}>
+        <Space orientation="vertical" size={2}>
           {renderFocusLine('对象数', formatCount(record.itemCount))}
           {renderFocusLine('价格区间', formatPriceTransition(record))}
           {renderFocusLine('变化摘要', record.diffSummary || '--')}
@@ -346,8 +539,8 @@ function buildSnapshotCompareRows(
 function renderSnapshotObject(row: SnapshotCompareRow) {
   const item = row.item;
   return (
-    <Space direction="vertical" size={2}>
-      <span>{ITEM_TYPE_TEXT[String(item?.itemType || '')] || row.payloadType || '--'}</span>
+    <Space orientation="vertical" size={2}>
+      <span>{item?.itemType ? formatItemTypeLabel(item.itemType) : formatPayloadTypeLabel(row.payloadType)}</span>
       <Typography.Text type="secondary">{item?.systemSkuCode || '--'}</Typography.Text>
       {item?.sellerSkuCode ? <Typography.Text type="secondary">{item.sellerSkuCode}</Typography.Text> : null}
       {item?.diffSummary ? <Typography.Text type="secondary">{item.diffSummary}</Typography.Text> : null}
@@ -372,7 +565,7 @@ function renderSnapshotCompareTable(
       title: '载荷',
       dataIndex: 'payloadType',
       width: 100,
-      render: (value) => value || '--',
+      render: (value) => formatPayloadTypeLabel(String(value || '')),
     },
     {
       title: '变更前',
@@ -387,7 +580,7 @@ function renderSnapshotCompareTable(
   ];
 
   return (
-    <Space direction="vertical" size={8} style={{ width: '100%' }}>
+    <Space orientation="vertical" size={8} style={{ width: '100%' }}>
       <Typography.Text strong>{title}</Typography.Text>
       <Table
         rowKey="key"
@@ -406,7 +599,7 @@ function renderTypeDetailPanel(review: API.ProductReview.Review) {
     <Descriptions size="small" bordered column={3}>
       <Descriptions.Item label="对象数">{formatCount(review.itemCount)}</Descriptions.Item>
       <Descriptions.Item label="SKU数">{formatCount(resolveReviewSkuCount(review), '个SKU')}</Descriptions.Item>
-      <Descriptions.Item label="发货仓库">{review.warehouseSummary || '--'}</Descriptions.Item>
+      <Descriptions.Item label="仓库类型">{formatWarehouseKindLabel(review.warehouseSummary)}</Descriptions.Item>
       <Descriptions.Item label="价格区间">{formatPriceRange(review)}</Descriptions.Item>
       <Descriptions.Item label="价格变化">{formatPriceTransition(review)}</Descriptions.Item>
       <Descriptions.Item label="币种">{review.currencySummary || '--'}</Descriptions.Item>
@@ -417,13 +610,13 @@ function renderTypeDetailPanel(review: API.ProductReview.Review) {
   switch (review.reviewType) {
     case 'NEW_PRODUCT':
       return (
-        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={16} style={{ width: '100%' }}>
           <Descriptions size="small" bordered column={3}>
             <Descriptions.Item label="审核重点">新增 SPU 和全部 SKU</Descriptions.Item>
             <Descriptions.Item label="新增SKU">{formatCount(resolveReviewSkuCount(review), '个SKU')}</Descriptions.Item>
             <Descriptions.Item label="价格区间">{formatPriceRange(review)}</Descriptions.Item>
             <Descriptions.Item label="类目">{review.categoryName || '--'}</Descriptions.Item>
-            <Descriptions.Item label="发货仓库">{review.warehouseSummary || '--'}</Descriptions.Item>
+            <Descriptions.Item label="仓库类型">{formatWarehouseKindLabel(review.warehouseSummary)}</Descriptions.Item>
             <Descriptions.Item label="主图">{renderReviewImage(review.mainImageUrlAfter)}</Descriptions.Item>
           </Descriptions>
           {renderSnapshotCompareTable(review, '新增内容快照', ['SPU', 'SKU'])}
@@ -431,21 +624,21 @@ function renderTypeDetailPanel(review: API.ProductReview.Review) {
       );
     case 'ADD_SKU':
       return (
-        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={16} style={{ width: '100%' }}>
           <Descriptions size="small" bordered column={3}>
             <Descriptions.Item label="审核重点">仅审核本次新增 SKU</Descriptions.Item>
             <Descriptions.Item label="新增SKU">{formatCount(resolveReviewSkuCount(review), '个SKU')}</Descriptions.Item>
             <Descriptions.Item label="价格区间">{formatPriceRange(review)}</Descriptions.Item>
             <Descriptions.Item label="系统SPU">{review.systemSpuCode || '--'}</Descriptions.Item>
             <Descriptions.Item label="商品标题">{review.productNameAfter || '--'}</Descriptions.Item>
-            <Descriptions.Item label="发货仓库">{review.warehouseSummary || '--'}</Descriptions.Item>
+            <Descriptions.Item label="仓库类型">{formatWarehouseKindLabel(review.warehouseSummary)}</Descriptions.Item>
           </Descriptions>
           {renderSnapshotCompareTable(review, '新增 SKU 快照', ['SKU'])}
         </Space>
       );
     case 'EDIT_PRODUCT_INFO':
       return (
-        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={16} style={{ width: '100%' }}>
           <Descriptions size="small" bordered column={2}>
             <Descriptions.Item label="原标题">{review.productNameBefore || '--'}</Descriptions.Item>
             <Descriptions.Item label="新标题">{review.productNameAfter || '--'}</Descriptions.Item>
@@ -460,11 +653,11 @@ function renderTypeDetailPanel(review: API.ProductReview.Review) {
       );
     case 'EDIT_SKU_INFO':
       return (
-        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={16} style={{ width: '100%' }}>
           <Descriptions size="small" bordered column={3}>
             <Descriptions.Item label="审核重点">SKU 资料变更</Descriptions.Item>
             <Descriptions.Item label="影响SKU">{formatCount(resolveReviewSkuCount(review), '个SKU')}</Descriptions.Item>
-            <Descriptions.Item label="价格变化">{formatPriceTransition(review)}</Descriptions.Item>
+            <Descriptions.Item label="销售价区间">{formatPriceRange(review)}</Descriptions.Item>
             <Descriptions.Item label="变化摘要" span={3}>{review.diffSummary || '--'}</Descriptions.Item>
           </Descriptions>
           {renderSnapshotCompareTable(review, 'SKU 资料变更对比', ['SKU'])}
@@ -472,21 +665,21 @@ function renderTypeDetailPanel(review: API.ProductReview.Review) {
       );
     case 'EDIT_PRICE':
       return (
-        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={16} style={{ width: '100%' }}>
           <Descriptions size="small" bordered column={3}>
-            <Descriptions.Item label="审核重点">价格变更</Descriptions.Item>
-            <Descriptions.Item label="原价格区间">{formatPriceRange(review, 'before')}</Descriptions.Item>
-            <Descriptions.Item label="新价格区间">{formatPriceRange(review, 'after')}</Descriptions.Item>
+            <Descriptions.Item label="审核重点">供货价变更</Descriptions.Item>
+            <Descriptions.Item label="原供货价区间">{formatPriceRange(review, 'before')}</Descriptions.Item>
+            <Descriptions.Item label="新供货价区间">{formatPriceRange(review, 'after')}</Descriptions.Item>
             <Descriptions.Item label="影响SKU">{formatCount(resolveReviewSkuCount(review), '个SKU')}</Descriptions.Item>
             <Descriptions.Item label="币种">{review.currencySummary || '--'}</Descriptions.Item>
             <Descriptions.Item label="变化摘要">{review.diffSummary || '--'}</Descriptions.Item>
           </Descriptions>
-          {renderSnapshotCompareTable(review, '价格变更对比', ['SKU', 'PRICE'])}
+          {renderSnapshotCompareTable(review, '供货价变更对比', ['SKU', 'PRICE'])}
         </Space>
       );
     default:
       return (
-        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={16} style={{ width: '100%' }}>
           {commonSummary}
           {renderSnapshotCompareTable(review, '审核快照对比')}
         </Space>
@@ -494,9 +687,47 @@ function renderTypeDetailPanel(review: API.ProductReview.Review) {
   }
 }
 
+function renderReviewBasicInfo(
+  review: API.ProductReview.Review,
+  reviewStatusValueEnum: Record<string, ValueEnumItem>,
+  reviewTypeValueEnum: Record<string, ValueEnumItem>,
+  riskLevelValueEnum: Record<string, ValueEnumItem>,
+) {
+  return (
+    <Descriptions size="small" bordered column={2}>
+      <Descriptions.Item label="审核单号">{review.reviewNo || '--'}</Descriptions.Item>
+      <Descriptions.Item label="审核状态">
+        {renderEnumTag(reviewStatusValueEnum, review.reviewStatus)}
+      </Descriptions.Item>
+      <Descriptions.Item label="审核类型">
+        {renderEnumTag(reviewTypeValueEnum, review.reviewType)}
+      </Descriptions.Item>
+      <Descriptions.Item label="风险等级">
+        {renderEnumTag(riskLevelValueEnum, review.riskLevel)}
+      </Descriptions.Item>
+      <Descriptions.Item label="商品标题">{review.productNameAfter || '--'}</Descriptions.Item>
+      <Descriptions.Item label="系统SPU">{review.systemSpuCode || '--'}</Descriptions.Item>
+      <Descriptions.Item label="卖家">{review.sellerName || '--'}</Descriptions.Item>
+      <Descriptions.Item label="类目">{review.categoryName || '--'}</Descriptions.Item>
+      <Descriptions.Item label="提交人">{review.submitUserName || '--'}</Descriptions.Item>
+      <Descriptions.Item label="提交时间">{review.submitTime || '--'}</Descriptions.Item>
+      <Descriptions.Item label="审核人">{review.reviewerName || '--'}</Descriptions.Item>
+      <Descriptions.Item label="审核时间">{review.reviewTime || '--'}</Descriptions.Item>
+      <Descriptions.Item label="价格">{formatPriceRange(review)}</Descriptions.Item>
+      <Descriptions.Item label="仓库类型">{formatWarehouseKindLabel(review.warehouseSummary)}</Descriptions.Item>
+      <Descriptions.Item label="变化摘要" span={2}>
+        {review.diffSummary || '--'}
+      </Descriptions.Item>
+      <Descriptions.Item label="审核原因" span={2}>
+        {review.reviewReason || '--'}
+      </Descriptions.Item>
+    </Descriptions>
+  );
+}
+
 function renderEnumTag(valueEnum: Record<string, ValueEnumItem>, value?: string) {
   const item = value ? valueEnum[value] : undefined;
-  return <Tag color={item?.status}>{item?.text || value || '--'}</Tag>;
+  return <Tag color={item?.status}>{item?.text || (value ? '未知' : '--')}</Tag>;
 }
 
 const ProductReviewPage = () => {
@@ -701,7 +932,7 @@ const ProductReviewPage = () => {
       width: 320,
       search: false,
       render: (_, record) => (
-        <Space direction="vertical" size={2}>
+        <Space orientation="vertical" size={2}>
           <Typography.Text strong>{record.productNameAfter || '--'}</Typography.Text>
           <Typography.Text type="secondary">{record.systemSpuCode || '--'}</Typography.Text>
           <Typography.Text type="secondary">{record.categoryName || '--'}</Typography.Text>
@@ -714,11 +945,18 @@ const ProductReviewPage = () => {
       width: 180,
       search: false,
       render: (_, record) => (
-        <Space direction="vertical" size={2}>
+        <Space orientation="vertical" size={2}>
           <span>{record.sellerName || '--'}</span>
           <Typography.Text type="secondary">{record.sellerId ?? '--'}</Typography.Text>
         </Space>
       ),
+    },
+    {
+      title: '仓库类型',
+      dataIndex: 'warehouseSummary',
+      search: false,
+      width: 110,
+      render: (_, record) => <Tag>{formatWarehouseKindLabel(record.warehouseSummary)}</Tag>,
     },
     {
       title: '审核重点',
@@ -733,7 +971,7 @@ const ProductReviewPage = () => {
       search: false,
       width: 150,
       render: (_, record) => (
-        <Space direction="vertical" size={2}>
+        <Space orientation="vertical" size={2}>
           {renderEnumTag(riskLevelValueEnum, record.riskLevel)}
           {record.riskSummary ? <Typography.Text type="secondary">{record.riskSummary}</Typography.Text> : null}
         </Space>
@@ -818,7 +1056,7 @@ const ProductReviewPage = () => {
       title: '对象',
       dataIndex: 'itemType',
       width: 90,
-      render: (value) => ITEM_TYPE_TEXT[String(value || '')] || String(value || '--'),
+      render: (value) => formatItemTypeLabel(String(value || '')),
     },
     { title: '系统SKU', dataIndex: 'systemSkuCode', width: 160, render: (value) => value || '--' },
     { title: '客户SKU', dataIndex: 'sellerSkuCode', width: 160, render: (value) => value || '--' },
@@ -826,7 +1064,7 @@ const ProductReviewPage = () => {
       title: '变化',
       dataIndex: 'changeType',
       width: 120,
-      render: (value) => CHANGE_TYPE_TEXT[String(value || '')] || String(value || '--'),
+      render: (value) => formatChangeTypeLabel(String(value || '')),
     },
     {
       title: '状态',
@@ -838,8 +1076,8 @@ const ProductReviewPage = () => {
   ];
 
   const snapshotColumns: ColumnsType<API.ProductReview.Snapshot> = [
-    { title: '快照', dataIndex: 'snapshotRole', width: 90 },
-    { title: '载荷', dataIndex: 'payloadType', width: 120 },
+    { title: '快照', dataIndex: 'snapshotRole', width: 90, render: (value) => formatSnapshotRoleLabel(String(value || '')) },
+    { title: '载荷', dataIndex: 'payloadType', width: 120, render: (value) => formatPayloadTypeLabel(String(value || '')) },
     { title: 'Hash', dataIndex: 'payloadHash', width: 220, ellipsis: true },
     {
       title: '内容',
@@ -853,10 +1091,10 @@ const ProductReviewPage = () => {
       title: '操作',
       dataIndex: 'operationType',
       width: 100,
-      render: (value) => OPERATION_TYPE_TEXT[String(value || '')] || String(value || '--'),
+      render: (value) => formatOperationTypeLabel(String(value || '')),
     },
-    { title: '前状态', dataIndex: 'beforeStatus', width: 110, render: (value) => value || '--' },
-    { title: '后状态', dataIndex: 'afterStatus', width: 110, render: (value) => value || '--' },
+    { title: '前状态', dataIndex: 'beforeStatus', width: 110, render: (value) => formatReviewOrSalesStatusLabel(String(value || '')) },
+    { title: '后状态', dataIndex: 'afterStatus', width: 110, render: (value) => formatReviewOrSalesStatusLabel(String(value || '')) },
     { title: '操作人', dataIndex: 'operatorName', width: 120 },
     { title: '操作时间', dataIndex: 'operationTime', width: 170 },
     { title: '原因', dataIndex: 'reason', ellipsis: true, render: (value) => value || '--' },
@@ -865,12 +1103,24 @@ const ProductReviewPage = () => {
   const detailTabs = [
     {
       key: 'focus',
-      label: '审核重点',
-      children: currentReview ? renderTypeDetailPanel(currentReview) : null,
+      label: '变更预览',
+      children: currentReview ? <ProductReviewBusinessPreview review={currentReview} /> : null,
+    },
+    {
+      key: 'basic',
+      label: '审核基础信息',
+      children: currentReview
+        ? renderReviewBasicInfo(
+            currentReview,
+            reviewStatusValueEnum,
+            reviewTypeValueEnum,
+            riskLevelValueEnum,
+          )
+        : null,
     },
     {
       key: 'items',
-      label: '对象明细',
+      label: '审计对象',
       children: (
         <Table
           rowKey="itemId"
@@ -884,7 +1134,7 @@ const ProductReviewPage = () => {
     },
     {
       key: 'snapshots',
-      label: '审核快照',
+      label: '审计快照',
       children: (
         <Table
           rowKey="snapshotId"
@@ -961,49 +1211,11 @@ const ProductReviewPage = () => {
       <Drawer
         title="商品审核详情"
         open={detailOpen}
-        width={1120}
+        size={1280}
         onClose={() => setDetailOpen(false)}
       >
         {currentReview ? (
-          <Space direction="vertical" size={16} style={{ width: '100%' }}>
-            <Descriptions size="small" bordered column={2}>
-              <Descriptions.Item label="审核单号">{currentReview.reviewNo || '--'}</Descriptions.Item>
-              <Descriptions.Item label="审核状态">
-                {renderEnumTag(reviewStatusValueEnum, currentReview.reviewStatus)}
-              </Descriptions.Item>
-              <Descriptions.Item label="审核类型">
-                {renderEnumTag(reviewTypeValueEnum, currentReview.reviewType)}
-              </Descriptions.Item>
-              <Descriptions.Item label="风险等级">
-                {renderEnumTag(riskLevelValueEnum, currentReview.riskLevel)}
-              </Descriptions.Item>
-              <Descriptions.Item label="商品标题">{currentReview.productNameAfter || '--'}</Descriptions.Item>
-              <Descriptions.Item label="系统SPU">{currentReview.systemSpuCode || '--'}</Descriptions.Item>
-              <Descriptions.Item label="卖家">{currentReview.sellerName || '--'}</Descriptions.Item>
-              <Descriptions.Item label="类目">{currentReview.categoryName || '--'}</Descriptions.Item>
-              <Descriptions.Item label="提交人">{currentReview.submitUserName || '--'}</Descriptions.Item>
-              <Descriptions.Item label="提交时间">{currentReview.submitTime || '--'}</Descriptions.Item>
-              <Descriptions.Item label="审核人">{currentReview.reviewerName || '--'}</Descriptions.Item>
-              <Descriptions.Item label="审核时间">{currentReview.reviewTime || '--'}</Descriptions.Item>
-              <Descriptions.Item label="价格">{formatPriceRange(currentReview)}</Descriptions.Item>
-              <Descriptions.Item label="仓库">{currentReview.warehouseSummary || '--'}</Descriptions.Item>
-              <Descriptions.Item label="变化摘要" span={2}>
-                {currentReview.diffSummary || '--'}
-              </Descriptions.Item>
-              <Descriptions.Item label="审核原因" span={2}>
-                {currentReview.reviewReason || '--'}
-              </Descriptions.Item>
-            </Descriptions>
-            {currentReview.mainImageUrlAfter ? (
-              <Image
-                width={96}
-                height={96}
-                src={resolveResourceUrl(currentReview.mainImageUrlAfter)}
-                style={{ objectFit: 'cover' }}
-              />
-            ) : null}
-            <Tabs items={detailTabs} />
-          </Space>
+          <Tabs items={detailTabs} />
         ) : null}
       </Drawer>
 
@@ -1015,7 +1227,7 @@ const ProductReviewPage = () => {
         okButtonProps={{ danger: actionState.kind === 'REJECT' }}
         onOk={submitAction}
         onCancel={closeAction}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={actionForm} layout="vertical">
           <Form.Item

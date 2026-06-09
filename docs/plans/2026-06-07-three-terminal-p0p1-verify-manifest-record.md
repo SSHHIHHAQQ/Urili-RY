@@ -1,5 +1,7 @@
 # 2026-06-07 三端 P0/P1 验证入口 Manifest 化记录
 
+> 当前口径追补（2026-06-09）：本文件中的 GPT-5.3 Codex 优先尝试仅代表 2026-06-07 当时历史执行事实，不再作为后续规则。当前 `AGENTS.md` 已收紧为子 Agent 默认且只能使用 `gpt-5.4`，不得再使用 GPT-5.3 Codex。当前验证入口以 `react-ui/scripts/verify-three-terminal.mjs` 的 manifest 驱动、动态 reactor 模块发现和仓库级前端测试发现为准。
+
 ## 目标
 
 继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为参考方向，只处理当前 P0/P1：编译、guard、接口、权限、串端、service/字段缺失。
@@ -8,7 +10,7 @@
 
 ## 子 Agent 执行情况
 
-- 按用户最新规则优先尝试 6 个 `gpt-5.3-codex-spark` 只读子 Agent；平台返回用量限制，失败 Agent 已关闭。
+- 历史执行事实：按 2026-06-07 当时规则优先尝试 6 个 `gpt-5.3-codex-spark` 只读子 Agent；平台返回用量限制，失败 Agent 已关闭。该模型规则已在 2026-06-09 过期。
 - 回退使用 6 个 `gpt-5.4` 只读子 Agent，均已关闭。
 - 采纳结论：
   - `verify-three-terminal` 清单 manifest 化是当前最适合直接代码收口的 P1。

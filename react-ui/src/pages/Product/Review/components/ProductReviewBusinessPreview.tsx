@@ -1,5 +1,4 @@
 import {
-  Alert,
   Collapse,
   Descriptions,
   Divider,
@@ -10,9 +9,16 @@ import {
   Typography,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import type { ReactNode } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { getCategorySchema } from '@/services/product/product';
+import {
+  buildAttributeLabelMap,
+  buildOptionLabelMap,
+  formatAttributeValue,
+  resolveAttributeLabel,
+} from '@/pages/Product/utils/attributeDisplay';
 import DetailContentPreview from '../../Distribution/components/DetailContentPreview';
-import { resolveResourceUrl } from '../../Distribution/constants';
+import { getSalesStatusText, resolveResourceUrl, warehouseKindText } from '../../Distribution/constants';
 
 type SnapshotPayload<T> = {
   key: string;
@@ -40,10 +46,19 @@ type ChangeRow = {
   changed: boolean;
 };
 
-type CheckItem = {
+type SkuFieldChange = {
+  key: string;
   label: string;
-  ok: boolean;
-  detail: string;
+  beforeRaw?: unknown;
+  afterRaw?: unknown;
+  before: ReactNode;
+  after: ReactNode;
+  changed: boolean;
+};
+
+type AttributeDisplayMaps = {
+  attributeLabelMap: Map<string, string>;
+  optionLabelMap: Map<string, string>;
 };
 
 const sectionStyle = {
@@ -69,6 +84,20 @@ const imageCompareStyle = {
   gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
   gap: 12,
 } as const;
+
+const compactTagWrapStyle = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: 6,
+} as const;
+
+const salesStatusColor: Record<string, string> = {
+  DRAFT: 'default',
+  READY: 'warning',
+  ON_SALE: 'success',
+  OFF_SALE: 'processing',
+  DISABLED: 'error',
+};
 
 function parsePayload<T>(snapshot?: API.ProductReview.Snapshot) {
   if (!snapshot?.payloadJson) {
@@ -118,6 +147,61 @@ function getAfterProduct(review: API.ProductReview.Review) {
 
 function getBeforeProduct(review: API.ProductReview.Review) {
   return getProductSnapshot(review, 'BEFORE');
+}
+
+function getReviewCategoryId(review: API.ProductReview.Review) {
+  return getAfterProduct(review)?.categoryId || getBeforeProduct(review)?.categoryId || review.categoryId;
+}
+
+function getProductWarehouseKind(product?: API.ProductDistribution.Spu, review?: API.ProductReview.Review) {
+  return product?.warehouseKind || product?.warehouseKindSummary || review?.warehouseSummary;
+}
+
+function normalizeWarehouseKind(value?: string) {
+  if (!value) {
+    return '';
+  }
+  if (warehouseKindText[value]) {
+    return value;
+  }
+  if (value === '官方仓') {
+    return 'official';
+  }
+  if (value === '三方仓' || value === '混合') {
+    return value === '混合' ? 'MIXED' : 'third_party';
+  }
+  return 'third_party';
+}
+
+function formatWarehouseKindLabel(value?: string) {
+  const normalized = normalizeWarehouseKind(value);
+  if (!normalized) {
+    return '--';
+  }
+  return warehouseKindText[normalized] || normalized;
+}
+
+function formatSalesStatusLabel(value?: string) {
+  if (!value) {
+    return '--';
+  }
+  if (value === 'DISABLED') {
+    return '停用';
+  }
+  const label = getSalesStatusText(value);
+  return label === value ? '未知状态' : label;
+}
+
+function renderSalesStatus(value?: string) {
+  return <Tag color={value ? salesStatusColor[value] || 'default' : 'default'}>{formatSalesStatusLabel(value)}</Tag>;
+}
+
+function formatSkuWarehouseValue(sku?: API.ProductDistribution.Sku) {
+  return sku?.sourceWarehouseNames || formatWarehouseKindLabel(sku?.warehouseKindSummary);
+}
+
+function shouldShowDeliveryWarehouse(product?: API.ProductDistribution.Spu, review?: API.ProductReview.Review) {
+  return normalizeWarehouseKind(getProductWarehouseKind(product, review)) !== 'official';
 }
 
 function getSkuPairs(review: API.ProductReview.Review): SkuPair[] {
@@ -255,34 +339,18 @@ function renderMetric(label: string, value: ReactNode, color?: string) {
   );
 }
 
-function renderCheckList(items: CheckItem[]) {
-  return (
-    <div style={inlineGridStyle}>
-      {items.map((item) => (
-        <div key={item.label} style={{ padding: 12, border: '1px solid #f0f0f0', borderRadius: 6 }}>
-          <Tag color={item.ok ? 'success' : 'error'}>{item.ok ? '已完整' : '需关注'}</Tag>
-          <Typography.Text strong>{item.label}</Typography.Text>
-          <div style={{ marginTop: 6 }}>
-            <Typography.Text type="secondary">{item.detail}</Typography.Text>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function renderProductBasicInfo(product?: API.ProductDistribution.Spu, review?: API.ProductReview.Review) {
   return (
-    <Descriptions size="small" bordered column={3}>
+    <Descriptions size="small" bordered column={2}>
       <Descriptions.Item label="商品标题" span={2}>
         {valueText(product?.productName || review?.productNameAfter)}
       </Descriptions.Item>
-      <Descriptions.Item label="系统SPU">{valueText(product?.systemSpuCode || review?.systemSpuCode)}</Descriptions.Item>
       <Descriptions.Item label="卖家">{valueText(product?.sellerName || review?.sellerName)}</Descriptions.Item>
+      <Descriptions.Item label="系统SPU">{valueText(product?.systemSpuCode || review?.systemSpuCode)}</Descriptions.Item>
       <Descriptions.Item label="类目">{valueText(product?.categoryName || review?.categoryName)}</Descriptions.Item>
-      <Descriptions.Item label="商品状态">{valueText(product?.spuStatus)}</Descriptions.Item>
+      <Descriptions.Item label="商品状态">{renderSalesStatus(product?.spuStatus)}</Descriptions.Item>
       <Descriptions.Item label="英文标题" span={2}>{valueText(product?.productNameEn)}</Descriptions.Item>
-      <Descriptions.Item label="卖点" span={3}>{valueText(product?.sellingPoint)}</Descriptions.Item>
+      <Descriptions.Item label="卖点" span={2}>{valueText(product?.sellingPoint)}</Descriptions.Item>
     </Descriptions>
   );
 }
@@ -312,7 +380,7 @@ function renderImageGallery(product?: API.ProductDistribution.Spu, review?: API.
 
 function renderWarehouseTable(product?: API.ProductDistribution.Spu) {
   const columns: ColumnsType<API.ProductDistribution.ProductWarehouse> = [
-    { title: '仓库类型', dataIndex: 'warehouseKind', width: 120, render: (value) => value || '--' },
+    { title: '仓库类型', dataIndex: 'warehouseKind', width: 120, render: (value) => formatWarehouseKindLabel(String(value || '')) },
     { title: '仓库编码', dataIndex: 'warehouseCode', width: 160, render: (value) => value || '--' },
     { title: '仓库名称', dataIndex: 'warehouseName', render: (value) => value || '--' },
     { title: '结算币种', dataIndex: 'settlementCurrency', width: 120, render: (value) => value || '--' },
@@ -320,7 +388,7 @@ function renderWarehouseTable(product?: API.ProductDistribution.Spu) {
 
   return (
     <Table
-      rowKey={(row, index) => String(row.id ?? row.warehouseId ?? index)}
+      rowKey={(row) => String(row.id ?? row.warehouseId ?? row.warehouseCode ?? row.warehouseName ?? JSON.stringify(row))}
       size="small"
       columns={columns}
       dataSource={product?.warehouses || []}
@@ -330,24 +398,24 @@ function renderWarehouseTable(product?: API.ProductDistribution.Spu) {
   );
 }
 
-function renderAttributeValue(item: API.ProductDistribution.AttributeValue) {
-  if (item.valueText) return item.valueText;
-  if (item.valueCode) return item.valueCode;
-  if (item.valueNumber != null) return item.valueNumber;
-  if (item.valueDate) return item.valueDate;
-  if (item.valueJson) return item.valueJson;
-  return '--';
-}
-
-function renderAttributeTable(product?: API.ProductDistribution.Spu) {
+function renderAttributeTable(product: API.ProductDistribution.Spu | undefined, displayMaps: AttributeDisplayMaps) {
   const columns: ColumnsType<API.ProductDistribution.AttributeValue> = [
-    { title: '属性', dataIndex: 'attributeName', width: 220, render: (value, row) => value || row.attributeCode || '--' },
-    { title: '值', dataIndex: 'valueText', render: (_, row) => renderAttributeValue(row) },
+    {
+      title: '属性',
+      dataIndex: 'attributeName',
+      width: 220,
+      render: (_, row) => resolveAttributeLabel(row, displayMaps.attributeLabelMap),
+    },
+    {
+      title: '值',
+      dataIndex: 'valueText',
+      render: (_, row) => formatAttributeValue(row, displayMaps.optionLabelMap),
+    },
   ];
 
   return (
     <Table
-      rowKey={(row, index) => String(row.valueId ?? row.attributeId ?? index)}
+      rowKey={(row) => String(row.valueId ?? row.attributeId ?? row.attributeCode ?? row.attributeName ?? JSON.stringify(row))}
       size="small"
       columns={columns}
       dataSource={product?.attributeValues || []}
@@ -390,13 +458,13 @@ function renderSkuTable(skus: API.ProductDistribution.Sku[], mode: 'full' | 'add
       render: (_, row) => formatMoney(row.supplyPrice, row.currencyCode),
     },
     { title: '尺寸重量', dataIndex: 'measureLengthCm', width: 180, render: (_, row) => formatDimension(row) },
-    { title: '仓库', dataIndex: 'sourceWarehouseNames', width: 180, render: (value, row) => value || row.warehouseKindSummary || '--' },
-    { title: '状态', dataIndex: 'skuStatus', width: 100, render: (value) => value || '--' },
+    { title: '仓库', dataIndex: 'sourceWarehouseNames', width: 180, render: (_, row) => formatSkuWarehouseValue(row) },
+    { title: '状态', dataIndex: 'skuStatus', width: 100, render: (value) => renderSalesStatus(String(value || '')) },
   ];
 
   return (
     <Table
-      rowKey={(row, index) => String(row.skuId ?? row.sellerSkuCode ?? row.systemSkuCode ?? index)}
+      rowKey={(row) => String(row.skuId ?? row.sellerSkuCode ?? row.systemSkuCode ?? row.sourceDimensionGroupKey ?? JSON.stringify(row))}
       size="small"
       columns={columns}
       dataSource={skus}
@@ -407,66 +475,32 @@ function renderSkuTable(skus: API.ProductDistribution.Sku[], mode: 'full' | 'add
   );
 }
 
-function buildNewProductChecks(product?: API.ProductDistribution.Spu, skus: API.ProductDistribution.Sku[] = []) {
-  const hasPrice = skus.every((sku) => sku.salePrice != null);
-  const hasSupplyPrice = skus.every((sku) => sku.supplyPrice != null);
-  return [
-    {
-      label: '基础资料',
-      ok: !!product?.productName && !!product?.categoryName,
-      detail: product?.productName && product?.categoryName ? '标题和类目已填写' : '标题或类目缺失',
-    },
-    {
-      label: '商品图片',
-      ok: !!product?.mainImageUrl,
-      detail: product?.mainImageUrl ? '主图已上传' : '主图缺失',
-    },
-    {
-      label: 'SKU',
-      ok: skus.length > 0,
-      detail: skus.length ? `共 ${skus.length} 个 SKU` : '没有 SKU',
-    },
-    {
-      label: '价格',
-      ok: !!skus.length && hasPrice && hasSupplyPrice,
-      detail: hasPrice && hasSupplyPrice ? '销售价和供货价完整' : '存在价格缺失',
-    },
-    {
-      label: '发货仓库',
-      ok: !!product?.warehouses?.length,
-      detail: product?.warehouses?.length ? `已绑定 ${product.warehouses.length} 个仓库` : '未绑定仓库',
-    },
-    {
-      label: '商品详情',
-      ok: !!product?.detailContent,
-      detail: product?.detailContent ? '详情图文已填写' : '详情图文为空',
-    },
-  ];
-}
-
-function NewProductReviewView({ review }: { review: API.ProductReview.Review }) {
+function NewProductReviewView({
+  review,
+  displayMaps,
+}: {
+  review: API.ProductReview.Review;
+  displayMaps: AttributeDisplayMaps;
+}) {
   const product = getAfterProduct(review);
   const skus = getAfterSkus(review);
+  const showDeliveryWarehouse = shouldShowDeliveryWarehouse(product, review);
 
   return (
     <div style={stackStyle}>
-      <Alert
-        type="info"
-        showIcon
-        message="新增商品审核需要看完整商品"
-        description="这个视图按商城商品详情的顺序展示基础资料、图片、SKU、价格、仓库和详情图文，所有内容都是本次新增。"
-      />
       <div style={inlineGridStyle}>
         {renderMetric('SKU数量', skus.length || review.skuCount || '--')}
         {renderMetric('销售价区间', formatRange(review.priceAfterMin, review.priceAfterMax, review.currencySummary))}
-        {renderMetric('发货仓库', product?.warehouses?.length ? `${product.warehouses.length} 个` : review.warehouseSummary || '--')}
+        {renderMetric('仓库类型', formatWarehouseKindLabel(getProductWarehouseKind(product, review)))}
+        {showDeliveryWarehouse
+          ? renderMetric('发货仓库', product?.warehouses?.length ? `${product.warehouses.length} 个` : '--')
+          : null}
       </div>
-      {renderSection('审核检查清单', renderCheckList(buildNewProductChecks(product, skus)))}
       {renderSection('商品基础信息', renderProductBasicInfo(product, review))}
       {renderSection('商品图片', renderImageGallery(product, review))}
       {renderSection('SKU 和价格', renderSkuTable(skus))}
-      {renderSection('发货仓库', renderWarehouseTable(product))}
-      {renderSection('商品属性', renderAttributeTable(product))}
+      {showDeliveryWarehouse ? renderSection('发货仓库', renderWarehouseTable(product)) : null}
+      {renderSection('商品属性', renderAttributeTable(product, displayMaps))}
       {renderSection('商品详情图文', <DetailContentPreview value={product?.detailContent} />)}
     </div>
   );
@@ -481,12 +515,6 @@ function AddSkuReviewView({ review }: { review: API.ProductReview.Review }) {
 
   return (
     <div style={stackStyle}>
-      <Alert
-        type="info"
-        showIcon
-        message="本次只审核新增 SKU"
-        description="旧商品资料只作为上下文，审核重点是下面这些新增 SKU 的图片、规格、价格、尺寸重量和仓库。"
-      />
       {renderSection('商品上下文', renderProductBasicInfo(product, review))}
       {renderSection('新增 SKU', renderSkuTable(addedSkus.length ? addedSkus : getAfterSkus(review), 'added'))}
       <Collapse
@@ -556,7 +584,13 @@ function renderChangeTable(rows: ChangeRow[]) {
   );
 }
 
-function ProductInfoChangeReviewView({ review }: { review: API.ProductReview.Review }) {
+function ProductInfoChangeReviewView({
+  review,
+  displayMaps,
+}: {
+  review: API.ProductReview.Review;
+  displayMaps: AttributeDisplayMaps;
+}) {
   const before = getBeforeProduct(review);
   const after = getAfterProduct(review);
   const rows = buildProductChangeRows(before, after);
@@ -564,12 +598,6 @@ function ProductInfoChangeReviewView({ review }: { review: API.ProductReview.Rev
 
   return (
     <div style={stackStyle}>
-      <Alert
-        type="warning"
-        showIcon
-        message={`商品资料变更：${changedCount || 0} 项变化`}
-        description="默认只看变更字段；详情图文和完整属性保留在下方，方便审核员按商城商品详情理解。"
-      />
       {renderSection('商品资料变化', renderChangeTable(rows))}
       {renderSection('主图对比', (
         <div style={imageCompareStyle}>
@@ -594,7 +622,7 @@ function ProductInfoChangeReviewView({ review }: { review: API.ProductReview.Rev
           {
             key: 'attributes',
             label: '查看修改后类目属性',
-            children: renderAttributeTable(after),
+            children: renderAttributeTable(after, displayMaps),
           },
         ]}
       />
@@ -602,23 +630,163 @@ function ProductInfoChangeReviewView({ review }: { review: API.ProductReview.Rev
   );
 }
 
-function buildSkuChangeSummary(before?: API.ProductDistribution.Sku, after?: API.ProductDistribution.Sku) {
-  const fields = [
-    ['SKU图', before?.skuImageUrl, after?.skuImageUrl],
-    ['客户SKU', before?.sellerSkuCode, after?.sellerSkuCode],
-    ['颜色', before?.color, after?.color],
-    ['尺码', before?.size, after?.size],
-    ['材质', before?.material, after?.material],
-    ['款式', before?.style, after?.style],
-    ['型号', before?.model, after?.model],
-    ['容量', before?.capacity, after?.capacity],
-    ['尺寸重量', formatDimension(before), formatDimension(after)],
-    ['仓库', before?.sourceWarehouseNames || before?.warehouseKindSummary, after?.sourceWarehouseNames || after?.warehouseKindSummary],
+function renderSkuValue(value?: ReactNode) {
+  return <Typography.Text>{valueText(value)}</Typography.Text>;
+}
+
+function renderSkuWarehouseValue(sku?: API.ProductDistribution.Sku) {
+  return renderSkuValue(formatSkuWarehouseValue(sku));
+}
+
+function buildSkuFieldChanges(before?: API.ProductDistribution.Sku, after?: API.ProductDistribution.Sku): SkuFieldChange[] {
+  const currency = after?.currencyCode || before?.currencyCode;
+  const fields: Omit<SkuFieldChange, 'changed'>[] = [
+    {
+      key: 'skuImageUrl',
+      label: 'SKU图',
+      beforeRaw: before?.skuImageUrl,
+      afterRaw: after?.skuImageUrl,
+      before: renderImage(before?.skuImageUrl, 56),
+      after: renderImage(after?.skuImageUrl, 56),
+    },
+    {
+      key: 'sellerSkuCode',
+      label: '客户SKU',
+      beforeRaw: before?.sellerSkuCode,
+      afterRaw: after?.sellerSkuCode,
+      before: renderSkuValue(before?.sellerSkuCode),
+      after: renderSkuValue(after?.sellerSkuCode),
+    },
+    {
+      key: 'systemSkuCode',
+      label: '系统SKU',
+      beforeRaw: before?.systemSkuCode,
+      afterRaw: after?.systemSkuCode,
+      before: renderSkuValue(before?.systemSkuCode),
+      after: renderSkuValue(after?.systemSkuCode),
+    },
+    { key: 'color', label: '颜色', beforeRaw: before?.color, afterRaw: after?.color, before: renderSkuValue(before?.color), after: renderSkuValue(after?.color) },
+    { key: 'size', label: '尺码', beforeRaw: before?.size, afterRaw: after?.size, before: renderSkuValue(before?.size), after: renderSkuValue(after?.size) },
+    { key: 'material', label: '材质', beforeRaw: before?.material, afterRaw: after?.material, before: renderSkuValue(before?.material), after: renderSkuValue(after?.material) },
+    { key: 'style', label: '款式', beforeRaw: before?.style, afterRaw: after?.style, before: renderSkuValue(before?.style), after: renderSkuValue(after?.style) },
+    { key: 'model', label: '型号', beforeRaw: before?.model, afterRaw: after?.model, before: renderSkuValue(before?.model), after: renderSkuValue(after?.model) },
+    { key: 'capacity', label: '容量', beforeRaw: before?.capacity, afterRaw: after?.capacity, before: renderSkuValue(before?.capacity), after: renderSkuValue(after?.capacity) },
+    {
+      key: 'dimension',
+      label: '尺寸重量',
+      beforeRaw: formatDimension(before),
+      afterRaw: formatDimension(after),
+      before: renderSkuValue(formatDimension(before)),
+      after: renderSkuValue(formatDimension(after)),
+    },
+    {
+      key: 'supplyPrice',
+      label: '供货价',
+      beforeRaw: before?.supplyPrice,
+      afterRaw: after?.supplyPrice,
+      before: renderSkuValue(formatMoney(before?.supplyPrice, currency)),
+      after: renderSkuValue(formatMoney(after?.supplyPrice, currency)),
+    },
+    {
+      key: 'warehouse',
+      label: '仓库',
+      beforeRaw: before?.sourceWarehouseNames || before?.warehouseKindSummary,
+      afterRaw: after?.sourceWarehouseNames || after?.warehouseKindSummary,
+      before: renderSkuWarehouseValue(before),
+      after: renderSkuWarehouseValue(after),
+    },
+    {
+      key: 'skuStatus',
+      label: '状态',
+      beforeRaw: before?.skuStatus,
+      afterRaw: after?.skuStatus,
+      before: renderSalesStatus(before?.skuStatus),
+      after: renderSalesStatus(after?.skuStatus),
+    },
+  ];
+
+  return fields.map((field) => ({
+    ...field,
+    changed: isDifferent(field.beforeRaw, field.afterRaw),
+  }));
+}
+
+function getChangedSkuFields(pair: SkuPair) {
+  return buildSkuFieldChanges(pair.before, pair.after).filter((field) => field.changed);
+}
+
+function renderSkuChangeTags(pair: SkuPair) {
+  const changedFields = getChangedSkuFields(pair);
+  if (!changedFields.length) {
+    return <Typography.Text type="secondary">未识别到字段变化</Typography.Text>;
+  }
+  return (
+    <div style={compactTagWrapStyle}>
+      {changedFields.map((field) => (
+        <Tag key={field.key} color="blue">{field.label}</Tag>
+      ))}
+    </div>
+  );
+}
+
+function renderSkuSpecTags(pair: SkuPair) {
+  const after = pair.after || pair.before;
+  const changedKeys = new Set(getChangedSkuFields(pair).map((field) => field.key));
+  const specs = [
+    ['color', '颜色', after?.color],
+    ['size', '尺码', after?.size],
+    ['material', '材质', after?.material],
+    ['style', '款式', after?.style],
+    ['model', '型号', after?.model],
+    ['capacity', '容量', after?.capacity],
   ] as const;
-  return fields
-    .filter(([, beforeValue, afterValue]) => isDifferent(beforeValue, afterValue))
-    .map(([label]) => label)
-    .join('、') || '未识别到字段变化';
+  const visibleSpecs = specs.filter(([, , value]) => !!value);
+  if (!visibleSpecs.length) {
+    return <Typography.Text type="secondary">--</Typography.Text>;
+  }
+  return (
+    <div style={compactTagWrapStyle}>
+      {visibleSpecs.map(([key, label, value]) => (
+        <Tag key={key} color={changedKeys.has(key) ? 'orange' : undefined}>
+          {label}：{value}
+        </Tag>
+      ))}
+    </div>
+  );
+}
+
+function renderSkuImageSummary(pair: SkuPair) {
+  const imageChanged = isDifferent(pair.before?.skuImageUrl, pair.after?.skuImageUrl);
+  if (!imageChanged) {
+    return renderImage(pair.after?.skuImageUrl || pair.before?.skuImageUrl, 56);
+  }
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      {renderImage(pair.before?.skuImageUrl, 48)}
+      <Typography.Text type="secondary">-&gt;</Typography.Text>
+      {renderImage(pair.after?.skuImageUrl, 48)}
+    </div>
+  );
+}
+
+function renderSkuFieldChangeDetail(pair: SkuPair) {
+  const changedFields = getChangedSkuFields(pair);
+  const columns: ColumnsType<SkuFieldChange> = [
+    { title: '字段', dataIndex: 'label', width: 120, render: (value) => <Tag>{value}</Tag> },
+    { title: '修改前', dataIndex: 'before', render: (_, row) => row.before },
+    { title: '修改后', dataIndex: 'after', render: (_, row) => <div style={{ color: '#1677ff' }}>{row.after}</div> },
+  ];
+
+  return (
+    <Table
+      rowKey="key"
+      size="small"
+      columns={columns}
+      dataSource={changedFields}
+      pagination={false}
+      locale={{ emptyText: '未识别到字段变化' }}
+    />
+  );
 }
 
 function renderSkuInfoChangeTable(pairs: SkuPair[]) {
@@ -626,22 +794,33 @@ function renderSkuInfoChangeTable(pairs: SkuPair[]) {
     {
       title: 'SKU',
       dataIndex: 'key',
-      width: 180,
-      render: (_, row) => formatSkuIdentity(row.after || row.before, row.item),
+      width: 190,
+      render: (_, row) => (
+        <div>
+          <Typography.Text strong>{formatSkuIdentity(row.after || row.before, row.item)}</Typography.Text>
+          <div>
+            <Typography.Text type="secondary">{row.after?.systemSkuCode || row.before?.systemSkuCode || '--'}</Typography.Text>
+          </div>
+        </div>
+      ),
     },
     {
       title: 'SKU图',
       dataIndex: 'skuImageUrl',
-      width: 150,
-      render: (_, row) => (
-        <div style={imageCompareStyle}>
-          {renderImage(row.before?.skuImageUrl, 48)}
-          {renderImage(row.after?.skuImageUrl, 48)}
-        </div>
-      ),
+      width: 130,
+      render: (_, row) => renderSkuImageSummary(row),
     },
-    { title: '规格', dataIndex: 'spec', render: (_, row) => `${formatSkuSpecs(row.before)} -> ${formatSkuSpecs(row.after)}` },
-    { title: '变化字段', dataIndex: 'diff', render: (_, row) => buildSkuChangeSummary(row.before, row.after) },
+    {
+      title: '规格摘要',
+      dataIndex: 'spec',
+      render: (_, row) => renderSkuSpecTags(row),
+    },
+    {
+      title: '变化项',
+      dataIndex: 'diff',
+      width: 240,
+      render: (_, row) => renderSkuChangeTags(row),
+    },
   ];
 
   return (
@@ -651,7 +830,8 @@ function renderSkuInfoChangeTable(pairs: SkuPair[]) {
       columns={columns}
       dataSource={pairs}
       pagination={false}
-      scroll={{ x: 980 }}
+      expandable={{ expandedRowRender: renderSkuFieldChangeDetail }}
+      scroll={{ x: 920 }}
       locale={{ emptyText: '没有 SKU 资料变化' }}
     />
   );
@@ -659,16 +839,12 @@ function renderSkuInfoChangeTable(pairs: SkuPair[]) {
 
 function SkuInfoChangeReviewView({ review }: { review: API.ProductReview.Review }) {
   const pairs = getSkuPairs(review).filter((pair) => !!pair.after);
+  const changedPairs = pairs.filter((pair) => getChangedSkuFields(pair).length > 0);
+  const visiblePairs = changedPairs.length ? changedPairs : pairs;
 
   return (
     <div style={stackStyle}>
-      <Alert
-        type="warning"
-        showIcon
-        message={`SKU资料变更：影响 ${pairs.length || review.skuCount || 0} 个 SKU`}
-        description="这里只展示发生变化的 SKU，重点看图片、规格、编码、尺寸重量、仓库等非价格资料。"
-      />
-      {renderSection('SKU 资料变化', renderSkuInfoChangeTable(pairs))}
+      {renderSection('SKU 资料变化', renderSkuInfoChangeTable(visiblePairs), <Tag color="blue">{visiblePairs.length} 个SKU</Tag>)}
     </div>
   );
 }
@@ -688,20 +864,20 @@ function renderPriceDelta(before?: number, after?: number) {
   );
 }
 
-function renderPriceRisk(before?: API.ProductDistribution.Sku, after?: API.ProductDistribution.Sku) {
-  if (after?.salePrice == null) {
-    return <Tag color="error">缺销售价</Tag>;
+function renderSupplyPriceRisk(before?: API.ProductDistribution.Sku, after?: API.ProductDistribution.Sku) {
+  if (after?.supplyPrice == null) {
+    return <Tag color="error">缺供货价</Tag>;
   }
-  if (after.supplyPrice != null && after.salePrice < after.supplyPrice) {
-    return <Tag color="error">低于供货价</Tag>;
+  if (after.salePrice != null && after.supplyPrice > after.salePrice) {
+    return <Tag color="error">高于销售价</Tag>;
   }
-  if (before?.salePrice != null && before.salePrice !== 0) {
-    const percent = Math.abs((after.salePrice - before.salePrice) / before.salePrice) * 100;
+  if (before?.supplyPrice != null && before.supplyPrice !== 0) {
+    const percent = Math.abs((after.supplyPrice - before.supplyPrice) / before.supplyPrice) * 100;
     if (percent >= 30) {
       return <Tag color="warning">涨跌幅较大</Tag>;
     }
   }
-  return <Tag color="success">价格正常</Tag>;
+  return <Tag color="success">供货价正常</Tag>;
 }
 
 function renderPriceChangeTable(pairs: SkuPair[]) {
@@ -714,25 +890,25 @@ function renderPriceChangeTable(pairs: SkuPair[]) {
     },
     { title: '规格', dataIndex: 'spec', render: (_, row) => formatSkuSpecs(row.after || row.before) },
     {
-      title: '原销售价',
+      title: '原供货价',
       dataIndex: 'beforePrice',
       width: 130,
-      render: (_, row) => formatMoney(row.before?.salePrice, row.before?.currencyCode || row.after?.currencyCode),
+      render: (_, row) => formatMoney(row.before?.supplyPrice, row.before?.currencyCode || row.after?.currencyCode),
     },
     {
-      title: '新销售价',
+      title: '新供货价',
       dataIndex: 'afterPrice',
       width: 130,
-      render: (_, row) => formatMoney(row.after?.salePrice, row.after?.currencyCode || row.before?.currencyCode),
+      render: (_, row) => formatMoney(row.after?.supplyPrice, row.after?.currencyCode || row.before?.currencyCode),
     },
-    { title: '变化', dataIndex: 'delta', width: 160, render: (_, row) => renderPriceDelta(row.before?.salePrice, row.after?.salePrice) },
+    { title: '变化', dataIndex: 'delta', width: 160, render: (_, row) => renderPriceDelta(row.before?.supplyPrice, row.after?.supplyPrice) },
     {
-      title: '供货价',
-      dataIndex: 'supplyPrice',
+      title: '当前销售价',
+      dataIndex: 'salePrice',
       width: 130,
-      render: (_, row) => formatMoney(row.after?.supplyPrice ?? row.before?.supplyPrice, row.after?.currencyCode || row.before?.currencyCode),
+      render: (_, row) => formatMoney(row.after?.salePrice ?? row.before?.salePrice, row.after?.currencyCode || row.before?.currencyCode),
     },
-    { title: '风险', dataIndex: 'risk', width: 140, render: (_, row) => renderPriceRisk(row.before, row.after) },
+    { title: '风险', dataIndex: 'risk', width: 140, render: (_, row) => renderSupplyPriceRisk(row.before, row.after) },
   ];
 
   return (
@@ -743,7 +919,7 @@ function renderPriceChangeTable(pairs: SkuPair[]) {
       dataSource={pairs}
       pagination={false}
       scroll={{ x: 1080 }}
-      locale={{ emptyText: '没有价格变化' }}
+      locale={{ emptyText: '没有供货价变化' }}
     />
   );
 }
@@ -751,26 +927,20 @@ function renderPriceChangeTable(pairs: SkuPair[]) {
 function PriceChangeReviewView({ review }: { review: API.ProductReview.Review }) {
   const pairs = getSkuPairs(review).filter((pair) => !!pair.before || !!pair.after);
   const increased = pairs.filter((pair) =>
-    pair.before?.salePrice != null && pair.after?.salePrice != null && pair.after.salePrice > pair.before.salePrice).length;
+    pair.before?.supplyPrice != null && pair.after?.supplyPrice != null && pair.after.supplyPrice > pair.before.supplyPrice).length;
   const decreased = pairs.filter((pair) =>
-    pair.before?.salePrice != null && pair.after?.salePrice != null && pair.after.salePrice < pair.before.salePrice).length;
+    pair.before?.supplyPrice != null && pair.after?.supplyPrice != null && pair.after.supplyPrice < pair.before.supplyPrice).length;
 
   return (
     <div style={stackStyle}>
-      <Alert
-        type="warning"
-        showIcon
-        message="价格变更审核"
-        description="这个视图只看价格变化，默认展示原销售价、新销售价、差额、涨跌幅和低于供货价等风险。"
-      />
       <div style={inlineGridStyle}>
         {renderMetric('影响 SKU', pairs.length || review.skuCount || '--')}
         {renderMetric('涨价 SKU', increased, increased ? '#cf1322' : undefined)}
         {renderMetric('降价 SKU', decreased, decreased ? '#3f8600' : undefined)}
-        {renderMetric('原价格区间', formatRange(review.priceBeforeMin, review.priceBeforeMax, review.currencySummary))}
-        {renderMetric('新价格区间', formatRange(review.priceAfterMin, review.priceAfterMax, review.currencySummary))}
+        {renderMetric('原供货价区间', formatRange(review.priceBeforeMin, review.priceBeforeMax, review.currencySummary))}
+        {renderMetric('新供货价区间', formatRange(review.priceAfterMin, review.priceAfterMax, review.currencySummary))}
       </div>
-      {renderSection('SKU 价格对比', renderPriceChangeTable(pairs))}
+      {renderSection('SKU 供货价对比', renderPriceChangeTable(pairs))}
     </div>
   );
 }
@@ -781,7 +951,6 @@ function GenericReviewView({ review }: { review: API.ProductReview.Review }) {
 
   return (
     <div style={stackStyle}>
-      <Alert type="info" showIcon message="审核预览" description="暂未识别到专用审核视图，按商品和 SKU 信息展示。" />
       {renderSection('商品基础信息', renderProductBasicInfo(product, review))}
       {renderSection('SKU', renderSkuTable(skus))}
     </div>
@@ -789,6 +958,37 @@ function GenericReviewView({ review }: { review: API.ProductReview.Review }) {
 }
 
 export default function ProductReviewBusinessPreview({ review }: ProductReviewBusinessPreviewProps) {
+  const [categorySchema, setCategorySchema] = useState<API.Product.CategoryAttribute[]>([]);
+  const categoryId = getReviewCategoryId(review);
+  const attributeLabelMap = useMemo(() => buildAttributeLabelMap(categorySchema), [categorySchema]);
+  const optionLabelMap = useMemo(() => buildOptionLabelMap(categorySchema), [categorySchema]);
+  const displayMaps = useMemo(
+    () => ({ attributeLabelMap, optionLabelMap }),
+    [attributeLabelMap, optionLabelMap],
+  );
+
+  useEffect(() => {
+    if (!categoryId) {
+      setCategorySchema([]);
+      return undefined;
+    }
+    let cancelled = false;
+    getCategorySchema(categoryId, { skipErrorHandler: true })
+      .then((resp) => {
+        if (!cancelled) {
+          setCategorySchema(resp.data || []);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCategorySchema([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [categoryId]);
+
   return (
     <div style={stackStyle}>
       <div>
@@ -800,9 +1000,11 @@ export default function ProductReviewBusinessPreview({ review }: ProductReviewBu
         </Typography.Text>
       </div>
       <Divider style={{ margin: 0 }} />
-      {review.reviewType === 'NEW_PRODUCT' ? <NewProductReviewView review={review} /> : null}
+      {review.reviewType === 'NEW_PRODUCT' ? <NewProductReviewView review={review} displayMaps={displayMaps} /> : null}
       {review.reviewType === 'ADD_SKU' ? <AddSkuReviewView review={review} /> : null}
-      {review.reviewType === 'EDIT_PRODUCT_INFO' ? <ProductInfoChangeReviewView review={review} /> : null}
+      {review.reviewType === 'EDIT_PRODUCT_INFO' ? (
+        <ProductInfoChangeReviewView review={review} displayMaps={displayMaps} />
+      ) : null}
       {review.reviewType === 'EDIT_SKU_INFO' ? <SkuInfoChangeReviewView review={review} /> : null}
       {review.reviewType === 'EDIT_PRICE' ? <PriceChangeReviewView review={review} /> : null}
       {!review.reviewType || !['NEW_PRODUCT', 'ADD_SKU', 'EDIT_PRODUCT_INFO', 'EDIT_SKU_INFO', 'EDIT_PRICE'].includes(review.reviewType)

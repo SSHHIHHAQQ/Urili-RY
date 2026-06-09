@@ -5,7 +5,7 @@
 -- 3. Add the admin permission button for inventory overview sync policy changes.
 
 set names utf8mb4;
-set session group_concat_max_len = greatest(@@session.group_concat_max_len, 1048576);
+set session group_concat_max_len = cast(greatest(@@session.group_concat_max_len, 1048576) as unsigned);
 
 set @confirm_inventory_auto_wms_stock_sync_policy := coalesce(@confirm_inventory_auto_wms_stock_sync_policy, '');
 set @inventory_auto_wms_menu_expected_count := coalesce(@inventory_auto_wms_menu_expected_count, '');
@@ -264,7 +264,15 @@ end//
 drop procedure if exists assert_inventory_auto_wms_stock_sync_policy_completed//
 create procedure assert_inventory_auto_wms_stock_sync_policy_completed()
 begin
+  declare v_menu_seed_count bigint default 0;
+  declare v_dict_type_seed_count bigint default 0;
+  declare v_dict_data_seed_count bigint default 0;
+
   call assert_inventory_auto_wms_schema_ready();
+
+  select count(1) into v_menu_seed_count from tmp_inventory_auto_wms_sys_menu_seed;
+  select count(1) into v_dict_type_seed_count from tmp_inventory_auto_wms_dict_type_seed;
+  select count(1) into v_dict_data_seed_count from tmp_inventory_auto_wms_dict_data_seed;
 
   if (
     select count(1)
@@ -280,7 +288,7 @@ begin
       and coalesce(m.perms, '') = seed.perms
       and coalesce(m.icon, '') = seed.icon
       and coalesce(m.remark, '') = seed.remark
-  ) <> (select count(1) from tmp_inventory_auto_wms_sys_menu_seed) then
+  ) <> v_menu_seed_count then
     signal sqlstate '45000' set message_text = 'inventory auto wms sys_menu seed completion mismatch';
   end if;
 
@@ -290,7 +298,7 @@ begin
     join tmp_inventory_auto_wms_dict_type_seed seed on seed.dict_type = t.dict_type
     where coalesce(t.dict_name, '') = seed.dict_name
       and coalesce(t.status, '') = '0'
-  ) <> (select count(1) from tmp_inventory_auto_wms_dict_type_seed) then
+  ) <> v_dict_type_seed_count then
     signal sqlstate '45000' set message_text = 'inventory auto wms dict type seed completion mismatch';
   end if;
 
@@ -305,7 +313,7 @@ begin
       and coalesce(d.list_class, '') = seed.list_class
       and coalesce(d.is_default, '') = seed.is_default
       and coalesce(d.status, '') = '0'
-  ) <> (select count(1) from tmp_inventory_auto_wms_dict_data_seed) then
+  ) <> v_dict_data_seed_count then
     signal sqlstate '45000' set message_text = 'inventory auto wms dict data seed completion mismatch';
   end if;
 end//

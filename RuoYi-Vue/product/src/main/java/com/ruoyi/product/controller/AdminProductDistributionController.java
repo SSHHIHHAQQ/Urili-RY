@@ -148,8 +148,7 @@ public class AdminProductDistributionController extends BaseController
     @PutMapping("/skus/sale-prices")
     public AjaxResult batchUpdateSkuSalePrice(@RequestBody ProductSkuSalePriceUpdateRequest request)
     {
-        int rows = productReviewService.submitSkuSalePriceReview(request);
-        return rows > 0 ? success("已提交调价审核") : error();
+        return toAjax(productDistributionService.batchUpdateSkuSalePrice(request));
     }
 
     @PreAuthorize("@ss.hasPermi('product:distribution:status')")

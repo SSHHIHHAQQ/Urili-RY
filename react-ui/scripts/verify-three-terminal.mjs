@@ -20,6 +20,8 @@ const frontendJestCommand = path.join(
   '.bin',
   process.platform === 'win32' ? 'jest.cmd' : 'jest',
 );
+const frontendUmiTestSetupScript = path.join(uiRoot, 'scripts', 'prepare-umi-test.mjs');
+const frontendUmiTestExportsPath = path.join(uiRoot, 'src', '.umi-test', 'exports.ts');
 const cliArgs = process.argv.slice(2);
 const frontendJestPassThroughArgs = readFrontendJestPassThroughArgs(cliArgs);
 const frontendDiscoveryIgnoredDirs = new Set([
@@ -35,6 +37,9 @@ const criticalBackendTestPathPattern = /^(?:ruoyi-system[\\/]src[\\/]test[\\/]ja
 const criticalBackendExplicitTestClasses = new Set(manifest.criticalBackendExplicitTestClasses);
 const frontendDiscoveryRoots = [uiRoot];
 const criticalFrontendTestPathPattern = /(?:terminal|portal|partner|remote-menu|getrouters|authority|auth-sidecar|direct-login|unauthorized|redirect|three-terminal|namespace|menu-id|menu-range|account-scope|permission-contract|system-user-service|product-distribution-permission|product-center|source-product|upstream-system-permission|inventory-overview|inventory-adjustment-review|source-warehouse|warehouse|finance|currency)/i;
+const criticalFrontendExplicitTestPaths = new Set(
+  manifest.criticalFrontendExplicitTestPaths.map(normalizeFrontendTestPath),
+);
 
 function readFrontendJestPassThroughArgs(args) {
   const allowedJestArgs = new Set(['--coverage', '-u', '--updateSnapshot']);
@@ -67,11 +72,13 @@ function readThreeTerminalManifest() {
   const backendTestClasses = readStringArray(manifest, 'backendTestClasses');
   const criticalBackendExplicitTestClasses = readStringArray(manifest, 'criticalBackendExplicitTestClasses');
   const frontendTestPaths = readStringArray(manifest, 'frontendTestPaths');
+  const criticalFrontendExplicitTestPaths = readStringArray(manifest, 'criticalFrontendExplicitTestPaths');
   const frontendGuardScriptEntries = readFrontendGuardScriptEntries(manifest);
   const frontendGuardScripts = frontendGuardScriptEntries.map((entry) => entry.name);
   assertUnique('backendTestClasses', backendTestClasses);
   assertUnique('criticalBackendExplicitTestClasses', criticalBackendExplicitTestClasses);
   assertUnique('frontendTestPaths', frontendTestPaths);
+  assertUnique('criticalFrontendExplicitTestPaths', criticalFrontendExplicitTestPaths);
   assertUnique('frontendGuardScripts', frontendGuardScripts);
   assertFrontendGuardScriptsMatch(frontendGuardScriptEntries);
 
@@ -83,10 +90,20 @@ function readThreeTerminalManifest() {
     );
   }
 
+  const frontendConfigured = new Set(frontendTestPaths.map(normalizeFrontendTestPath));
+  const frontendExplicitMissing = criticalFrontendExplicitTestPaths
+    .filter((testPath) => !frontendConfigured.has(normalizeFrontendTestPath(testPath)));
+  if (frontendExplicitMissing.length > 0) {
+    throw new Error(
+      `critical frontend test files are not included in three-terminal manifest: ${frontendExplicitMissing.join(', ')}`,
+    );
+  }
+
   return {
     backendTestClasses,
     criticalBackendExplicitTestClasses,
     frontendTestPaths,
+    criticalFrontendExplicitTestPaths,
     frontendGuardScripts,
   };
 }
@@ -353,8 +370,11 @@ function assertFrontendTestSourcesIncluded() {
   assertGeneratedFrontendTestMirrors(testFiles);
   const sourceTestFiles = testFiles.filter((file) => !isGeneratedFrontendTestMirror(file));
   const unlisted = sourceTestFiles.filter((file) => {
-    return criticalFrontendTestPathPattern.test(file.replaceAll(path.sep, '/'))
-      && !configuredTests.has(file);
+    const normalized = normalizeFrontendTestPath(file);
+    return (
+      criticalFrontendExplicitTestPaths.has(normalized)
+      || criticalFrontendTestPathPattern.test(normalized)
+    ) && !configuredTests.has(file);
   });
 
   if (unlisted.length > 0) {
@@ -405,8 +425,18 @@ function prepareFrontendJestResultFile() {
   if (!fs.existsSync(frontendJestCommand)) {
     throw new Error(`frontend Jest binary is missing: ${path.relative(uiRoot, frontendJestCommand)}`);
   }
+  assertFrontendUmiTestExportsReady();
   fs.mkdirSync(path.dirname(frontendJestResultPath), { recursive: true });
   fs.rmSync(frontendJestResultPath, { force: true });
+}
+
+function assertFrontendUmiTestExportsReady() {
+  if (!fs.existsSync(frontendUmiTestExportsPath)) {
+    throw new Error(
+      `frontend Jest Umi exports are missing: ${path.relative(uiRoot, frontendUmiTestExportsPath)}. `
+        + 'Run max setup before executing three-terminal Jest tests.',
+    );
+  }
 }
 
 function assertFrontendJestResults() {
@@ -556,6 +586,13 @@ const steps = [
     command: 'npm',
     args: ['run', scriptName],
   })),
+  {
+    label: 'umi test setup',
+    cwd: uiRoot,
+    command: process.execPath,
+    args: [frontendUmiTestSetupScript],
+    after: assertFrontendUmiTestExportsReady,
+  },
   {
     label: 'react typecheck',
     cwd: uiRoot,

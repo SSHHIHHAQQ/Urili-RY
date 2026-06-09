@@ -71,6 +71,11 @@
 - `mvn -pl seller "-Dtest=SellerPortalProductServiceImplTest" test`
   - 通过，8 个测试通过。
 
+## CodeGraph 追补
+
+- 2026-06-09 后续记录层复核发现：本文件记录过 `AGENTS.md` 规则更新，但当时未在本文件中写入 CodeGraph 结果。
+- 追补口径：本轮已在仓库根目录执行 `codegraph sync .`，同步结果以 `docs/plans/2026-06-04-three-terminal-isolation-goal-tracker.md` 和 `docs/plans/2026-06-09-three-terminal-p0p1-gpt54-fast-pass-record.md` 最新检查点为准。
+
 ## 当前判断
 
 - 当前源码层面未发现新的 seller/buyer 账号权限串端 P0/P1。

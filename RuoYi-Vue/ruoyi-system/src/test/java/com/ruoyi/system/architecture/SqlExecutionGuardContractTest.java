@@ -975,8 +975,10 @@ public class SqlExecutionGuardContractTest
                 "unique key uk_buyer_menu_perms (perms_unique_key)",
                 "seller_menu contains invalid terminal perms",
                 "buyer_menu contains invalid terminal perms",
-                "seller_menu page menus require component",
-                "buyer_menu page menus require component",
+                "seller_menu page menus require component under Seller/",
+                "buyer_menu page menus require component under Buyer/",
+                "coalesce(trim(component), '') not like 'Seller/%'",
+                "coalesce(trim(component), '') not like 'Buyer/%'",
                 "seller_menu perms must be unique before terminal role grants",
                 "buyer_menu perms must be unique before terminal role grants",
                 "menu_type in ('C', 'F')",
@@ -1011,8 +1013,10 @@ public class SqlExecutionGuardContractTest
                 "unique key uk_buyer_menu_perms (perms_unique_key)",
                 "seller_menu contains invalid terminal perms",
                 "buyer_menu contains invalid terminal perms",
-                "seller_menu page menus require component",
-                "buyer_menu page menus require component",
+                "seller_menu page menus require component under Seller/",
+                "buyer_menu page menus require component under Buyer/",
+                "coalesce(trim(component), '') not like 'Seller/%'",
+                "coalesce(trim(component), '') not like 'Buyer/%'",
                 "seller_menu perms must be unique before terminal role grants",
                 "buyer_menu perms must be unique before terminal role grants",
                 "menu_type in ('C', 'F')",
@@ -5230,10 +5234,12 @@ public class SqlExecutionGuardContractTest
     {
         String menuTable = terminal + "_menu";
         String roleMenuTable = terminal + "_role_menu";
+        String componentRoot = Character.toUpperCase(terminal.charAt(0)) + terminal.substring(1) + "/";
 
         for (String expected : new String[] {
                 menuTable + " contains invalid terminal perms",
-                menuTable + " page menus require component",
+                menuTable + " page menus require component under " + componentRoot,
+                "coalesce(trim(component), '') not like '" + componentRoot + "%'",
                 menuTable + " perms must be unique before terminal role grants",
                 "duplicate_" + menuTable + "_perms"
         })

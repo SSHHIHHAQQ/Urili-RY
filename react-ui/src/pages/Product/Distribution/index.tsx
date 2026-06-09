@@ -639,7 +639,7 @@ export default function ProductDistributionPage() {
     const run = async () => {
       const ok = resultOk(
         await batchUpdateDistributionSkuSalePrices(items, priceReason.trim()),
-        '已提交调价审核',
+        '已调整售价',
       );
       if (ok) {
         setPriceModalOpen(false);
@@ -650,7 +650,7 @@ export default function ProductDistributionPage() {
     if (belowSupply) {
       modal.confirm({
         title: '存在低于供货价的售价',
-        content: '低于供货价可能导致亏损或审核风险，确认继续保存本次调价？',
+        content: '低于供货价可能导致亏损风险，确认继续保存本次调价？',
         okText: '确认保存',
         cancelText: '返回修改',
         okButtonProps: { danger: true },
@@ -1325,6 +1325,7 @@ export default function ProductDistributionPage() {
         open={detailOpen}
         product={current}
         categoryPath={current ? renderListCategoryName(current) : undefined}
+        canPreviewCategorySchema={canPreviewCategorySchema}
         onClose={() => setDetailOpen(false)}
       />
       <ProductDistributionOperationLogDrawer

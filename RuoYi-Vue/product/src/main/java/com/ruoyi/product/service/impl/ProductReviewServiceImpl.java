@@ -28,7 +28,7 @@ import com.ruoyi.product.domain.ProductReviewOperationLog;
 import com.ruoyi.product.domain.ProductReviewRequest;
 import com.ruoyi.product.domain.ProductReviewSnapshot;
 import com.ruoyi.product.domain.ProductSku;
-import com.ruoyi.product.domain.ProductSkuSalePriceUpdateRequest;
+import com.ruoyi.product.domain.ProductSkuSupplyPriceUpdateRequest;
 import com.ruoyi.product.domain.ProductSpu;
 import com.ruoyi.product.domain.ProductSpuWarehouse;
 import com.ruoyi.product.mapper.ProductDistributionMapper;
@@ -200,35 +200,35 @@ public class ProductReviewServiceImpl implements IProductReviewService
 
     @Override
     @Transactional
-    public int submitSkuSalePriceReview(ProductSkuSalePriceUpdateRequest request)
+    public int submitSkuSupplyPriceReview(ProductSkuSupplyPriceUpdateRequest request)
     {
         if (request == null || request.getItems() == null || request.getItems().isEmpty())
         {
-            throw new ServiceException("请选择需要调价的 SKU");
+            throw new ServiceException("请选择需要调整供货价的 SKU");
         }
-        Map<Long, List<ProductSkuSalePriceUpdateRequest.Item>> itemsBySpu = new LinkedHashMap<>();
+        Map<Long, List<ProductSkuSupplyPriceUpdateRequest.Item>> itemsBySpu = new LinkedHashMap<>();
         Map<Long, ProductSku> skuMap = new HashMap<>();
-        for (ProductSkuSalePriceUpdateRequest.Item item : request.getItems())
+        for (ProductSkuSupplyPriceUpdateRequest.Item item : request.getItems())
         {
             if (item == null || item.getSkuId() == null)
             {
-                throw new ServiceException("SKU 调价参数不完整");
+                throw new ServiceException("SKU 供货价调整参数不完整");
             }
             ProductSku sku = productDistributionMapper.selectSkuById(item.getSkuId());
             if (sku == null)
             {
                 throw new ServiceException("商品 SKU 不存在：" + item.getSkuId());
             }
-            validateReviewPrice(item.getSalePrice());
+            validateReviewPrice(item.getSupplyPrice());
             ProductSpu product = productDistributionService.selectProductById(sku.getSpuId());
             if (STATUS_DRAFT.equals(product.getSpuStatus()))
             {
-                throw new ServiceException("草稿商品请在商品编辑页直接维护销售价");
+                throw new ServiceException("草稿商品请在商品编辑页直接维护供货价");
             }
             if (!CONTROL_NORMAL.equals(StringUtils.defaultIfBlank(product.getControlStatus(), CONTROL_NORMAL))
                 || !CONTROL_NORMAL.equals(StringUtils.defaultIfBlank(sku.getControlStatus(), CONTROL_NORMAL)))
             {
-                throw new ServiceException("停用商品或 SKU 不能提交调价审核");
+                throw new ServiceException("停用商品或 SKU 不能提交供货价审核");
             }
             itemsBySpu.computeIfAbsent(product.getSpuId(), key -> new ArrayList<>()).add(item);
             skuMap.put(sku.getSkuId(), sku);
@@ -236,7 +236,7 @@ public class ProductReviewServiceImpl implements IProductReviewService
 
         String operator = currentUsername();
         int rows = 0;
-        for (Map.Entry<Long, List<ProductSkuSalePriceUpdateRequest.Item>> entry : itemsBySpu.entrySet())
+        for (Map.Entry<Long, List<ProductSkuSupplyPriceUpdateRequest.Item>> entry : itemsBySpu.entrySet())
         {
             ProductSpu product = productDistributionService.selectProductById(entry.getKey());
             String activePendingKey = activePendingKey(product.getSpuId());
@@ -244,10 +244,10 @@ public class ProductReviewServiceImpl implements IProductReviewService
             {
                 throw new ServiceException("当前商品已存在待审核单：" + product.getSystemSpuCode());
             }
-            ProductReviewRequest review = buildSkuSalePriceReview(product, entry.getValue(), skuMap, operator,
+            ProductReviewRequest review = buildSkuSupplyPriceReview(product, entry.getValue(), skuMap, operator,
                 activePendingKey, request.getReason());
             productReviewMapper.insertReview(review);
-            insertSkuSalePriceReviewItemsAndSnapshots(review, entry.getValue(), skuMap);
+            insertSkuSupplyPriceReviewItemsAndSnapshots(review, entry.getValue(), skuMap);
             insertReviewLog(review, OP_SUBMIT, product.getSpuStatus(), REVIEW_STATUS_PENDING, operator,
                 StringUtils.defaultString(request.getReason()));
             rows++;
@@ -283,7 +283,7 @@ public class ProductReviewServiceImpl implements IProductReviewService
         }
         else if (REVIEW_TYPE_EDIT_PRICE.equals(review.getReviewType()))
         {
-            approveSkuSalePriceEdit(review, operator);
+            approveSkuSupplyPriceEdit(review, operator);
         }
         else
         {
@@ -379,21 +379,23 @@ public class ProductReviewServiceImpl implements IProductReviewService
         review.setRiskSummary(resolveRiskSummary(after, safeSkus(after)));
         review.setSkuCount(safeSkus(after).size());
         review.setItemCount(safeSkus(after).size() + 1);
-        review.setPriceBeforeMin(minSalePrice(before));
-        review.setPriceBeforeMax(maxSalePrice(before));
-        review.setPriceAfterMin(minSalePrice(after));
-        review.setPriceAfterMax(maxSalePrice(after));
+        boolean supplyPriceReview = REVIEW_TYPE_EDIT_PRICE.equals(review.getReviewType());
+        review.setPriceBeforeMin(supplyPriceReview ? minSupplyPrice(before) : minSalePrice(before));
+        review.setPriceBeforeMax(supplyPriceReview ? maxSupplyPrice(before) : maxSalePrice(before));
+        review.setPriceAfterMin(supplyPriceReview ? minSupplyPrice(after) : minSalePrice(after));
+        review.setPriceAfterMax(supplyPriceReview ? maxSupplyPrice(after) : maxSalePrice(after));
         review.setCurrencySummary(resolveCurrencySummary(after));
         review.setWarehouseSummary(resolveWarehouseSummary(after));
-        review.setDiffSummary(buildEditDiffSummary(before, after));
+        review.setDiffSummary(supplyPriceReview ? buildSupplyPriceDiffSummary(before, after)
+            : buildEditDiffSummary(before, after));
         review.setActivePendingKey(activePendingKey);
         review.setCreateBy(operator);
         review.setUpdateBy(operator);
         return review;
     }
 
-    private ProductReviewRequest buildSkuSalePriceReview(ProductSpu product,
-        List<ProductSkuSalePriceUpdateRequest.Item> items, Map<Long, ProductSku> skuMap, String operator,
+    private ProductReviewRequest buildSkuSupplyPriceReview(ProductSpu product,
+        List<ProductSkuSupplyPriceUpdateRequest.Item> items, Map<Long, ProductSku> skuMap, String operator,
         String activePendingKey, String reason)
     {
         ProductReviewRequest review = new ProductReviewRequest();
@@ -420,17 +422,17 @@ public class ProductReviewServiceImpl implements IProductReviewService
         review.setRiskSummary("");
         review.setSkuCount(items.size());
         review.setItemCount(items.size());
-        review.setPriceBeforeMin(items.stream().map(item -> skuMap.get(item.getSkuId()).getSalePrice())
+        review.setPriceBeforeMin(items.stream().map(item -> skuMap.get(item.getSkuId()).getSupplyPrice())
             .filter(Objects::nonNull).min(BigDecimal::compareTo).orElse(null));
-        review.setPriceBeforeMax(items.stream().map(item -> skuMap.get(item.getSkuId()).getSalePrice())
+        review.setPriceBeforeMax(items.stream().map(item -> skuMap.get(item.getSkuId()).getSupplyPrice())
             .filter(Objects::nonNull).max(BigDecimal::compareTo).orElse(null));
-        review.setPriceAfterMin(items.stream().map(ProductSkuSalePriceUpdateRequest.Item::getSalePrice)
+        review.setPriceAfterMin(items.stream().map(ProductSkuSupplyPriceUpdateRequest.Item::getSupplyPrice)
             .filter(Objects::nonNull).min(BigDecimal::compareTo).orElse(null));
-        review.setPriceAfterMax(items.stream().map(ProductSkuSalePriceUpdateRequest.Item::getSalePrice)
+        review.setPriceAfterMax(items.stream().map(ProductSkuSupplyPriceUpdateRequest.Item::getSupplyPrice)
             .filter(Objects::nonNull).max(BigDecimal::compareTo).orElse(null));
         review.setCurrencySummary(resolveCurrencySummary(product));
         review.setWarehouseSummary(resolveWarehouseSummary(product));
-        review.setDiffSummary("SKU销售价调整：" + items.size() + " 个SKU");
+        review.setDiffSummary("SKU供货价调整：" + items.size() + " 个SKU");
         review.setActivePendingKey(activePendingKey);
         review.setCreateBy(operator);
         review.setUpdateBy(operator);
@@ -493,20 +495,20 @@ public class ProductReviewServiceImpl implements IProductReviewService
         }
     }
 
-    private void insertSkuSalePriceReviewItemsAndSnapshots(ProductReviewRequest review,
-        List<ProductSkuSalePriceUpdateRequest.Item> items, Map<Long, ProductSku> skuMap)
+    private void insertSkuSupplyPriceReviewItemsAndSnapshots(ProductReviewRequest review,
+        List<ProductSkuSupplyPriceUpdateRequest.Item> items, Map<Long, ProductSku> skuMap)
     {
         int index = 0;
-        for (ProductSkuSalePriceUpdateRequest.Item priceItem : items)
+        for (ProductSkuSupplyPriceUpdateRequest.Item priceItem : items)
         {
             ProductSku beforeSku = skuMap.get(priceItem.getSkuId());
-            ProductSku afterSku = copySkuForPriceReview(beforeSku, priceItem.getSalePrice());
+            ProductSku afterSku = copySkuForSupplyPriceReview(beforeSku, priceItem.getSupplyPrice());
             String beforeSkuJson = snapshotSkuFull(beforeSku);
             String afterSkuJson = snapshotSkuFull(afterSku);
             ProductReviewItem skuItem = newReviewItem(review, ITEM_TYPE_SKU, CHANGE_UPDATE, review.getSpuId(),
                 beforeSku.getSkuId(), StringUtils.defaultString(beforeSku.getSystemSkuCode()),
                 StringUtils.defaultString(beforeSku.getSellerSkuCode()), index++,
-                "销售价：" + beforeSku.getSalePrice() + " -> " + priceItem.getSalePrice());
+                "供货价：" + beforeSku.getSupplyPrice() + " -> " + priceItem.getSupplyPrice());
             skuItem.setBeforeHash(sha256(beforeSkuJson));
             skuItem.setAfterHash(sha256(afterSkuJson));
             productReviewMapper.insertReviewItem(skuItem);
@@ -515,10 +517,10 @@ public class ProductReviewServiceImpl implements IProductReviewService
         }
     }
 
-    private ProductSku copySkuForPriceReview(ProductSku beforeSku, BigDecimal salePrice)
+    private ProductSku copySkuForSupplyPriceReview(ProductSku beforeSku, BigDecimal supplyPrice)
     {
         ProductSku afterSku = JSON.parseObject(JSON.toJSONString(beforeSku), ProductSku.class);
-        afterSku.setSalePrice(salePrice);
+        afterSku.setSupplyPrice(supplyPrice);
         return afterSku;
     }
 
@@ -595,7 +597,7 @@ public class ProductReviewServiceImpl implements IProductReviewService
         recordDistributionReviewEditLog(current, review, operator);
     }
 
-    private void approveSkuSalePriceEdit(ProductReviewRequest review, String operator)
+    private void approveSkuSupplyPriceEdit(ProductReviewRequest review, String operator)
     {
         ProductSpu product = productDistributionService.selectProductById(review.getSpuId());
         List<ProductReviewItem> items = productReviewMapper.selectReviewItems(review.getReviewId());
@@ -615,27 +617,27 @@ public class ProductReviewServiceImpl implements IProductReviewService
             ProductReviewSnapshot afterSnapshot = afterSnapshotsByItemId.get(item.getItemId());
             if (afterSnapshot == null)
             {
-                throw new ServiceException("调价审核缺少 SKU 快照");
+                throw new ServiceException("供货价审核缺少 SKU 快照");
             }
             ProductReviewSnapshot beforeSnapshot = beforeSnapshotsByItemId.get(item.getItemId());
             if (beforeSnapshot == null)
             {
-                throw new ServiceException("调价审核缺少 SKU 生效前快照");
+                throw new ServiceException("供货价审核缺少 SKU 生效前快照");
             }
             ProductSku afterSku = JSON.parseObject(afterSnapshot.getPayloadJson(), ProductSku.class);
-            validateReviewPrice(afterSku.getSalePrice());
+            validateReviewPrice(afterSku.getSupplyPrice());
             ProductSku currentSku = productDistributionMapper.selectSkuById(afterSku.getSkuId());
             if (currentSku == null || !product.getSpuId().equals(currentSku.getSpuId()))
             {
-                throw new ServiceException("调价 SKU 不存在：" + afterSku.getSkuId());
+                throw new ServiceException("供货价审核 SKU 不存在：" + afterSku.getSkuId());
             }
             String currentHash = sha256(snapshotSkuFull(currentSku));
             if (!StringUtils.equals(currentHash, beforeSnapshot.getPayloadHash()))
             {
                 throw new ServiceException("SKU 正式数据已变化，请重新提交审核");
             }
-            productDistributionMapper.updateSkuSalePrice(afterSku.getSkuId(), afterSku.getSalePrice(), operator);
-            recordDistributionReviewPriceLog(product, currentSku, afterSku.getSalePrice(), review, operator);
+            productDistributionMapper.updateSkuSupplyPrice(afterSku.getSkuId(), afterSku.getSupplyPrice(), operator);
+            recordDistributionReviewSupplyPriceLog(product, currentSku, afterSku.getSupplyPrice(), review, operator);
         }
     }
 
@@ -734,7 +736,7 @@ public class ProductReviewServiceImpl implements IProductReviewService
         operationLogMapper.insertOperationLog(log);
     }
 
-    private void recordDistributionReviewPriceLog(ProductSpu product, ProductSku sku, BigDecimal targetPrice,
+    private void recordDistributionReviewSupplyPriceLog(ProductSpu product, ProductSku sku, BigDecimal targetPrice,
         ProductReviewRequest review, String operator)
     {
         ProductDistributionOperationLog log = new ProductDistributionOperationLog();
@@ -747,14 +749,12 @@ public class ProductReviewServiceImpl implements IProductReviewService
         log.setSystemSkuCode(sku.getSystemSkuCode());
         log.setSellerId(product.getSellerId());
         log.setSellerName(product.getSellerName());
-        log.setBeforeSalePrice(sku.getSalePrice());
-        log.setAfterSalePrice(targetPrice);
         log.setBeforeSalesStatus(sku.getSkuStatus());
         log.setAfterSalesStatus(sku.getSkuStatus());
-        log.setReason("调价审核通过");
-        log.setChangeSummary("SKU销售价审核通过：" + sku.getSalePrice() + " -> " + targetPrice);
+        log.setReason("供货价审核通过");
+        log.setChangeSummary("SKU供货价审核通过：" + sku.getSupplyPrice() + " -> " + targetPrice);
         log.setDiffJson("{\"reviewId\":" + review.getReviewId() + ",\"reviewType\":\""
-            + escapeJson(review.getReviewType()) + "\",\"before\":\"" + sku.getSalePrice()
+            + escapeJson(review.getReviewType()) + "\",\"field\":\"supplyPrice\",\"before\":\"" + sku.getSupplyPrice()
             + "\",\"after\":\"" + targetPrice + "\"}");
         log.setOperatorName(operator);
         log.setOperationSource(DIST_OP_SOURCE_REVIEW);
@@ -812,6 +812,10 @@ public class ProductReviewServiceImpl implements IProductReviewService
             return REVIEW_TYPE_ADD_SKU;
         }
         boolean productChanged = !StringUtils.equals(productReviewPayload(before), productReviewPayload(after));
+        if (!productChanged && hasOnlySkuSupplyPriceChanged(before, after))
+        {
+            return REVIEW_TYPE_EDIT_PRICE;
+        }
         boolean skuChanged = hasSkuReviewPayloadChanged(before, after);
         if (skuChanged && !productChanged)
         {
@@ -840,6 +844,37 @@ public class ProductReviewServiceImpl implements IProductReviewService
             }
         }
         return submittedExistingSkuCount != beforeSkuMap.size();
+    }
+
+    private boolean hasOnlySkuSupplyPriceChanged(ProductSpu before, ProductSpu after)
+    {
+        Map<Long, ProductSku> beforeSkuMap = safeSkus(before).stream()
+            .filter(sku -> sku.getSkuId() != null)
+            .collect(Collectors.toMap(ProductSku::getSkuId, sku -> sku, (a, b) -> a));
+        int submittedExistingSkuCount = 0;
+        boolean hasSupplyPriceChange = false;
+        for (ProductSku afterSku : safeSkus(after))
+        {
+            if (afterSku.getSkuId() == null)
+            {
+                return false;
+            }
+            submittedExistingSkuCount++;
+            ProductSku beforeSku = beforeSkuMap.get(afterSku.getSkuId());
+            if (beforeSku == null)
+            {
+                return false;
+            }
+            if (!StringUtils.equals(skuInfoReviewPayload(beforeSku), skuInfoReviewPayload(afterSku)))
+            {
+                return false;
+            }
+            if (!moneyEquals(beforeSku.getSupplyPrice(), afterSku.getSupplyPrice()))
+            {
+                hasSupplyPriceChange = true;
+            }
+        }
+        return hasSupplyPriceChange && submittedExistingSkuCount == beforeSkuMap.size();
     }
 
     private String productReviewPayload(ProductSpu product)
@@ -889,6 +924,43 @@ public class ProductReviewServiceImpl implements IProductReviewService
         payload.put("measureHeightCm", sku.getMeasureHeightCm());
         payload.put("measureWeightKg", sku.getMeasureWeightKg());
         return JSON.toJSONString(payload);
+    }
+
+    private String skuInfoReviewPayload(ProductSku sku)
+    {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("sellerSkuCode", sku.getSellerSkuCode());
+        payload.put("color", sku.getColor());
+        payload.put("size", sku.getSize());
+        payload.put("lengthValue", sku.getLengthValue());
+        payload.put("widthValue", sku.getWidthValue());
+        payload.put("heightValue", sku.getHeightValue());
+        payload.put("weight", sku.getWeight());
+        payload.put("material", sku.getMaterial());
+        payload.put("style", sku.getStyle());
+        payload.put("model", sku.getModel());
+        payload.put("packageQuantity", sku.getPackageQuantity());
+        payload.put("capacity", sku.getCapacity());
+        payload.put("skuImageUrl", sku.getSkuImageUrl());
+        payload.put("currencyCode", sku.getCurrencyCode());
+        payload.put("skuStatus", sku.getSkuStatus());
+        payload.put("sourceDimensionGroupKey", sku.getSourceDimensionGroupKey());
+        payload.put("sourceSkuGroupKey", sku.getSourceSkuGroupKey());
+        payload.put("masterSku", sku.getMasterSku());
+        payload.put("measureLengthCm", sku.getMeasureLengthCm());
+        payload.put("measureWidthCm", sku.getMeasureWidthCm());
+        payload.put("measureHeightCm", sku.getMeasureHeightCm());
+        payload.put("measureWeightKg", sku.getMeasureWeightKg());
+        return JSON.toJSONString(payload);
+    }
+
+    private boolean moneyEquals(BigDecimal before, BigDecimal after)
+    {
+        if (before == null || after == null)
+        {
+            return before == after;
+        }
+        return before.compareTo(after) == 0;
     }
 
     private List<Map<String, Object>> warehouseReviewPayload(ProductSpu product)
@@ -943,6 +1015,21 @@ public class ProductReviewServiceImpl implements IProductReviewService
         return "变更：" + StringUtils.join(parts, "、");
     }
 
+    private String buildSupplyPriceDiffSummary(ProductSpu before, ProductSpu after)
+    {
+        Map<Long, ProductSku> beforeSkuMap = safeSkus(before).stream()
+            .filter(sku -> sku.getSkuId() != null)
+            .collect(Collectors.toMap(ProductSku::getSkuId, sku -> sku, (a, b) -> a));
+        long changedCount = safeSkus(after).stream()
+            .filter(sku -> sku.getSkuId() != null)
+            .filter(sku -> {
+                ProductSku beforeSku = beforeSkuMap.get(sku.getSkuId());
+                return beforeSku != null && !moneyEquals(beforeSku.getSupplyPrice(), sku.getSupplyPrice());
+            })
+            .count();
+        return "SKU供货价调整：" + changedCount + " 个SKU";
+    }
+
     private List<ProductSku> safeSkus(ProductSpu product)
     {
         return product == null || product.getSkus() == null ? List.of() : product.getSkus();
@@ -960,6 +1047,18 @@ public class ProductReviewServiceImpl implements IProductReviewService
             .max(BigDecimal::compareTo).orElse(product == null ? null : product.getSalePriceMax());
     }
 
+    private BigDecimal minSupplyPrice(ProductSpu product)
+    {
+        return safeSkus(product).stream().map(ProductSku::getSupplyPrice).filter(Objects::nonNull)
+            .min(BigDecimal::compareTo).orElse(product == null ? null : product.getSupplyPriceMin());
+    }
+
+    private BigDecimal maxSupplyPrice(ProductSpu product)
+    {
+        return safeSkus(product).stream().map(ProductSku::getSupplyPrice).filter(Objects::nonNull)
+            .max(BigDecimal::compareTo).orElse(product == null ? null : product.getSupplyPriceMax());
+    }
+
     private String resolveCurrencySummary(ProductSpu product)
     {
         String currencies = safeSkus(product).stream().map(ProductSku::getCurrencyCode)
@@ -969,12 +1068,6 @@ public class ProductReviewServiceImpl implements IProductReviewService
 
     private String resolveWarehouseSummary(ProductSpu product)
     {
-        if (product != null && product.getWarehouses() != null && !product.getWarehouses().isEmpty())
-        {
-            return product.getWarehouses().stream()
-                .map(warehouse -> StringUtils.defaultIfBlank(warehouse.getWarehouseName(), warehouse.getWarehouseCode()))
-                .filter(StringUtils::isNotBlank).distinct().collect(Collectors.joining("/"));
-        }
         return product == null ? "" : StringUtils.defaultString(product.getWarehouseKindSummary());
     }
 
@@ -1138,7 +1231,7 @@ public class ProductReviewServiceImpl implements IProductReviewService
     {
         if (price == null || price.compareTo(BigDecimal.ZERO) < 0)
         {
-            throw new ServiceException("SKU 销售价不能为空且不能小于 0");
+            throw new ServiceException("SKU 供货价不能为空且不能小于 0");
         }
     }
 

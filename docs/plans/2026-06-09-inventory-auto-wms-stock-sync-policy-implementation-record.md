@@ -55,7 +55,9 @@
 
 - `RuoYi-Vue/sql/20260609_inventory_auto_wms_stock_sync_policy.sql`
 
-本轮没有直接执行该 SQL。脚本包含确认变量、基础表存在校验、菜单 slot guard、动态 DDL guard 和权限 seed。
+首次实现时没有直接执行该 SQL。2026-06-09 已按用户“执行”授权应用到当前 `.env.local` 指向的远端 MySQL `fenxiao`，执行记录见：
+
+- `docs/plans/2026-06-09-inventory-auto-wms-stock-sync-policy-sql-execution-record.md`
 
 执行前需要显式设置：
 
@@ -103,11 +105,12 @@ set @confirm_inventory_auto_wms_stock_sync_policy = 'APPLY_INVENTORY_AUTO_WMS_ST
   - 仓库设置下同时显示卖家选择和仓库选择，仓库选择是 Ant Design 多选控件。
   - 仓库设置的下拉未再显示“来源SKU未绑定”“发货仓库未配置”等库存占位仓库名。
 - 运行态说明：
-  - 当前 `127.0.0.1:8080` 仍未暴露本轮新增的 `/inventory/admin/overview/seller/options` 和 `/inventory/admin/overview/official-warehouse/options` 映射，直接探测返回旧运行态的 `No static resource ...`。
-  - 本轮未执行 `20260609_inventory_auto_wms_stock_sync_policy.sql`，也未重启后端；需要在 SQL 明确授权并应用后，再重启新 jar 做完整运行态复验。
+  - 已执行 `20260609_inventory_auto_wms_stock_sync_policy.sql`，并重新 package / 启动 `ruoyi-admin.jar`。
+  - 新接口 `/inventory/admin/overview/seller/options` 和 `/inventory/admin/overview/official-warehouse/options` 已在 8080 返回 200。
+  - 浏览器弹窗中卖家下拉已有真实卖家选项，官方仓多选只显示官方仓主数据，不再混入库存占位仓库名。
 
 ## 后续注意
 
-- 真正启用后端新增接口前，需要确认目标数据库并执行迁移脚本。
+- 自动同步策略 SQL 已执行；后续如果回放到其它环境，需要重新按目标环境预览签名并执行。
 - 如果后续新增新的自动同步口径，必须同时扩展 SQL 字典、后端策略服务、前端文案、合同测试和库存流水类型。
 - 如果要让卖家端也配置该能力，应复用现有同步策略服务，不要在卖家端页面复制库存计算逻辑。

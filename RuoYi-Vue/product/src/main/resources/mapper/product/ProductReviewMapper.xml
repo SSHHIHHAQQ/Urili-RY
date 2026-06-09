@@ -92,53 +92,115 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="remark"           column="remark"            />
     </resultMap>
 
+    <sql id="reviewWarehouseKindSummaryJoin">
+        left join (
+            select spu_id,
+                   case when count(distinct warehouse_kind) = 1 then min(warehouse_kind) else 'MIXED' end as warehouse_kind_summary
+            from product_spu_warehouse
+            group by spu_id
+        ) wh on wh.spu_id = r.spu_id
+    </sql>
+
+    <sql id="reviewRequestSelectColumns">
+        r.review_id,
+        r.review_no,
+        r.review_type,
+        r.review_status,
+        r.spu_id,
+        r.system_spu_code,
+        r.seller_id,
+        r.seller_name,
+        r.category_id,
+        r.category_name,
+        r.product_name_before,
+        r.product_name_after,
+        r.main_image_url_before,
+        r.main_image_url_after,
+        r.submit_terminal,
+        r.submit_subject_id,
+        r.submit_account_id,
+        r.submit_user_name,
+        r.submit_time,
+        r.reviewer_id,
+        r.reviewer_name,
+        r.review_time,
+        r.review_reason,
+        r.risk_level,
+        r.risk_summary,
+        r.item_count,
+        r.sku_count,
+        r.price_before_min,
+        r.price_before_max,
+        r.price_after_min,
+        r.price_after_max,
+        r.currency_summary,
+        case
+            when r.warehouse_summary in ('official', 'third_party', 'MIXED') then r.warehouse_summary
+            when wh.warehouse_kind_summary in ('official', 'third_party', 'MIXED') then wh.warehouse_kind_summary
+            when r.warehouse_summary is not null and r.warehouse_summary != '' then 'third_party'
+            else ''
+        end as warehouse_summary,
+        r.diff_summary,
+        r.active_pending_key,
+        r.del_flag,
+        r.create_by,
+        r.create_time,
+        r.update_by,
+        r.update_time,
+        r.remark
+    </sql>
+
     <select id="selectReviewList" parameterType="ProductReviewRequest" resultMap="ProductReviewRequestResult">
-        select *
-        from product_review_request
-        where del_flag = '0'
+        select
+        <include refid="reviewRequestSelectColumns"/>
+        from product_review_request r
+        <include refid="reviewWarehouseKindSummaryJoin"/>
+        where r.del_flag = '0'
         <if test="keyword != null and keyword != ''">
             and (
-                review_no like concat('%', #{keyword}, '%')
-                or system_spu_code like concat('%', #{keyword}, '%')
-                or product_name_after like concat('%', #{keyword}, '%')
-                or seller_name like concat('%', #{keyword}, '%')
+                r.review_no like concat('%', #{keyword}, '%')
+                or r.system_spu_code like concat('%', #{keyword}, '%')
+                or r.product_name_after like concat('%', #{keyword}, '%')
+                or r.seller_name like concat('%', #{keyword}, '%')
             )
         </if>
         <if test="reviewType != null and reviewType != ''">
-            and review_type = #{reviewType}
+            and r.review_type = #{reviewType}
         </if>
         <if test="reviewTypes != null and reviewTypes != ''">
-            and find_in_set(review_type, #{reviewTypes})
+            and find_in_set(r.review_type, #{reviewTypes})
         </if>
         <if test="reviewStatus != null and reviewStatus != ''">
-            and review_status = #{reviewStatus}
+            and r.review_status = #{reviewStatus}
         </if>
         <if test="sellerId != null">
-            and seller_id = #{sellerId}
+            and r.seller_id = #{sellerId}
         </if>
         <if test="categoryId != null">
-            and category_id = #{categoryId}
+            and r.category_id = #{categoryId}
         </if>
         <if test="submitTerminal != null and submitTerminal != ''">
-            and submit_terminal = #{submitTerminal}
+            and r.submit_terminal = #{submitTerminal}
         </if>
         <if test="params.beginTime != null and params.beginTime != ''">
-            and submit_time &gt;= #{params.beginTime}
+            and r.submit_time &gt;= #{params.beginTime}
         </if>
         <if test="params.endTime != null and params.endTime != ''">
-            and submit_time &lt;= #{params.endTime}
+            and r.submit_time &lt;= #{params.endTime}
         </if>
         order by
-            case when review_status = 'PENDING' then 0 else 1 end,
-            submit_time asc,
-            review_id desc
+            case when r.review_status = 'PENDING' then 0 else 1 end,
+            r.submit_time asc,
+            r.review_id desc
     </select>
 
     <select id="selectReviewById" resultMap="ProductReviewRequestResult">
-        select *
-        from product_review_request
-        where review_id = #{reviewId}
-          and del_flag = '0'
+        select
+        <include refid="reviewRequestSelectColumns"/>
+        from product_review_request r
+        <include refid="reviewWarehouseKindSummaryJoin"/>
+        where r.review_id = #{reviewId}
+          and r.del_flag = '0'
         limit 1
     </select>
 

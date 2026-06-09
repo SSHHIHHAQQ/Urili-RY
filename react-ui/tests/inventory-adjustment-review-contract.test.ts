@@ -60,4 +60,34 @@ describe('inventory adjustment review contract', () => {
     expect(overviewQuantityCell).toContain('申请退回');
     expect(inventoryAdjustButton).toContain('reviewRequiredCount');
   });
+
+  it('keeps all policy and seller-binding config fields wired to validation', () => {
+    const page = readSource('src/pages/Inventory/AdjustmentReview/index.tsx');
+
+    for (const field of [
+      'policyStatus',
+      'reviewMode',
+      'directionScope',
+      'salesWindowDays',
+      'reserveDays',
+      'cooldownHours',
+      'minReturnQtyToReview',
+      'minReturnRatioToReview',
+      'autoEffectEnabled',
+      'manualEffectAllowed',
+      'policyId',
+      'bindingType',
+      'bindingIdValue',
+      'priority',
+      'status',
+    ]) {
+      expect(page).toContain(`name="${field}"`);
+    }
+
+    expect(page).toContain('validateSalesWindowText');
+    expect(page).toContain('销量窗口必须至少包含一个正整数天数');
+    expect(page).toContain("bindingType === 'SELLER'");
+    expect(page).toContain('请输入卖家ID');
+    expect(page).toContain("disabled={bindingType === 'GLOBAL'}");
+  });
 });

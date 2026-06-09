@@ -30,7 +30,7 @@ import com.ruoyi.product.domain.ProductReviewOperationLog;
 import com.ruoyi.product.domain.ProductReviewRequest;
 import com.ruoyi.product.domain.ProductReviewSnapshot;
 import com.ruoyi.product.domain.ProductSku;
-import com.ruoyi.product.domain.ProductSkuSalePriceUpdateRequest;
+import com.ruoyi.product.domain.ProductSkuSupplyPriceUpdateRequest;
 import com.ruoyi.product.domain.ProductSpu;
 import com.ruoyi.product.mapper.ProductDistributionMapper;
 import com.ruoyi.product.mapper.ProductDistributionOperationLogMapper;
@@ -94,6 +94,7 @@ public class ProductReviewServiceImplTest
         assertEquals("admin", reviewMapper.insertedReview.getSubmitUserName());
         assertEquals(Integer.valueOf(2), reviewMapper.insertedReview.getItemCount());
         assertEquals(Integer.valueOf(1), reviewMapper.insertedReview.getSkuCount());
+        assertEquals("official", reviewMapper.insertedReview.getWarehouseSummary());
         assertEquals(2, reviewMapper.insertedItems.size());
         assertEquals(2, reviewMapper.insertedSnapshots.size());
         assertEquals(1, reviewMapper.insertedOperationLogs.size());
@@ -170,6 +171,28 @@ public class ProductReviewServiceImplTest
     }
 
     @Test
+    public void submitProductEditReviewClassifiesSupplyPriceOnlyChangeAsPriceReview() throws Exception
+    {
+        authenticateAdmin(100L, "admin");
+        RecordingProductReviewMapper reviewMapper = new RecordingProductReviewMapper();
+        RecordingProductDistributionService distributionService = new RecordingProductDistributionService();
+        distributionService.productByIdResult = readyProduct("正式商品");
+        ProductSpu supplyPriceChanged = readyProduct("正式商品");
+        supplyPriceChanged.getSkus().get(0).setSupplyPrice(new BigDecimal("19.99"));
+        distributionService.preparedProduct = supplyPriceChanged;
+        ProductReviewServiceImpl service = service(reviewMapper.proxy(), distributionService.proxy(),
+                new RecordingProductDistributionMapper().proxy(), new RecordingOperationLogMapper().proxy());
+
+        int rows = service.submitProductEditReview(supplyPriceChanged);
+
+        assertEquals(1, rows);
+        assertEquals("EDIT_PRICE", reviewMapper.insertedReview.getReviewType());
+        assertEquals("SKU供货价调整：1 个SKU", reviewMapper.insertedReview.getDiffSummary());
+        assertEquals(new BigDecimal("10.00"), reviewMapper.insertedReview.getPriceBeforeMin());
+        assertEquals(new BigDecimal("19.99"), reviewMapper.insertedReview.getPriceAfterMin());
+    }
+
+    @Test
     public void approveProductEditReviewAppliesAfterSnapshotAndKeepsLiveStatus() throws Exception
     {
         authenticateAdmin(100L, "admin");
@@ -197,7 +220,7 @@ public class ProductReviewServiceImplTest
     }
 
     @Test
-    public void approvePriceReviewUpdatesSkuSalePriceAfterApproval() throws Exception
+    public void approvePriceReviewUpdatesSkuSupplyPriceAfterApproval() throws Exception
     {
         authenticateAdmin(100L, "admin");
         RecordingProductReviewMapper reviewMapper = new RecordingProductReviewMapper();
@@ -208,7 +231,7 @@ public class ProductReviewServiceImplTest
         beforeSku.setSkuStatus("READY");
         ProductSku afterSku = draftSku();
         afterSku.setSkuStatus("READY");
-        afterSku.setSalePrice(new BigDecimal("19.99"));
+        afterSku.setSupplyPrice(new BigDecimal("19.99"));
         ProductReviewSnapshot beforeSnapshot = skuSnapshot(item, "BEFORE", beforeSku);
         ProductReviewSnapshot afterSnapshot = new ProductReviewSnapshot();
         afterSnapshot.setItemId(item.getItemId());
@@ -227,9 +250,10 @@ public class ProductReviewServiceImplTest
         int rows = service.approveReview(900L, "通过");
 
         assertEquals(1, rows);
-        assertEquals(Long.valueOf(100L), distributionMapper.updateSalePriceSkuId);
-        assertEquals(new BigDecimal("19.99"), distributionMapper.updateSalePriceValue);
-        assertEquals("admin", distributionMapper.updateSalePriceBy);
+        assertEquals(Long.valueOf(100L), distributionMapper.updateSupplyPriceSkuId);
+        assertEquals(new BigDecimal("19.99"), distributionMapper.updateSupplyPriceValue);
+        assertEquals("admin", distributionMapper.updateSupplyPriceBy);
+        assertEquals(null, distributionMapper.updateSalePriceSkuId);
         assertEquals(1, operationLogMapper.insertedLogs.size());
     }
 
@@ -245,7 +269,7 @@ public class ProductReviewServiceImplTest
         beforeSku.setSkuStatus("READY");
         ProductSku afterSku = draftSku();
         afterSku.setSkuStatus("READY");
-        afterSku.setSalePrice(new BigDecimal("19.99"));
+        afterSku.setSupplyPrice(new BigDecimal("19.99"));
         reviewMapper.reviewSnapshots = List.of(skuSnapshot(item, "BEFORE", beforeSku),
                 skuSnapshot(item, "AFTER", afterSku));
         RecordingProductDistributionService distributionService = new RecordingProductDistributionService();
@@ -253,7 +277,7 @@ public class ProductReviewServiceImplTest
         RecordingProductDistributionMapper distributionMapper = new RecordingProductDistributionMapper();
         ProductSku changedSku = draftSku();
         changedSku.setSkuStatus("READY");
-        changedSku.setSalePrice(new BigDecimal("18.88"));
+        changedSku.setSupplyPrice(new BigDecimal("18.88"));
         distributionMapper.skuByIdResult = changedSku;
         RecordingOperationLogMapper operationLogMapper = new RecordingOperationLogMapper();
         ProductReviewServiceImpl service = service(reviewMapper.proxy(), distributionService.proxy(),
@@ -266,7 +290,7 @@ public class ProductReviewServiceImplTest
         catch (ServiceException e)
         {
             assertEquals("SKU 正式数据已变化，请重新提交审核", e.getMessage());
-            assertEquals(null, distributionMapper.updateSalePriceSkuId);
+            assertEquals(null, distributionMapper.updateSupplyPriceSkuId);
             assertTrue(operationLogMapper.insertedLogs.isEmpty());
             return;
         }
@@ -286,13 +310,13 @@ public class ProductReviewServiceImplTest
         distributionMapper.skuByIdResult = sku;
         ProductReviewServiceImpl service = service(reviewMapper.proxy(), distributionService.proxy(),
                 distributionMapper.proxy(), new RecordingOperationLogMapper().proxy());
-        ProductSkuSalePriceUpdateRequest request = new ProductSkuSalePriceUpdateRequest();
-        ProductSkuSalePriceUpdateRequest.Item item = new ProductSkuSalePriceUpdateRequest.Item();
+        ProductSkuSupplyPriceUpdateRequest request = new ProductSkuSupplyPriceUpdateRequest();
+        ProductSkuSupplyPriceUpdateRequest.Item item = new ProductSkuSupplyPriceUpdateRequest.Item();
         item.setSkuId(100L);
-        item.setSalePrice(new BigDecimal("19.99"));
+        item.setSupplyPrice(new BigDecimal("19.99"));
         request.setItems(List.of(item));
 
-        int rows = service.submitSkuSalePriceReview(request);
+        int rows = service.submitSkuSupplyPriceReview(request);
 
         assertEquals(1, rows);
         assertEquals("EDIT_PRICE", reviewMapper.insertedReview.getReviewType());
@@ -405,7 +429,7 @@ public class ProductReviewServiceImplTest
         product.setSalePriceMin(new BigDecimal("12.34"));
         product.setSalePriceMax(new BigDecimal("56.78"));
         product.setCurrencySummary("USD");
-        product.setWarehouseKindSummary("OFFICIAL");
+        product.setWarehouseKindSummary("official");
         product.setSkus(List.of(draftSku()));
         return product;
     }
@@ -630,6 +654,9 @@ public class ProductReviewServiceImplTest
         private Long updateSalePriceSkuId;
         private BigDecimal updateSalePriceValue;
         private String updateSalePriceBy;
+        private Long updateSupplyPriceSkuId;
+        private BigDecimal updateSupplyPriceValue;
+        private String updateSupplyPriceBy;
 
         private ProductDistributionMapper proxy()
         {
@@ -658,6 +685,11 @@ public class ProductReviewServiceImplTest
                     updateSalePriceSkuId = (Long) args[0];
                     updateSalePriceValue = (BigDecimal) args[1];
                     updateSalePriceBy = (String) args[2];
+                    return 1;
+                case "updateSkuSupplyPrice":
+                    updateSupplyPriceSkuId = (Long) args[0];
+                    updateSupplyPriceValue = (BigDecimal) args[1];
+                    updateSupplyPriceBy = (String) args[2];
                     return 1;
                 default:
                     throw new UnsupportedOperationException(method.getName());

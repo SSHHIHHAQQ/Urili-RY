@@ -69,6 +69,25 @@ describe('verify-three-terminal backend gate', () => {
     expect(source).not.toMatch(/const backendReportModules = \[[\s\S]*?\];/);
   });
 
+  it('prepares Umi test exports before running frontend Jest', () => {
+    const source = readSource('scripts/verify-three-terminal.mjs');
+    const setupSource = readSource('scripts/prepare-umi-test.mjs');
+
+    expect(source).toContain("const frontendUmiTestSetupScript = path.join(uiRoot, 'scripts', 'prepare-umi-test.mjs');");
+    expect(source).toContain("const frontendUmiTestExportsPath = path.join(uiRoot, 'src', '.umi-test', 'exports.ts');");
+    expect(source).toContain('function assertFrontendUmiTestExportsReady()');
+    expect(source).toContain("label: 'umi test setup'");
+    expect(source).toContain('command: process.execPath');
+    expect(source).toContain('args: [frontendUmiTestSetupScript]');
+    expect(source).toMatch(/label: 'umi test setup'[\s\S]*?after: assertFrontendUmiTestExportsReady[\s\S]*?label: 'react typecheck'/);
+    expect(source).toMatch(/assertFrontendUmiTestExportsReady\(\);[\s\S]*fs\.mkdirSync\(path\.dirname\(frontendJestResultPath\)/);
+    expect(setupSource).toContain("process.env.NODE_ENV = 'test';");
+    expect(setupSource).toContain("await import('@umijs/max/test.js')");
+    expect(setupSource).toContain('await configUmiAlias({');
+    expect(setupSource).toContain("target: 'browser'");
+    expect(setupSource).toContain("path.join(uiRoot, 'src', '.umi-test', 'exports.ts')");
+  });
+
   it('runs the domain JS mirror guard from lint and covers shared admin domains', () => {
     const packageJson = JSON.parse(readSource('package.json'));
     const mirrorGuard = readSource('scripts/check-product-upstream-js-mirrors.mjs');

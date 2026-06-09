@@ -12,7 +12,7 @@
 - 已有商品新增 SKU 需要审核。
 - 已有商品编辑商品资料需要审核。
 - 已有 SKU 编辑资料需要审核。
-- SKU 价格、供货价、币种等价格类变更需要审核。
+- SKU 供货价变更需要审核；管理端销售价调整直接生效，不进入商品审核。
 
 审核通过后才把变更应用到正式商品主数据；审核驳回后正式商品主数据不被污染。
 
@@ -42,7 +42,7 @@
 | `ADD_SKU` | 新增 SKU 审核 | 已有 SPU 下的新 SKU | 新 SKU 从 `DRAFT` 进入 `READY`，原 SKU 不变 |
 | `EDIT_PRODUCT_INFO` | 商品资料变更审核 | SPU 标题、卖点、主图、详情、类目属性、发货仓库等 | 更新 SPU 资料，销售状态不变 |
 | `EDIT_SKU_INFO` | SKU 资料变更审核 | SKU 图、规格、尺寸重量、仓库/来源绑定等 | 更新对应 SKU 资料，销售状态不变 |
-| `EDIT_PRICE` | 价格变更审核 | SKU 供货价、销售价、币种 | 更新对应 SKU 价格，销售状态不变 |
+| `EDIT_PRICE` | 价格变更审核 | SKU 供货价 | 更新对应 SKU 供货价，销售状态不变 |
 
 页面上的 `全部` 是筛选项，不写入数据库：
 
@@ -108,15 +108,15 @@ PENDING / APPROVED / REJECTED / WITHDRAWN
 ### 4.5 价格变更
 
 ```text
-读取当前 SKU 价格
-  -> 生成价格 AFTER 快照和风险摘要
+读取当前 SKU 供货价
+  -> 生成供货价 AFTER 快照和风险摘要
   -> 提交 EDIT_PRICE 审核
-  -> 正式 SKU 价格暂不更新
-  -> 通过：更新供货价 / 销售价 / 币种
-  -> 驳回：价格不变
+  -> 正式 SKU 供货价暂不更新
+  -> 通过：更新供货价
+  -> 驳回：供货价不变
 ```
 
-价格审核必须突出风险：低于供货价、币种变化、涨跌幅、影响 SKU 数。
+价格审核必须突出风险：供货价涨跌幅、是否高于当前销售价、影响 SKU 数。
 
 ## 5. 审核列表设计
 
@@ -162,7 +162,7 @@ PENDING / APPROVED / REJECTED / WITHDRAWN
 | `ADD_SKU` | 新增 SKU 数、新 SKU 价格区间、仓库/来源 SKU 绑定摘要 |
 | `EDIT_PRODUCT_INFO` | 变更字段数、标题/主图/详情/类目属性是否变化 |
 | `EDIT_SKU_INFO` | 影响 SKU 数、规格/图片/尺寸/仓库/来源绑定变化 |
-| `EDIT_PRICE` | 影响 SKU 数、原价格区间、新价格区间、毛利风险 |
+| `EDIT_PRICE` | 影响 SKU 数、原供货价区间、新供货价区间、是否高于当前销售价 |
 
 行内操作：
 
@@ -190,7 +190,7 @@ PENDING / APPROVED / REJECTED / WITHDRAWN
 | `ADD_SKU` | 新增 SKU 明细、SKU 图、价格、仓库/来源绑定 |
 | `EDIT_PRODUCT_INFO` | SPU 字段 diff、主图/详情对比、属性变化 |
 | `EDIT_SKU_INFO` | SKU 字段 diff、规格/尺寸/图片/仓库变化 |
-| `EDIT_PRICE` | 价格 diff、供货价/销售价/币种、毛利风险 |
+| `EDIT_PRICE` | 供货价 diff、当前销售价上下文、供货价高于销售价风险 |
 
 审核员不应该靠肉眼找变化；后端应提供 `diff_summary` 和 `diff_json`，前端用高亮展示差异。
 
@@ -355,7 +355,7 @@ PENDING / APPROVED / REJECTED / WITHDRAWN
 
 - 不提前改 `product_spu` 标题、主图、详情。
 - 不提前改 `product_sku` 规格、尺寸、图片、仓库绑定。
-- 不提前改供货价、销售价、币种。
+- 不提前改供货价。
 
 这些变更先进入 `product_review_snapshot.AFTER`，审核通过后由 service 事务化应用。
 

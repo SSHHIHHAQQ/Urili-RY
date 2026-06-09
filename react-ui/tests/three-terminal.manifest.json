@@ -23,6 +23,7 @@
     "WarehouseAdminRouteContractTest",
     "WarehouseModuleBoundaryContractTest",
     "InventoryAdminRouteContractTest",
+    "InventoryAdjustmentReviewPolicyEffectTest",
     "TerminalRouteOwnershipTest",
     "RouterVoPermissionContractTest",
     "TerminalAccountIsolationTest",
@@ -59,6 +60,7 @@
     "ProductPortalSchemaServiceImplTest",
     "ProductCenterServiceImplTest",
     "ProductReviewServiceImplTest",
+    "ProductReviewMapperContractTest",
     "InventoryOverviewRefreshContractTest",
     "InventorySourceWarehouseStockBoundaryContractTest",
     "IntegrationModuleBoundaryContractTest",
@@ -86,6 +88,7 @@
     "WarehouseAdminRouteContractTest",
     "WarehouseModuleBoundaryContractTest",
     "InventoryAdminRouteContractTest",
+    "InventoryAdjustmentReviewPolicyEffectTest",
     "RouterVoPermissionContractTest",
     "PortalPasswordChangeContractTest",
     "ProductDistributionMapperContractTest",
@@ -94,6 +97,7 @@
     "ProductPortalSchemaServiceImplTest",
     "ProductCenterServiceImplTest",
     "ProductReviewServiceImplTest",
+    "ProductReviewMapperContractTest",
     "InventoryOverviewRefreshContractTest",
     "InventorySourceWarehouseStockBoundaryContractTest",
     "IntegrationModuleBoundaryContractTest",
@@ -134,6 +138,20 @@
     "tests/source-product-library-contract.test.ts",
     "tests/source-warehouse-stock-contract.test.ts",
     "tests/upstream-system-permission-guard.test.ts"
+  ],
+  "criticalFrontendExplicitTestPaths": [
+    "tests/terminal-session-token.test.ts",
+    "tests/portal-session-request.test.ts",
+    "tests/portal-direct-login-message.test.ts",
+    "tests/partner-audit-modal.test.ts",
+    "tests/remote-menu-route-guard.test.ts",
+    "tests/static-route-authority-contract.test.ts",
+    "tests/portal-unauthorized-redirect.test.ts",
+    "tests/getrouters-authority-contract.test.ts",
+    "tests/admin-auth-sidecar-contract.test.ts",
+    "tests/system-user-service-contract.test.ts",
+    "tests/verify-three-terminal-backend-gate.test.ts",
+    "tests/permission-contract.test.ts"
   ],
   "frontendGuardScripts": [
     {

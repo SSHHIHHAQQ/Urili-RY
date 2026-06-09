@@ -272,10 +272,10 @@ export async function getCategoryAttributeList(categoryId: number) {
   );
 }
 
-export async function getCategorySchema(categoryId: number) {
+export async function getCategorySchema(categoryId: number, options?: { skipErrorHandler?: boolean }) {
   return request<API.Product.InfoResult<API.Product.CategoryAttribute[]>>(
     `${baseUrl}/category-attributes/schema/${categoryId}`,
-    { method: 'GET' },
+    { method: 'GET', ...options },
   );
 }
 

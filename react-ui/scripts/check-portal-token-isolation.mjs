@@ -1015,6 +1015,12 @@ for (const proxyFile of [proxyConfigFile]) {
   if (!source.includes('API_PROXY_TARGET')) {
     violations.push(`${relativePath} must allow API_PROXY_TARGET override`);
   }
+  assertMatches(
+    source,
+    relativePath,
+    /dev\s*:\s*\{[\s\S]*['"`]\/api\/['"`]\s*:\s*\{[\s\S]*target\s*:\s*apiProxyTarget[\s\S]*changeOrigin\s*:\s*true[\s\S]*pathRewrite\s*:\s*\{\s*['"`]\^\/api['"`]\s*:\s*['"`]['"`]\s*,?\s*\}/,
+    'keep dev /api/ proxy target, changeOrigin, and ^/api pathRewrite contract',
+  );
 }
 
 const proxyConfigJs = assertFileExists(proxyConfigJsFile);

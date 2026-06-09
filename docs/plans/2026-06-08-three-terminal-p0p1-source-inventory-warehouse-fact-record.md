@@ -2,6 +2,8 @@
 
 参考方向：`docs/plans/2026-06-04-three-terminal-isolation-control-plan.md`。
 
+> 当前口径追补（2026-06-09）：本文件中的 GPT-5.3 Codex 子 Agent 尝试仅代表当时历史执行事实，不再作为后续规则。当前 `AGENTS.md` 已收紧为子 Agent 默认且只能使用 `gpt-5.4`，不得再使用 GPT-5.3 Codex。
+
 本轮继续执行快速推进模式：只修 P0/P1（编译、guard、接口、权限、串端、service/字段缺失），P2 只记录不阻塞；不做浏览器运行态验收、截图、DOM 检测或 UI 细调。
 
 ## 子 Agent 使用记录

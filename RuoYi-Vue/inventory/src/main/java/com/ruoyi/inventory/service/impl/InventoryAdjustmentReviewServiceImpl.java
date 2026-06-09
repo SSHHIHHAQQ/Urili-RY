@@ -61,6 +61,7 @@ public class InventoryAdjustmentReviewServiceImpl implements IInventoryAdjustmen
     private static final String STATUS_SOURCE_UNBOUND = "SOURCE_UNBOUND";
     private static final String STATUS_SOURCE_ONLY_IN_TRANSIT = "SOURCE_ONLY_IN_TRANSIT";
     private static final String REF_SOURCE_UNBOUND = "SOURCE_UNBOUND";
+    private static final String SYNC_MODE_MANUAL = "MANUAL";
 
     @Autowired
     private InventoryAdjustmentReviewMapper reviewMapper;
@@ -385,9 +386,9 @@ public class InventoryAdjustmentReviewServiceImpl implements IInventoryAdjustmen
         }
         InventoryAdjustmentReviewPolicy fallback = new InventoryAdjustmentReviewPolicy();
         fallback.setPolicyId(0L);
-        fallback.setPolicyName("默认库存退回保护策略");
+        fallback.setPolicyName("无匹配库存调整审核策略");
         fallback.setPolicyStatus("ENABLED");
-        fallback.setReviewMode(MODE_CONDITIONAL);
+        fallback.setReviewMode(MODE_DISABLED);
         fallback.setDirectionScope(DIRECTION_DECREASE);
         fallback.setFieldScope(FIELD_PLATFORM_TOTAL);
         fallback.setSalesWindowDays("[7,30]");
@@ -609,6 +610,35 @@ public class InventoryAdjustmentReviewServiceImpl implements IInventoryAdjustmen
         policy.setCooldownHours(defaultInt(policy.getCooldownHours(), 168));
         policy.setAutoEffectEnabled(defaultString(policy.getAutoEffectEnabled(), "Y"));
         policy.setManualEffectAllowed(defaultString(policy.getManualEffectAllowed(), "Y"));
+        assertOneOf(policy.getPolicyStatus(), "策略状态", "ENABLED", "DISABLED");
+        assertOneOf(policy.getReviewMode(), "审核模式", MODE_DISABLED, MODE_CONDITIONAL, MODE_ALWAYS);
+        assertOneOf(policy.getDirectionScope(), "方向范围", DIRECTION_DECREASE, DIRECTION_INCREASE, DIRECTION_BOTH);
+        assertOneOf(policy.getFieldScope(), "字段范围", FIELD_PLATFORM_TOTAL, "ALL");
+        assertOneOf(policy.getSalesAggregateMode(), "销量聚合方式", "MAX_DAILY_AVG");
+        if (parseWindows(policy.getSalesWindowDays(), false).isEmpty())
+        {
+            throw new ServiceException("销量窗口必须至少包含一个正整数天数");
+        }
+        if (policy.getReserveDays() < 0)
+        {
+            throw new ServiceException("保留天数不能小于0");
+        }
+        if (policy.getCooldownHours() < 0)
+        {
+            throw new ServiceException("冷却小时不能小于0");
+        }
+        if (policy.getMinReturnQtyToReview() != null && policy.getMinReturnQtyToReview() < 0)
+        {
+            throw new ServiceException("最低退回数量不能小于0");
+        }
+        if (policy.getMinReturnRatioToReview() != null
+            && (policy.getMinReturnRatioToReview().compareTo(BigDecimal.ZERO) < 0
+                || policy.getMinReturnRatioToReview().compareTo(BigDecimal.ONE) > 0))
+        {
+            throw new ServiceException("最低退回比例必须在0到1之间");
+        }
+        assertOneOf(policy.getAutoEffectEnabled(), "到期自动生效", "Y", "N");
+        assertOneOf(policy.getManualEffectAllowed(), "允许人工生效", "Y", "N");
     }
 
     private void validateBinding(InventoryAdjustmentReviewPolicyBinding binding)
@@ -618,7 +648,9 @@ public class InventoryAdjustmentReviewServiceImpl implements IInventoryAdjustmen
             throw new ServiceException("策略ID不能为空");
         }
         binding.setBindingType(defaultString(binding.getBindingType(), "SELLER"));
-        if (!"GLOBAL".equals(binding.getBindingType()) && binding.getBindingIdValue() == null)
+        assertOneOf(binding.getBindingType(), "绑定类型", "GLOBAL", "SELLER");
+        if (!"GLOBAL".equals(binding.getBindingType())
+            && (binding.getBindingIdValue() == null || binding.getBindingIdValue() <= 0))
         {
             throw new ServiceException("绑定对象不能为空");
         }
@@ -628,9 +660,19 @@ public class InventoryAdjustmentReviewServiceImpl implements IInventoryAdjustmen
         }
         binding.setPriority(defaultInt(binding.getPriority(), 100));
         binding.setStatus(defaultString(binding.getStatus(), "ENABLED"));
+        if (binding.getPriority() <= 0)
+        {
+            throw new ServiceException("优先级必须大于0");
+        }
+        assertOneOf(binding.getStatus(), "绑定状态", "ENABLED", "DISABLED");
     }
 
     private List<Integer> parseWindows(String value)
+    {
+        return parseWindows(value, true);
+    }
+
+    private List<Integer> parseWindows(String value, boolean useDefaultWhenEmpty)
     {
         List<Integer> result = new ArrayList<>();
         if (value != null)
@@ -652,12 +694,24 @@ public class InventoryAdjustmentReviewServiceImpl implements IInventoryAdjustmen
                 }
             }
         }
-        if (result.isEmpty())
+        if (result.isEmpty() && useDefaultWhenEmpty)
         {
             result.add(7);
             result.add(30);
         }
         return result;
+    }
+
+    private void assertOneOf(String value, String fieldName, String... allowedValues)
+    {
+        for (String allowedValue : allowedValues)
+        {
+            if (allowedValue.equals(value))
+            {
+                return;
+            }
+        }
+        throw new ServiceException(fieldName + "不合法");
     }
 
     private long salesQty(Long skuId, int days)
@@ -798,6 +852,12 @@ public class InventoryAdjustmentReviewServiceImpl implements IInventoryAdjustmen
         target.setPendingSourceDeductionQty(qty(source.getPendingSourceDeductionQty()));
         target.setPlatformAvailableQty(qty(source.getPlatformAvailableQty()));
         target.setEffectiveStatus(source.getEffectiveStatus());
+        target.setSyncMode(source.getSyncMode() == null ? SYNC_MODE_MANUAL : source.getSyncMode());
+        target.setSyncPolicyId(source.getSyncPolicyId());
+        target.setSyncPolicyScope(source.getSyncPolicyScope());
+        target.setSyncPolicyKey(source.getSyncPolicyKey());
+        target.setSyncStatus(source.getSyncStatus());
+        target.setLastAutoSyncTime(source.getLastAutoSyncTime());
         target.setVersion(source.getVersion());
         target.setCalcTime(source.getCalcTime());
         return target;

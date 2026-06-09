@@ -36,6 +36,11 @@
 - 旧 portal token 口径未标过期搜索：通过，未发现未标过期的 stale 命中。
 - 3 份旧 review 顶部过期标记检查：通过。
 
+## CodeGraph 追补
+
+- 2026-06-09 后续记录层复核发现：本文件记录过 `AGENTS.md` 和 `docs/architecture/reuse-ledger.md` 口径同步，但当时未在本文件中写入 CodeGraph 结果。
+- 追补口径：本轮已在仓库根目录执行 `codegraph sync .`，同步结果以 `docs/plans/2026-06-04-three-terminal-isolation-goal-tracker.md` 和 `docs/plans/2026-06-09-three-terminal-p0p1-gpt54-fast-pass-record.md` 最新检查点为准。
+
 ## 未执行
 
 - 未执行远端 MySQL DDL/DML。

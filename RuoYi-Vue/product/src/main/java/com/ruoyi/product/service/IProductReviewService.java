@@ -3,7 +3,7 @@ package com.ruoyi.product.service;
 import java.util.List;
 import com.ruoyi.product.domain.ProductReviewOperationLog;
 import com.ruoyi.product.domain.ProductReviewRequest;
-import com.ruoyi.product.domain.ProductSkuSalePriceUpdateRequest;
+import com.ruoyi.product.domain.ProductSkuSupplyPriceUpdateRequest;
 import com.ruoyi.product.domain.ProductSpu;
 
 /**
@@ -21,7 +21,7 @@ public interface IProductReviewService
 
     int submitProductEditReview(ProductSpu product);
 
-    int submitSkuSalePriceReview(ProductSkuSalePriceUpdateRequest request);
+    int submitSkuSupplyPriceReview(ProductSkuSupplyPriceUpdateRequest request);
 
     int approveReview(Long reviewId, String reason);
 
