@@ -226,6 +226,22 @@
   - `npm run tsc -- --pretty false`：通过。
   - `npx jest --config jest.config.ts tests/product-distribution-permission-guard.test.ts --runInBand`：通过，10 tests，0 failures/errors。
   - 浏览器插件工具本轮未暴露；Playwright bash 包装脚本在当前 Windows 环境不可用，`npx --package` 也未能把临时 Playwright 包挂入 `require` 路径，因此未完成自动浏览器 DOM 验证。
+  - 本地 8001 前端服务重启时发现 Umi MFSU 生成缓存报 `Two output files share the same path` 和 `.umi/core/polyfill.js` 缺失；已用 `DISABLE_MFSU=1 npm run dev` 重新启动，`http://127.0.0.1:8001/` 返回 200。
+  - 本轮未执行远程 MySQL DDL/DML，未读取或写入 Redis。
+
+### 2026-06-09 SKU 横向资料对比修正
+
+- 调整原因：
+  - SKU 字段数量较多，按字段纵向逐行左右对比会导致 10 个 SKU、20 个字段时形成非常长的审核页面。
+  - 供货价属于 SKU 资料的一部分，不应在详情主视图里再单独拆出 `SKU 供货价左右对比` 区域。
+- 修正内容：
+  - `SKU 资料左右对比` 改为每个 SKU 一张卡片，卡片主体分为 `修改前` / `修改后` 两栏。
+  - 每栏内部使用横向信息块展示 SKU 字段，字段一行排不下时自动换到第二、三、四行，减少纵向长度。
+  - 供货价合并回 SKU 信息块，随 SKU 资料一起展示和高亮；供货价上涨/下降提示保留在 SKU 卡片头部变化项中。
+  - 删除详情主视图里的独立 `SKU 供货价左右对比` 渲染路径，避免同一个 SKU 在资料区和供货价区重复出现。
+- 验证结果：
+  - `npm run tsc -- --pretty false`：通过。
+  - `npx jest --config jest.config.ts tests/product-distribution-permission-guard.test.ts --runInBand`：通过，10 tests，0 failures/errors。
   - 本轮未执行远程 MySQL DDL/DML，未读取或写入 Redis。
 
 ## 后续建议
@@ -235,3 +251,20 @@
 3. 商品审核详情从当前抽屉展示合并为“商品编辑页同款只读弹窗”，和商品列表查看能力统一。
 4. 商品列表补充“存在待审变更”的标识和查看审核单入口，避免卖家重复提交时只看到后端拦截。
 5. 后续统一清理 Ant Design `destroyOnClose` / `Drawer.width` 废弃属性，降低浏览器控制台噪音。
+
+### 2026-06-09 P1 审查后的供货价语义回正
+
+- 本段为最新结论，覆盖上方“SKU 横向资料对比修正”中“供货价合并回 SKU 信息块、删除独立供货价对比”的过期口径。
+- 原因：
+  - 管理端商品审核页是 review-only 审核入口，审核重点必须和后端 `reviewType` 保持一致。
+  - `EDIT_PRICE` 代表供货价审核，不应被归类为 `SKU_INFO` 或只展示成 `SKU 资料左右对比`。
+- 修正内容：
+  - `supplyPrice` 不再参与 `getSkuInfoChangedFields`。
+  - `SKU 资料左右对比` 渲染字段集合排除 `supplyPrice`。
+  - 供货价变化恢复独立 `SKU 供货价左右对比` 区域。
+  - 商品审核详情预览的类目 schema 请求增加 `product:categoryAttribute:preview` gate，无权限时不请求该 admin API。
+- 验证结果：
+  - `.\node_modules\.bin\jest.cmd --config jest.config.ts --runTestsByPath tests\product-distribution-permission-guard.test.ts --runInBand`：通过，1 suite / 10 tests。
+  - `npm run tsc -- --pretty false`：通过。
+  - `npm run verify:three-terminal`：通过，前端 24 suites / 192 tests；后端 product 53 tests、seller 100 tests、buyer 101 tests。
+  - 本轮未执行远程 MySQL DDL/DML，未写入 Redis。

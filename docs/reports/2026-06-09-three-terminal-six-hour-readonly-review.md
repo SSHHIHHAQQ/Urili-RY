@@ -1,5 +1,7 @@
 # 2026-06-09 三端权限改造六小时只读审查
 
+> 2026-06-09 记录层 P1 修正：本文是 13:42-14:00 的历史快照，文中“未运行完整 verify-three-terminal / 提交前复跑完整 verifier”的 P0/P1 优先建议已在 19:50 后续记录中关闭，后续状态以 `docs/reports/three-terminal-six-hour-review-log.md` 和 `docs/plans/2026-06-09-three-terminal-p0p1-verify-cold-start-record.md` 为准。
+
 - 审查时间：2026-06-09 13:42-14:00，Asia/Shanghai
 - 审查窗口：2026-06-09 07:40:35 之后到本次审查
 - 审查模式：只读审查；未修改业务代码；未执行 DDL/DML；未读取或写入 Redis
@@ -85,9 +87,9 @@ git diff --check -- ...
 
 ## 4. 下一步建议优先级
 
-P0/P1 优先级：
+当时快照 P0/P1 建议（后续已关闭）：
 
-1. 提交或合并当前未提交变更前，复跑完整 `cd E:\Urili-Ruoyi\react-ui; node scripts\verify-three-terminal.mjs`，因为当前 manifest / proxy guard /库存审核测试都有未提交变更。
+1. 当时建议：提交或合并当前未提交变更前，复跑完整 `cd E:\Urili-Ruoyi\react-ui; node scripts\verify-three-terminal.mjs`，因为当前 manifest / proxy guard / 库存审核测试都有未提交变更；后续已复跑通过，不再作为当前开放 P1。
 2. 对当前新增/未跟踪的审计报告、执行记录和生成目录做提交范围确认；继续排除 `.codegraph/`、`.umi-test/`、`.umi-undefined/`、`node_modules/`、`test-results/`。
 3. 如果继续推进三端权限，只处理 guard、权限注解、接口、SQL fail-closed、端内会话/日志审计和最小菜单模板；不要扩展完整 seller/buyer 业务菜单。
 

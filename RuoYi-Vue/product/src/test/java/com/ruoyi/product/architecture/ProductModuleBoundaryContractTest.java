@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -98,6 +99,107 @@ public class ProductModuleBoundaryContractTest
         if (!violations.isEmpty())
         {
             fail("product inventory lookup must implement the inventory-owned port without inventory internals:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    @Test
+    public void productPortalDistributionServiceMustStayReadOnlyAndDependencyLight() throws IOException
+    {
+        Path backendRoot = findBackendRoot();
+        String service = Files.readString(backendRoot.resolve(
+                "product/src/main/java/com/ruoyi/product/service/impl/ProductPortalDistributionServiceImpl.java"),
+                StandardCharsets.UTF_8);
+        List<String> violations = new ArrayList<>();
+
+        requireContains(service, "implements IProductPortalDistributionService", violations);
+        requireContains(service, "private ProductDistributionMapper productDistributionMapper;", violations);
+        requireContains(service, "selectProductList(query)", violations);
+        requireContains(service, "selectOnSaleProductList(query)", violations);
+        requireContains(service, "selectProductByIdAndSellerId(spuId, sellerId)", violations);
+        requireContains(service, "selectOnSaleProductById(spuId)", violations);
+        requireNotContains(service, "IProductDistributionService", violations);
+        requireNotContains(service, "ProductSellerLookupService", violations);
+        requireNotContains(service, "IWarehouseService", violations);
+        requireNotContains(service, "IFinanceCurrencyService", violations);
+        requireNotContains(service, "IUpstreamSystemService", violations);
+        requireNotContains(service, "ObjectProvider", violations);
+        requireNotContains(service, "insertProduct(", violations);
+        requireNotContains(service, "updateProduct(", violations);
+        requireNotContains(service, "deleteDraftProduct(", violations);
+
+        if (!violations.isEmpty())
+        {
+            fail("product portal distribution service must stay read-only and dependency-light:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    @Test
+    public void productCoreWriteServiceMustNotLookupSellerSnapshotAtRuntime() throws IOException
+    {
+        Path backendRoot = findBackendRoot();
+        String serviceSource = Files.readString(backendRoot.resolve(
+                "product/src/main/java/com/ruoyi/product/service/impl/ProductDistributionServiceImpl.java"),
+                StandardCharsets.UTF_8);
+        String controllerSource = Files.readString(backendRoot.resolve(
+                "product/src/main/java/com/ruoyi/product/controller/AdminProductDistributionController.java"),
+                StandardCharsets.UTF_8);
+        List<String> violations = new ArrayList<>();
+
+        requireNotContains(serviceSource, "ProductSellerLookupService", violations);
+        requireNotContains(serviceSource, "productSellerLookupService", violations);
+        requireNotContains(serviceSource, "selectSellerSnapshot(", violations);
+        requireNotContains(serviceSource, "fillSellerSnapshot(", violations);
+        requireContains(serviceSource, "normalizeSellerSnapshot(product, current)", violations);
+        requireContains(serviceSource, "product.setSellerNo(requireTrim(product.getSellerNo()", violations);
+        requireContains(serviceSource, "product.setSellerNo(requireTrim(current.getSellerNo()", violations);
+        requireContains(serviceSource, "商品卖家不能在保存时变更", violations);
+
+        requireContains(controllerSource, "private ObjectProvider<ProductSellerLookupService> productSellerLookupService;",
+                violations);
+        requireContains(controllerSource, "fillSellerSnapshot(product);", violations);
+        requireContains(controllerSource, "productDistributionService.insertProduct(product)", violations);
+        requireContains(controllerSource, "lookupService.selectSellerSnapshot(product.getSellerId())", violations);
+
+        if (!violations.isEmpty())
+        {
+            fail("product core write service must receive seller snapshots from the admin edge, not lookup seller at runtime:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    @Test
+    public void productSellerLookupPortMustStayOnAdminEdgeAllowlist() throws IOException
+    {
+        Path backendRoot = findBackendRoot();
+        Set<String> allowed = Set.of(
+                "product/src/main/java/com/ruoyi/product/service/ProductSellerLookupService.java",
+                "product/src/main/java/com/ruoyi/product/controller/AdminProductDistributionController.java",
+                "seller/src/main/java/com/ruoyi/seller/service/impl/ProductSellerLookupServiceImpl.java");
+        List<String> violations = new ArrayList<>();
+
+        for (String module : List.of("product", "seller", "buyer"))
+        {
+            Path root = backendRoot.resolve(module + "/src/main/java");
+            for (Path file : javaFiles(root))
+            {
+                String source = Files.readString(file, StandardCharsets.UTF_8);
+                if (!source.contains("ProductSellerLookupService") && !source.contains("selectSellerSnapshot("))
+                {
+                    continue;
+                }
+                String relativePath = backendRoot.relativize(file).toString().replace('\\', '/');
+                if (!allowed.contains(relativePath))
+                {
+                    violations.add(relativePath);
+                }
+            }
+        }
+
+        if (!violations.isEmpty())
+        {
+            fail("ProductSellerLookupService must stay limited to the admin write edge and seller adapter:\n"
                     + String.join("\n", violations));
         }
     }

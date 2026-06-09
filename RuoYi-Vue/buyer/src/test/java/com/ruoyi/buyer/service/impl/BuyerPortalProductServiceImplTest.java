@@ -18,11 +18,9 @@ import com.ruoyi.buyer.domain.BuyerPortalProductSku;
 import com.ruoyi.buyer.mapper.BuyerMapper;
 import com.ruoyi.common.constant.HttpStatus;
 import com.ruoyi.common.exception.ServiceException;
-import com.ruoyi.product.domain.ProductDistributionOperationLog;
 import com.ruoyi.product.domain.ProductSku;
-import com.ruoyi.product.domain.ProductSkuSalePriceUpdateRequest;
 import com.ruoyi.product.domain.ProductSpu;
-import com.ruoyi.product.service.IProductDistributionService;
+import com.ruoyi.product.service.IProductPortalDistributionService;
 import com.ruoyi.system.domain.PortalLoginSession;
 
 public class BuyerPortalProductServiceImplTest
@@ -235,15 +233,15 @@ public class BuyerPortalProductServiceImplTest
         assertEquals(null, productService.onSaleSkuListSpuId);
     }
 
-    private BuyerPortalProductServiceImpl service(IProductDistributionService productService)
+    private BuyerPortalProductServiceImpl service(IProductPortalDistributionService productService)
     {
         return service(productService, buyerMapper(new RecordingBuyerMapper(true)));
     }
 
-    private BuyerPortalProductServiceImpl service(IProductDistributionService productService, BuyerMapper buyerMapper)
+    private BuyerPortalProductServiceImpl service(IProductPortalDistributionService productService, BuyerMapper buyerMapper)
     {
         BuyerPortalProductServiceImpl service = new BuyerPortalProductServiceImpl();
-        setField(service, "productDistributionService", productService);
+        setField(service, "productPortalDistributionService", productService);
         setField(service, "buyerMapper", buyerMapper);
         return service;
     }
@@ -355,7 +353,7 @@ public class BuyerPortalProductServiceImplTest
         void run();
     }
 
-    private static class RecordingProductDistributionService implements IProductDistributionService
+    private static class RecordingProductDistributionService implements IProductPortalDistributionService
     {
         private List<ProductSpu> onSaleProductListResult = new ArrayList<>();
         private final List<ProductSku> onSaleSkuListResult = new ArrayList<>();
@@ -367,13 +365,25 @@ public class BuyerPortalProductServiceImplTest
         private Long onSaleSkuListSpuId;
 
         @Override
-        public List<ProductSpu> selectProductList(ProductSpu query)
+        public List<ProductSpu> selectSellerProductList(ProductSpu query)
         {
             return new ArrayList<>();
         }
 
         @Override
-        public List<ProductSpu> selectOnSaleProductList(ProductSpu query)
+        public ProductSpu selectSellerProductById(Long spuId, Long sellerId)
+        {
+            return null;
+        }
+
+        @Override
+        public List<ProductSku> selectSellerSkuList(Long spuId, Long sellerId)
+        {
+            return new ArrayList<>();
+        }
+
+        @Override
+        public List<ProductSpu> selectBuyerVisibleProductList(ProductSpu query)
         {
             onSaleProductListQuery = query;
             returnedOnSaleProductListSource = onSaleProductListResult;
@@ -381,122 +391,14 @@ public class BuyerPortalProductServiceImplTest
         }
 
         @Override
-        public ProductSpu selectProductById(Long spuId)
-        {
-            return null;
-        }
-
-        @Override
-        public ProductSpu selectProductById(Long spuId, Long sellerId)
-        {
-            return null;
-        }
-
-        @Override
-        public ProductSpu selectOnSaleProductById(Long spuId)
+        public ProductSpu selectBuyerVisibleProductById(Long spuId)
         {
             onSaleProductByIdArg = spuId;
             return onSaleProductByIdResult;
         }
 
         @Override
-        public int insertProduct(ProductSpu product)
-        {
-            return 0;
-        }
-
-        @Override
-        public int updateProduct(ProductSpu product)
-        {
-            return 0;
-        }
-
-        @Override
-        public int deleteDraftProduct(Long spuId)
-        {
-            return 0;
-        }
-
-        @Override
-        public ProductSpu prepareReviewedProductUpdate(ProductSpu product)
-        {
-            return product;
-        }
-
-        @Override
-        public int applyReviewedProductUpdate(ProductSpu product)
-        {
-            return 0;
-        }
-
-        @Override
-        public int updateSpuStatus(Long spuId, String status, String reason)
-        {
-            return 0;
-        }
-
-        @Override
-        public int updateSkuStatus(Long spuId, Long skuId, String status, String reason)
-        {
-            return 0;
-        }
-
-        @Override
-        public int batchUpdateSpuStatus(List<Long> spuIds, String status, boolean syncSkuStatus, String reason)
-        {
-            return 0;
-        }
-
-        @Override
-        public int batchUpdateSkuStatus(List<Long> skuIds, String status, String reason)
-        {
-            return 0;
-        }
-
-        @Override
-        public int batchUpdateSpuControlStatus(List<Long> spuIds, String controlStatus, String reason)
-        {
-            return 0;
-        }
-
-        @Override
-        public int batchUpdateSkuControlStatus(List<Long> skuIds, String controlStatus, String reason)
-        {
-            return 0;
-        }
-
-        @Override
-        public int batchUpdateSkuSalePrice(ProductSkuSalePriceUpdateRequest request)
-        {
-            return 0;
-        }
-
-        @Override
-        public List<ProductDistributionOperationLog> selectOperationLogList(ProductDistributionOperationLog query)
-        {
-            return new ArrayList<>();
-        }
-
-        @Override
-        public List<ProductSku> selectSkuPageList(ProductSku query)
-        {
-            return new ArrayList<>();
-        }
-
-        @Override
-        public List<ProductSku> selectSkuList(Long spuId)
-        {
-            return new ArrayList<>();
-        }
-
-        @Override
-        public List<ProductSku> selectSkuList(Long spuId, Long sellerId)
-        {
-            return new ArrayList<>();
-        }
-
-        @Override
-        public List<ProductSku> selectOnSaleSkuList(Long spuId)
+        public List<ProductSku> selectBuyerVisibleSkuList(Long spuId)
         {
             onSaleSkuListSpuId = spuId;
             return onSaleSkuListResult;

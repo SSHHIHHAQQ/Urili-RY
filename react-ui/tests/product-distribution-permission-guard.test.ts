@@ -178,6 +178,7 @@ describe('product distribution permission guard', () => {
     expect(reviewPageTsx).toContain("const canApproveProductReview = access.hasPerms('review:productDistribution:approve')");
     expect(reviewPageTsx).toContain("const canRejectProductReview = access.hasPerms('review:productDistribution:reject')");
     expect(reviewPageTsx).toContain("const canViewProductReviewLog = access.hasPerms('review:productDistribution:log')");
+    expect(reviewPageTsx).toContain("const canPreviewCategorySchema = access.hasPerms('product:categoryAttribute:preview')");
     expect(reviewPageTsx).toContain('getProductReviewLogs');
     expect(reviewPageTsx).toMatch(/if \(canViewProductReviewLog\)[\s\S]*?getProductReviewLogs\(record\.reviewId\)/);
     expect(reviewPageTsx).toMatch(/if \(!canListProductReview\)[\s\S]*?return \{ data: \[\], total: 0, success: false \}/);
@@ -193,6 +194,7 @@ describe('product distribution permission guard', () => {
     expect(reviewPageTsx).not.toContain('<Dropdown');
     expect(reviewPageTsx).not.toContain('更多 <DownOutlined />');
     expect(reviewPageTsx).toContain('ProductReviewBusinessPreview');
+    expect(reviewPageTsx).toContain('canPreviewCategorySchema={canPreviewCategorySchema}');
     expect(reviewPageTsx).toContain('function renderReviewFocus');
     expect(reviewPageTsx).toContain('function normalizeWarehouseKind');
     expect(reviewPageTsx).toContain('function formatWarehouseKindLabel');
@@ -254,6 +256,9 @@ describe('product distribution permission guard', () => {
     expect(reviewBusinessPreviewTsx).toContain('function renderSkuChangeTags');
     expect(reviewBusinessPreviewTsx).toContain('function renderSkuFieldChangeDetail');
     expect(reviewBusinessPreviewTsx).toContain('function renderSkuCompareHeader');
+    expect(reviewBusinessPreviewTsx).toContain('function renderSkuFieldTiles');
+    expect(reviewBusinessPreviewTsx).toContain('const skuCompareBodyStyle');
+    expect(reviewBusinessPreviewTsx).toContain('const skuFieldListStyle');
     expect(reviewBusinessPreviewTsx).toContain('function renderSalesStatus');
     expect(reviewBusinessPreviewTsx).toContain('function normalizeCompareValue');
     expect(reviewBusinessPreviewTsx).toContain('function normalizeMeasurementString');
@@ -281,6 +286,9 @@ describe('product distribution permission guard', () => {
     expect(reviewBusinessPreviewTsx).toContain("renderMetric('供货价区间'");
     expect(reviewBusinessPreviewTsx).not.toContain("renderMetric('销售价区间'");
     expect(reviewBusinessPreviewTsx).toContain("showDeliveryWarehouse ? renderSection('发货仓库'");
+    expect(reviewBusinessPreviewTsx).toContain('canPreviewCategorySchema?: boolean');
+    expect(reviewBusinessPreviewTsx).toContain('canPreviewCategorySchema = false');
+    expect(reviewBusinessPreviewTsx).toContain('if (!categoryId || !canPreviewCategorySchema)');
     expect(reviewBusinessPreviewTsx).toContain('getCategorySchema(categoryId, { skipErrorHandler: true })');
     expect(reviewBusinessPreviewTsx).toContain('formatAttributeValue(row, displayMaps.optionLabelMap)');
     expect(reviewBusinessPreviewTsx).toContain('resolveAttributeLabel(row, displayMaps.attributeLabelMap)');
@@ -298,6 +306,7 @@ describe('product distribution permission guard', () => {
       'width',
       'height',
       'weight',
+      'supplyPrice',
     ].forEach((fieldKey) => {
       expect(reviewBusinessPreviewTsx).toContain(`key: '${fieldKey}'`);
     });
@@ -341,6 +350,7 @@ describe('product distribution permission guard', () => {
     expect(reviewBusinessPreviewTsx).toContain("renderComparePanels('商品详情图文'");
     expect(reviewBusinessPreviewTsx).toContain("renderSection('SKU 资料左右对比'");
     expect(reviewBusinessPreviewTsx).toContain("renderSection('SKU 供货价左右对比'");
+    expect(reviewBusinessPreviewTsx).toContain("field.key !== 'supplyPrice'");
     expect(reviewBusinessPreviewTsx).not.toContain("renderMetric('影响 SKU'");
     expect(reviewBusinessPreviewTsx).not.toContain("renderMetric('涨价 SKU'");
     expect(reviewBusinessPreviewTsx).not.toContain("renderMetric('降价 SKU'");

@@ -10,7 +10,7 @@ import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.product.domain.ProductSku;
 import com.ruoyi.product.domain.ProductSpu;
-import com.ruoyi.product.service.IProductDistributionService;
+import com.ruoyi.product.service.IProductPortalDistributionService;
 import com.ruoyi.seller.domain.SellerAccount;
 import com.ruoyi.seller.domain.SellerPortalProduct;
 import com.ruoyi.seller.domain.SellerPortalProductSku;
@@ -27,7 +27,7 @@ public class SellerPortalProductServiceImpl implements ISellerPortalProductServi
     private static final String TERMINAL_SELLER = "seller";
 
     @Autowired
-    private IProductDistributionService productDistributionService;
+    private IProductPortalDistributionService productPortalDistributionService;
 
     @Autowired
     private SellerMapper sellerMapper;
@@ -36,7 +36,7 @@ public class SellerPortalProductServiceImpl implements ISellerPortalProductServi
     public List<SellerPortalProduct> selectOwnProductList(PortalLoginSession session, ProductSpu query)
     {
         assertSellerSession(session);
-        List<ProductSpu> products = productDistributionService.selectProductList(buildOwnProductQuery(session, query));
+        List<ProductSpu> products = productPortalDistributionService.selectSellerProductList(buildOwnProductQuery(session, query));
         List<SellerPortalProduct> result = newPortalProductList(products);
         for (ProductSpu product : products)
         {
@@ -56,7 +56,7 @@ public class SellerPortalProductServiceImpl implements ISellerPortalProductServi
     public List<SellerPortalProductSku> selectOwnSkuList(PortalLoginSession session, Long spuId)
     {
         requireOwnProduct(session, spuId);
-        return toPortalSkus(productDistributionService.selectSkuList(spuId, session.getSubjectId()));
+        return toPortalSkus(productPortalDistributionService.selectSellerSkuList(spuId, session.getSubjectId()));
     }
 
     private ProductSpu buildOwnProductQuery(PortalLoginSession session, ProductSpu query)
@@ -105,7 +105,7 @@ public class SellerPortalProductServiceImpl implements ISellerPortalProductServi
         {
             throw new ServiceException("商城商品不存在");
         }
-        ProductSpu product = productDistributionService.selectProductById(spuId, session.getSubjectId());
+        ProductSpu product = productPortalDistributionService.selectSellerProductById(spuId, session.getSubjectId());
         if (product == null || !session.getSubjectId().equals(product.getSellerId()))
         {
             throw new ServiceException("商城商品不存在");
@@ -149,7 +149,7 @@ public class SellerPortalProductServiceImpl implements ISellerPortalProductServi
         result.setSalePriceMax(product.getSalePriceMax());
         result.setCurrencySummary(product.getCurrencySummary());
         result.setWarehouseCount(product.getWarehouseCount());
-        result.setSkus(toPortalSkus(productDistributionService.selectSkuList(product.getSpuId(), sellerId)));
+        result.setSkus(toPortalSkus(productPortalDistributionService.selectSellerSkuList(product.getSpuId(), sellerId)));
         return result;
     }
 

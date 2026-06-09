@@ -1,5 +1,7 @@
 # 2026-06-06 react-ui 三端独立前端 P0/P1 只读审计
 
+> 2026-06-09 记录层 P1 修正：本文中的 2 条前端 P1 已由后续 `config/routes.js` re-export、`PartnerMenuModal` fail-closed 校验、`check-partner-management-template.mjs` guard 和三端验证收口。本文保留历史证据，不再代表当前开放 P1。
+
 ## 审计范围
 
 - 范围：`react-ui/src`、`react-ui/config/routes.ts`、`react-ui/scripts`
@@ -9,14 +11,14 @@
 ## 一句话结论
 
 - **P0：0 项**
-- **P1：2 项**
-- 当前 `seller/buyer/admin` token 分流、portal 401/退出/direct-login 的主链路静态代码已基本对齐三端独立；残留风险主要在 **`config/routes.js` 陈旧副本** 和 **菜单编辑端隔离 guard 仍是黑名单式校验**。
+- **P1：2 项（历史发现，已关闭）**
+- 当前 `seller/buyer/admin` token 分流、portal 401/退出/direct-login 的主链路静态代码已基本对齐三端独立；本文记录的 **`config/routes.js` 陈旧副本** 和 **菜单编辑端隔离 guard 仍是黑名单式校验** 是历史风险，已在后续检查点关闭。
 
-## 新增问题
+## 历史新增问题（已关闭）
 
-### P1-1 `config/routes.js` 已落后于 `config/routes.ts`，仍然可能把 portal 登录入口带回旧路由集
+### P1-1 `config/routes.js` 当时已落后于 `config/routes.ts`，可能把 portal 登录入口带回旧路由集
 
-- 风险描述：
+- 当时风险描述：
   - `react-ui/config/routes.ts` 已声明 `/seller/login` 和 `/buyer/login`。
   - 同目录的 `react-ui/config/routes.js` 仍然缺少这两个 portal 登录入口。
   - 当前静态证据显示 TS 配置链路优先命中 `routes.ts`，所以这不是现状 P0；但只要有人回退到 `config.js`、脚本误扫 JS 配置、或者后续入口调整，这个陈旧副本就会直接把 portal 登录入口带回旧集合。
@@ -28,9 +30,9 @@
 - 影响判断：
   - 当前更像“**陈旧副本 + guard 覆盖缺口**”，不是已证实的线上断路，所以定为 **P1**。
 
-### P1-2 菜单编辑端隔离 guard 仍然不够，只拦“对端”，没有拦“admin/common/shared”
+### P1-2 菜单编辑端隔离 guard 当时不够，只拦“对端”，没有拦“admin/common/shared”
 
-- 风险描述：
+- 当时风险描述：
   - `PartnerMenuModal` 的前端校验只做了三件事：
     1. 路由 path 不能显式指向对端前缀
     2. component 不能显式指向对端页面根目录
@@ -80,10 +82,10 @@
   - `npm run guard:seller-portal-product` 通过
   - `npm run guard:buyer-portal-product` 通过
 
-## 残留问题
+## 历史残留问题（已关闭）
 
-- `react-ui/config/routes.js` 仍是陈旧副本，且当前 guard 不覆盖它；这是本次最明确的 TS/JS 双份残留点。
-- `PartnerMenuModal.tsx` 目前是黑名单式隔离，不是 allowlist 式隔离；即使 seller/buyer service 主干完整，这一层仍可能把 admin/common/shared 页面挂进端内菜单。
+- `react-ui/config/routes.js` 当时是陈旧副本，且当时 guard 不覆盖它；后续已改为 re-export 并由 `remote-menu-route-guard.test.ts` / `admin-auth-sidecar-contract.test.ts` 固定。
+- `PartnerMenuModal.tsx` 当时是黑名单式隔离，不是 allowlist 式隔离；后续已补 fail-closed 校验和 `check-partner-management-template.mjs` guard，当前不再作为开放 P1。
 
 ## 验证命令
 
@@ -161,9 +163,9 @@ react-ui/src/pages/Portal/Home/index.tsx :: ../terminal => E:/Urili-Ruoyi/react-
 ## 重复代码检查结果
 
 - `app.tsx/app.js`、`Portal/Home/index.tsx/index.js`、`Portal/DirectLogin/index.tsx/index.js` 当前更像“TS 源 + JS 派生副本”，没有发现本次审计范围内仍然明显分叉的 portal token/401 旧逻辑。
-- **真正仍然分叉的已确认点是 `config/routes.ts` 与 `config/routes.js`**：
+- **当时真正分叉的已确认点是 `config/routes.ts` 与 `config/routes.js`**：
   - `routes.ts` 有 `/seller/login`、`/buyer/login`
   - `routes.js` 没有
 - 因此“TS 与 JS 双份文件是否会造成实际构建用旧逻辑”的当前结论是：
   - **未找到主链路已经吃到旧 JS 的直接证据**
-  - **但 `routes.js` 这份陈旧副本仍然足以构成 P1 回归源**
+  - **但 `routes.js` 这份陈旧副本当时足以构成 P1 回归源；后续已关闭**

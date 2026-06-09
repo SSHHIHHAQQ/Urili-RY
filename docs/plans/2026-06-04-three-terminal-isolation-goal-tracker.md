@@ -13496,3 +13496,219 @@ P2 记录：
 - 本轮未执行远程 MySQL DDL/DML。
 - 本轮未读取或写入 Redis。
 - 本轮只修改 SQL 脚本、前后端源码与测试，未回放到远端库。
+
+## 2026-06-09 检查点：gpt-5.4 子 Agent 规则确认与密钥配置占位
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为参考方向。当前仍是快速推进模式：只处理 P0/P1，不做浏览器、截图、DOM 或 UI 细调。
+
+子 Agent 使用记录：
+- 本检查点未新增子 Agent。
+- 已复核 `AGENTS.md`：后续子 Agent 默认且只能使用 `gpt-5.4`，不得再使用 GPT-5.3 Codex。
+- 后续如需继续拆分，仍需记录模型、数量、关闭状态和结论采纳。
+
+已保留：
+- `RuoYi-Vue/ruoyi-admin/src/main/resources/application.yml` 增加 `urili.secret.encryption-key` 和 `urili.secret.encryption-key-id`。
+- 两个配置均使用环境变量占位，不写入明文密钥：`${URILI_SECRET_ENCRYPTION_KEY:}`、`${URILI_SECRET_ENCRYPTION_KEY_ID:local-v1}`。
+
+远端影响：
+- 本检查点未执行远程 MySQL DDL/DML。
+- 本检查点未读取或写入 Redis。
+- 本检查点未启动或重启后端。
+
+验证：
+- `cd E:\Urili-Ruoyi\react-ui; .\node_modules\.bin\jest.cmd --config jest.config.ts --runTestsByPath tests\verify-three-terminal-backend-gate.test.ts --runInBand`：通过，1 suite / 20 tests。
+- `cd E:\Urili-Ruoyi\react-ui; node scripts\verify-three-terminal.mjs --check-manifest`：通过，输出 `three-terminal manifest check passed.`。
+- `cd E:\Urili-Ruoyi; git diff --check`：通过，仅提示当前工作区 LF/CRLF 换行转换 warning。
+- `cd E:\Urili-Ruoyi; codegraph sync .`：通过，输出 `Already up to date`。
+
+## 2026-06-09 检查点：verify gate 生成目录与 token secret guard 加固
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为参考方向。当前仍是快速推进模式：只处理 P0/P1，不做浏览器、截图、DOM 或 UI 细调。
+
+子 Agent 使用记录：
+- 本轮启动 6 个只读子 Agent，全部使用 `gpt-5.4`。
+- 6 个切片覆盖 portal 接口、管理端账号权限、SQL/seed guard、React 管理端、React portal/token、verify gate/manifest。
+- 6 个子 Agent 均已完成并关闭。
+
+已采纳并修复：
+- P1：`src/.umi-test` 生成目录未从主 `tsconfig` 排除，已加入 `react-ui/tsconfig.json` 的 `exclude`。
+- P1：认证关键配置 `token.secret` 未被 gate 固定为环境变量占位，已在 `react-ui/tests/verify-three-terminal-backend-gate.test.ts` 固定 `secret: ${RUOYI_TOKEN_SECRET:}`。
+- 同一测试同时固定 `.umi-test` 错误生成文件不能污染主 typecheck。
+- 其余 5 个子 Agent 切片未发现新的可坐实 P0/P1。
+
+远端影响：
+- 本检查点未执行远程 MySQL DDL/DML。
+- 本检查点未读取或写入 Redis。
+- 本检查点未启动或重启后端。
+
+验证：
+- `cd E:\Urili-Ruoyi\react-ui; .\node_modules\.bin\jest.cmd --config jest.config.ts --runTestsByPath tests\verify-three-terminal-backend-gate.test.ts --runInBand`：通过，1 suite / 20 tests。
+- `cd E:\Urili-Ruoyi\react-ui; npm run tsc -- --pretty false`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run verify:three-terminal`：通过；Frontend Jest 24 suites / 192 tests；后端 reactor test-compile 14 个模块 SUCCESS；product 53 tests、seller 100 tests、buyer 101 tests 通过。
+- 浏览器、截图、DOM、UI 细调验收按当前快速推进模式跳过。
+
+收尾检查：
+- `cd E:\Urili-Ruoyi; git diff --check`：通过，仅提示当前工作区 LF/CRLF 换行转换 warning。
+- `cd E:\Urili-Ruoyi; codegraph sync .`：通过，输出 `Synced 2 changed files`；记录回填后再次执行通过，输出 `Synced 1 changed files`。
+
+## 2026-06-09 检查点：商品审核 P1 权限与供货价语义回正
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为参考方向。当前仍是快速推进模式：只处理 P0/P1，不做浏览器、截图、DOM 或 UI 细调验收。
+
+子 Agent 使用记录：
+- 本轮使用并关闭 6 个子 Agent，全部为 `gpt-5.4`，未使用 GPT-5.3 Codex。
+- 切片 A 发现 2 个商品审核 P1，并落盘只读报告 `docs/reports/2026-06-09-product-review-slice-a-readonly-audit.md`。
+- 切片 B、D 分别落盘只读报告 `docs/reviews/2026-06-09-three-terminal-readonly-audit-slice-b.md`、`docs/reviews/2026-06-09-react-ui-three-terminal-slice-d-readonly.md`。
+- 切片 C、E、F 未发现新的可坐实 P0/P1；C 做了 live schema 只读核验，E 做了 portal 真实业务接口核验，F 做了记录层核验。
+
+已采纳并修复：
+- P1：商品审核详情预览调用类目 schema 接口但审核页未 gate `product:categoryAttribute:preview`。已在 `ProductReviewPage` 计算 `canPreviewCategorySchema` 并传入 `ProductReviewBusinessPreview`；无权限时预览组件不请求 `getCategorySchema`，仅按已有快照降级展示。
+- P1：dirty change 把 `EDIT_PRICE` 供货价审核并回 `SKU_INFO`。已恢复 `supplyPrice` 不参与 `getSkuInfoChangedFields`，`SKU 资料左右对比` 字段集合也排除供货价；供货价继续独立展示为 `SKU 供货价左右对比`。
+- `product-distribution-permission-guard.test.ts` 固定上述权限 gate 和供货价独立审核语义。
+- `docs/plans/2026-06-08-product-review-implementation-record.md` 追加语义回正记录，覆盖此前“供货价合并回 SKU 信息块”的过期记录。
+
+未采纳的非阻塞 P2：
+- 可把 `tests/product-distribution-permission-guard.test.ts` 显式提升到 `criticalFrontendExplicitTestPaths`，当前仍由现有 critical pattern 覆盖，不阻塞本轮。
+- 可在 `.gitignore` 中显式补 `.umi-test` 生成目录忽略，当前 `tsconfig` 与 gate 已固定主 typecheck 不受污染，不阻塞本轮。
+- 可继续补 portal query 白名单和 seller/buyer distribution query 架构测试，当前只作为加固项。
+
+远端影响：
+- 本检查点未执行远程 MySQL DDL/DML。
+- 本检查点未写入 Redis。
+- C 切片只读连接 live MySQL 做 schema 核验；未执行任何写操作。
+- 本检查点未启动或重启后端。
+
+验证：
+- `cd E:\Urili-Ruoyi\react-ui; .\node_modules\.bin\jest.cmd --config jest.config.ts --runTestsByPath tests\product-distribution-permission-guard.test.ts --runInBand`：通过，1 suite / 10 tests。
+- `cd E:\Urili-Ruoyi\react-ui; npm run tsc -- --pretty false`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run verify:three-terminal`：通过；前端 24 suites / 192 tests，通过；后端 reactor test-compile 14 个模块 SUCCESS；后端三端合同 product 53 tests、seller 100 tests、buyer 101 tests 通过。
+- 浏览器、截图、DOM、UI 细调验收按当前快速推进模式跳过。
+
+收尾检查：
+- `cd E:\Urili-Ruoyi; git diff --check`：通过，仅提示当前工作区 LF/CRLF 换行转换 warning。
+- `cd E:\Urili-Ruoyi; codegraph sync .`：通过，输出 `Synced 3 changed files`。
+
+## 2026-06-09 检查点：六切片现存 P0/P1 复核与记录层 P1 修正
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为参考方向。当前仍是快速推进模式：只处理 P0/P1，不做浏览器、截图、DOM 或 UI 细调验收。
+
+子 Agent 使用记录：
+- 本轮使用并关闭 6 个只读子 Agent，全部为 `gpt-5.4`，未使用 GPT-5.3 Codex。
+- 切片 A 复核管理端 seller/buyer 控制面，未发现当前开放 P0/P1；P2 记录为 controller 显式测试和少量英文异常文案。
+- 切片 B 复核 portal auth、session、direct-login 和日志链路，未发现当前开放 P0/P1。
+- 切片 C 复核 React 三端前端主链路，未发现当前开放 P0/P1；P2 记录为 `app.tsx` / `requestErrorConfig.ts` 401 分支可进一步收敛。
+- 切片 D 复核 SQL、seed、guard 和合同，未发现当前开放 P0/P1。
+- 切片 E 复核 product、inventory、warehouse、integration、finance 等共享业务边界，未发现当前开放 P0/P1。
+- 切片 F 发现 3 个记录层 P1：旧只读报告仍把已修复问题呈现为当前开放 P1。
+
+已修正：
+- `docs/reports/2026-06-09-product-review-slice-a-readonly-audit.md`：标记商品审核 2 条 P1 为“历史发现，已关闭”，当前状态以后续 fast-pass 和商品审核实施记录为准。
+- `docs/reviews/2026-06-06-react-ui-three-terminal-p0p1-readonly-audit.md`：标记 `routes.js` 陈旧副本、菜单编辑 guard 不足两项 P1 为历史发现，已由后续 guard 和验证关闭。
+- `docs/reports/2026-06-07-portal-direct-login-readonly-scan.md`：标记 seller/buyer 自助日志与会话 DTO 泄漏 P1 为历史发现，已由 `PortalOwn*` DTO 和合同测试关闭。
+
+远端影响：
+- 本检查点未执行远程 MySQL DDL/DML。
+- 本检查点未读取或写入 Redis。
+- 本检查点未启动或重启后端。
+
+验证：
+- 子 Agent A：seller/buyer focused Maven 测试通过。
+- 子 Agent B：seller/buyer/system/framework focused Maven 测试通过。
+- 子 Agent C：manifest check 和 6 个 React Jest suites / 98 tests 通过。
+- 子 Agent D：`ruoyi-system` SQL/terminal contract Maven 批次通过。
+- 子 Agent E：product/inventory/warehouse/integration/finance 边界合同 Maven 批次通过。
+- 本轮主控只修改 Markdown 记录；`cd E:\Urili-Ruoyi\react-ui; node scripts\verify-three-terminal.mjs --check-manifest` 通过，输出 `three-terminal manifest check passed.`。
+- `cd E:\Urili-Ruoyi; git diff --check` 通过，仅提示当前工作区 LF/CRLF 换行转换 warning。
+- `cd E:\Urili-Ruoyi; codegraph sync .` 通过，输出 `Already up to date`。
+
+未处理的非阻塞 P2：
+- 管理端 seller/buyer 控制器可继续补更显式的端隔离单测。
+- 少量英文 `ServiceException` 文案可后续统一中文化。
+- `app.tsx` 与 `requestErrorConfig.ts` 的 portal 401 分支可进一步抽共用 helper，当前不阻塞 P0/P1。
+
+## 2026-06-09 检查点：Product Portal 只读接口 P1 收口
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为参考方向。当前仍是快速推进模式：只处理 P0/P1，不做浏览器、截图、DOM 或 UI 细调验收。
+
+子 Agent 使用记录：
+- 本轮使用并关闭 6 个子 Agent，全部为 `gpt-5.4`，未使用 GPT-5.3 Codex。
+- 切片 A 发现 Maven/module 边界 2 个 P1；本轮采纳并修复只读链路 P1，写侧 seller 快照依赖 P1 留作后续独立切片。
+- 切片 B、C、D、E 未发现新的可坐实 P0/P1；切片 D 新增只读报告 `docs/reports/2026-06-09-readonly-slice-d-partner-management-review.md`。
+- 切片 F 发现 2 份旧记录仍把已关闭问题标成当前开放 P1，本轮已同步标注历史状态。
+
+已采纳并修复：
+- seller/buyer portal 和 product center 当前只读链路从 `IProductDistributionService` 剥离到 `IProductPortalDistributionService`。
+- 新增 `ProductPortalDistributionServiceImpl`，只依赖 product mapper 做只读查询，避免只读链路被 product 写侧的 warehouse/finance/integration/seller lookup 依赖放大。
+- 更新 seller/buyer/product center 单元测试和 `PortalProductEndpointPermissionContractTest`、`ProductModuleBoundaryContractTest`，固定只读 port 与轻依赖边界。
+- `ProductSellerLookupServiceImpl` 对缺失 seller 资料返回 `null`，仅收口错误路径；product 写路径对 seller 快照扩展点的运行时依赖仍是后续 P1。
+- 三份历史报告已标注：`docs/reports/2026-06-09-three-terminal-six-hour-readonly-review.md`、`docs/reviews/2026-06-09-slice-5-verify-three-terminal-readonly-audit.md`、`docs/reviews/2026-06-06-maven-module-dependency-audit.md`。
+
+远端影响：
+- 本检查点未执行远程 MySQL DDL/DML。
+- 本检查点未读取或写入 Redis。
+- 本检查点未启动或重启后端。
+
+验证：
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl seller,buyer,product,ruoyi-system -am "-Dtest=SellerPortalProductServiceImplTest,BuyerPortalProductServiceImplTest,ProductCenterServiceImplTest,ProductModuleBoundaryContractTest,PortalProductEndpointPermissionContractTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，reactor 10 个模块 SUCCESS；相关测试 39 个通过。
+- `cd E:\Urili-Ruoyi\react-ui; node scripts\verify-three-terminal.mjs --check-manifest`：通过。
+- 针对 seller/buyer portal 与 product center 目标面的 `IProductDistributionService` 静态搜索无输出。
+
+历史未处理 P1（后续已关闭）：
+- 当时 `product` 写路径仍通过 seller 快照扩展点依赖 seller 资料校验；该问题已在后一检查点“Product 写侧 seller 快照依赖 P1 收口”关闭。
+
+## 2026-06-09 检查点：Product 写侧 seller 快照依赖 P1 收口
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为参考方向。当前仍是快速推进模式：只处理 P0/P1，不做浏览器、截图、DOM 或 UI 细调验收。
+
+子 Agent 使用记录：
+- 本轮使用并关闭 6 个子 Agent，全部为 `gpt-5.4`，未使用 GPT-5.3 Codex。
+- 写入口切片确认新建商品是唯一必须 live lookup seller 的入口；草稿更新、编辑提审和审核生效可复用当前 product 已落库 seller 快照。
+- 测试/合同切片确认需要固定 product 核心写服务不再引用 `ProductSellerLookupService`，并保护 portal/product-center 只读面。
+- 字段流转切片确认 `product_spu` 与审核 snapshot JSON 覆盖 `sellerId/sellerNo/sellerName` 核心字段；`product_review_request` 主表无 `seller_no` 仅作为后续审计/列表投影缺口记录。
+
+已采纳并修复：
+- `ProductDistributionServiceImpl` 移除 `ProductSellerLookupService` 运行时 lookup。
+- 新建商品要求 admin 写入口先提供 `sellerId/sellerNo/sellerName`；缺失则 fail-closed。
+- 已有商品更新、编辑提审和审核生效复用当前商品已落库 seller 快照，并禁止保存时变更 sellerId。
+- `AdminProductDistributionController.add(...)` 在调用 `insertProduct(...)` 前通过 seller adapter 装配 seller 快照。
+- `ProductDistributionServiceImplTest` 固定新建快照必填、已有商品复用当前快照、sellerId 不可变更。
+- `ProductModuleBoundaryContractTest` 和 `PortalProductEndpointPermissionContractTest` 固定 lookup 暴露面与 portal/product-center 防回流边界。
+
+行为口径：
+- 当前语义为“seller 快照在商品新建时固化，后续 update/review 复用已落库快照”。
+- seller 主档变更后是否批量刷新商品快照属于后续业务设计，不再作为当前三端隔离 P1。
+
+远端影响：
+- 本检查点未执行远程 MySQL DDL/DML。
+- 本检查点未读取或写入 Redis。
+- 本检查点未启动或重启后端。
+
+验证：
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl seller,buyer,product,ruoyi-system -am "-Dtest=ProductDistributionServiceImplTest,ProductModuleBoundaryContractTest,PortalProductEndpointPermissionContractTest,SellerPortalProductServiceImplTest,BuyerPortalProductServiceImplTest,ProductCenterServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，reactor 10 个模块 SUCCESS；相关测试 48 个通过。
+- `cd E:\Urili-Ruoyi\react-ui; node scripts\verify-three-terminal.mjs --check-manifest`：通过。
+- 静态搜索确认 product 核心写服务、seller/buyer portal 与 product center 目标面不再命中 `ProductSellerLookupService` / `selectSellerSnapshot(...)`。
+
+## 2026-06-09 检查点：gpt-5.4 六切片当前状态复核与记录层 P1 收口
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为参考方向。当前仍是快速推进模式：只处理 P0/P1，不做浏览器、截图、DOM 或 UI 细调验收。
+
+子 Agent 使用记录：
+- 本轮使用并关闭 6 个子 Agent，全部为 `gpt-5.4`，未使用 GPT-5.3 Codex。
+- 后端管理端控制面、portal auth/session/log、SQL/seed/guard、React 管理端、React portal/token、verify/manifest 六个切片均未发现新的代码级开放 P0/P1。
+- 管理端控制面切片新增只读记录：`docs/reviews/2026-06-09-three-terminal-slice-a-admin-control-backend-readonly-audit.md`。
+
+已修复：
+- 收口记录层 P1：旧 Markdown 中已关闭问题仍有“当前开放”表述，容易误导后续 Agent 判断。
+- `docs/reviews/2026-06-09-slice-5-verify-three-terminal-readonly-audit.md` 改为历史快照口径。
+- `docs/reviews/2026-06-06-react-ui-three-terminal-p0p1-readonly-audit.md` 改为历史问题口径。
+- `docs/reviews/2026-06-06-maven-module-dependency-audit.md` 改为当时判断和后续已采纳口径。
+- `docs/plans/2026-06-09-three-terminal-p0p1-gpt54-fast-pass-record.md` 中间段的 product 写侧旧 P1 改为历史段，并追加本轮 6 切片复核记录。
+
+远端影响：
+- 本检查点未执行远程 MySQL DDL/DML。
+- 本检查点未读取或写入 Redis。
+- 本检查点未启动或重启后端。
+
+验证：
+- 子 Agent A/B/C/D/E/F 分别完成后端或前端窄测试，均通过；具体命令和结果记录在 `docs/plans/2026-06-09-three-terminal-p0p1-gpt54-fast-pass-record.md`。
+- 主控本轮只修改 Markdown 记录；`node scripts\verify-three-terminal.mjs --check-manifest` 通过，旧开放 P1 关键词回扫无命中，`git diff --check` 通过且仅有 LF/CRLF warning，`codegraph sync .` 通过并输出 `Already up to date`。

@@ -141,6 +141,7 @@ describe('verify-three-terminal backend gate', () => {
     const rootGitignore = fs.readFileSync(path.resolve(uiRoot, '..', '.gitignore'), 'utf8');
 
     expect(tsconfig.exclude).toEqual(expect.arrayContaining([
+      'src/.umi-test',
       'src/.umi-undefined',
       'src/.umi-production',
       'test-results',
@@ -156,6 +157,7 @@ describe('verify-three-terminal backend gate', () => {
     expect(rootGitignore).toContain('react-ui/test-results/');
 
     const generatedFiles = [
+      path.join(uiRoot, 'src', '.umi-test', 'generated-typecheck-noise.ts'),
       path.join(uiRoot, 'src', '.umi-undefined', 'generated-typecheck-noise.ts'),
       path.join(uiRoot, 'src', '.umi-production', 'generated-typecheck-noise.ts'),
     ];
@@ -185,6 +187,7 @@ describe('verify-three-terminal backend gate', () => {
 
     expect(applicationYml).toContain('encryption-key: ${URILI_SECRET_ENCRYPTION_KEY:}');
     expect(applicationYml).toContain('encryption-key-id: ${URILI_SECRET_ENCRYPTION_KEY_ID:local-v1}');
+    expect(applicationYml).toContain('secret: ${RUOYI_TOKEN_SECRET:}');
     expect(secretCipherSupport).toContain('@Value("${urili.secret.encryption-key:}")');
     expect(secretCipherSupport).toContain('@Value("${urili.secret.encryption-key-id:default}")');
     expect(secretCipherSupport).toContain('缺少 URILI_SECRET_ENCRYPTION_KEY');

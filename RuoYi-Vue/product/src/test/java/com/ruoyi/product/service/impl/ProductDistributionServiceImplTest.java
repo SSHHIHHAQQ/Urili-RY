@@ -129,6 +129,58 @@ public class ProductDistributionServiceImplTest
     }
 
     @Test
+    public void normalizeSellerSnapshotForNewProductRequiresPreparedSellerSnapshot() throws Exception
+    {
+        ProductDistributionServiceImpl service = service(new RecordingProductDistributionMapper().proxy());
+        ProductSpu product = new ProductSpu();
+        product.setSellerId(11L);
+
+        try
+        {
+            invokeNormalizeSellerSnapshot(service, product, null);
+        }
+        catch (ServiceException e)
+        {
+            assertEquals("卖家编号不能为空", e.getMessage());
+            return;
+        }
+        throw new AssertionError("Expected ServiceException");
+    }
+
+    @Test
+    public void normalizeSellerSnapshotForExistingProductPreservesPersistedSnapshot() throws Exception
+    {
+        ProductDistributionServiceImpl service = service(new RecordingProductDistributionMapper().proxy());
+        ProductSpu product = new ProductSpu();
+        ProductSpu current = productWithSeller(11L, "S001", "卖家 A");
+
+        invokeNormalizeSellerSnapshot(service, product, current);
+
+        assertEquals(Long.valueOf(11L), product.getSellerId());
+        assertEquals("S001", product.getSellerNo());
+        assertEquals("卖家 A", product.getSellerName());
+    }
+
+    @Test
+    public void normalizeSellerSnapshotForExistingProductRejectsSellerChange() throws Exception
+    {
+        ProductDistributionServiceImpl service = service(new RecordingProductDistributionMapper().proxy());
+        ProductSpu product = productWithSeller(12L, "S002", "卖家 B");
+        ProductSpu current = productWithSeller(11L, "S001", "卖家 A");
+
+        try
+        {
+            invokeNormalizeSellerSnapshot(service, product, current);
+        }
+        catch (ServiceException e)
+        {
+            assertEquals("商品卖家不能在保存时变更", e.getMessage());
+            return;
+        }
+        throw new AssertionError("Expected ServiceException");
+    }
+
+    @Test
     public void officialWarehouseSaveRejectsWhenSourceBindingIsNotPersisted() throws Exception
     {
         RecordingProductDistributionMapper mapper = new RecordingProductDistributionMapper();
@@ -274,6 +326,26 @@ public class ProductDistributionServiceImplTest
         }
     }
 
+    private void invokeNormalizeSellerSnapshot(ProductDistributionServiceImpl service, ProductSpu product,
+            ProductSpu current) throws Exception
+    {
+        Method method = ProductDistributionServiceImpl.class.getDeclaredMethod("normalizeSellerSnapshot",
+                ProductSpu.class, ProductSpu.class);
+        method.setAccessible(true);
+        try
+        {
+            method.invoke(service, product, current);
+        }
+        catch (InvocationTargetException e)
+        {
+            if (e.getCause() instanceof ServiceException)
+            {
+                throw (ServiceException) e.getCause();
+            }
+            throw e;
+        }
+    }
+
     private void invokeValidateSkuSpecsForSave(ProductDistributionServiceImpl service, List<ProductSku> skus)
             throws Exception
     {
@@ -307,6 +379,15 @@ public class ProductDistributionServiceImplTest
         binding.setSourceDimensionGroupKey(sourceDimensionGroupKey);
         binding.setMasterSku(masterSku);
         return binding;
+    }
+
+    private ProductSpu productWithSeller(Long sellerId, String sellerNo, String sellerName)
+    {
+        ProductSpu product = new ProductSpu();
+        product.setSellerId(sellerId);
+        product.setSellerNo(sellerNo);
+        product.setSellerName(sellerName);
+        return product;
     }
 
     private void setField(Object target, String fieldName, Object value) throws Exception

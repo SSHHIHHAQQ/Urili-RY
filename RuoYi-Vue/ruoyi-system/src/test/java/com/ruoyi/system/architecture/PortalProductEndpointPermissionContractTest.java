@@ -47,49 +47,79 @@ public class PortalProductEndpointPermissionContractTest
     }
 
     @Test
-    public void sellerPortalEmbeddedSkusMustUseSellerScopedSkuQuery() throws IOException
+    public void terminalProductServicesMustUseReadOnlyProductPortalPort() throws IOException
     {
         Path backendRoot = findBackendRoot();
-        Path service = backendRoot.resolve(
+        Path sellerService = backendRoot.resolve(
                 "seller/src/main/java/com/ruoyi/seller/service/impl/SellerPortalProductServiceImpl.java");
-        String source = Files.readString(service, StandardCharsets.UTF_8);
+        Path buyerService = backendRoot.resolve(
+                "buyer/src/main/java/com/ruoyi/buyer/service/impl/BuyerPortalProductServiceImpl.java");
+        Path productCenterService = backendRoot.resolve(
+                "product/src/main/java/com/ruoyi/product/service/impl/ProductCenterServiceImpl.java");
+        String sellerSource = Files.readString(sellerService, StandardCharsets.UTF_8);
+        String buyerSource = Files.readString(buyerService, StandardCharsets.UTF_8);
+        String productCenterSource = Files.readString(productCenterService, StandardCharsets.UTF_8);
         List<String> violations = new ArrayList<>();
 
-        if (!source.contains("toPortalProduct(product, session.getSubjectId())"))
+        assertUsesReadOnlyProductPort(sellerService, sellerSource, violations);
+        assertUsesReadOnlyProductPort(buyerService, buyerSource, violations);
+        assertUsesReadOnlyProductPort(productCenterService, productCenterSource, violations);
+
+        if (!sellerSource.contains("toPortalProduct(product, session.getSubjectId())"))
         {
-            violations.add(relative(service)
+            violations.add(relative(sellerService)
                     + " list/detail mapping must pass current sellerId into embedded SKU mapping");
         }
-        if (!source.contains("productDistributionService.selectSkuList(product.getSpuId(), sellerId)"))
+        if (!sellerSource.contains("productPortalDistributionService.selectSellerSkuList(product.getSpuId(), sellerId)"))
         {
-            violations.add(relative(service)
-                    + " embedded SKU mapping must use selectSkuList(spuId, sellerId)");
+            violations.add(relative(sellerService)
+                    + " embedded SKU mapping must use selectSellerSkuList(spuId, sellerId)");
         }
-        if (!source.contains("productDistributionService.selectProductById(spuId, session.getSubjectId())"))
+        if (!sellerSource.contains("productPortalDistributionService.selectSellerProductById(spuId, session.getSubjectId())"))
         {
-            violations.add(relative(service)
-                    + " product detail ownership lookup must use selectProductById(spuId, sellerId)");
+            violations.add(relative(sellerService)
+                    + " product detail ownership lookup must use selectSellerProductById(spuId, sellerId)");
         }
-        if (source.contains("result.setSkus(toPortalSkus(product.getSkus()))"))
+        if (sellerSource.contains("result.setSkus(toPortalSkus(product.getSkus()))"))
         {
-            violations.add(relative(service)
+            violations.add(relative(sellerService)
                     + " must not expose ProductSpu#getSkus() directly on seller portal list/detail responses");
         }
-        String compactSource = source.replaceAll("\\s+", "");
-        if (compactSource.contains("productDistributionService.selectProductById(spuId)"))
+        String compactSource = sellerSource.replaceAll("\\s+", "");
+        if (compactSource.contains("productPortalDistributionService.selectSellerProductById(spuId)"))
         {
-            violations.add(relative(service)
-                    + " must not call single-argument selectProductById(spuId) from seller portal");
+            violations.add(relative(sellerService)
+                    + " must not call single-argument selectSellerProductById(spuId) from seller portal");
         }
-        if (compactSource.contains("productDistributionService.selectSkuList(spuId)"))
+        if (compactSource.contains("productPortalDistributionService.selectSellerSkuList(spuId)"))
         {
-            violations.add(relative(service)
-                    + " must not call single-argument selectSkuList(spuId) from seller portal");
+            violations.add(relative(sellerService)
+                    + " must not call single-argument selectSellerSkuList(spuId) from seller portal");
         }
 
         if (!violations.isEmpty())
         {
-            fail("seller portal embedded skus must keep seller scope:\n" + String.join("\n", violations));
+            fail("terminal product services must use the read-only product portal port and keep seller scope:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    private void assertUsesReadOnlyProductPort(Path service, String source, List<String> violations)
+    {
+        if (source.contains("IProductDistributionService"))
+        {
+            violations.add(relative(service)
+                    + " must not inject the read/write IProductDistributionService into terminal read-only surfaces");
+        }
+        if (source.contains("ProductSellerLookupService"))
+        {
+            violations.add(relative(service)
+                    + " must not lookup seller snapshots from terminal/product-center read-only surfaces");
+        }
+        if (!source.contains("IProductPortalDistributionService"))
+        {
+            violations.add(relative(service)
+                    + " must inject IProductPortalDistributionService for terminal/product-center read-only queries");
         }
     }
 

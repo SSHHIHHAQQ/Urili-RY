@@ -20,6 +20,10 @@ public class ProductSellerLookupServiceImpl implements ProductSellerLookupServic
     public ProductSellerSnapshot selectSellerSnapshot(Long sellerId)
     {
         Seller seller = sellerService.selectSellerById(sellerId);
+        if (seller == null)
+        {
+            return null;
+        }
         return new ProductSellerSnapshot(seller.getSellerId(), seller.getSellerNo(), seller.getCompanyName());
     }
 }

@@ -12,12 +12,14 @@
   - 未连接 DB / Redis
   - 未运行接口
 
+> 2026-06-09 记录层 P1 修正：本文中的 seller/buyer 自助日志与会话 DTO 泄漏 P1 已由后续 `PortalOwnLoginLogProfile`、`PortalOwnOperLogProfile`、`PortalOwnSessionProfile` 脱敏 DTO 收口，并由 `PortalSelfServiceSurfaceContractTest` 固定。本文保留历史证据，不再代表当前开放 P1。
+
 ## 结论
 
 - 未发现 `P0`
 - 未发现“免密登录串端” `P0/P1`
 - 未发现“旧 Redis key 被认证链路读取依赖” `P0/P1`
-- 发现 `P1`：seller/buyer 端内自助日志与会话查询直接返回管理端免密审计字段，构成越权信息泄漏
+- 历史发现 `P1`：seller/buyer 端内自助日志与会话查询直接返回管理端免密审计字段，构成越权信息泄漏；当前已关闭
 
 ## Findings
 

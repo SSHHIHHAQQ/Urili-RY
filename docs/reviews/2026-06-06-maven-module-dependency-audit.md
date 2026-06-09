@@ -1,5 +1,7 @@
 # 2026-06-06 Maven/module 依赖只读审计
 
+> 2026-06-09 记录层修正：本文 `P1-1`（seller/buyer/product center 只读链路依赖整块 `IProductDistributionService`）已由 `IProductPortalDistributionService` 和 `ProductPortalDistributionServiceImpl` 收口，并由 `PortalProductEndpointPermissionContractTest`、`ProductModuleBoundaryContractTest` 固定。`P1-2`（product 写路径对 seller 快照扩展点的运行时强依赖）已按“新建商品由 admin 写入口装配 seller 快照，后续 update/review 复用已落库 seller 快照并禁止变更 sellerId”的语义关闭；`ProductDistributionServiceImpl` 不再引用 `ProductSellerLookupService`。
+
 ## 审计范围
 
 - `RuoYi-Vue/pom.xml`
@@ -20,8 +22,8 @@
 ## 结论摘要
 
 - `P0`：未发现当前 Maven 模块声明式循环，也未发现 Java 层“跨模块直接注入对方 Mapper”导致的现有编译/启动硬阻断。
-- `P1-1`：`seller/buyer` 只消费商品只读能力，但当前依赖的是整块 `IProductDistributionService`；该实现把 `warehouse/finance/integration` 的必选 Bean 一并带入启动条件，导致卖家/买家侧对 `product` 的依赖仍然是“整块业务服务依赖”，不是稳定的只读契约依赖。
-- `P1-2`：`ObjectProvider<ProductSellerLookupService>` 只解决了“seller lookup Bean 可缺省注入”，没有真正消除 `product -> seller` 的运行时反向必选依赖；一旦走到 `insert/update` 写路径，`product` 仍然会在运行时强依赖 `seller`。
+- `P1-1`（历史发现，已关闭）：`seller/buyer` 只消费商品只读能力，但当前依赖的是整块 `IProductDistributionService`；该实现把 `warehouse/finance/integration` 的必选 Bean 一并带入启动条件，导致卖家/买家侧对 `product` 的依赖仍然是“整块业务服务依赖”，不是稳定的只读契约依赖。
+- `P1-2`（历史发现，已关闭）：`ObjectProvider<ProductSellerLookupService>` 只解决了“seller lookup Bean 可缺省注入”，没有真正消除 `product -> seller` 的运行时反向必选依赖；一旦走到 `insert/update` 写路径，`product` 仍然会在运行时强依赖 `seller`。
 
 ## P0 / P1 证据
 
@@ -40,7 +42,7 @@
    - `rg -n "^import com\.ruoyi\.(seller|buyer|product|warehouse|finance|integration)\.mapper"` 结果只命中各模块自身 mapper。
    - 因此当前没有“service 直接跨模块读对方 Mapper 接口”的证据。
 
-### P1-1：`seller/buyer` 仍依赖整块 `product` 服务，启动条件被 `warehouse/finance/integration` 放大
+### P1-1（历史发现，已关闭）：`seller/buyer` 当时仍依赖整块 `product` 服务，启动条件被 `warehouse/finance/integration` 放大
 
 1. `seller` 与 `buyer` 都只依赖 `product` 模块：
    - [`RuoYi-Vue/seller/pom.xml:26`](../../RuoYi-Vue/seller/pom.xml) 至 [`RuoYi-Vue/seller/pom.xml:30`](../../RuoYi-Vue/seller/pom.xml)
@@ -62,12 +64,12 @@
    - `IFinanceCurrencyService`：[`RuoYi-Vue/warehouse/src/main/java/com/ruoyi/warehouse/service/impl/WarehouseServiceImpl.java:46`](../../RuoYi-Vue/warehouse/src/main/java/com/ruoyi/warehouse/service/impl/WarehouseServiceImpl.java) 至 [`:47`](../../RuoYi-Vue/warehouse/src/main/java/com/ruoyi/warehouse/service/impl/WarehouseServiceImpl.java)
    - `IUpstreamSystemService`：[`.../WarehouseServiceImpl.java:49`](../../RuoYi-Vue/warehouse/src/main/java/com/ruoyi/warehouse/service/impl/WarehouseServiceImpl.java) 至 [`:50`](../../RuoYi-Vue/warehouse/src/main/java/com/ruoyi/warehouse/service/impl/WarehouseServiceImpl.java)
 
-**判断：**
+**当时判断：**
 
 - 当前全量 `ruoyi-admin` 启动场景下，这不是立刻的 `P0`，因为 `ruoyi-admin` 已显式装配全部模块。
 - 但它仍然是 `P1` 模块边界问题：卖家/买家只读链路实际上被绑定到 `product -> warehouse -> integration/finance` 的整条启动链，导致后续任何“卖家/买家轻量切片启动”“模块单测隔离”“拆分 seller-ui / buyer-ui 对应后端切片”都会先被 `product` 的写侧依赖拖住。
 
-**最小修复建议：**
+**当时最小修复建议（后续已采纳）：**
 
 1. 把 `IProductDistributionService` 拆成至少两层：
    - `IProductQueryService`：只保留 `seller/buyer` 当前用到的只读查询。
@@ -75,7 +77,7 @@
 2. 让 `SellerPortalProductServiceImpl` 与 `BuyerPortalProductServiceImpl` 只注入 `IProductQueryService`。
 3. `ProductQueryServiceImpl` 仅保留 `product` 自有 mapper 依赖；不要把 `warehouse/finance/seller lookup` 强行挂到只读查询 Bean 上。
 
-### P1-2：`ObjectProvider` 修复不够，`product` 写路径仍有运行时反向必选 `seller` 依赖
+### P1-2（历史发现，已关闭）：`ObjectProvider` 修复不够，`product` 写路径当时仍有运行时反向必选 `seller` 依赖
 
 1. `ProductDistributionServiceImpl` 的写路径 `insertProduct/updateProduct` 都先走 `normalizeSpuForSave(...)`：
    - [`RuoYi-Vue/product/src/main/java/com/ruoyi/product/service/impl/ProductDistributionServiceImpl.java:137`](../../RuoYi-Vue/product/src/main/java/com/ruoyi/product/service/impl/ProductDistributionServiceImpl.java) 至 [`:157`](../../RuoYi-Vue/product/src/main/java/com/ruoyi/product/service/impl/ProductDistributionServiceImpl.java)
@@ -89,13 +91,13 @@
    - [`RuoYi-Vue/product/src/main/java/com/ruoyi/product/service/ProductSellerLookupService.java:7`](../../RuoYi-Vue/product/src/main/java/com/ruoyi/product/service/ProductSellerLookupService.java) 至 [`:9`](../../RuoYi-Vue/product/src/main/java/com/ruoyi/product/service/ProductSellerLookupService.java)
    - [`RuoYi-Vue/seller/src/main/java/com/ruoyi/seller/service/impl/ProductSellerLookupServiceImpl.java:12`](../../RuoYi-Vue/seller/src/main/java/com/ruoyi/seller/service/impl/ProductSellerLookupServiceImpl.java) 至 [`:23`](../../RuoYi-Vue/seller/src/main/java/com/ruoyi/seller/service/impl/ProductSellerLookupServiceImpl.java)
 
-**判断：**
+**当时判断：**
 
 - `ObjectProvider` 只把“缺 Bean 时启动直接炸掉”降成了“真正执行写路径时炸掉”。
 - 这意味着 `product` 仍不是一个真正独立的共享基础模块；它在运行时仍通过写路径反向要求 `seller` 存在。
 - 因为 `seller/buyer` 当前只走读路径，所以这不是现网立即启动阻断；但如果后续试图把 `product` 单独作为共享域模块抽离，当前修复不够。
 
-**最小修复建议：**
+**当时最小修复建议（后续已采纳）：**
 
 1. 不要让 `product` 核心写服务自己回查 `seller`。
 2. 最小代价做法：
@@ -114,18 +116,19 @@
   - [`.../WarehouseMapper.xml:270`](../../RuoYi-Vue/warehouse/src/main/resources/mapper/warehouse/WarehouseMapper.xml) 至 [`:273`](../../RuoYi-Vue/warehouse/src/main/resources/mapper/warehouse/WarehouseMapper.xml)
   - 这属于 SQL/数据层耦合，不是本次“跨模块 Mapper 接口直读”证据，但后续如果做严格模块隔离，需要继续拆。
 
-## 新增问题
+## 历史新增问题（已关闭）
 
-1. `P1`：`seller/buyer` 只读链路依赖整块 `IProductDistributionService`，被 `warehouse/finance/integration` 启动链放大。
-2. `P1`：`ObjectProvider<ProductSellerLookupService>` 仍未消除 `product` 写路径对 `seller` 的运行时强依赖。
+1. `P1`（历史发现，已关闭）：`seller/buyer` 只读链路依赖整块 `IProductDistributionService`，被 `warehouse/finance/integration` 启动链放大。
+2. `P1`（历史发现，已关闭）：`ObjectProvider<ProductSellerLookupService>` 仍未消除 `product` 写路径对 `seller` 的运行时强依赖。
 
 ## 已修复问题
 
-- 本次为只读审计，未修改源码，暂无“已修复问题”。
+- 2026-06-09 后续修复：新增 `IProductPortalDistributionService` / `ProductPortalDistributionServiceImpl`，seller portal、buyer portal 和 product center 只读链路改为依赖只读接口，不再注入整块 `IProductDistributionService`。
+- 2026-06-09 后续修复：`ProductDistributionServiceImpl` 移除 `ProductSellerLookupService` 运行时 lookup；`AdminProductDistributionController.add(...)` 作为 admin 写入口负责从 seller adapter 装配新建商品 seller 快照；后续 update/review 复用当前 product 已落库 seller 快照并拒绝 sellerId 变更。
 
-## 残留问题
+## 后续非阻塞项
 
-- `product` 查询/写入职责未拆分，后续模块隔离仍会持续受影响。
+- 如未来要求“卖家主档改名后商品快照随保存/审核自动刷新”，需要单独设计快照刷新或重算流程；当前三端隔离 P1 只要求 product 核心写服务不再运行时依赖 seller。
 - `warehouse` 仍存在 SQL 级跨业务表 join，后续若继续收紧模块边界，需要额外审计。
 
 ## 验证命令
@@ -190,4 +193,4 @@ rg -n "ObjectProvider|IProductDistributionService|IWarehouseService|IFinanceCurr
   - seller：按 `subjectId` 限定自有商品
   - buyer：只暴露 `ON_SALE` 只读浏览
 - 该重复更接近已确认模板化推进，不属于本次 `P0/P1` 主问题。
-- 真正需要优先消除的不是 facade 级重复，而是它们共同依赖了过大的 `IProductDistributionService`。
+- 当时真正需要优先消除的不是 facade 级重复，而是它们共同依赖了过大的 `IProductDistributionService`；后续已由 `IProductPortalDistributionService` / `ProductPortalDistributionServiceImpl` 收口。

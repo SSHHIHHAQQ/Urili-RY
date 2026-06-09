@@ -792,6 +792,7 @@ const ProductReviewPage = () => {
   const canApproveProductReview = access.hasPerms('review:productDistribution:approve');
   const canRejectProductReview = access.hasPerms('review:productDistribution:reject');
   const canViewProductReviewLog = access.hasPerms('review:productDistribution:log');
+  const canPreviewCategorySchema = access.hasPerms('product:categoryAttribute:preview');
 
   const refreshReviewTypePendingCounts = useCallback(async () => {
     if (!canListProductReview) {
@@ -1144,7 +1145,14 @@ const ProductReviewPage = () => {
     {
       key: 'focus',
       label: '变更预览',
-      children: currentReview ? <ProductReviewBusinessPreview review={currentReview} /> : null,
+      children: currentReview
+        ? (
+            <ProductReviewBusinessPreview
+              review={currentReview}
+              canPreviewCategorySchema={canPreviewCategorySchema}
+            />
+          )
+        : null,
     },
     {
       key: 'basic',

@@ -36,6 +36,7 @@ type SkuPair = {
 
 type ProductReviewBusinessPreviewProps = {
   review: API.ProductReview.Review;
+  canPreviewCategorySchema?: boolean;
 };
 
 type ChangeRow = {
@@ -153,6 +154,33 @@ const skuCompareHeaderStyle = {
   padding: 12,
   background: '#fafafa',
   borderBottom: '1px solid #f0f0f0',
+} as const;
+
+const skuCompareBodyStyle = {
+  display: 'grid',
+  gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+  borderTop: '1px solid #f0f0f0',
+} as const;
+
+const skuCompareSideStyle = {
+  minWidth: 0,
+  padding: 12,
+} as const;
+
+const skuFieldListStyle = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(118px, 1fr))',
+  gap: 8,
+} as const;
+
+const skuFieldBlockStyle = {
+  border: '1px solid #f0f0f0',
+  borderRadius: 6,
+  padding: '6px 8px',
+  minHeight: 50,
+  background: '#fff',
+  boxSizing: 'border-box',
+  overflowWrap: 'anywhere',
 } as const;
 
 const salesStatusColor: Record<string, string> = {
@@ -530,10 +558,6 @@ function renderCompareFieldBlock(label: string, value: ReactNode, tone: CompareT
       <div>{valueText(value)}</div>
     </div>
   );
-}
-
-function renderCompareEmpty(label = '无') {
-  return renderCompareFieldBlock(label, <Typography.Text type="secondary">--</Typography.Text>, 'empty');
 }
 
 function buildCompareField(
@@ -1175,18 +1199,50 @@ function hasSupplyPriceChanged(pair: SkuPair) {
   return !!pair.before && !!pair.after && isDifferent(pair.before.supplyPrice, pair.after.supplyPrice);
 }
 
-function toSkuCompareField(field: SkuFieldChange, pair: SkuPair): CompareField {
-  const beforeTone: CompareTone = !pair.before ? 'empty' : field.changed ? 'before' : 'same';
-  const afterTone: CompareTone = !pair.after ? 'empty' : field.changed || !pair.before ? 'after' : 'same';
-  return {
-    key: field.key,
-    before: !pair.before
-      ? renderCompareEmpty(field.label)
-      : renderCompareFieldBlock(field.label, field.before, beforeTone),
-    after: !pair.after
-      ? renderCompareEmpty(field.label)
-      : renderCompareFieldBlock(field.label, field.after, afterTone),
-  };
+function skuFieldBlockToneStyle(tone: CompareTone) {
+  if (tone === 'before') {
+    return {
+      ...skuFieldBlockStyle,
+      borderColor: '#ffccc7',
+      background: '#fff1f0',
+    };
+  }
+  if (tone === 'after') {
+    return {
+      ...skuFieldBlockStyle,
+      borderColor: '#b7eb8f',
+      background: '#f6ffed',
+    };
+  }
+  if (tone === 'empty') {
+    return {
+      ...skuFieldBlockStyle,
+      borderStyle: 'dashed',
+      background: '#fafafa',
+    };
+  }
+  return skuFieldBlockStyle;
+}
+
+function renderSkuFieldTile(field: SkuFieldChange, side: 'before' | 'after', pair: SkuPair) {
+  const missing = side === 'before' ? !pair.before : !pair.after;
+  const tone: CompareTone = missing ? 'empty' : field.changed ? side : 'same';
+  return (
+    <div key={`${side}-${field.key}`} style={skuFieldBlockToneStyle(tone)}>
+      <div style={{ marginBottom: 2 }}>
+        <Typography.Text type="secondary">{field.label}</Typography.Text>
+      </div>
+      <div>{missing ? <Typography.Text type="secondary">--</Typography.Text> : valueText(field[side])}</div>
+    </div>
+  );
+}
+
+function renderSkuFieldTiles(fields: SkuFieldChange[], side: 'before' | 'after', pair: SkuPair) {
+  return (
+    <div style={skuFieldListStyle}>
+      {fields.map((field) => renderSkuFieldTile(field, side, pair))}
+    </div>
+  );
 }
 
 function renderSkuCompareHeader(pair: SkuPair, extra?: ReactNode) {
@@ -1208,12 +1264,19 @@ function renderSkuCompareHeader(pair: SkuPair, extra?: ReactNode) {
   );
 }
 
-function renderSkuComparePair(pair: SkuPair, fields: CompareField[], title?: string, extra?: ReactNode) {
+function renderSkuComparePair(pair: SkuPair, fields: SkuFieldChange[], extra?: ReactNode) {
   return (
     <section key={pair.key} style={skuCompareCardStyle}>
       {renderSkuCompareHeader(pair, extra)}
-      <div style={{ padding: 12 }}>
-        {renderAlignedCompareGrid(fields, title || pair.key)}
+      <div style={skuCompareBodyStyle}>
+        <div style={{ ...skuCompareSideStyle, borderRight: '1px solid #f0f0f0' }}>
+          <div style={{ marginBottom: 8, fontWeight: 600 }}>修改前</div>
+          {renderSkuFieldTiles(fields, 'before', pair)}
+        </div>
+        <div style={skuCompareSideStyle}>
+          <div style={{ marginBottom: 8, fontWeight: 600 }}>修改后</div>
+          {renderSkuFieldTiles(fields, 'after', pair)}
+        </div>
       </div>
     </section>
   );
@@ -1223,42 +1286,18 @@ function renderSkuDetailCompare(pair: SkuPair, mode: 'all' | 'changed' = 'all') 
   const fieldChanges = buildSkuFieldChanges(pair.before, pair.after)
     .filter((field) => field.key !== 'supplyPrice');
   const visibleFields = mode === 'all' ? fieldChanges : fieldChanges.filter((field) => field.changed);
-  const fields = (visibleFields.length ? visibleFields : fieldChanges).map((field) => toSkuCompareField(field, pair));
   return renderSkuComparePair(
     pair,
-    fields,
-    formatSkuIdentity(pair.after || pair.before, pair.item),
+    visibleFields.length ? visibleFields : fieldChanges,
     renderSkuChangeTags(pair),
   );
 }
 
 function renderAddedSkuCompare(pair: SkuPair) {
-  const fields = buildSkuFieldChanges(pair.before, pair.after).map((field) => toSkuCompareField(field, pair));
   return renderSkuComparePair(
     pair,
-    fields,
-    formatSkuIdentity(pair.after || pair.before, pair.item),
+    buildSkuFieldChanges(pair.before, pair.after),
     <Tag color="green">新增SKU</Tag>,
-  );
-}
-
-function renderSkuSupplyPriceCompare(pair: SkuPair) {
-  const currency = pair.after?.currencyCode || pair.before?.currencyCode;
-  const fields: CompareField[] = [
-    buildCompareField(
-      'supplyPrice',
-      '供货价',
-      pair.before?.supplyPrice,
-      pair.after?.supplyPrice,
-      formatMoney(pair.before?.supplyPrice, currency),
-      formatMoney(pair.after?.supplyPrice, currency),
-    ),
-  ];
-  return renderSkuComparePair(
-    pair,
-    fields,
-    formatSkuIdentity(pair.after || pair.before, pair.item),
-    renderSupplyPriceChangeTags(pair.before, pair.after),
   );
 }
 
@@ -1269,9 +1308,7 @@ function renderSkuChangeTags(pair: SkuPair) {
   }
   return (
     <div style={compactTagWrapStyle}>
-      {changedFields.map((field) => (
-        <Tag key={field.key} color="blue">{field.label}</Tag>
-      ))}
+      {changedFields.map((field) => <Tag key={field.key} color="blue">{field.label}</Tag>)}
     </div>
   );
 }
@@ -1459,9 +1496,13 @@ function PriceChangeReviewView({
     <div style={stackStyle}>
       {renderSection('SKU 供货价左右对比', (
         <div style={stackStyle}>
-          {pairs.map((pair) => renderSkuSupplyPriceCompare(pair))}
+          {pairs.map((pair) => renderSkuComparePair(
+            pair,
+            buildSkuFieldChanges(pair.before, pair.after).filter((field) => field.key === 'supplyPrice'),
+            renderSupplyPriceChangeTags(pair.before, pair.after),
+          ))}
         </div>
-      ))}
+      ), <Tag color="red">{pairs.length} 个SKU</Tag>)}
     </div>
   );
 }
@@ -1563,7 +1604,10 @@ function GenericReviewView({ review }: { review: API.ProductReview.Review }) {
   );
 }
 
-export default function ProductReviewBusinessPreview({ review }: ProductReviewBusinessPreviewProps) {
+export default function ProductReviewBusinessPreview({
+  review,
+  canPreviewCategorySchema = false,
+}: ProductReviewBusinessPreviewProps) {
   const [categorySchema, setCategorySchema] = useState<API.Product.CategoryAttribute[]>([]);
   const categoryId = getReviewCategoryId(review);
   const attributeLabelMap = useMemo(() => buildAttributeLabelMap(categorySchema), [categorySchema]);
@@ -1574,7 +1618,7 @@ export default function ProductReviewBusinessPreview({ review }: ProductReviewBu
   );
 
   useEffect(() => {
-    if (!categoryId) {
+    if (!categoryId || !canPreviewCategorySchema) {
       setCategorySchema([]);
       return undefined;
     }
@@ -1593,7 +1637,7 @@ export default function ProductReviewBusinessPreview({ review }: ProductReviewBu
     return () => {
       cancelled = true;
     };
-  }, [categoryId]);
+  }, [canPreviewCategorySchema, categoryId]);
 
   return (
     <div style={stackStyle}>

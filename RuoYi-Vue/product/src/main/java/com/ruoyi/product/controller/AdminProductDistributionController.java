@@ -1,7 +1,9 @@
 package com.ruoyi.product.controller;
 
 import java.util.List;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -17,15 +19,18 @@ import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.core.page.TableDataInfo;
 import com.ruoyi.common.enums.BusinessType;
+import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.product.domain.ProductBatchStatusUpdateRequest;
 import com.ruoyi.product.domain.ProductControlStatusUpdateRequest;
 import com.ruoyi.product.domain.ProductDistributionOperationLog;
+import com.ruoyi.product.domain.ProductSellerSnapshot;
 import com.ruoyi.product.domain.ProductSku;
 import com.ruoyi.product.domain.ProductSkuSalePriceUpdateRequest;
 import com.ruoyi.product.domain.ProductSpu;
 import com.ruoyi.product.domain.ProductStatusUpdateRequest;
 import com.ruoyi.product.service.IProductDistributionService;
 import com.ruoyi.product.service.IProductReviewService;
+import com.ruoyi.product.service.ProductSellerLookupService;
 
 /**
  * 管理端商城商品列表。
@@ -41,6 +46,9 @@ public class AdminProductDistributionController extends BaseController
 
     @Autowired
     private IProductReviewService productReviewService;
+
+    @Autowired
+    private ObjectProvider<ProductSellerLookupService> productSellerLookupService;
 
     @PreAuthorize("@ss.hasPermi('product:distribution:list')")
     @GetMapping("/list")
@@ -79,6 +87,7 @@ public class AdminProductDistributionController extends BaseController
     @PostMapping
     public AjaxResult add(@Validated @RequestBody ProductSpu product)
     {
+        fillSellerSnapshot(product);
         int rows = productDistributionService.insertProduct(product);
         return rows > 0 ? success(product) : error();
     }
@@ -185,5 +194,36 @@ public class AdminProductDistributionController extends BaseController
     {
         List<ProductSku> skus = productDistributionService.selectSkuList(spuId);
         return success(skus);
+    }
+
+    private void fillSellerSnapshot(ProductSpu product)
+    {
+        if (product == null || product.getSellerId() == null)
+        {
+            throw new ServiceException("请选择卖家");
+        }
+        ProductSellerLookupService lookupService = productSellerLookupService.getIfAvailable();
+        if (lookupService == null)
+        {
+            throw new ServiceException("卖家快照服务未启用");
+        }
+        ProductSellerSnapshot seller = lookupService.selectSellerSnapshot(product.getSellerId());
+        if (seller == null)
+        {
+            throw new ServiceException("卖家不存在");
+        }
+        product.setSellerId(seller.getSellerId());
+        product.setSellerNo(StringUtils.trimToEmpty(seller.getSellerNo()));
+        product.setSellerName(requireTrim(seller.getSellerName(), "卖家名称不能为空"));
+    }
+
+    private String requireTrim(String value, String message)
+    {
+        String result = StringUtils.trimToEmpty(value);
+        if (StringUtils.isBlank(result))
+        {
+            throw new ServiceException(message);
+        }
+        return result;
     }
 }

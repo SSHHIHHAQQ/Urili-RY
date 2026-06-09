@@ -42,7 +42,6 @@ import com.ruoyi.product.domain.ProductCategoryAttribute;
 import com.ruoyi.product.domain.ProductDistributionOperationLog;
 import com.ruoyi.product.domain.ProductImage;
 import com.ruoyi.product.domain.ProductReviewRequest;
-import com.ruoyi.product.domain.ProductSellerSnapshot;
 import com.ruoyi.product.domain.ProductSku;
 import com.ruoyi.product.domain.ProductSkuSourceBinding;
 import com.ruoyi.product.domain.ProductSkuSalePriceUpdateRequest;
@@ -54,7 +53,6 @@ import com.ruoyi.product.mapper.ProductReviewMapper;
 import com.ruoyi.product.service.IProductCodePoolService;
 import com.ruoyi.product.service.IProductConfigService;
 import com.ruoyi.product.service.IProductDistributionService;
-import com.ruoyi.product.service.ProductSellerLookupService;
 import com.ruoyi.warehouse.domain.Warehouse;
 import com.ruoyi.warehouse.service.IWarehouseService;
 
@@ -118,9 +116,6 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
 
     @Autowired
     private IProductConfigService productConfigService;
-
-    @Autowired
-    private ObjectProvider<ProductSellerLookupService> productSellerLookupService;
 
     @Autowired
     private IFinanceCurrencyService financeCurrencyService;
@@ -670,7 +665,7 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
         product.setSourceType(current == null ? SOURCE_ADMIN_MANUAL : current.getSourceType());
         product.setSourceRefType(current == null ? "" : trimToEmpty(current.getSourceRefType()));
         product.setSourceRefId(current == null ? "" : trimToEmpty(current.getSourceRefId()));
-        fillSellerSnapshot(product);
+        normalizeSellerSnapshot(product, current);
         fillCategorySnapshot(product);
         normalizeWarehouseBindings(product, current, sourceContext);
         if (StringUtils.isNotBlank(product.getSellerSpuCode())
@@ -741,24 +736,29 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
         validateSkuSpecsForSave(skus);
     }
 
-    private void fillSellerSnapshot(ProductSpu product)
+    private void normalizeSellerSnapshot(ProductSpu product, ProductSpu current)
     {
+        if (current != null)
+        {
+            if (current.getSellerId() == null)
+            {
+                throw new ServiceException("商品卖家不存在");
+            }
+            if (product.getSellerId() != null && !Objects.equals(current.getSellerId(), product.getSellerId()))
+            {
+                throw new ServiceException("商品卖家不能在保存时变更");
+            }
+            product.setSellerId(current.getSellerId());
+            product.setSellerNo(requireTrim(current.getSellerNo(), "商品卖家编号不能为空"));
+            product.setSellerName(requireTrim(current.getSellerName(), "商品卖家名称不能为空"));
+            return;
+        }
         if (product.getSellerId() == null)
         {
             throw new ServiceException("请选择卖家");
         }
-        ProductSellerLookupService lookupService = productSellerLookupService.getIfAvailable();
-        if (lookupService == null)
-        {
-            throw new ServiceException("Product seller lookup service is not enabled");
-        }
-        ProductSellerSnapshot seller = lookupService.selectSellerSnapshot(product.getSellerId());
-        if (seller == null)
-        {
-            throw new ServiceException("卖家不存在");
-        }
-        product.setSellerNo(trimToEmpty(seller.getSellerNo()));
-        product.setSellerName(requireTrim(seller.getSellerName(), "卖家名称不能为空"));
+        product.setSellerNo(requireTrim(product.getSellerNo(), "卖家编号不能为空"));
+        product.setSellerName(requireTrim(product.getSellerName(), "卖家名称不能为空"));
     }
 
     private void fillCategorySnapshot(ProductSpu product)

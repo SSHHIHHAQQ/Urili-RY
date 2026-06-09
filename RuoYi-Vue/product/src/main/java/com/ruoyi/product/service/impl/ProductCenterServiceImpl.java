@@ -19,7 +19,7 @@ import com.ruoyi.product.domain.ProductSku;
 import com.ruoyi.product.domain.ProductSpu;
 import com.ruoyi.product.domain.ProductSpuWarehouse;
 import com.ruoyi.product.service.IProductCenterService;
-import com.ruoyi.product.service.IProductDistributionService;
+import com.ruoyi.product.service.IProductPortalDistributionService;
 
 /**
  * Maps product domain data to a buyer-facing product center shape.
@@ -31,12 +31,12 @@ public class ProductCenterServiceImpl implements IProductCenterService
     private static final String IMAGE_ROLE_GALLERY = "GALLERY";
 
     @Autowired
-    private IProductDistributionService productDistributionService;
+    private IProductPortalDistributionService productPortalDistributionService;
 
     @Override
     public List<ProductCenterProduct> selectProductList(ProductCenterQuery query)
     {
-        List<ProductSpu> products = productDistributionService.selectOnSaleProductList(toProductQuery(query));
+        List<ProductSpu> products = productPortalDistributionService.selectBuyerVisibleProductList(toProductQuery(query));
         List<ProductCenterProduct> result = newProductCenterList(products);
         for (ProductSpu product : products)
         {
@@ -55,7 +55,7 @@ public class ProductCenterServiceImpl implements IProductCenterService
     public List<ProductCenterSku> selectSkuList(Long spuId)
     {
         requireVisibleProduct(spuId);
-        return toProductCenterSkus(productDistributionService.selectOnSaleSkuList(spuId));
+        return toProductCenterSkus(productPortalDistributionService.selectBuyerVisibleSkuList(spuId));
     }
 
     private ProductSpu toProductQuery(ProductCenterQuery query)
@@ -80,7 +80,7 @@ public class ProductCenterServiceImpl implements IProductCenterService
         {
             throw new ServiceException("商品不存在");
         }
-        ProductSpu product = productDistributionService.selectOnSaleProductById(spuId);
+        ProductSpu product = productPortalDistributionService.selectBuyerVisibleProductById(spuId);
         if (product == null || !STATUS_ON_SALE.equals(product.getSpuStatus()) || visibleSkus(product).isEmpty())
         {
             throw new ServiceException("商品不存在");

@@ -18,7 +18,7 @@ import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.product.domain.ProductSku;
 import com.ruoyi.product.domain.ProductSpu;
-import com.ruoyi.product.service.IProductDistributionService;
+import com.ruoyi.product.service.IProductPortalDistributionService;
 import com.ruoyi.system.domain.PortalLoginSession;
 
 /**
@@ -31,7 +31,7 @@ public class BuyerPortalProductServiceImpl implements IBuyerPortalProductService
     private static final String STATUS_ON_SALE = "ON_SALE";
 
     @Autowired
-    private IProductDistributionService productDistributionService;
+    private IProductPortalDistributionService productPortalDistributionService;
 
     @Autowired
     private BuyerMapper buyerMapper;
@@ -40,7 +40,7 @@ public class BuyerPortalProductServiceImpl implements IBuyerPortalProductService
     public List<BuyerPortalProduct> selectVisibleProductList(PortalLoginSession session, ProductSpu query)
     {
         assertBuyerSession(session);
-        List<ProductSpu> products = productDistributionService.selectOnSaleProductList(buildVisibleProductQuery(query));
+        List<ProductSpu> products = productPortalDistributionService.selectBuyerVisibleProductList(buildVisibleProductQuery(query));
         List<BuyerPortalProduct> result = newPortalProductList(products);
         for (ProductSpu product : products)
         {
@@ -59,7 +59,7 @@ public class BuyerPortalProductServiceImpl implements IBuyerPortalProductService
     public List<BuyerPortalProductSku> selectVisibleSkuList(PortalLoginSession session, Long spuId)
     {
         requireVisibleProduct(session, spuId);
-        return toPortalSkus(productDistributionService.selectOnSaleSkuList(spuId));
+        return toPortalSkus(productPortalDistributionService.selectBuyerVisibleSkuList(spuId));
     }
 
     private ProductSpu buildVisibleProductQuery(ProductSpu query)
@@ -104,7 +104,7 @@ public class BuyerPortalProductServiceImpl implements IBuyerPortalProductService
         {
             throw new ServiceException("商城商品不存在");
         }
-        ProductSpu product = productDistributionService.selectOnSaleProductById(spuId);
+        ProductSpu product = productPortalDistributionService.selectBuyerVisibleProductById(spuId);
         if (product == null || !STATUS_ON_SALE.equals(product.getSpuStatus()) || visibleSkus(product.getSkus()).isEmpty())
         {
             throw new ServiceException("商城商品不存在");

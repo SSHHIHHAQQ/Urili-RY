@@ -13,12 +13,10 @@ import com.ruoyi.product.domain.ProductCenterProduct;
 import com.ruoyi.product.domain.ProductCenterQuery;
 import com.ruoyi.product.domain.ProductCenterSku;
 import com.ruoyi.product.domain.ProductCenterWarehouse;
-import com.ruoyi.product.domain.ProductDistributionOperationLog;
 import com.ruoyi.product.domain.ProductSku;
-import com.ruoyi.product.domain.ProductSkuSalePriceUpdateRequest;
 import com.ruoyi.product.domain.ProductSpu;
 import com.ruoyi.product.domain.ProductSpuWarehouse;
-import com.ruoyi.product.service.IProductDistributionService;
+import com.ruoyi.product.service.IProductPortalDistributionService;
 
 public class ProductCenterServiceImplTest
 {
@@ -144,10 +142,10 @@ public class ProductCenterServiceImplTest
         assertEquals("ON_SALE", result.get(0).getSkuStatus());
     }
 
-    private ProductCenterServiceImpl service(IProductDistributionService productService)
+    private ProductCenterServiceImpl service(IProductPortalDistributionService productService)
     {
         ProductCenterServiceImpl service = new ProductCenterServiceImpl();
-        setField(service, "productDistributionService", productService);
+        setField(service, "productPortalDistributionService", productService);
         return service;
     }
 
@@ -222,7 +220,7 @@ public class ProductCenterServiceImplTest
         }
     }
 
-    private static class RecordingProductDistributionService implements IProductDistributionService
+    private static class RecordingProductDistributionService implements IProductPortalDistributionService
     {
         private ProductSpu onSaleProductListQuery;
         private List<ProductSpu> onSaleProductListResult = new ArrayList<>();
@@ -232,44 +230,28 @@ public class ProductCenterServiceImplTest
         private List<ProductSku> onSaleSkuListResult = new ArrayList<>();
 
         @Override
-        public List<ProductSpu> selectOnSaleProductList(ProductSpu query)
+        public List<ProductSpu> selectBuyerVisibleProductList(ProductSpu query)
         {
             onSaleProductListQuery = query;
             return onSaleProductListResult;
         }
 
         @Override
-        public ProductSpu selectOnSaleProductById(Long spuId)
+        public ProductSpu selectBuyerVisibleProductById(Long spuId)
         {
             onSaleProductByIdArg = spuId;
             return onSaleProductByIdResult;
         }
 
         @Override
-        public List<ProductSku> selectOnSaleSkuList(Long spuId)
+        public List<ProductSku> selectBuyerVisibleSkuList(Long spuId)
         {
             onSaleSkuListSpuId = spuId;
             return onSaleSkuListResult;
         }
 
-        @Override public List<ProductSpu> selectProductList(ProductSpu query) { throw new UnsupportedOperationException(); }
-        @Override public ProductSpu selectProductById(Long spuId) { throw new UnsupportedOperationException(); }
-        @Override public ProductSpu selectProductById(Long spuId, Long sellerId) { throw new UnsupportedOperationException(); }
-        @Override public int insertProduct(ProductSpu product) { throw new UnsupportedOperationException(); }
-        @Override public int updateProduct(ProductSpu product) { throw new UnsupportedOperationException(); }
-        @Override public int deleteDraftProduct(Long spuId) { throw new UnsupportedOperationException(); }
-        @Override public ProductSpu prepareReviewedProductUpdate(ProductSpu product) { throw new UnsupportedOperationException(); }
-        @Override public int applyReviewedProductUpdate(ProductSpu product) { throw new UnsupportedOperationException(); }
-        @Override public int updateSpuStatus(Long spuId, String status, String reason) { throw new UnsupportedOperationException(); }
-        @Override public int updateSkuStatus(Long spuId, Long skuId, String status, String reason) { throw new UnsupportedOperationException(); }
-        @Override public int batchUpdateSpuStatus(List<Long> spuIds, String status, boolean syncSkuStatus, String reason) { throw new UnsupportedOperationException(); }
-        @Override public int batchUpdateSkuStatus(List<Long> skuIds, String status, String reason) { throw new UnsupportedOperationException(); }
-        @Override public int batchUpdateSpuControlStatus(List<Long> spuIds, String controlStatus, String reason) { throw new UnsupportedOperationException(); }
-        @Override public int batchUpdateSkuControlStatus(List<Long> skuIds, String controlStatus, String reason) { throw new UnsupportedOperationException(); }
-        @Override public int batchUpdateSkuSalePrice(ProductSkuSalePriceUpdateRequest request) { throw new UnsupportedOperationException(); }
-        @Override public List<ProductDistributionOperationLog> selectOperationLogList(ProductDistributionOperationLog query) { throw new UnsupportedOperationException(); }
-        @Override public List<ProductSku> selectSkuPageList(ProductSku query) { throw new UnsupportedOperationException(); }
-        @Override public List<ProductSku> selectSkuList(Long spuId) { throw new UnsupportedOperationException(); }
-        @Override public List<ProductSku> selectSkuList(Long spuId, Long sellerId) { throw new UnsupportedOperationException(); }
+        @Override public List<ProductSpu> selectSellerProductList(ProductSpu query) { throw new UnsupportedOperationException(); }
+        @Override public ProductSpu selectSellerProductById(Long spuId, Long sellerId) { throw new UnsupportedOperationException(); }
+        @Override public List<ProductSku> selectSellerSkuList(Long spuId, Long sellerId) { throw new UnsupportedOperationException(); }
     }
 }
