@@ -1252,24 +1252,22 @@ export default function ProductDistributionEditPage() {
           </section>
 
           <section className={styles.formSection}>
-            {isOfficialWarehouse ? (
-              <div className={styles.sourceSkuToolbar}>
-                <Space>
-                  <Button type="primary" disabled={!canQuerySourceProducts} onClick={openSourceSelector}>
-                    批量选择来源 SKU
-                  </Button>
-                  <Typography.Text type="secondary">
-                    官方仓商品的尺寸重量和发货仓库由来源 SKU 派生；已有 SKU 请在行内配对，批量选择只新增来源 SKU 行。
-                  </Typography.Text>
-                </Space>
-              </div>
-            ) : null}
             <SkuMatrixEditor
               value={skuRows}
               focusSkuId={focusSkuId}
               currencyCode={isOfficialWarehouse ? undefined : derivedCurrencyCode}
               currencyLabel={isOfficialWarehouse ? '由官方履约仓派生' : derivedCurrencyLabel}
               sourceMode={isOfficialWarehouse}
+              sourceToolbarExtra={isOfficialWarehouse ? (
+                <Space size={8} wrap>
+                  <Typography.Text type="secondary">
+                    官方仓尺寸重量和发货仓库由来源 SKU 派生；批量选择会新增来源 SKU 行。
+                  </Typography.Text>
+                  <Button type="primary" disabled={!canQuerySourceProducts} onClick={openSourceSelector}>
+                    批量选择来源 SKU
+                  </Button>
+                </Space>
+              ) : undefined}
               onPairSourceSku={openSourceSelectorForRow}
               onClearSourceSku={clearSourceSkuForRow}
               onChange={setSkuRows}

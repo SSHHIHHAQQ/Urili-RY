@@ -393,6 +393,95 @@ begin
   end if;
 end//
 
+drop procedure if exists assert_no_blank_terminal_passwords//
+create procedure assert_no_blank_terminal_passwords(
+  in p_table varchar(64),
+  in p_message varchar(128)
+)
+begin
+  if not exists (
+    select 1
+    from information_schema.columns
+    where table_schema = database()
+      and table_name = p_table
+      and column_name = 'password'
+  ) then
+    signal sqlstate '45000' set message_text = 'terminal account password column is required before password final structure check';
+  end if;
+
+  set @blank_terminal_password_count := 0;
+  set @sql = concat(
+    'select count(1) into @blank_terminal_password_count from `',
+    p_table,
+    '` where password is null or trim(password) = ',
+    char(39),
+    char(39)
+  );
+  prepare stmt from @sql;
+  execute stmt;
+  deallocate prepare stmt;
+
+  if @blank_terminal_password_count > 0 then
+    signal sqlstate '45000' set message_text = p_message;
+  end if;
+end//
+
+drop procedure if exists modify_terminal_account_password_column_if_needed//
+create procedure modify_terminal_account_password_column_if_needed(in p_table varchar(64))
+begin
+  declare v_missing_count int default 0;
+  declare v_mismatch_count int default 0;
+
+  select count(1)
+    into v_missing_count
+  from information_schema.columns
+  where table_schema = database()
+    and table_name = p_table
+    and column_name = 'password';
+
+  if v_missing_count <> 1 then
+    signal sqlstate '45000' set message_text = 'terminal account password column is required before password final structure check';
+  end if;
+
+  select count(1)
+    into v_mismatch_count
+  from information_schema.columns c
+  where c.table_schema = database()
+    and c.table_name = p_table
+    and c.column_name = 'password'
+    and (
+      lower(c.data_type) <> 'varchar'
+      or coalesce(c.character_maximum_length, -1) <> 100
+      or c.is_nullable <> 'NO'
+      or c.column_default is not null
+    );
+
+  if v_mismatch_count > 0 then
+    set @ddl = concat('alter table `', p_table, '` modify password varchar(100) not null comment ''密码密文''');
+    prepare stmt from @ddl;
+    execute stmt;
+    deallocate prepare stmt;
+  end if;
+end//
+
+drop procedure if exists assert_terminal_account_password_column_final//
+create procedure assert_terminal_account_password_column_final(in p_table varchar(64), in p_message varchar(128))
+begin
+  if not exists (
+    select 1
+    from information_schema.columns c
+    where c.table_schema = database()
+      and c.table_name = p_table
+      and c.column_name = 'password'
+      and lower(c.data_type) = 'varchar'
+      and coalesce(c.character_maximum_length, -1) = 100
+      and c.is_nullable = 'NO'
+      and c.column_default is null
+  ) then
+    signal sqlstate '45000' set message_text = p_message;
+  end if;
+end//
+
 drop procedure if exists recreate_index_if_mismatch//
 create procedure recreate_index_if_mismatch(
   in p_table varchar(64),
@@ -524,6 +613,9 @@ end//
 drop procedure if exists assert_seller_buyer_management_seed_completed//
 create procedure assert_seller_buyer_management_seed_completed()
 begin
+  call assert_terminal_account_password_column_final('seller_account', 'seller_account.password final column must be varchar(100) not null without default');
+  call assert_terminal_account_password_column_final('buyer_account', 'buyer_account.password final column must be varchar(100) not null without default');
+
   if exists (
     select 1
     from tmp_seller_buyer_sys_menu_guard seed
@@ -953,6 +1045,13 @@ create table if not exists buyer_account (
   key idx_buyer_account_buyer_status (buyer_id, status),
   key idx_buyer_account_buyer_lock (buyer_id, lock_status)
 ) engine=innodb auto_increment=1 comment = '买家端账号表';
+
+call assert_no_blank_terminal_passwords('seller_account', 'seller_account contains blank passwords; reset or backfill before seller/buyer management seed');
+call assert_no_blank_terminal_passwords('buyer_account', 'buyer_account contains blank passwords; reset or backfill before seller/buyer management seed');
+call modify_terminal_account_password_column_if_needed('seller_account');
+call modify_terminal_account_password_column_if_needed('buyer_account');
+call assert_terminal_account_password_column_final('seller_account', 'seller_account.password final column must be varchar(100) not null without default');
+call assert_terminal_account_password_column_final('buyer_account', 'buyer_account.password final column must be varchar(100) not null without default');
 
 create table if not exists seller_dept (
   seller_dept_id        bigint(20)      not null auto_increment    comment '卖家端部门ID',
@@ -1979,6 +2078,9 @@ drop procedure if exists assert_buyer_menu_permission_slot;
 drop procedure if exists assert_terminal_menu_range_ready;
 drop procedure if exists add_index_if_missing;
 drop procedure if exists add_column_if_missing;
+drop procedure if exists assert_no_blank_terminal_passwords;
+drop procedure if exists modify_terminal_account_password_column_if_needed;
+drop procedure if exists assert_terminal_account_password_column_final;
 drop procedure if exists recreate_index_if_mismatch;
 drop procedure if exists assert_terminal_menu_perms_unique_index;
 drop procedure if exists assert_terminal_owner_role_slots_ready;

@@ -95,6 +95,8 @@ public class ProductReviewServiceImplTest
         assertEquals(Integer.valueOf(2), reviewMapper.insertedReview.getItemCount());
         assertEquals(Integer.valueOf(1), reviewMapper.insertedReview.getSkuCount());
         assertEquals("official", reviewMapper.insertedReview.getWarehouseSummary());
+        assertEquals(new BigDecimal("10.00"), reviewMapper.insertedReview.getPriceAfterMin());
+        assertEquals(new BigDecimal("10.00"), reviewMapper.insertedReview.getPriceAfterMax());
         assertEquals(2, reviewMapper.insertedItems.size());
         assertEquals(2, reviewMapper.insertedSnapshots.size());
         assertEquals(1, reviewMapper.insertedOperationLogs.size());
@@ -428,6 +430,8 @@ public class ProductReviewServiceImplTest
         product.setControlStatus("NORMAL");
         product.setSalePriceMin(new BigDecimal("12.34"));
         product.setSalePriceMax(new BigDecimal("56.78"));
+        product.setSupplyPriceMin(new BigDecimal("10.00"));
+        product.setSupplyPriceMax(new BigDecimal("10.00"));
         product.setCurrencySummary("USD");
         product.setWarehouseKindSummary("official");
         product.setSkus(List.of(draftSku()));

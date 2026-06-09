@@ -48,6 +48,12 @@ public class SqlExecutionGuardContractTest
     private static final Pattern TERMINAL_PAGE_MENU_WITH_BLANK_COMPONENT = Pattern.compile(
             "(?is)(?:\\bnull\\b|'')\\s*,\\s*''\\s*,\\s*''\\s*,\\s*1\\s*,\\s*0\\s*,\\s*'C'");
 
+    private static final Pattern TERMINAL_MENU_UPDATE_WITH_BLANK_COMPONENT = Pattern.compile(
+            "(?is)\\bupdate\\s+(?:seller_menu|buyer_menu)\\b[^;]*\\bcomponent\\s*=\\s*(?:''|null)");
+
+    private static final Pattern TERMINAL_MENU_UPDATE_WITH_BLANK_PERMS = Pattern.compile(
+            "(?is)\\bupdate\\s+(?:seller_menu|buyer_menu)\\b[^;]*\\bperms\\s*=\\s*(?:''|null)");
+
     @Test
     public void highImpactSqlScriptsMustRequireExplicitConfirmToken() throws IOException
     {
@@ -2543,6 +2549,36 @@ public class SqlExecutionGuardContractTest
     }
 
     @Test
+    public void terminalMenuSeedDiscoveryMustRejectBlankUpdateValues()
+    {
+        List<String> blankComponentViolations = new ArrayList<>();
+        assertAutoDiscoveredTerminalMenuSeed(
+                "create procedure assert_seller_menu_permission_slot(in p_perms varchar(100)) begin select 1; end;\n"
+                        + "call assert_seller_menu_permission_slot('seller:product:list');\n"
+                        + "update seller_menu set component = '' where seller_menu_id = 100001;",
+                "synthetic_terminal_menu_blank_component_update.sql", "seller", blankComponentViolations);
+        if (blankComponentViolations.stream()
+                .noneMatch(violation -> violation.contains("must not update terminal menu component to blank")))
+        {
+            fail("terminal menu update mutations must reject blank component updates:\n"
+                    + String.join("\n", blankComponentViolations));
+        }
+
+        List<String> blankPermsViolations = new ArrayList<>();
+        assertAutoDiscoveredTerminalMenuSeed(
+                "create procedure assert_buyer_menu_permission_slot(in p_perms varchar(100)) begin select 1; end;\n"
+                        + "call assert_buyer_menu_permission_slot('buyer:product:list');\n"
+                        + "update buyer_menu set perms = '' where buyer_menu_id = 200001;",
+                "synthetic_terminal_menu_blank_perms_update.sql", "buyer", blankPermsViolations);
+        if (blankPermsViolations.stream()
+                .noneMatch(violation -> violation.contains("must not update terminal menu perms to blank")))
+        {
+            fail("terminal menu update mutations must reject blank perms updates:\n"
+                    + String.join("\n", blankPermsViolations));
+        }
+    }
+
+    @Test
     public void warehouseManagementMenuSeedMustGuardSysMenuSlotsBeforeUpsert() throws IOException
     {
         Path backendRoot = findWorkspaceRoot().resolve("RuoYi-Vue");
@@ -4075,6 +4111,71 @@ public class SqlExecutionGuardContractTest
     }
 
     @Test
+    public void sellerBuyerManagementSeedMustConvergePatchExistingPasswordColumnsFailClosed() throws IOException
+    {
+        Path backendRoot = findWorkspaceRoot().resolve("RuoYi-Vue");
+        Path seedSql = backendRoot.resolve("sql/seller_buyer_management_seed.sql");
+        String source = Files.readString(seedSql, StandardCharsets.UTF_8);
+        String normalizedSource = source.replace("\r\n", "\n").toLowerCase();
+        List<String> violations = new ArrayList<>();
+
+        for (String expected : new String[] {
+                "create procedure assert_no_blank_terminal_passwords",
+                "terminal account password column is required before password final structure check",
+                "where password is null or trim(password) = ',",
+                "seller_account contains blank passwords; reset or backfill before seller/buyer management seed",
+                "buyer_account contains blank passwords; reset or backfill before seller/buyer management seed",
+                "create procedure modify_terminal_account_password_column_if_needed",
+                "lower(c.data_type) <> 'varchar'",
+                "coalesce(c.character_maximum_length, -1) <> 100",
+                "c.is_nullable <> 'NO'",
+                "c.column_default is not null",
+                "alter table `', p_table, '` modify password varchar(100) not null comment ''密码密文''",
+                "create procedure assert_terminal_account_password_column_final",
+                "seller_account.password final column must be varchar(100) not null without default",
+                "buyer_account.password final column must be varchar(100) not null without default",
+                "call assert_no_blank_terminal_passwords('seller_account'",
+                "call assert_no_blank_terminal_passwords('buyer_account'",
+                "call modify_terminal_account_password_column_if_needed('seller_account');",
+                "call modify_terminal_account_password_column_if_needed('buyer_account');",
+                "call assert_terminal_account_password_column_final('seller_account'",
+                "call assert_terminal_account_password_column_final('buyer_account'",
+                "drop procedure if exists assert_no_blank_terminal_passwords",
+                "drop procedure if exists modify_terminal_account_password_column_if_needed",
+                "drop procedure if exists assert_terminal_account_password_column_final"
+        })
+        {
+            requireContains(violations, seedSql.getFileName().toString(), source, expected);
+        }
+        for (String forbidden : new String[] {
+                "modify password varchar(100) not null default ''''",
+                "password = coalesce(password, '')",
+                "password              varchar(100)    not null default ''"
+        })
+        {
+            requireNotContains(violations, seedSql.getFileName().toString(), normalizedSource, forbidden);
+        }
+        assertAppearsBefore(violations, seedSql.getFileName().toString(), source,
+                "call assert_no_blank_terminal_passwords('seller_account'",
+                "call modify_terminal_account_password_column_if_needed('seller_account');");
+        assertAppearsBefore(violations, seedSql.getFileName().toString(), source,
+                "call assert_no_blank_terminal_passwords('buyer_account'",
+                "call modify_terminal_account_password_column_if_needed('buyer_account');");
+        assertAppearsBefore(violations, seedSql.getFileName().toString(), source,
+                "call modify_terminal_account_password_column_if_needed('seller_account');",
+                "create table if not exists seller_dept");
+        assertAppearsBefore(violations, seedSql.getFileName().toString(), source,
+                "call assert_terminal_account_password_column_final('seller_account'",
+                "call assert_seller_buyer_management_seed_completed();");
+
+        if (!violations.isEmpty())
+        {
+            fail("seller/buyer management PATCH_EXISTING seed must converge password columns fail-closed:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    @Test
     public void threeTerminalIsolationMigrationMustRunPreflightBeforeFirstDdlAndDocumentPartialApplyRisk()
             throws IOException
     {
@@ -5382,6 +5483,17 @@ public class SqlExecutionGuardContractTest
                 if (TERMINAL_PAGE_MENU_WITH_BLANK_COMPONENT.matcher(statement).find())
                 {
                     violations.add(statementName + " must not insert a C menu with blank component");
+                }
+            }
+            else if (matcher.group(2) != null)
+            {
+                if (TERMINAL_MENU_UPDATE_WITH_BLANK_COMPONENT.matcher(statement).find())
+                {
+                    violations.add(statementName + " must not update terminal menu component to blank");
+                }
+                if (TERMINAL_MENU_UPDATE_WITH_BLANK_PERMS.matcher(statement).find())
+                {
+                    violations.add(statementName + " must not update terminal menu perms to blank");
                 }
             }
         }

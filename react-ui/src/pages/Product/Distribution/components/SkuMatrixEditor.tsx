@@ -2,7 +2,7 @@ import { DownOutlined, PlusOutlined } from '@ant-design/icons';
 import { Button, Checkbox, Dropdown, Input, InputNumber, Radio, Space, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { skuSpecFields } from '../constants';
 import ImageUploadField from './ImageUploadField';
 import styles from '../style.module.css';
@@ -17,6 +17,7 @@ type SkuMatrixEditorProps = {
   currencyCode?: string;
   currencyLabel?: string;
   sourceMode?: boolean;
+  sourceToolbarExtra?: ReactNode;
   onPairSourceSku?: (row: SkuRow) => void;
   onClearSourceSku?: (row: SkuRow) => void;
   onChange: (value: SkuRow[]) => void;
@@ -223,6 +224,7 @@ export default function SkuMatrixEditor({
   currencyCode,
   currencyLabel,
   sourceMode = false,
+  sourceToolbarExtra,
   onPairSourceSku,
   onClearSourceSku,
   onChange,
@@ -698,6 +700,9 @@ export default function SkuMatrixEditor({
             应用到全部 SKU
           </Button>
         </Space>
+        {sourceToolbarExtra ? (
+          <div className={styles.bulkPanelExtra}>{sourceToolbarExtra}</div>
+        ) : null}
       </div>
 
       <Table

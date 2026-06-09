@@ -254,10 +254,6 @@
   gap: 14px;
 }
 
-.sourceSkuToolbar {
-  margin-bottom: 12px;
-}
-
 .sourceSkuSelectionBoard {
   margin-bottom: 12px;
   padding: 10px 12px;
@@ -673,10 +669,20 @@
 }
 
 .bulkPanel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   padding: 10px 12px;
   background: #fafafa;
   border: 1px solid #f0f0f0;
   border-radius: 6px;
+}
+
+.bulkPanelExtra {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
 }
 
 .bulkPanelLabel {

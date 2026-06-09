@@ -223,6 +223,8 @@ describe('product distribution permission guard', () => {
     expect(reviewPageTsx).toContain("render: (value) => formatPayloadTypeLabel(String(value || ''))");
     expect(reviewPageTsx).toContain("render: (value) => formatReviewOrSalesStatusLabel(String(value || ''))");
     expect(reviewPageTsx).toContain('function renderReviewTypeTabLabel');
+    expect(reviewPageTsx).toContain('function normalizeReviewTypeValueEnum');
+    expect(reviewPageTsx).toContain("text: '供货价变更'");
     expect(reviewPageTsx).toContain('reviewTypePendingCounts');
     expect(reviewPageTsx).toContain("reviewStatus: 'PENDING'");
     expect(reviewPageTsx).toContain('refreshReviewTypePendingCounts();');
@@ -266,6 +268,8 @@ describe('product distribution permission guard', () => {
     expect(reviewBusinessPreviewTsx).toContain("normalizeWarehouseKind(getProductWarehouseKind(product, review)) !== 'official'");
     expect(reviewBusinessPreviewTsx).toContain("return 'third_party'");
     expect(reviewBusinessPreviewTsx).toContain("renderMetric('仓库类型'");
+    expect(reviewBusinessPreviewTsx).toContain("renderMetric('供货价区间'");
+    expect(reviewBusinessPreviewTsx).not.toContain("renderMetric('销售价区间'");
     expect(reviewBusinessPreviewTsx).toContain("showDeliveryWarehouse ? renderSection('发货仓库'");
     expect(reviewBusinessPreviewTsx).toContain('getCategorySchema(categoryId, { skipErrorHandler: true })');
     expect(reviewBusinessPreviewTsx).toContain('formatAttributeValue(row, displayMaps.optionLabelMap)');

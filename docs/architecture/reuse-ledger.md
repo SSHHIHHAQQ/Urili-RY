@@ -41,7 +41,8 @@
   - 固定商城商品列表从 `product_review_request` 派生最近一次审核状态和审核反馈，不在商品主表重复新增审核字段。
   - 固定编辑页通过 `GET /product/admin/distribution-products/{spuId}/latest-rejected-submission` 读取最近一次被驳回的完整提交快照；入口只放在编辑页底部“恢复上次提交内容”按钮，不放审核中心或列表更多操作。
   - 固定审核列表以 `review_type` 做类型 Tabs，`全部` 只作为前端筛选，不进入数据库枚举。
-  - 固定审核列表和详情必须按 `review_type` 做类型化展示：新增商品、新增 SKU、商品资料变更、SKU 资料变更、价格变更分别展示不同审核重点；价格变更特指供货价审核，管理端销售价调价直接生效。
+  - 固定审核列表和详情必须按 `review_type` 做类型化展示：新增商品、新增 SKU、商品资料变更、SKU 资料变更、供货价变更分别展示不同审核重点；`EDIT_PRICE` 特指供货价审核，管理端销售价调价直接生效。
+  - 固定商品审核主表的 `priceBeforeMin/priceBeforeMax/priceAfterMin/priceAfterMax` 在审核工作台中按供货价区间解释；销售价只允许作为 SKU 列表普通展示或供货价风险上下文，不作为审核重点指标。
 - 复用规则：
   - 后续接入 `ADD_SKU`、`EDIT_PRODUCT_INFO`、`EDIT_SKU_INFO`、`EDIT_PRICE` 时继续复用 `product_review_request/item/snapshot/operation_log`，不要按类型拆新审核主表。
   - 已有商品资料、已有 SKU 资料和供货价变更不得先改正式商品表；必须先进入审核快照，审核通过后由 product service 事务化应用。

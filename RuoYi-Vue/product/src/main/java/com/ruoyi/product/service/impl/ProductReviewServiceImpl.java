@@ -341,8 +341,8 @@ public class ProductReviewServiceImpl implements IProductReviewService
         review.setRiskSummary(resolveRiskSummary(product, skus));
         review.setSkuCount(skus.size());
         review.setItemCount(skus.size() + 1);
-        review.setPriceAfterMin(product.getSalePriceMin());
-        review.setPriceAfterMax(product.getSalePriceMax());
+        review.setPriceAfterMin(minSupplyPrice(product));
+        review.setPriceAfterMax(maxSupplyPrice(product));
         review.setCurrencySummary(StringUtils.defaultString(product.getCurrencySummary()));
         review.setWarehouseSummary(StringUtils.defaultString(product.getWarehouseKindSummary()));
         review.setDiffSummary("新增商品：" + StringUtils.defaultString(product.getProductName()));
@@ -380,10 +380,10 @@ public class ProductReviewServiceImpl implements IProductReviewService
         review.setSkuCount(safeSkus(after).size());
         review.setItemCount(safeSkus(after).size() + 1);
         boolean supplyPriceReview = REVIEW_TYPE_EDIT_PRICE.equals(review.getReviewType());
-        review.setPriceBeforeMin(supplyPriceReview ? minSupplyPrice(before) : minSalePrice(before));
-        review.setPriceBeforeMax(supplyPriceReview ? maxSupplyPrice(before) : maxSalePrice(before));
-        review.setPriceAfterMin(supplyPriceReview ? minSupplyPrice(after) : minSalePrice(after));
-        review.setPriceAfterMax(supplyPriceReview ? maxSupplyPrice(after) : maxSalePrice(after));
+        review.setPriceBeforeMin(minSupplyPrice(before));
+        review.setPriceBeforeMax(maxSupplyPrice(before));
+        review.setPriceAfterMin(minSupplyPrice(after));
+        review.setPriceAfterMax(maxSupplyPrice(after));
         review.setCurrencySummary(resolveCurrencySummary(after));
         review.setWarehouseSummary(resolveWarehouseSummary(after));
         review.setDiffSummary(supplyPriceReview ? buildSupplyPriceDiffSummary(before, after)
@@ -1033,18 +1033,6 @@ public class ProductReviewServiceImpl implements IProductReviewService
     private List<ProductSku> safeSkus(ProductSpu product)
     {
         return product == null || product.getSkus() == null ? List.of() : product.getSkus();
-    }
-
-    private BigDecimal minSalePrice(ProductSpu product)
-    {
-        return safeSkus(product).stream().map(ProductSku::getSalePrice).filter(Objects::nonNull)
-            .min(BigDecimal::compareTo).orElse(product == null ? null : product.getSalePriceMin());
-    }
-
-    private BigDecimal maxSalePrice(ProductSpu product)
-    {
-        return safeSkus(product).stream().map(ProductSku::getSalePrice).filter(Objects::nonNull)
-            .max(BigDecimal::compareTo).orElse(product == null ? null : product.getSalePriceMax());
     }
 
     private BigDecimal minSupplyPrice(ProductSpu product)

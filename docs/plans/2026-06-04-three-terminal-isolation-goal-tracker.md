@@ -13363,3 +13363,41 @@ P2 记录：
 
 P2 记录：
 - 远端 `portal.seller.web.url` / `portal.buyer.web.url` 仍是本地验证占位地址，继续作为 P2，不阻塞当前 P0/P1。
+
+## 2026-06-09 检查点：manifest 与 SQL guard P1 修复
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为参考方向。当前仍是快速推进模式：只修 P0/P1，不做浏览器、截图、DOM 或 UI 细调。
+
+子 Agent 使用记录：
+- 本轮启动并关闭 6 个子 Agent，全部使用 `gpt-5.4`，未使用 GPT-5.3 Codex。
+- 子 Agent 共坐实 4 类 P1：前端生成目录污染 manifest 发现、critical backend 清单缺关键合同、`PATCH_EXISTING` 密码列终态缺 fail-closed、端内菜单 `UPDATE` 自动发现漏拦空值。
+- 其他切片未发现新的 P0/P1。
+
+已修复：
+- `verify-three-terminal` 已忽略 `.umi-test`、`.umi-undefined`、`test-results` 本地生成目录。
+- `criticalBackendExplicitTestClasses` 已纳入 `AdminAccountPermissionUiContractTest`、`SellerAdminPermissionContractTest`、`BuyerAdminPermissionContractTest`、`StandalonePartnerSeedMenuContractTest`。
+- `seller_buyer_management_seed.sql` 已对 `seller_account.password` / `buyer_account.password` 做 `PATCH_EXISTING` fail-closed：缺列失败、null/空白密码失败、数据合格才修正为 `varchar(100) not null` 且无默认值。
+- `SqlExecutionGuardContractTest` 已补端内菜单 `UPDATE component/perms` 空值负例。
+
+涉及记录：
+- `docs/plans/2026-06-09-three-terminal-p0p1-gpt54-manifest-sql-guard-record.md`。
+
+验证：
+- `cd E:\Urili-Ruoyi\react-ui; node scripts\verify-three-terminal.mjs --check-manifest`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; .\node_modules\.bin\jest.cmd --config jest.config.ts --runTestsByPath tests/verify-three-terminal-backend-gate.test.ts --runInBand`：通过，1 suite / 18 tests。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system -Dtest=SqlExecutionGuardContractTest test`：通过，79 tests。
+- `cd E:\Urili-Ruoyi\react-ui; npm run verify:three-terminal`：通过；Frontend Jest 23 suites / 186 tests，通过；后端 reactor test-compile 14 个模块 SUCCESS；seller 100 tests、buyer 101 tests 通过。
+- `npx jest ...` 未作为有效验证：仓库存在双 Jest config，需显式 `--config`。
+- `npm run test:unit -- --runTestsByPath ...` 未作为有效验证：当前 public test script 已接入三端总门，不接受该透传参数。
+
+远端影响：
+- 本轮未执行远程 MySQL DDL/DML。
+- 本轮未读取或写入 Redis。
+- 本轮只修改 SQL 脚本和合同测试，未回放到远端库。
+
+P2 记录：
+- 远端 `portal.seller.web.url` / `portal.buyer.web.url` 仍是本地验证占位地址，继续作为 P2，不阻塞当前 P0/P1。
+- 浏览器、截图、DOM、UI 细调按快速推进模式跳过。
+
+CodeGraph：
+- `cd E:\Urili-Ruoyi; codegraph sync .`：通过，输出 `Already up to date`。

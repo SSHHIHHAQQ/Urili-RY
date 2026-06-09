@@ -718,7 +718,7 @@ function NewProductReviewView({
     <div style={stackStyle}>
       <div style={inlineGridStyle}>
         {renderMetric('SKU数量', skus.length || review.skuCount || '--')}
-        {renderMetric('销售价区间', formatRange(review.priceAfterMin, review.priceAfterMax, review.currencySummary))}
+        {renderMetric('供货价区间', formatRange(review.priceAfterMin, review.priceAfterMax, review.currencySummary))}
         {renderMetric('仓库类型', formatWarehouseKindLabel(getProductWarehouseKind(product, review)))}
         {showDeliveryWarehouse
           ? renderMetric('发货仓库', product?.warehouses?.length ? `${product.warehouses.length} 个` : '--')

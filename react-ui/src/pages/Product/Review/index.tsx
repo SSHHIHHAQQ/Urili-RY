@@ -72,7 +72,7 @@ const DEFAULT_REVIEW_TYPE_ENUM: Record<string, ValueEnumItem> = {
   ADD_SKU: { text: '新增SKU', status: 'processing' },
   EDIT_PRODUCT_INFO: { text: '商品资料变更', status: 'warning' },
   EDIT_SKU_INFO: { text: 'SKU资料变更', status: 'warning' },
-  EDIT_PRICE: { text: '价格变更', status: 'error' },
+  EDIT_PRICE: { text: '供货价变更', status: 'error' },
 };
 
 const DEFAULT_REVIEW_STATUS_ENUM: Record<string, ValueEnumItem> = {
@@ -102,7 +102,7 @@ const ITEM_TYPE_TEXT: Record<string, string> = {
 const CHANGE_TYPE_TEXT: Record<string, string> = {
   CREATE: '新增',
   UPDATE: '资料变更',
-  PRICE_UPDATE: '价格变更',
+  PRICE_UPDATE: '供货价变更',
 };
 
 const OPERATION_TYPE_TEXT: Record<string, string> = {
@@ -120,7 +120,7 @@ const SNAPSHOT_ROLE_TEXT: Record<string, string> = {
 const PAYLOAD_TYPE_TEXT: Record<string, string> = {
   SPU: '商品',
   SKU: 'SKU',
-  PRICE: '价格',
+  PRICE: '供货价',
   OBJECT: '对象',
   UNKNOWN: '未知',
 };
@@ -169,6 +169,17 @@ function valueEnumText(valueEnum: Record<string, ValueEnumItem>, value?: string,
 
 function normalizeValueEnum(data: Record<string, ValueEnumItem>, fallback: Record<string, ValueEnumItem>) {
   return Object.keys(data || {}).length > 0 ? data : fallback;
+}
+
+function normalizeReviewTypeValueEnum(data: Record<string, ValueEnumItem>) {
+  const valueEnum = normalizeValueEnum(data, DEFAULT_REVIEW_TYPE_ENUM);
+  return {
+    ...valueEnum,
+    EDIT_PRICE: {
+      ...(valueEnum.EDIT_PRICE || DEFAULT_REVIEW_TYPE_ENUM.EDIT_PRICE),
+      text: '供货价变更',
+    },
+  };
 }
 
 function formatPriceRangeValues(min?: number, max?: number, currencySummary?: string) {
@@ -428,7 +439,7 @@ function renderReviewFocus(record: API.ProductReview.Review) {
       return (
         <Space orientation="vertical" size={2}>
           {renderFocusLine('新增范围', `${formatCount(record.itemCount, '个对象')} / ${formatCount(resolveReviewSkuCount(record), '个SKU')}`)}
-          {renderFocusLine('价格区间', formatPriceRange(record))}
+          {renderFocusLine('供货价区间', formatPriceRange(record))}
           {!isOfficialWarehouseKind(record.warehouseSummary)
             ? renderFocusLine('发货仓库', formatWarehouseKindLabel(record.warehouseSummary))
             : null}
@@ -439,7 +450,7 @@ function renderReviewFocus(record: API.ProductReview.Review) {
       return (
         <Space orientation="vertical" size={2}>
           {renderFocusLine('新增SKU', formatCount(resolveReviewSkuCount(record), '个SKU'))}
-          {renderFocusLine('价格区间', formatPriceRange(record))}
+          {renderFocusLine('供货价区间', formatPriceRange(record))}
           {renderFocusLine('仓库类型', formatWarehouseKindLabel(record.warehouseSummary))}
           {renderFocusLine('变化摘要', record.diffSummary || '--')}
         </Space>
@@ -457,7 +468,7 @@ function renderReviewFocus(record: API.ProductReview.Review) {
       return (
         <Space orientation="vertical" size={2}>
           {renderFocusLine('影响SKU', formatCount(resolveReviewSkuCount(record), '个SKU'))}
-          {renderFocusLine('销售价区间', formatPriceRange(record))}
+          {renderFocusLine('供货价区间', formatPriceRange(record))}
           {renderFocusLine('变化摘要', record.diffSummary || '--')}
         </Space>
       );
@@ -474,7 +485,7 @@ function renderReviewFocus(record: API.ProductReview.Review) {
       return (
         <Space orientation="vertical" size={2}>
           {renderFocusLine('对象数', formatCount(record.itemCount))}
-          {renderFocusLine('价格区间', formatPriceTransition(record))}
+          {renderFocusLine('供货价区间', formatPriceTransition(record))}
           {renderFocusLine('变化摘要', record.diffSummary || '--')}
         </Space>
       );
@@ -600,8 +611,8 @@ function renderTypeDetailPanel(review: API.ProductReview.Review) {
       <Descriptions.Item label="对象数">{formatCount(review.itemCount)}</Descriptions.Item>
       <Descriptions.Item label="SKU数">{formatCount(resolveReviewSkuCount(review), '个SKU')}</Descriptions.Item>
       <Descriptions.Item label="仓库类型">{formatWarehouseKindLabel(review.warehouseSummary)}</Descriptions.Item>
-      <Descriptions.Item label="价格区间">{formatPriceRange(review)}</Descriptions.Item>
-      <Descriptions.Item label="价格变化">{formatPriceTransition(review)}</Descriptions.Item>
+      <Descriptions.Item label="供货价区间">{formatPriceRange(review)}</Descriptions.Item>
+      <Descriptions.Item label="供货价变化">{formatPriceTransition(review)}</Descriptions.Item>
       <Descriptions.Item label="币种">{review.currencySummary || '--'}</Descriptions.Item>
       <Descriptions.Item label="变化摘要" span={3}>{review.diffSummary || '--'}</Descriptions.Item>
     </Descriptions>
@@ -614,7 +625,7 @@ function renderTypeDetailPanel(review: API.ProductReview.Review) {
           <Descriptions size="small" bordered column={3}>
             <Descriptions.Item label="审核重点">新增 SPU 和全部 SKU</Descriptions.Item>
             <Descriptions.Item label="新增SKU">{formatCount(resolveReviewSkuCount(review), '个SKU')}</Descriptions.Item>
-            <Descriptions.Item label="价格区间">{formatPriceRange(review)}</Descriptions.Item>
+            <Descriptions.Item label="供货价区间">{formatPriceRange(review)}</Descriptions.Item>
             <Descriptions.Item label="类目">{review.categoryName || '--'}</Descriptions.Item>
             <Descriptions.Item label="仓库类型">{formatWarehouseKindLabel(review.warehouseSummary)}</Descriptions.Item>
             <Descriptions.Item label="主图">{renderReviewImage(review.mainImageUrlAfter)}</Descriptions.Item>
@@ -628,7 +639,7 @@ function renderTypeDetailPanel(review: API.ProductReview.Review) {
           <Descriptions size="small" bordered column={3}>
             <Descriptions.Item label="审核重点">仅审核本次新增 SKU</Descriptions.Item>
             <Descriptions.Item label="新增SKU">{formatCount(resolveReviewSkuCount(review), '个SKU')}</Descriptions.Item>
-            <Descriptions.Item label="价格区间">{formatPriceRange(review)}</Descriptions.Item>
+            <Descriptions.Item label="供货价区间">{formatPriceRange(review)}</Descriptions.Item>
             <Descriptions.Item label="系统SPU">{review.systemSpuCode || '--'}</Descriptions.Item>
             <Descriptions.Item label="商品标题">{review.productNameAfter || '--'}</Descriptions.Item>
             <Descriptions.Item label="仓库类型">{formatWarehouseKindLabel(review.warehouseSummary)}</Descriptions.Item>
@@ -657,7 +668,7 @@ function renderTypeDetailPanel(review: API.ProductReview.Review) {
           <Descriptions size="small" bordered column={3}>
             <Descriptions.Item label="审核重点">SKU 资料变更</Descriptions.Item>
             <Descriptions.Item label="影响SKU">{formatCount(resolveReviewSkuCount(review), '个SKU')}</Descriptions.Item>
-            <Descriptions.Item label="销售价区间">{formatPriceRange(review)}</Descriptions.Item>
+            <Descriptions.Item label="供货价区间">{formatPriceRange(review)}</Descriptions.Item>
             <Descriptions.Item label="变化摘要" span={3}>{review.diffSummary || '--'}</Descriptions.Item>
           </Descriptions>
           {renderSnapshotCompareTable(review, 'SKU 资料变更对比', ['SKU'])}
@@ -781,7 +792,7 @@ const ProductReviewPage = () => {
 
   useEffect(() => {
     getDictValueEnum('product_review_type').then((data) => {
-      setReviewTypeValueEnum(normalizeValueEnum(data as Record<string, ValueEnumItem>, DEFAULT_REVIEW_TYPE_ENUM));
+      setReviewTypeValueEnum(normalizeReviewTypeValueEnum(data as Record<string, ValueEnumItem>));
     });
     getDictValueEnum('product_review_status').then((data) => {
       setReviewStatusValueEnum(normalizeValueEnum(data as Record<string, ValueEnumItem>, DEFAULT_REVIEW_STATUS_ENUM));
