@@ -96,7 +96,7 @@
   - `EDIT_PRODUCT_INFO` 默认展示商品资料变更字段、主图对比和修改后的详情图文。
   - `EDIT_SKU_INFO` 默认只展示发生变化的 SKU 资料字段。
   - 优化 `EDIT_SKU_INFO` 的详情显示：默认表格只展示真正发生字段变化的 SKU，规格从整段 before/after 文本改为短标签摘要，变化内容改为 `变化项` 标签；需要细看时展开当前行，按 `字段 / 修改前 / 修改后` 查看差异。
-  - `EDIT_PRICE` 独立展示供货价审核总览、供货价涨价/降价数量、原新供货价区间和 SKU 供货价左右对比。
+  - `EDIT_PRICE` 独立展示 SKU 供货价左右对比，不再在详情中间插入供货价汇总卡片。
   - 原 `对象明细` / `审核快照` 改为 `审计对象` / `审计快照`，保留追溯能力但不再作为主审核入口。
   - 浏览器验证：`新增商品 / 新增SKU / 商品资料变更 / SKU资料变更 / 供货价变更` 五个 type 均进入各自 `变更预览`，且保留 `审计快照`；干净会话控制台 error/warning 为 0。
   - 按审核员视角精简新增商品详情：删除 `新增商品审核需要看完整商品` 这类系统说明和 `审核检查清单 / 已完整` 自检内容，新增商品详情直接展示真实商品资料区块。
@@ -117,12 +117,12 @@
   - 修正 `EDIT_PRICE` 业务口径：供货价变更审核特指 SKU 供货价变更，管理端 SKU 销售价调整直接生效，不进入商品审核。
   - 后端新增 `ProductSkuSupplyPriceUpdateRequest` 和 `submitSkuSupplyPriceReview`，审批通过时只调用 `updateSkuSupplyPrice` 写入 `product_sku.supply_price`，不再通过审核链路写 `sale_price`。
   - 非草稿商品编辑如果只改 SKU 供货价，会被归类为 `EDIT_PRICE`；审核单主表的 `priceBeforeMin/Max`、`priceAfterMin/Max` 在该类型下保存供货价区间。
-  - 前端供货价变更详情改为供货价口径和左右双栏：展示 `原供货价区间 / 新供货价区间 / SKU 供货价左右对比 / 原供货价 / 新供货价`，不再展示或对比销售价。
+  - 前端供货价变更详情改为供货价口径和左右双栏：展示 `SKU 供货价左右对比 / 原供货价 / 新供货价`，不再展示或对比销售价。
   - 商品列表 `调整售价` 成功提示改为直接生效语义，低于供货价确认文案不再描述审核风险。
   - `npm run tsc`：通过。
   - `npx jest --config jest.config.ts tests/product-distribution-permission-guard.test.ts --runInBand`：通过。
   - `mvn -pl product -am -Dtest=ProductReviewServiceImplTest "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，11 tests，0 failures/errors。
-  - 浏览器运行态验证：用拦截数据构造 `EDIT_PRICE` 供货价审核单，登录 `http://127.0.0.1:8001/review-center/product-distribution` 后打开供货价变更详情，详情抽屉存在 `修改前 / 修改后 / 原供货价区间 / 新供货价区间 / SKU 供货价左右对比 / 原供货价 / 新供货价`，且不再出现 `原销售价 / 新销售价 / SKU 价格对比`。
+  - 浏览器运行态验证：用拦截数据构造 `EDIT_PRICE` 供货价审核单，登录 `http://127.0.0.1:8001/review-center/product-distribution` 后打开供货价变更详情，详情抽屉存在 `修改前 / 修改后 / SKU 供货价左右对比 / 原供货价 / 新供货价`，且不再出现 `原销售价 / 新销售价 / SKU 价格对比`。
 
 ### 2026-06-09 商品审核价格口径统一
 
@@ -153,7 +153,62 @@
   - `rg "当前销售价|高于销售价|原销售价|新销售价|SKU 价格对比|renderPriceChangeTable"`：商品审核源码中无命中，仅保留测试的禁止断言和文档说明。
   - 浏览器运行态验证：`http://127.0.0.1:8001/review-center/product-distribution` 可加载，当前运行数据中 `全部(0)` 且 `供货价变更(0)`，因此未打开真实详情单。
   - `codegraph sync .`：通过，已同步 2 个变更文件。
+  - 删除供货价模块中间汇总卡片：`影响 SKU / 涨价 SKU / 降价 SKU / 原供货价区间 / 新供货价区间` 不再出现在详情主预览，只保留逐 SKU 的供货价左右对比。
+  - 浏览器补充验证：打开 `商品资料变更` 第一条详情，详情抽屉中未出现 `影响 SKU / 涨价 SKU / 降价 SKU / 原供货价区间 / 新供货价区间` 汇总卡片标题。
 - `npx playwright screenshot --timeout=15000 http://127.0.0.1:8001/user/login E:\Urili-Ruoyi\logs\product-review-login-check.png`：通过，仅验证当前前端服务可加载；商品审核业务页等待 SQL 迁移后验证。
+
+### 2026-06-09 商品审核综合变更补充
+
+- 审核类型仍由后端商品审核服务判断，商城商品列表只提交修改后的商品数据或供货价调整数据，不允许前端直接决定 `reviewType`。
+- 后端新增 `EDIT_MIXED` / `综合变更` 审核类型，用于一次提交同时命中多类变更的场景。
+- 后端编辑审核的变更范围拆为四类：
+  - 商品资料：SPU 基础资料、图片、属性、详情图文、仓库等变化。
+  - 新增 SKU：本次新增的 SKU。
+  - SKU 资料：既有 SKU 的图片、规格、尺寸重量、仓库、状态等非供货价资料变化。
+  - 供货价：既有 SKU 的供货价变化。
+- 后端归类规则：
+  - 只命中一类变更时，继续进入对应 type：`ADD_SKU`、`EDIT_PRODUCT_INFO`、`EDIT_SKU_INFO`、`EDIT_PRICE`。
+  - 同时命中两类及以上时，统一进入 `EDIT_MIXED`。
+  - `EDIT_MIXED` 审批通过时仍按完整 `AFTER` 商品快照生效。
+- 前端商品审核 Tabs 增加 `综合变更`，待审核数量统计会包含该类型。
+- 审核详情首屏改为实际变更范围驱动：
+  - `EDIT_PRODUCT_INFO` / `EDIT_SKU_INFO` / `EDIT_PRICE` / `EDIT_MIXED` 都进入统一 `EditChangeOverviewView`。
+  - 详情从 before/after 快照重新识别实际变更模块，命中的模块都展示，未命中的模块不展示。
+  - 供货价变化独立展示为 `SKU 供货价左右对比`，不再混入 `SKU 资料左右对比`。
+  - `SKU 资料左右对比` 明确排除供货价字段，避免供货价变化被误归类为 SKU 资料。
+- 已补测试：
+  - `商品资料 + 供货价` 会归类为 `EDIT_MIXED`，摘要包含 `SPU资料` 和 `供货价`。
+  - `SKU资料 + 供货价` 会归类为 `EDIT_MIXED`，摘要包含 `SKU资料` 和 `供货价`。
+  - `EDIT_MIXED` 列表/详情供货价区间仍从快照 `supplyPrice` 重算。
+- 验证结果：
+  - `mvn -pl product -am -Dtest=ProductReviewServiceImplTest "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，15 tests，0 failures/errors。
+  - `mvn -pl ruoyi-system -Dtest=SqlExecutionGuardContractTest test`：通过，79 tests，0 failures/errors。
+  - `mvn -pl ruoyi-system -Dtest=ProductAdminRouteContractTest test`：通过，1 test，0 failures/errors。
+  - `npm run tsc -- --pretty false`：通过。
+  - `npx jest --config jest.config.ts tests/product-distribution-permission-guard.test.ts --runInBand`：通过，10 tests，0 failures/errors。
+  - 浏览器运行态验证：`http://127.0.0.1:8001/review-center/product-distribution` 可加载，类型 Tabs 显示 `全部(26) / 新增商品(5) / 新增SKU(5) / 商品资料变更(6) / SKU资料变更(5) / 供货价变更(5) / 综合变更(0)`；当前运行数据没有综合变更单，因此未打开真实综合详情。
+
+### 2026-06-09 快速推进 P1 追补
+
+- 当前仍按三端快速推进模式处理，只修 P0/P1，不做浏览器、截图、DOM 或 UI 细调。
+- 子 Agent：本轮确认并关闭 6 个子 Agent，全部使用 `gpt-5.4`，未使用 GPT-5.3 Codex。
+- SQL seed：
+  - `product_review_type` 的 `EDIT_MIXED` 字典项已增加同类型 `dict_sort` 槽位冲突 guard。
+  - 如果远端已有同类型同排序位但不同 `dict_value` 的脏字典项，脚本会 `45000` fail-closed，不会静默产生重复排序。
+- 前端审核预览：
+  - `EDIT_MIXED` / `EDIT_SKU_INFO` 的 SKU 资料识别补齐后端审核口径中的包装数量、币种、来源维度组、来源 SKU 组、Master SKU、手工尺寸重量和来源尺寸重量。
+  - 供货价仍独立进入 `SKU 供货价左右对比`，不会重新混进 SKU 资料变化。
+- 测试补齐：
+  - `ProductReviewServiceImplTest` 新增 `EDIT_MIXED` 审批生效路径，确认综合变更审批后按完整 `AFTER` 商品快照应用。
+  - `product-distribution-permission-guard.test.ts` 固定前端 SKU 审核字段集。
+  - `SqlExecutionGuardContractTest` 固定商品审核 SQL seed 的字典排序槽位 guard。
+- 验证结果：
+  - `mvn -pl ruoyi-system,product -am "-Dtest=SqlExecutionGuardContractTest,ProductReviewServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`SqlExecutionGuardContractTest` 79 tests，`ProductReviewServiceImplTest` 16 tests。
+  - `.\node_modules\.bin\jest.cmd --config jest.config.ts --runTestsByPath tests\product-distribution-permission-guard.test.ts --runInBand`：通过，1 suite / 10 tests；Jest 仍有既有 open handle 提示。
+  - `npm run tsc -- --pretty false`：通过。
+  - `git diff --check`：通过，仅输出 LF/CRLF 换行提示。
+  - `codegraph sync .`：通过，输出 `Already up to date`。
+- 远端影响：本轮未执行远程 MySQL DDL/DML，未读取或写入 Redis，SQL 脚本未回放到远端库。
 
 ## 后续建议
 

@@ -65,6 +65,7 @@ const REVIEW_TYPE_ORDER = [
   'EDIT_PRODUCT_INFO',
   'EDIT_SKU_INFO',
   'EDIT_PRICE',
+  'EDIT_MIXED',
 ];
 
 const DEFAULT_REVIEW_TYPE_ENUM: Record<string, ValueEnumItem> = {
@@ -73,6 +74,7 @@ const DEFAULT_REVIEW_TYPE_ENUM: Record<string, ValueEnumItem> = {
   EDIT_PRODUCT_INFO: { text: '商品资料变更', status: 'warning' },
   EDIT_SKU_INFO: { text: 'SKU资料变更', status: 'warning' },
   EDIT_PRICE: { text: '供货价变更', status: 'error' },
+  EDIT_MIXED: { text: '综合变更', status: 'warning' },
 };
 
 const DEFAULT_REVIEW_STATUS_ENUM: Record<string, ValueEnumItem> = {
@@ -178,6 +180,10 @@ function normalizeReviewTypeValueEnum(data: Record<string, ValueEnumItem>) {
     EDIT_PRICE: {
       ...(valueEnum.EDIT_PRICE || DEFAULT_REVIEW_TYPE_ENUM.EDIT_PRICE),
       text: '供货价变更',
+    },
+    EDIT_MIXED: {
+      ...(valueEnum.EDIT_MIXED || DEFAULT_REVIEW_TYPE_ENUM.EDIT_MIXED),
+      text: '综合变更',
     },
   };
 }
@@ -481,6 +487,15 @@ function renderReviewFocus(record: API.ProductReview.Review) {
           {renderFocusLine('变化摘要', record.diffSummary || '--')}
         </Space>
       );
+    case 'EDIT_MIXED':
+      return (
+        <Space orientation="vertical" size={2}>
+          {renderFocusLine('变更类型', record.diffSummary || '综合变更')}
+          {renderFocusLine('供货价变化', formatPriceTransition(record))}
+          {renderFocusLine('影响SKU', formatCount(resolveReviewSkuCount(record), '个SKU'))}
+          {renderFocusLine('仓库类型', formatWarehouseKindLabel(record.warehouseSummary))}
+        </Space>
+      );
     default:
       return (
         <Space orientation="vertical" size={2}>
@@ -686,6 +701,20 @@ function renderTypeDetailPanel(review: API.ProductReview.Review) {
             <Descriptions.Item label="变化摘要">{review.diffSummary || '--'}</Descriptions.Item>
           </Descriptions>
           {renderSnapshotCompareTable(review, '供货价变更对比', ['SKU', 'PRICE'])}
+        </Space>
+      );
+    case 'EDIT_MIXED':
+      return (
+        <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+          <Descriptions size="small" bordered column={3}>
+            <Descriptions.Item label="审核重点">综合变更</Descriptions.Item>
+            <Descriptions.Item label="影响SKU">{formatCount(resolveReviewSkuCount(review), '个SKU')}</Descriptions.Item>
+            <Descriptions.Item label="供货价变化">{formatPriceTransition(review)}</Descriptions.Item>
+            <Descriptions.Item label="仓库类型">{formatWarehouseKindLabel(review.warehouseSummary)}</Descriptions.Item>
+            <Descriptions.Item label="币种">{review.currencySummary || '--'}</Descriptions.Item>
+            <Descriptions.Item label="变化摘要">{review.diffSummary || '--'}</Descriptions.Item>
+          </Descriptions>
+          {renderSnapshotCompareTable(review, '综合变更快照对比', ['SPU', 'SKU'])}
         </Space>
       );
     default:

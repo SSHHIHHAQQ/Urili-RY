@@ -195,6 +195,51 @@ public class ProductReviewServiceImplTest
     }
 
     @Test
+    public void submitProductEditReviewClassifiesProductInfoAndSupplyPriceChangeAsMixedReview() throws Exception
+    {
+        authenticateAdmin(100L, "admin");
+        RecordingProductReviewMapper reviewMapper = new RecordingProductReviewMapper();
+        RecordingProductDistributionService distributionService = new RecordingProductDistributionService();
+        distributionService.productByIdResult = readyProduct("正式商品");
+        ProductSpu changed = readyProduct("修改后商品");
+        changed.getSkus().get(0).setSupplyPrice(new BigDecimal("19.99"));
+        distributionService.preparedProduct = changed;
+        ProductReviewServiceImpl service = service(reviewMapper.proxy(), distributionService.proxy(),
+                new RecordingProductDistributionMapper().proxy(), new RecordingOperationLogMapper().proxy());
+
+        int rows = service.submitProductEditReview(changed);
+
+        assertEquals(1, rows);
+        assertEquals("EDIT_MIXED", reviewMapper.insertedReview.getReviewType());
+        assertTrue(reviewMapper.insertedReview.getDiffSummary().contains("SPU资料"));
+        assertTrue(reviewMapper.insertedReview.getDiffSummary().contains("供货价"));
+        assertEquals(new BigDecimal("10.00"), reviewMapper.insertedReview.getPriceBeforeMin());
+        assertEquals(new BigDecimal("19.99"), reviewMapper.insertedReview.getPriceAfterMin());
+    }
+
+    @Test
+    public void submitProductEditReviewClassifiesSkuInfoAndSupplyPriceChangeAsMixedReview() throws Exception
+    {
+        authenticateAdmin(100L, "admin");
+        RecordingProductReviewMapper reviewMapper = new RecordingProductReviewMapper();
+        RecordingProductDistributionService distributionService = new RecordingProductDistributionService();
+        distributionService.productByIdResult = readyProduct("正式商品");
+        ProductSpu changed = readyProduct("正式商品");
+        changed.getSkus().get(0).setColor("黑色");
+        changed.getSkus().get(0).setSupplyPrice(new BigDecimal("19.99"));
+        distributionService.preparedProduct = changed;
+        ProductReviewServiceImpl service = service(reviewMapper.proxy(), distributionService.proxy(),
+                new RecordingProductDistributionMapper().proxy(), new RecordingOperationLogMapper().proxy());
+
+        int rows = service.submitProductEditReview(changed);
+
+        assertEquals(1, rows);
+        assertEquals("EDIT_MIXED", reviewMapper.insertedReview.getReviewType());
+        assertTrue(reviewMapper.insertedReview.getDiffSummary().contains("SKU资料"));
+        assertTrue(reviewMapper.insertedReview.getDiffSummary().contains("供货价"));
+    }
+
+    @Test
     public void approveProductEditReviewAppliesAfterSnapshotAndKeepsLiveStatus() throws Exception
     {
         authenticateAdmin(100L, "admin");
@@ -216,6 +261,39 @@ public class ProductReviewServiceImplTest
         assertEquals(1, rows);
         assertNotNull(distributionService.applyReviewedProductUpdateArg);
         assertEquals("审核通过后的商品", distributionService.applyReviewedProductUpdateArg.getProductName());
+        assertEquals("APPROVED", reviewMapper.updatedReview.getReviewStatus());
+        assertEquals(1, operationLogMapper.insertedLogs.size());
+        assertEquals("REVIEW_APPROVE", operationLogMapper.insertedLogs.get(0).getOperationType());
+    }
+
+    @Test
+    public void approveMixedEditReviewAppliesAfterSnapshotAndKeepsLiveStatus() throws Exception
+    {
+        authenticateAdmin(100L, "admin");
+        RecordingProductReviewMapper reviewMapper = new RecordingProductReviewMapper();
+        reviewMapper.reviewById = pendingMixedProductReview();
+        ProductSpu afterProduct = readyProduct("综合变更后的商品");
+        afterProduct.getSkus().get(0).setColor("黑色");
+        afterProduct.getSkus().get(0).setSupplyPrice(new BigDecimal("19.99"));
+        ProductReviewSnapshot afterSnapshot = new ProductReviewSnapshot();
+        afterSnapshot.setSnapshotRole("AFTER");
+        afterSnapshot.setPayloadType("SPU");
+        afterSnapshot.setPayloadJson(JSON.toJSONString(afterProduct));
+        reviewMapper.reviewSnapshots = List.of(afterSnapshot);
+        RecordingProductDistributionService distributionService = new RecordingProductDistributionService();
+        distributionService.productByIdResult = readyProduct("正式商品");
+        RecordingOperationLogMapper operationLogMapper = new RecordingOperationLogMapper();
+        ProductReviewServiceImpl service = service(reviewMapper.proxy(), distributionService.proxy(),
+                new RecordingProductDistributionMapper().proxy(), operationLogMapper.proxy());
+
+        int rows = service.approveReview(900L, "通过");
+
+        assertEquals(1, rows);
+        assertNotNull(distributionService.applyReviewedProductUpdateArg);
+        assertEquals("综合变更后的商品", distributionService.applyReviewedProductUpdateArg.getProductName());
+        assertEquals("黑色", distributionService.applyReviewedProductUpdateArg.getSkus().get(0).getColor());
+        assertEquals(new BigDecimal("19.99"),
+                distributionService.applyReviewedProductUpdateArg.getSkus().get(0).getSupplyPrice());
         assertEquals("APPROVED", reviewMapper.updatedReview.getReviewStatus());
         assertEquals(1, operationLogMapper.insertedLogs.size());
         assertEquals("REVIEW_APPROVE", operationLogMapper.insertedLogs.get(0).getOperationType());
@@ -359,6 +437,8 @@ public class ProductReviewServiceImplTest
         assertReviewSupplyPriceRange("EDIT_SKU_INFO", new BigDecimal("10.00"), new BigDecimal("20.00"),
                 new BigDecimal("8.00"), new BigDecimal("18.00"));
         assertReviewSupplyPriceRange("EDIT_PRICE", new BigDecimal("10.00"), new BigDecimal("20.00"),
+                new BigDecimal("8.00"), new BigDecimal("18.00"));
+        assertReviewSupplyPriceRange("EDIT_MIXED", new BigDecimal("10.00"), new BigDecimal("20.00"),
                 new BigDecimal("8.00"), new BigDecimal("18.00"));
     }
 
@@ -551,6 +631,14 @@ public class ProductReviewServiceImplTest
         ProductReviewRequest review = pendingNewProductReview();
         review.setReviewType("EDIT_PRICE");
         review.setReviewNo("PRV-PRICE-1");
+        return review;
+    }
+
+    private ProductReviewRequest pendingMixedProductReview()
+    {
+        ProductReviewRequest review = pendingNewProductReview();
+        review.setReviewType("EDIT_MIXED");
+        review.setReviewNo("PRV-MIXED-1");
         return review;
     }
 

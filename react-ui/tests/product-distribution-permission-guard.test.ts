@@ -225,6 +225,7 @@ describe('product distribution permission guard', () => {
     expect(reviewPageTsx).toContain('function renderReviewTypeTabLabel');
     expect(reviewPageTsx).toContain('function normalizeReviewTypeValueEnum');
     expect(reviewPageTsx).toContain("text: '供货价变更'");
+    expect(reviewPageTsx).toContain("EDIT_MIXED: { text: '综合变更'");
     expect(reviewPageTsx).toContain('reviewTypePendingCounts');
     expect(reviewPageTsx).toContain("reviewStatus: 'PENDING'");
     expect(reviewPageTsx).toContain('refreshReviewTypePendingCounts();');
@@ -237,6 +238,7 @@ describe('product distribution permission guard', () => {
     expect(reviewPageTsx).toContain("case 'EDIT_PRODUCT_INFO'");
     expect(reviewPageTsx).toContain("case 'EDIT_SKU_INFO'");
     expect(reviewPageTsx).toContain("case 'EDIT_PRICE'");
+    expect(reviewPageTsx).toContain("case 'EDIT_MIXED'");
     expect(reviewPageTsx).toContain('priceBeforeMin');
     expect(reviewPageTsx).toContain('priceAfterMin');
     expect(reviewPageTsx).toContain("label: '变更预览'");
@@ -251,7 +253,10 @@ describe('product distribution permission guard', () => {
     expect(reviewBusinessPreviewTsx).toContain('function renderSkuSpecTags');
     expect(reviewBusinessPreviewTsx).toContain('function renderSkuChangeTags');
     expect(reviewBusinessPreviewTsx).toContain('function renderSkuFieldChangeDetail');
+    expect(reviewBusinessPreviewTsx).toContain('function renderSkuCompareHeader');
     expect(reviewBusinessPreviewTsx).toContain('function renderSalesStatus');
+    expect(reviewBusinessPreviewTsx).toContain('function normalizeCompareValue');
+    expect(reviewBusinessPreviewTsx).toContain('function normalizeMeasurementString');
     expect(reviewBusinessPreviewTsx).toContain('function formatSkuWarehouseValue');
     expect(reviewBusinessPreviewTsx).toContain('const changedPairs = pairs.filter');
     expect(reviewBusinessPreviewTsx).toContain('const visiblePairs = changedPairs.length ? changedPairs : pairs');
@@ -262,6 +267,11 @@ describe('product distribution permission guard', () => {
     expect(reviewBusinessPreviewTsx).toContain('expandable={{ expandedRowRender: renderSkuFieldChangeDetail }}');
     expect(reviewBusinessPreviewTsx).not.toContain("`${formatSkuSpecs(row.before)} -> ${formatSkuSpecs(row.after)}`");
     expect(reviewBusinessPreviewTsx).toContain('function PriceChangeReviewView');
+    expect(reviewBusinessPreviewTsx).toContain('function EditChangeOverviewView');
+    expect(reviewBusinessPreviewTsx).toContain('function getEditChangeScopes');
+    expect(reviewBusinessPreviewTsx).toContain('function renderChangeScopeTags');
+    expect(reviewBusinessPreviewTsx).toContain("'EDIT_MIXED'");
+    expect(reviewBusinessPreviewTsx).toContain("'SUPPLY_PRICE'");
     expect(reviewBusinessPreviewTsx).toContain('function getProductWarehouseKind');
     expect(reviewBusinessPreviewTsx).toContain('function normalizeWarehouseKind');
     expect(reviewBusinessPreviewTsx).toContain('function shouldShowDeliveryWarehouse');
@@ -278,6 +288,19 @@ describe('product distribution permission guard', () => {
     expect(reviewBusinessPreviewTsx).toContain("render: (value) => renderSalesStatus(String(value || ''))");
     expect(reviewBusinessPreviewTsx).toContain('before: renderSalesStatus(before?.skuStatus)');
     expect(reviewBusinessPreviewTsx).toContain('after: renderSalesStatus(after?.skuStatus)');
+    [
+      'packageQuantity',
+      'currencyCode',
+      'sourceDimensionGroupKey',
+      'sourceSkuGroupKey',
+      'masterSku',
+      'length',
+      'width',
+      'height',
+      'weight',
+    ].forEach((fieldKey) => {
+      expect(reviewBusinessPreviewTsx).toContain(`key: '${fieldKey}'`);
+    });
     expect(reviewBusinessPreviewTsx).not.toContain('function renderAttributeValue');
     expect(productDetailDrawerTsx).toContain('@/pages/Product/utils/attributeDisplay');
     expect(productDetailDrawerTsx).not.toContain('function formatAttributeValue');
@@ -318,9 +341,18 @@ describe('product distribution permission guard', () => {
     expect(reviewBusinessPreviewTsx).toContain("renderComparePanels('商品详情图文'");
     expect(reviewBusinessPreviewTsx).toContain("renderSection('SKU 资料左右对比'");
     expect(reviewBusinessPreviewTsx).toContain("renderSection('SKU 供货价左右对比'");
-    expect(reviewBusinessPreviewTsx).toContain("renderMetric('原供货价区间'");
-    expect(reviewBusinessPreviewTsx).toContain("renderMetric('新供货价区间'");
+    expect(reviewBusinessPreviewTsx).not.toContain("renderMetric('影响 SKU'");
+    expect(reviewBusinessPreviewTsx).not.toContain("renderMetric('涨价 SKU'");
+    expect(reviewBusinessPreviewTsx).not.toContain("renderMetric('降价 SKU'");
+    expect(reviewBusinessPreviewTsx).not.toContain("renderMetric('原供货价区间'");
+    expect(reviewBusinessPreviewTsx).not.toContain("renderMetric('新供货价区间'");
     expect(reviewBusinessPreviewTsx).toContain("'供货价'");
+    expect(reviewBusinessPreviewTsx).toContain('renderSupplyPriceChangeTags');
+    expect(reviewBusinessPreviewTsx).toContain('供货价上涨');
+    expect(reviewBusinessPreviewTsx).toContain('供货价下降');
+    expect(reviewBusinessPreviewTsx).toContain('供货价未变');
+    expect(reviewBusinessPreviewTsx).not.toContain('供货价正常');
+    expect(reviewBusinessPreviewTsx).not.toContain("buildCompareField('spec', '规格'");
     expect(reviewBusinessPreviewTsx).not.toContain("当前销售价");
     expect(reviewBusinessPreviewTsx).not.toContain("高于销售价");
   });

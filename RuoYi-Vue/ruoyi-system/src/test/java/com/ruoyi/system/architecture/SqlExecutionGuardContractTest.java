@@ -3444,6 +3444,7 @@ public class SqlExecutionGuardContractTest
                 "product_review schema column contract mismatch",
                 "product_review schema index contract mismatch",
                 "product review dict type target is occupied by incompatible row",
+                "product review dict data sort slot is occupied by incompatible row",
                 "product review dict data seed completion mismatch",
                 "product review sys_menu exact target count mismatch",
                 "product review sys_menu exact target signature mismatch",

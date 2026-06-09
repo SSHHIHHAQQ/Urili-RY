@@ -69,6 +69,8 @@ type CompareField = {
   after: ReactNode;
 };
 
+type EditChangeScope = 'PRODUCT_INFO' | 'ADD_SKU' | 'SKU_INFO' | 'SUPPLY_PRICE';
+
 const sectionStyle = {
   display: 'flex',
   flexDirection: 'column',
@@ -134,6 +136,23 @@ const compareFieldStyle = {
   boxSizing: 'border-box',
   overflowWrap: 'anywhere',
   background: '#fff',
+} as const;
+
+const skuCompareCardStyle = {
+  border: '1px solid #f0f0f0',
+  borderRadius: 6,
+  background: '#fff',
+  overflow: 'hidden',
+} as const;
+
+const skuCompareHeaderStyle = {
+  display: 'grid',
+  gridTemplateColumns: 'auto minmax(0, 1fr) auto',
+  gap: 12,
+  alignItems: 'center',
+  padding: 12,
+  background: '#fafafa',
+  borderBottom: '1px solid #f0f0f0',
 } as const;
 
 const salesStatusColor: Record<string, string> = {
@@ -339,6 +358,59 @@ function formatSkuIdentity(sku?: API.ProductDistribution.Sku, item?: API.Product
   return sku?.sellerSkuCode || sku?.systemSkuCode || item?.sellerSkuCode || item?.systemSkuCode || '--';
 }
 
+function formatSkuIdentityTitle(pair: SkuPair) {
+  const sku = pair.after || pair.before;
+  const sellerSku = sku?.sellerSkuCode || pair.item?.sellerSkuCode;
+  const systemSku = sku?.systemSkuCode || pair.item?.systemSkuCode;
+  const values = [sellerSku, systemSku].filter(Boolean);
+  return values.length ? values.join(' / ') : '--';
+}
+
+function formatMeasurementValue(value?: unknown, defaultUnit = '') {
+  if (value == null || value === '') {
+    return '--';
+  }
+  if (typeof value === 'number') {
+    return `${trimTrailingZeros(value.toFixed(2))}${defaultUnit ? ` ${defaultUnit}` : ''}`;
+  }
+  if (typeof value === 'string') {
+    const normalized = normalizeMeasurementString(value, defaultUnit);
+    const match = normalized.match(/^(-?\d+(?:\.\d+)?)\s*(.*)$/);
+    if (match) {
+      return `${trimTrailingZeros(Number(match[1]).toFixed(2))}${match[2] ? ` ${match[2]}` : ''}`;
+    }
+    return value || '--';
+  }
+  return String(value);
+}
+
+function getSkuMeasurementRaw(
+  sku: API.ProductDistribution.Sku | undefined,
+  measuredKey: keyof API.ProductDistribution.Sku,
+  legacyKey: keyof API.ProductDistribution.Sku,
+  defaultUnit: string,
+) {
+  const measuredValue = sku?.[measuredKey];
+  if (measuredValue != null && measuredValue !== '') {
+    return normalizeMeasurementString(String(measuredValue), defaultUnit);
+  }
+  const legacyValue = sku?.[legacyKey];
+  return legacyValue == null || legacyValue === '' ? '' : normalizeMeasurementString(String(legacyValue), defaultUnit);
+}
+
+function renderSkuMeasurementValue(
+  sku: API.ProductDistribution.Sku | undefined,
+  measuredKey: keyof API.ProductDistribution.Sku,
+  legacyKey: keyof API.ProductDistribution.Sku,
+  defaultUnit: string,
+) {
+  const measuredValue = sku?.[measuredKey];
+  if (measuredValue != null && measuredValue !== '') {
+    return renderSkuValue(formatMeasurementValue(measuredValue, defaultUnit));
+  }
+  return renderSkuValue(formatMeasurementValue(sku?.[legacyKey], defaultUnit));
+}
+
 function renderImage(url?: string, size = 72) {
   return url ? (
     <Image
@@ -352,11 +424,51 @@ function renderImage(url?: string, size = 72) {
   );
 }
 
-function normalizeText(value: unknown) {
+function trimTrailingZeros(value: string) {
+  return value.replace(/(\.\d*?[1-9])0+$/, '$1').replace(/\.0+$/, '');
+}
+
+function normalizeMeasurementString(value: string, defaultUnit = '') {
+  const normalized = value.trim().replace(/\s+/g, ' ');
+  const match = normalized.match(/^(-?\d+(?:\.\d+)?)\s*([a-zA-Z%°\u4e00-\u9fa5]+)?$/);
+  if (!match) {
+    return normalized;
+  }
+  const unit = (match[2] || defaultUnit).trim().toLowerCase();
+  return `${Number(match[1])}${unit ? ` ${unit}` : ''}`;
+}
+
+function normalizeCompareValue(value: unknown): unknown {
   if (value == null || value === '') {
     return '';
   }
-  return typeof value === 'string' ? value : JSON.stringify(value);
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? Number(value.toFixed(6)) : value;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return '';
+    }
+    return normalizeMeasurementString(trimmed);
+  }
+  if (Array.isArray(value)) {
+    return value.map(normalizeCompareValue);
+  }
+  if (typeof value === 'object') {
+    return Object.keys(value as Record<string, unknown>)
+      .sort()
+      .reduce<Record<string, unknown>>((result, key) => {
+        result[key] = normalizeCompareValue((value as Record<string, unknown>)[key]);
+        return result;
+      }, {});
+  }
+  return value;
+}
+
+function normalizeText(value: unknown) {
+  const normalized = normalizeCompareValue(value);
+  return typeof normalized === 'string' ? normalized : JSON.stringify(normalized);
 }
 
 function isDifferent(before: unknown, after: unknown) {
@@ -508,6 +620,8 @@ function buildProductBasicCompareFields(
       before?.categoryName || review?.categoryName, after?.categoryName || review?.categoryName),
     buildCompareField('spuStatus', '商品状态', before?.spuStatus, after?.spuStatus,
       renderSalesStatus(before?.spuStatus), renderSalesStatus(after?.spuStatus)),
+    buildCompareField('warehouseKind', '仓库类型', normalizeWarehouseKind(getProductWarehouseKind(before)), normalizeWarehouseKind(getProductWarehouseKind(after)),
+      formatWarehouseKindLabel(getProductWarehouseKind(before)), formatWarehouseKindLabel(getProductWarehouseKind(after))),
     buildCompareField('productNameEn', '英文标题', before?.productNameEn, after?.productNameEn),
   ];
 }
@@ -598,6 +712,58 @@ function renderDetailContentCompare(before?: API.ProductDistribution.Spu, after?
       key: 'detailContent',
       before: renderCompareContentBlock(<DetailContentPreview value={before?.detailContent} />, changed ? 'before' : 'same'),
       after: renderCompareContentBlock(<DetailContentPreview value={after?.detailContent} />, changed ? 'after' : 'same'),
+    },
+  ]);
+}
+
+function productBasicCompareRaw(product?: API.ProductDistribution.Spu) {
+  return JSON.stringify({
+    sellerSpuCode: product?.sellerSpuCode,
+    sellerId: product?.sellerId,
+    sellerName: product?.sellerName,
+    categoryId: product?.categoryId,
+    categoryName: product?.categoryName,
+    productName: product?.productName,
+    productNameEn: product?.productNameEn,
+    spuStatus: product?.spuStatus,
+    warehouseKind: normalizeWarehouseKind(getProductWarehouseKind(product)),
+  });
+}
+
+function productImagesCompareRaw(product?: API.ProductDistribution.Spu) {
+  return JSON.stringify({
+    mainImageUrl: product?.mainImageUrl,
+    images: product?.images || [],
+  });
+}
+
+function productAttributesCompareRaw(product?: API.ProductDistribution.Spu) {
+  return JSON.stringify(product?.attributeValues || []);
+}
+
+function productWarehouseCompareRaw(product?: API.ProductDistribution.Spu) {
+  return JSON.stringify({
+    warehouseKind: normalizeWarehouseKind(getProductWarehouseKind(product)),
+    warehouseIds: product?.warehouseIds,
+    warehouses: product?.warehouses || [],
+  });
+}
+
+function hasProductInfoChanged(before?: API.ProductDistribution.Spu, after?: API.ProductDistribution.Spu) {
+  return isDifferent(productBasicCompareRaw(before), productBasicCompareRaw(after))
+    || isDifferent(productImagesCompareRaw(before), productImagesCompareRaw(after))
+    || isDifferent(productAttributesCompareRaw(before), productAttributesCompareRaw(after))
+    || isDifferent(productWarehouseCompareRaw(before), productWarehouseCompareRaw(after))
+    || isDifferent(before?.detailContent, after?.detailContent);
+}
+
+function renderWarehouseCompare(before?: API.ProductDistribution.Spu, after?: API.ProductDistribution.Spu) {
+  const changed = isDifferent(productWarehouseCompareRaw(before), productWarehouseCompareRaw(after));
+  return renderComparePanels('发货仓库', [
+    {
+      key: 'warehouses',
+      before: renderCompareContentBlock(renderWarehouseTable(before), changed ? 'before' : 'same'),
+      after: renderCompareContentBlock(renderWarehouseTable(after), changed ? 'after' : 'same'),
     },
   ]);
 }
@@ -894,14 +1060,78 @@ function buildSkuFieldChanges(before?: API.ProductDistribution.Sku, after?: API.
     { key: 'material', label: '材质', beforeRaw: before?.material, afterRaw: after?.material, before: renderSkuValue(before?.material), after: renderSkuValue(after?.material) },
     { key: 'style', label: '款式', beforeRaw: before?.style, afterRaw: after?.style, before: renderSkuValue(before?.style), after: renderSkuValue(after?.style) },
     { key: 'model', label: '型号', beforeRaw: before?.model, afterRaw: after?.model, before: renderSkuValue(before?.model), after: renderSkuValue(after?.model) },
+    {
+      key: 'packageQuantity',
+      label: '包装数量',
+      beforeRaw: before?.packageQuantity,
+      afterRaw: after?.packageQuantity,
+      before: renderSkuValue(before?.packageQuantity),
+      after: renderSkuValue(after?.packageQuantity),
+    },
     { key: 'capacity', label: '容量', beforeRaw: before?.capacity, afterRaw: after?.capacity, before: renderSkuValue(before?.capacity), after: renderSkuValue(after?.capacity) },
     {
-      key: 'dimension',
-      label: '尺寸重量',
-      beforeRaw: formatDimension(before),
-      afterRaw: formatDimension(after),
-      before: renderSkuValue(formatDimension(before)),
-      after: renderSkuValue(formatDimension(after)),
+      key: 'currencyCode',
+      label: '币种',
+      beforeRaw: before?.currencyCode,
+      afterRaw: after?.currencyCode,
+      before: renderSkuValue(before?.currencyCode),
+      after: renderSkuValue(after?.currencyCode),
+    },
+    {
+      key: 'sourceDimensionGroupKey',
+      label: '来源维度组',
+      beforeRaw: before?.sourceDimensionGroupKey,
+      afterRaw: after?.sourceDimensionGroupKey,
+      before: renderSkuValue(before?.sourceDimensionGroupKey),
+      after: renderSkuValue(after?.sourceDimensionGroupKey),
+    },
+    {
+      key: 'sourceSkuGroupKey',
+      label: '来源SKU组',
+      beforeRaw: before?.sourceSkuGroupKey,
+      afterRaw: after?.sourceSkuGroupKey,
+      before: renderSkuValue(before?.sourceSkuGroupKey),
+      after: renderSkuValue(after?.sourceSkuGroupKey),
+    },
+    {
+      key: 'masterSku',
+      label: 'Master SKU',
+      beforeRaw: before?.masterSku,
+      afterRaw: after?.masterSku,
+      before: renderSkuValue(before?.masterSku),
+      after: renderSkuValue(after?.masterSku),
+    },
+    {
+      key: 'length',
+      label: '长',
+      beforeRaw: getSkuMeasurementRaw(before, 'measureLengthCm', 'lengthValue', 'cm'),
+      afterRaw: getSkuMeasurementRaw(after, 'measureLengthCm', 'lengthValue', 'cm'),
+      before: renderSkuMeasurementValue(before, 'measureLengthCm', 'lengthValue', 'cm'),
+      after: renderSkuMeasurementValue(after, 'measureLengthCm', 'lengthValue', 'cm'),
+    },
+    {
+      key: 'width',
+      label: '宽',
+      beforeRaw: getSkuMeasurementRaw(before, 'measureWidthCm', 'widthValue', 'cm'),
+      afterRaw: getSkuMeasurementRaw(after, 'measureWidthCm', 'widthValue', 'cm'),
+      before: renderSkuMeasurementValue(before, 'measureWidthCm', 'widthValue', 'cm'),
+      after: renderSkuMeasurementValue(after, 'measureWidthCm', 'widthValue', 'cm'),
+    },
+    {
+      key: 'height',
+      label: '高',
+      beforeRaw: getSkuMeasurementRaw(before, 'measureHeightCm', 'heightValue', 'cm'),
+      afterRaw: getSkuMeasurementRaw(after, 'measureHeightCm', 'heightValue', 'cm'),
+      before: renderSkuMeasurementValue(before, 'measureHeightCm', 'heightValue', 'cm'),
+      after: renderSkuMeasurementValue(after, 'measureHeightCm', 'heightValue', 'cm'),
+    },
+    {
+      key: 'weight',
+      label: '重量',
+      beforeRaw: getSkuMeasurementRaw(before, 'measureWeightKg', 'weight', 'kg'),
+      afterRaw: getSkuMeasurementRaw(after, 'measureWeightKg', 'weight', 'kg'),
+      before: renderSkuMeasurementValue(before, 'measureWeightKg', 'weight', 'kg'),
+      after: renderSkuMeasurementValue(after, 'measureWeightKg', 'weight', 'kg'),
     },
     {
       key: 'supplyPrice',
@@ -914,8 +1144,8 @@ function buildSkuFieldChanges(before?: API.ProductDistribution.Sku, after?: API.
     {
       key: 'warehouse',
       label: '仓库',
-      beforeRaw: before?.sourceWarehouseNames || before?.warehouseKindSummary,
-      afterRaw: after?.sourceWarehouseNames || after?.warehouseKindSummary,
+      beforeRaw: before?.sourceWarehouseNames || normalizeWarehouseKind(before?.warehouseKindSummary),
+      afterRaw: after?.sourceWarehouseNames || normalizeWarehouseKind(after?.warehouseKindSummary),
       before: renderSkuWarehouseValue(before),
       after: renderSkuWarehouseValue(after),
     },
@@ -935,8 +1165,14 @@ function buildSkuFieldChanges(before?: API.ProductDistribution.Sku, after?: API.
   }));
 }
 
-function getChangedSkuFields(pair: SkuPair) {
-  return buildSkuFieldChanges(pair.before, pair.after).filter((field) => field.changed);
+function getSkuInfoChangedFields(pair: SkuPair) {
+  return buildSkuFieldChanges(pair.before, pair.after)
+    .filter((field) => field.key !== 'supplyPrice')
+    .filter((field) => field.changed);
+}
+
+function hasSupplyPriceChanged(pair: SkuPair) {
+  return !!pair.before && !!pair.after && isDifferent(pair.before.supplyPrice, pair.after.supplyPrice);
 }
 
 function toSkuCompareField(field: SkuFieldChange, pair: SkuPair): CompareField {
@@ -953,20 +1189,39 @@ function toSkuCompareField(field: SkuFieldChange, pair: SkuPair): CompareField {
   };
 }
 
+function renderSkuCompareHeader(pair: SkuPair, extra?: ReactNode) {
+  const sku = pair.after || pair.before;
+  return (
+    <div style={skuCompareHeaderStyle}>
+      <div>{renderSkuImageSummary(pair)}</div>
+      <div style={{ minWidth: 0 }}>
+        <Typography.Text strong>{formatSkuIdentityTitle(pair)}</Typography.Text>
+        <div style={{ marginTop: 4 }}>
+          <Typography.Text type="secondary">
+            客户SKU：{sku?.sellerSkuCode || pair.item?.sellerSkuCode || '--'} / 系统SKU：{sku?.systemSkuCode || pair.item?.systemSkuCode || '--'}
+          </Typography.Text>
+        </div>
+        <div style={{ marginTop: 8 }}>{renderSkuSpecTags(pair)}</div>
+      </div>
+      <div style={{ maxWidth: 260 }}>{extra}</div>
+    </div>
+  );
+}
+
 function renderSkuComparePair(pair: SkuPair, fields: CompareField[], title?: string, extra?: ReactNode) {
   return (
-    <section key={pair.key} style={sectionStyle}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
-        <Typography.Text strong>{title || formatSkuIdentity(pair.after || pair.before, pair.item)}</Typography.Text>
-        {extra}
+    <section key={pair.key} style={skuCompareCardStyle}>
+      {renderSkuCompareHeader(pair, extra)}
+      <div style={{ padding: 12 }}>
+        {renderAlignedCompareGrid(fields, title || pair.key)}
       </div>
-      {renderAlignedCompareGrid(fields, pair.key)}
     </section>
   );
 }
 
-function renderSkuDetailCompare(pair: SkuPair, mode: 'all' | 'changed' = 'changed') {
-  const fieldChanges = buildSkuFieldChanges(pair.before, pair.after);
+function renderSkuDetailCompare(pair: SkuPair, mode: 'all' | 'changed' = 'all') {
+  const fieldChanges = buildSkuFieldChanges(pair.before, pair.after)
+    .filter((field) => field.key !== 'supplyPrice');
   const visibleFields = mode === 'all' ? fieldChanges : fieldChanges.filter((field) => field.changed);
   const fields = (visibleFields.length ? visibleFields : fieldChanges).map((field) => toSkuCompareField(field, pair));
   return renderSkuComparePair(
@@ -998,18 +1253,17 @@ function renderSkuSupplyPriceCompare(pair: SkuPair) {
       formatMoney(pair.before?.supplyPrice, currency),
       formatMoney(pair.after?.supplyPrice, currency),
     ),
-    buildCompareField('spec', '规格', formatSkuSpecs(pair.before), formatSkuSpecs(pair.after)),
   ];
   return renderSkuComparePair(
     pair,
     fields,
     formatSkuIdentity(pair.after || pair.before, pair.item),
-    renderSupplyPriceRisk(pair.before, pair.after),
+    renderSupplyPriceChangeTags(pair.before, pair.after),
   );
 }
 
 function renderSkuChangeTags(pair: SkuPair) {
-  const changedFields = getChangedSkuFields(pair);
+  const changedFields = getSkuInfoChangedFields(pair);
   if (!changedFields.length) {
     return <Typography.Text type="secondary">未识别到字段变化</Typography.Text>;
   }
@@ -1024,7 +1278,7 @@ function renderSkuChangeTags(pair: SkuPair) {
 
 function renderSkuSpecTags(pair: SkuPair) {
   const after = pair.after || pair.before;
-  const changedKeys = new Set(getChangedSkuFields(pair).map((field) => field.key));
+  const changedKeys = new Set(getSkuInfoChangedFields(pair).map((field) => field.key));
   const specs = [
     ['color', '颜色', after?.color],
     ['size', '尺码', after?.size],
@@ -1063,7 +1317,7 @@ function renderSkuImageSummary(pair: SkuPair) {
 }
 
 function renderSkuFieldChangeDetail(pair: SkuPair) {
-  const changedFields = getChangedSkuFields(pair);
+  const changedFields = getSkuInfoChangedFields(pair);
   const columns: ColumnsType<SkuFieldChange> = [
     { title: '字段', dataIndex: 'label', width: 120, render: (value) => <Tag>{value}</Tag> },
     { title: '修改前', dataIndex: 'before', render: (_, row) => row.before },
@@ -1134,7 +1388,7 @@ function SkuInfoChangeReviewView({ review }: { review: API.ProductReview.Review 
   const beforeProduct = getBeforeProduct(review);
   const afterProduct = getAfterProduct(review);
   const pairs = getSkuPairs(review).filter((pair) => !!pair.after);
-  const changedPairs = pairs.filter((pair) => getChangedSkuFields(pair).length > 0);
+  const changedPairs = pairs.filter((pair) => getSkuInfoChangedFields(pair).length > 0);
   const visiblePairs = changedPairs.length ? changedPairs : pairs;
 
   return (
@@ -1164,40 +1418,135 @@ function renderPriceDelta(before?: number, after?: number) {
   );
 }
 
-function renderSupplyPriceRisk(before?: API.ProductDistribution.Sku, after?: API.ProductDistribution.Sku) {
+function renderSupplyPriceChangeTags(before?: API.ProductDistribution.Sku, after?: API.ProductDistribution.Sku) {
   if (after?.supplyPrice == null) {
     return <Tag color="error">缺供货价</Tag>;
   }
-  if (before?.supplyPrice != null && before.supplyPrice !== 0) {
-    const percent = Math.abs((after.supplyPrice - before.supplyPrice) / before.supplyPrice) * 100;
-    if (percent >= 30) {
-      return <Tag color="warning">涨跌幅较大</Tag>;
-    }
+  if (before?.supplyPrice == null) {
+    return <Tag color="green">新增供货价</Tag>;
   }
-  return <Tag color="success">供货价正常</Tag>;
+  const delta = after.supplyPrice - before.supplyPrice;
+  if (delta === 0) {
+    return <Tag>供货价未变</Tag>;
+  }
+  const percent = before.supplyPrice === 0 ? undefined : Math.abs(delta / before.supplyPrice) * 100;
+  const directionTag = (
+    <Tag color={delta > 0 ? 'red' : 'green'}>
+      {delta > 0 ? '供货价上涨' : '供货价下降'} {renderPriceDelta(before.supplyPrice, after.supplyPrice)}
+    </Tag>
+  );
+  if (percent != null && percent >= 30) {
+    return (
+      <div style={compactTagWrapStyle}>
+        {directionTag}
+        <Tag color="warning">涨跌幅较大</Tag>
+      </div>
+    );
+  }
+  return directionTag;
 }
 
-function PriceChangeReviewView({ review }: { review: API.ProductReview.Review }) {
-  const pairs = getSkuPairs(review).filter((pair) => !!pair.before || !!pair.after);
-  const increased = pairs.filter((pair) =>
-    pair.before?.supplyPrice != null && pair.after?.supplyPrice != null && pair.after.supplyPrice > pair.before.supplyPrice).length;
-  const decreased = pairs.filter((pair) =>
-    pair.before?.supplyPrice != null && pair.after?.supplyPrice != null && pair.after.supplyPrice < pair.before.supplyPrice).length;
+function PriceChangeReviewView({
+  review,
+  pairs: inputPairs,
+}: {
+  review: API.ProductReview.Review;
+  pairs?: SkuPair[];
+}) {
+  const pairs = inputPairs || getSkuPairs(review).filter(hasSupplyPriceChanged);
 
   return (
     <div style={stackStyle}>
-      <div style={inlineGridStyle}>
-        {renderMetric('影响 SKU', pairs.length || review.skuCount || '--')}
-        {renderMetric('涨价 SKU', increased, increased ? '#cf1322' : undefined)}
-        {renderMetric('降价 SKU', decreased, decreased ? '#3f8600' : undefined)}
-        {renderMetric('原供货价区间', formatRange(review.priceBeforeMin, review.priceBeforeMax, review.currencySummary))}
-        {renderMetric('新供货价区间', formatRange(review.priceAfterMin, review.priceAfterMax, review.currencySummary))}
-      </div>
       {renderSection('SKU 供货价左右对比', (
         <div style={stackStyle}>
           {pairs.map((pair) => renderSkuSupplyPriceCompare(pair))}
         </div>
       ))}
+    </div>
+  );
+}
+
+function getEditChangeScopes(review: API.ProductReview.Review): EditChangeScope[] {
+  const beforeProduct = getBeforeProduct(review);
+  const afterProduct = getAfterProduct(review);
+  const pairs = getSkuPairs(review);
+  const scopes: EditChangeScope[] = [];
+  if (beforeProduct && afterProduct && hasProductInfoChanged(beforeProduct, afterProduct)) {
+    scopes.push('PRODUCT_INFO');
+  }
+  if (pairs.some((pair) => !pair.before && !!pair.after)) {
+    scopes.push('ADD_SKU');
+  }
+  if (pairs.some((pair) => !!pair.before && !!pair.after && getSkuInfoChangedFields(pair).length > 0)) {
+    scopes.push('SKU_INFO');
+  }
+  if (pairs.some(hasSupplyPriceChanged)) {
+    scopes.push('SUPPLY_PRICE');
+  }
+  return scopes;
+}
+
+function renderChangeScopeTags(scopes: EditChangeScope[]) {
+  const labelMap: Record<EditChangeScope, string> = {
+    PRODUCT_INFO: '商品资料',
+    ADD_SKU: '新增SKU',
+    SKU_INFO: 'SKU资料',
+    SUPPLY_PRICE: '供货价',
+  };
+  if (!scopes.length) {
+    return <Typography.Text type="secondary">未识别到字段变化</Typography.Text>;
+  }
+  return (
+    <div style={compactTagWrapStyle}>
+      {scopes.map((scope) => <Tag key={scope} color={scope === 'SUPPLY_PRICE' ? 'red' : 'blue'}>{labelMap[scope]}</Tag>)}
+    </div>
+  );
+}
+
+function EditChangeOverviewView({
+  review,
+  displayMaps,
+}: {
+  review: API.ProductReview.Review;
+  displayMaps: AttributeDisplayMaps;
+}) {
+  const beforeProduct = getBeforeProduct(review);
+  const afterProduct = getAfterProduct(review);
+  const pairs = getSkuPairs(review);
+  const scopes = getEditChangeScopes(review);
+  const addedPairs = pairs.filter((pair) => !pair.before && !!pair.after);
+  const skuInfoPairs = pairs.filter((pair) => !!pair.before && !!pair.after && getSkuInfoChangedFields(pair).length > 0);
+  const supplyPricePairs = pairs.filter(hasSupplyPriceChanged);
+  const productBasicChanged = isDifferent(productBasicCompareRaw(beforeProduct), productBasicCompareRaw(afterProduct));
+  const productImagesChanged = isDifferent(productImagesCompareRaw(beforeProduct), productImagesCompareRaw(afterProduct));
+  const productAttributesChanged = isDifferent(productAttributesCompareRaw(beforeProduct), productAttributesCompareRaw(afterProduct));
+  const productWarehouseChanged = isDifferent(productWarehouseCompareRaw(beforeProduct), productWarehouseCompareRaw(afterProduct));
+  const productDetailChanged = isDifferent(beforeProduct?.detailContent, afterProduct?.detailContent);
+  const shouldFallbackToProduct = review.reviewType === 'EDIT_PRODUCT_INFO' && beforeProduct && afterProduct && !scopes.length;
+  const shouldFallbackToSku = review.reviewType === 'EDIT_SKU_INFO' && !skuInfoPairs.length;
+  const fallbackSkuPairs = shouldFallbackToSku ? pairs.filter((pair) => !!pair.after) : [];
+  const visibleScopes = scopes.length ? scopes : review.reviewType === 'EDIT_MIXED' ? ['PRODUCT_INFO', 'SKU_INFO', 'SUPPLY_PRICE'] as EditChangeScope[] : [];
+
+  return (
+    <div style={stackStyle}>
+      {renderSection('变更范围', renderChangeScopeTags(visibleScopes.length ? visibleScopes : scopes))}
+      {(productBasicChanged || shouldFallbackToProduct) ? renderProductBasicCompare(beforeProduct, afterProduct, review) : null}
+      {productImagesChanged || shouldFallbackToProduct ? renderImageGalleryCompare(beforeProduct, afterProduct, review) : null}
+      {productWarehouseChanged || shouldFallbackToProduct ? renderWarehouseCompare(beforeProduct, afterProduct) : null}
+      {productAttributesChanged || shouldFallbackToProduct ? renderAttributeCompare(beforeProduct, afterProduct, displayMaps) : null}
+      {productDetailChanged || shouldFallbackToProduct ? renderDetailContentCompare(beforeProduct, afterProduct) : null}
+      {addedPairs.length ? renderSection('新增 SKU 左右对比', (
+        <div style={stackStyle}>
+          {addedPairs.map((pair) => renderAddedSkuCompare(pair))}
+        </div>
+      )) : null}
+      {skuInfoPairs.length || fallbackSkuPairs.length ? renderSection('SKU 资料左右对比', (
+        <div style={stackStyle}>
+          {(skuInfoPairs.length ? skuInfoPairs : fallbackSkuPairs).map((pair) => renderSkuDetailCompare(pair))}
+        </div>
+      ), <Tag color="blue">{(skuInfoPairs.length ? skuInfoPairs : fallbackSkuPairs).length} 个SKU</Tag>) : null}
+      {supplyPricePairs.length ? <PriceChangeReviewView review={review} pairs={supplyPricePairs} /> : null}
+      {!scopes.length && !shouldFallbackToProduct && !fallbackSkuPairs.length ? <GenericReviewView review={review} /> : null}
     </div>
   );
 }
@@ -1259,12 +1608,10 @@ export default function ProductReviewBusinessPreview({ review }: ProductReviewBu
       <Divider style={{ margin: 0 }} />
       {review.reviewType === 'NEW_PRODUCT' ? <NewProductReviewView review={review} displayMaps={displayMaps} /> : null}
       {review.reviewType === 'ADD_SKU' ? <AddSkuReviewView review={review} /> : null}
-      {review.reviewType === 'EDIT_PRODUCT_INFO' ? (
-        <ProductInfoChangeReviewView review={review} displayMaps={displayMaps} />
+      {['EDIT_PRODUCT_INFO', 'EDIT_SKU_INFO', 'EDIT_PRICE', 'EDIT_MIXED'].includes(String(review.reviewType || '')) ? (
+        <EditChangeOverviewView review={review} displayMaps={displayMaps} />
       ) : null}
-      {review.reviewType === 'EDIT_SKU_INFO' ? <SkuInfoChangeReviewView review={review} /> : null}
-      {review.reviewType === 'EDIT_PRICE' ? <PriceChangeReviewView review={review} /> : null}
-      {!review.reviewType || !['NEW_PRODUCT', 'ADD_SKU', 'EDIT_PRODUCT_INFO', 'EDIT_SKU_INFO', 'EDIT_PRICE'].includes(review.reviewType)
+      {!review.reviewType || !['NEW_PRODUCT', 'ADD_SKU', 'EDIT_PRODUCT_INFO', 'EDIT_SKU_INFO', 'EDIT_PRICE', 'EDIT_MIXED'].includes(review.reviewType)
         ? <GenericReviewView review={review} />
         : null}
     </div>

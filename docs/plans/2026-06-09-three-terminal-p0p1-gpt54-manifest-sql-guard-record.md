@@ -212,3 +212,97 @@ admin_sys_menu_perm_missing_count=0
 
 - 当前 worktree 仍包含 product review/distribution 与 `application.yml` 等相邻脏改动；这些不是本追补修复范围，未回滚。
 - 远端 `portal.seller.web.url` / `portal.buyer.web.url` 仍是本地验证占位地址，继续作为 P2，不阻塞当前 P0/P1。
+
+## 追补检查点：product 测试纳入三端总门 P1
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为参考方向。当前仍是快速推进模式：只修 P0/P1，不做浏览器、截图、DOM 或 UI 细调。
+
+### 新增问题
+
+- P1：`ProductCodeGeneratorTest` 是当前 product 模块新增测试。`verify-three-terminal` 的关键后端发现规则会把 product 模块测试视为必须登记的关键测试，但该测试未在 `react-ui/tests/three-terminal.manifest.json` 的 `backendTestClasses` 中登记，导致 `node scripts/verify-three-terminal.mjs --check-manifest` 失败。
+
+### 已修复
+
+- `react-ui/tests/three-terminal.manifest.json`
+  - 将 `ProductCodeGeneratorTest` 加入 product 模块后端测试清单。
+  - 不修改 product 编码池业务实现，只修正三端总门清单。
+
+### 验证
+
+- `cd E:\Urili-Ruoyi\react-ui; node scripts\verify-three-terminal.mjs --check-manifest`
+  - 通过。
+- `cd E:\Urili-Ruoyi\react-ui; .\node_modules\.bin\jest.cmd --config jest.config.ts --runTestsByPath tests\verify-three-terminal-backend-gate.test.ts tests\partner-management-contract.test.ts tests\portal-unauthorized-redirect.test.ts tests\terminal-session-token.test.ts tests\remote-menu-route-guard.test.ts --runInBand`
+  - 通过，5 suites / 60 tests。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl product,ruoyi-admin -am -DskipTests test-compile`
+  - 通过，14 个 reactor 模块 SUCCESS。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl product -am "-Dtest=ProductCodeGeneratorTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`
+  - 通过，3 tests。
+- `cd E:\Urili-Ruoyi\react-ui; npm run verify:three-terminal`
+  - 通过。
+  - Frontend Jest：24 suites / 191 tests 通过。
+  - Backend reactor test-compile：14 个模块 SUCCESS。
+  - Backend contracts：product 50 tests、seller 100 tests、buyer 101 tests 通过，包含 `ProductCodeGeneratorTest`。
+
+### 子 Agent 使用记录
+
+- 本追补检查启动并关闭 6 个子 Agent。
+- 全部使用 `gpt-5.4`。
+- 未使用 GPT-5.3 Codex。
+
+### 远端影响
+
+- 本检查点未执行远程 MySQL DDL/DML。
+- 本检查点未读取或写入 Redis。
+
+### P2 记录
+
+- 当前 worktree 仍包含 product review/distribution 与 `application.yml` 等相邻脏改动；这些不是本检查点修复范围，未回滚。
+- `ProductCodeGeneratorTest` 当前已存在于仓库跟踪文件与三端 manifest 中，本轮将其纳入实际验证口径；当前不再阻塞 P0/P1。
+
+## 追补检查点：商品审核综合变更 P1 收敛
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为参考方向。当前仍是快速推进模式：只修 P0/P1，不做浏览器、截图、DOM 或 UI 细调。
+
+### 子 Agent 使用记录
+
+- 本轮确认并关闭 6 个子 Agent。
+- 全部使用 `gpt-5.4`。
+- 未使用 GPT-5.3 Codex。
+
+### 新增问题
+
+- P1：`product_review_type` 字典 seed 已有 `EDIT_MIXED`，但 SQL 只按 `dict_type + dict_value` 防重；如果远端已有同类型同 `dict_sort=6` 的其他脏字典项，会静默并存重复排序，影响字典展示稳定性。
+- P1：`ProductReviewBusinessPreview` 的 SKU 资料变更识别少于后端 `skuInfoReviewPayload(...)` 字段集；`EDIT_MIXED` 如果是“供货价 + 包装数量/币种/来源维度/来源 SKU 组/Master SKU/尺寸重量”等组合，前端会只显示供货价，漏掉 SKU 资料变化。
+- P1：`ProductReviewServiceImplTest` 已覆盖 `EDIT_MIXED` 提交分类和读模型，但未覆盖 `EDIT_MIXED -> approveProductEdit()` 审批生效分支，三端总门会放过该路径回退。
+
+### 已修复
+
+- `RuoYi-Vue/sql/20260608_product_review.sql`
+  - `assert_product_review_seed_targets()` 增加同类型 `dict_sort` 槽位冲突 fail-closed，发现 `product_review_type` 排序位被其他值占用时直接 `45000`。
+- `RuoYi-Vue/ruoyi-system/src/test/java/com/ruoyi/system/architecture/SqlExecutionGuardContractTest.java`
+  - 固定商品审核 SQL seed 必须包含字典排序槽位冲突 guard。
+- `react-ui/src/pages/Product/Review/components/ProductReviewBusinessPreview.tsx`
+  - SKU 资料变化识别补齐包装数量、币种、来源维度组、来源 SKU 组、Master SKU、手工尺寸重量和来源尺寸重量。
+- `react-ui/tests/product-distribution-permission-guard.test.ts`
+  - 固定上述 SKU 字段必须纳入商品审核业务预览字段集。
+- `RuoYi-Vue/product/src/test/java/com/ruoyi/product/service/impl/ProductReviewServiceImplTest.java`
+  - 新增 `approveMixedEditReviewAppliesAfterSnapshotAndKeepsLiveStatus`，覆盖 `EDIT_MIXED` 审批通过后按 `AFTER` 商品快照生效。
+
+### 验证
+
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system,product -am "-Dtest=SqlExecutionGuardContractTest,ProductReviewServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`
+  - 通过，`SqlExecutionGuardContractTest` 79 tests，`ProductReviewServiceImplTest` 16 tests。
+- `cd E:\Urili-Ruoyi\react-ui; .\node_modules\.bin\jest.cmd --config jest.config.ts --runTestsByPath tests\product-distribution-permission-guard.test.ts --runInBand`
+  - 通过，1 suite / 10 tests；Jest 仍有既有 open handle 提示。
+- `cd E:\Urili-Ruoyi\react-ui; npm run tsc -- --pretty false`
+  - 通过。
+- `cd E:\Urili-Ruoyi; git diff --check`
+  - 通过，仅输出 LF/CRLF 换行提示，无空白错误。
+- `cd E:\Urili-Ruoyi; codegraph sync .`
+  - 通过，输出 `Already up to date`。
+
+### 远端影响
+
+- 本轮未执行远程 MySQL DDL/DML。
+- 本轮未读取或写入 Redis。
+- 本轮只修改 SQL 脚本、前后端源码与测试，未回放到远端库。

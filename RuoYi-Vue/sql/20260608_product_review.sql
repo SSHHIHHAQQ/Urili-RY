@@ -169,6 +169,17 @@ begin
   ) then
     signal sqlstate '45000' set message_text = 'product review dict data target is occupied by incompatible row';
   end if;
+
+  if exists (
+    select 1
+    from sys_dict_data d
+    join tmp_product_review_dict_data_seed seed
+      on seed.dict_type = d.dict_type
+     and seed.dict_sort = d.dict_sort
+     and seed.dict_value <> d.dict_value
+  ) then
+    signal sqlstate '45000' set message_text = 'product review dict data sort slot is occupied by incompatible row';
+  end if;
 end//
 
 drop procedure if exists assert_product_review_seed_target_signatures//
@@ -368,6 +379,7 @@ insert into tmp_product_review_dict_data_seed(dict_sort, dict_label, dict_value,
     (3, '商品资料变更', 'EDIT_PRODUCT_INFO', 'product_review_type', 'warning', 'N'),
     (4, 'SKU资料变更', 'EDIT_SKU_INFO', 'product_review_type', 'warning', 'N'),
     (5, '供货价变更', 'EDIT_PRICE', 'product_review_type', 'danger', 'N'),
+    (6, '综合变更', 'EDIT_MIXED', 'product_review_type', 'warning', 'N'),
     (1, '待审核', 'PENDING', 'product_review_status', 'warning', 'Y'),
     (2, '已通过', 'APPROVED', 'product_review_status', 'success', 'N'),
     (3, '已驳回', 'REJECTED', 'product_review_status', 'danger', 'N'),
