@@ -61,6 +61,14 @@ type AttributeDisplayMaps = {
   optionLabelMap: Map<string, string>;
 };
 
+type CompareTone = 'same' | 'before' | 'after' | 'empty';
+
+type CompareField = {
+  key: string;
+  before: ReactNode;
+  after: ReactNode;
+};
+
 const sectionStyle = {
   display: 'flex',
   flexDirection: 'column',
@@ -79,16 +87,46 @@ const inlineGridStyle = {
   gap: 12,
 } as const;
 
-const imageCompareStyle = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
-  gap: 12,
-} as const;
-
 const compactTagWrapStyle = {
   display: 'flex',
   flexWrap: 'wrap',
   gap: 6,
+} as const;
+
+const compareGridStyle = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
+  gap: 12,
+  alignItems: 'start',
+} as const;
+
+const comparePanelStyle = {
+  border: '1px solid #f0f0f0',
+  borderRadius: 6,
+  background: '#fff',
+  overflow: 'hidden',
+} as const;
+
+const comparePanelHeaderStyle = {
+  padding: '8px 12px',
+  borderBottom: '1px solid #f0f0f0',
+  background: '#fafafa',
+  fontWeight: 600,
+} as const;
+
+const comparePanelBodyStyle = {
+  padding: 12,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 10,
+} as const;
+
+const compareFieldStyle = {
+  border: '1px solid #f0f0f0',
+  borderRadius: 6,
+  padding: '8px 10px',
+  minHeight: 48,
+  background: '#fff',
 } as const;
 
 const salesStatusColor: Record<string, string> = {
@@ -339,6 +377,85 @@ function renderMetric(label: string, value: ReactNode, color?: string) {
   );
 }
 
+function compareToneStyle(tone: CompareTone) {
+  if (tone === 'before') {
+    return {
+      ...compareFieldStyle,
+      borderColor: '#ffccc7',
+      background: '#fff1f0',
+    };
+  }
+  if (tone === 'after') {
+    return {
+      ...compareFieldStyle,
+      borderColor: '#b7eb8f',
+      background: '#f6ffed',
+    };
+  }
+  if (tone === 'empty') {
+    return {
+      ...compareFieldStyle,
+      borderStyle: 'dashed',
+      background: '#fafafa',
+    };
+  }
+  return compareFieldStyle;
+}
+
+function renderCompareFieldBlock(label: string, value: ReactNode, tone: CompareTone = 'same') {
+  return (
+    <div style={compareToneStyle(tone)}>
+      <div style={{ marginBottom: 4 }}>
+        <Typography.Text type="secondary">{label}</Typography.Text>
+      </div>
+      <div>{valueText(value)}</div>
+    </div>
+  );
+}
+
+function renderCompareEmpty(label = '无') {
+  return renderCompareFieldBlock(label, <Typography.Text type="secondary">--</Typography.Text>, 'empty');
+}
+
+function buildCompareField(
+  key: string,
+  label: string,
+  beforeRaw: unknown,
+  afterRaw: unknown,
+  beforeNode?: ReactNode,
+  afterNode?: ReactNode,
+): CompareField {
+  const changed = isDifferent(beforeRaw, afterRaw);
+  return {
+    key,
+    before: renderCompareFieldBlock(label, beforeNode ?? valueText(beforeRaw as ReactNode), changed ? 'before' : 'same'),
+    after: renderCompareFieldBlock(label, afterNode ?? valueText(afterRaw as ReactNode), changed ? 'after' : 'same'),
+  };
+}
+
+function renderComparePanels(title: string, fields: CompareField[], extra?: ReactNode) {
+  return renderSection(title, (
+    <div style={compareGridStyle}>
+      <div style={comparePanelStyle}>
+        <div style={comparePanelHeaderStyle}>修改前</div>
+        <div style={comparePanelBodyStyle}>
+          {fields.map((field) => <div key={`${field.key}-before`}>{field.before}</div>)}
+        </div>
+      </div>
+      <div style={comparePanelStyle}>
+        <div style={comparePanelHeaderStyle}>修改后</div>
+        <div style={comparePanelBodyStyle}>
+          {fields.map((field) => <div key={`${field.key}-after`}>{field.after}</div>)}
+        </div>
+      </div>
+    </div>
+  ), extra);
+}
+
+function renderCompareContentBlock(content: ReactNode, tone: CompareTone = 'same') {
+  return <div style={compareToneStyle(tone)}>{content}</div>;
+}
+
 function renderProductBasicInfo(product?: API.ProductDistribution.Spu, review?: API.ProductReview.Review) {
   return (
     <Descriptions size="small" bordered column={2}>
@@ -353,6 +470,117 @@ function renderProductBasicInfo(product?: API.ProductDistribution.Spu, review?: 
       <Descriptions.Item label="卖点" span={2}>{valueText(product?.sellingPoint)}</Descriptions.Item>
     </Descriptions>
   );
+}
+
+function buildProductBasicCompareFields(
+  before?: API.ProductDistribution.Spu,
+  after?: API.ProductDistribution.Spu,
+  review?: API.ProductReview.Review,
+): CompareField[] {
+  return [
+    buildCompareField('productName', '商品标题', before?.productName, after?.productName,
+      before?.productName, after?.productName || review?.productNameAfter),
+    buildCompareField('sellerName', '卖家', before?.sellerName, after?.sellerName,
+      before?.sellerName || review?.sellerName, after?.sellerName || review?.sellerName),
+    buildCompareField('systemSpuCode', '系统SPU', before?.systemSpuCode, after?.systemSpuCode,
+      before?.systemSpuCode || review?.systemSpuCode, after?.systemSpuCode || review?.systemSpuCode),
+    buildCompareField('categoryName', '类目', before?.categoryName, after?.categoryName,
+      before?.categoryName || review?.categoryName, after?.categoryName || review?.categoryName),
+    buildCompareField('spuStatus', '商品状态', before?.spuStatus, after?.spuStatus,
+      renderSalesStatus(before?.spuStatus), renderSalesStatus(after?.spuStatus)),
+    buildCompareField('productNameEn', '英文标题', before?.productNameEn, after?.productNameEn),
+    buildCompareField('sellingPoint', '卖点', before?.sellingPoint, after?.sellingPoint),
+  ];
+}
+
+function renderProductBasicCompare(
+  before?: API.ProductDistribution.Spu,
+  after?: API.ProductDistribution.Spu,
+  review?: API.ProductReview.Review,
+) {
+  return renderComparePanels('商品基础信息', buildProductBasicCompareFields(before, after, review));
+}
+
+function renderImageGalleryCompare(before?: API.ProductDistribution.Spu, after?: API.ProductDistribution.Spu, review?: API.ProductReview.Review) {
+  const beforeRaw = JSON.stringify({
+    mainImageUrl: before?.mainImageUrl,
+    images: before?.images || [],
+  });
+  const afterRaw = JSON.stringify({
+    mainImageUrl: after?.mainImageUrl,
+    images: after?.images || [],
+  });
+  const changed = isDifferent(beforeRaw, afterRaw);
+  return renderComparePanels('商品图片', [
+    {
+      key: 'images',
+      before: renderCompareContentBlock(renderImageGallery(before, {
+        ...review,
+        mainImageUrlAfter: before?.mainImageUrl || review?.mainImageUrlBefore,
+      } as API.ProductReview.Review), changed ? 'before' : 'same'),
+      after: renderCompareContentBlock(renderImageGallery(after, review), changed ? 'after' : 'same'),
+    },
+  ]);
+}
+
+function attributeCompareKey(item: API.ProductDistribution.AttributeValue) {
+  return String(item.attributeId ?? item.attributeCode ?? item.attributeName ?? item.valueId ?? JSON.stringify(item));
+}
+
+function attributeCompareLabel(
+  before?: API.ProductDistribution.AttributeValue,
+  after?: API.ProductDistribution.AttributeValue,
+  displayMaps?: AttributeDisplayMaps,
+) {
+  const item = after || before;
+  return item && displayMaps ? resolveAttributeLabel(item, displayMaps.attributeLabelMap) : item?.attributeName || '--';
+}
+
+function buildAttributeCompareFields(
+  before?: API.ProductDistribution.Spu,
+  after?: API.ProductDistribution.Spu,
+  displayMaps?: AttributeDisplayMaps,
+): CompareField[] {
+  const beforeMap = new Map((before?.attributeValues || []).map((item) => [attributeCompareKey(item), item]));
+  const afterMap = new Map((after?.attributeValues || []).map((item) => [attributeCompareKey(item), item]));
+  const keys = Array.from(new Set([...beforeMap.keys(), ...afterMap.keys()]));
+  return keys.map((key) => {
+    const beforeItem = beforeMap.get(key);
+    const afterItem = afterMap.get(key);
+    const beforeText = beforeItem && displayMaps ? formatAttributeValue(beforeItem, displayMaps.optionLabelMap) : undefined;
+    const afterText = afterItem && displayMaps ? formatAttributeValue(afterItem, displayMaps.optionLabelMap) : undefined;
+    return buildCompareField(
+      key,
+      attributeCompareLabel(beforeItem, afterItem, displayMaps),
+      beforeText,
+      afterText,
+      beforeText,
+      afterText,
+    );
+  });
+}
+
+function renderAttributeCompare(
+  before: API.ProductDistribution.Spu | undefined,
+  after: API.ProductDistribution.Spu | undefined,
+  displayMaps: AttributeDisplayMaps,
+) {
+  const fields = buildAttributeCompareFields(before, after, displayMaps);
+  if (!fields.length) {
+    return renderSection('商品属性', <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="未填写类目属性" />);
+  }
+  return renderComparePanels('商品属性', fields);
+}
+
+function renderDetailContentCompare(before?: API.ProductDistribution.Spu, after?: API.ProductDistribution.Spu) {
+  const changed = isDifferent(before?.detailContent, after?.detailContent);
+  return renderComparePanels('商品详情图文', [
+    {
+      key: 'detailContent',
+      before: renderCompareContentBlock(<DetailContentPreview value={before?.detailContent} />, changed ? 'before' : 'same'),
+      after: renderCompareContentBlock(<DetailContentPreview value={after?.detailContent} />, changed ? 'after' : 'same'),
+    },
+  ]);
 }
 
 function renderImageGallery(product?: API.ProductDistribution.Spu, review?: API.ProductReview.Review) {
@@ -508,15 +736,19 @@ function NewProductReviewView({
 
 function AddSkuReviewView({ review }: { review: API.ProductReview.Review }) {
   const product = getAfterProduct(review);
-  const addedSkus = getSkuPairs(review)
-    .filter((pair) => !pair.before && pair.after)
-    .map((pair) => pair.after)
-    .filter((sku): sku is API.ProductDistribution.Sku => !!sku);
+  const addedPairs = getSkuPairs(review).filter((pair) => !pair.before && pair.after);
 
   return (
     <div style={stackStyle}>
       {renderSection('商品上下文', renderProductBasicInfo(product, review))}
-      {renderSection('新增 SKU', renderSkuTable(addedSkus.length ? addedSkus : getAfterSkus(review), 'added'))}
+      {renderSection('新增 SKU 左右对比', (
+        <div style={stackStyle}>
+          {(addedPairs.length ? addedPairs : getAfterSkus(review).map((sku, index) => ({
+            key: String(sku.skuId ?? sku.sellerSkuCode ?? index),
+            after: sku,
+          }))).map((pair) => renderAddedSkuCompare(pair))}
+        </div>
+      ))}
       <Collapse
         items={[
           {
@@ -593,39 +825,13 @@ function ProductInfoChangeReviewView({
 }) {
   const before = getBeforeProduct(review);
   const after = getAfterProduct(review);
-  const rows = buildProductChangeRows(before, after);
-  const changedCount = rows.filter((row) => row.changed).length;
 
   return (
     <div style={stackStyle}>
-      {renderSection('商品资料变化', renderChangeTable(rows))}
-      {renderSection('主图对比', (
-        <div style={imageCompareStyle}>
-          <div>
-            <Typography.Text type="secondary">修改前</Typography.Text>
-            <div style={{ marginTop: 8 }}>{renderImage(before?.mainImageUrl, 120)}</div>
-          </div>
-          <div>
-            <Typography.Text type="secondary">修改后</Typography.Text>
-            <div style={{ marginTop: 8 }}>{renderImage(after?.mainImageUrl, 120)}</div>
-          </div>
-        </div>
-      ))}
-      {renderSection('修改后的商品详情图文', <DetailContentPreview value={after?.detailContent} />)}
-      <Collapse
-        items={[
-          {
-            key: 'before-detail',
-            label: '查看修改前商品详情图文',
-            children: <DetailContentPreview value={before?.detailContent} />,
-          },
-          {
-            key: 'attributes',
-            label: '查看修改后类目属性',
-            children: renderAttributeTable(after, displayMaps),
-          },
-        ]}
-      />
+      {renderProductBasicCompare(before, after, review)}
+      {renderImageGalleryCompare(before, after, review)}
+      {renderAttributeCompare(before, after, displayMaps)}
+      {renderDetailContentCompare(before, after)}
     </div>
   );
 }
@@ -713,6 +919,96 @@ function buildSkuFieldChanges(before?: API.ProductDistribution.Sku, after?: API.
 
 function getChangedSkuFields(pair: SkuPair) {
   return buildSkuFieldChanges(pair.before, pair.after).filter((field) => field.changed);
+}
+
+function toSkuCompareField(field: SkuFieldChange, pair: SkuPair): CompareField {
+  const beforeTone: CompareTone = !pair.before ? 'empty' : field.changed ? 'before' : 'same';
+  const afterTone: CompareTone = !pair.after ? 'empty' : field.changed || !pair.before ? 'after' : 'same';
+  return {
+    key: field.key,
+    before: !pair.before
+      ? renderCompareEmpty(field.label)
+      : renderCompareFieldBlock(field.label, field.before, beforeTone),
+    after: !pair.after
+      ? renderCompareEmpty(field.label)
+      : renderCompareFieldBlock(field.label, field.after, afterTone),
+  };
+}
+
+function renderSkuComparePair(pair: SkuPair, fields: CompareField[], title?: string, extra?: ReactNode) {
+  return (
+    <section key={pair.key} style={sectionStyle}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+        <Typography.Text strong>{title || formatSkuIdentity(pair.after || pair.before, pair.item)}</Typography.Text>
+        {extra}
+      </div>
+      <div style={compareGridStyle}>
+        <div style={comparePanelStyle}>
+          <div style={comparePanelHeaderStyle}>修改前</div>
+          <div style={comparePanelBodyStyle}>
+            {fields.map((field) => <div key={`${pair.key}-${field.key}-before`}>{field.before}</div>)}
+          </div>
+        </div>
+        <div style={comparePanelStyle}>
+          <div style={comparePanelHeaderStyle}>修改后</div>
+          <div style={comparePanelBodyStyle}>
+            {fields.map((field) => <div key={`${pair.key}-${field.key}-after`}>{field.after}</div>)}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function renderSkuDetailCompare(pair: SkuPair, mode: 'all' | 'changed' = 'changed') {
+  const fieldChanges = buildSkuFieldChanges(pair.before, pair.after);
+  const visibleFields = mode === 'all' ? fieldChanges : fieldChanges.filter((field) => field.changed);
+  const fields = (visibleFields.length ? visibleFields : fieldChanges).map((field) => toSkuCompareField(field, pair));
+  return renderSkuComparePair(
+    pair,
+    fields,
+    formatSkuIdentity(pair.after || pair.before, pair.item),
+    renderSkuChangeTags(pair),
+  );
+}
+
+function renderAddedSkuCompare(pair: SkuPair) {
+  const fields = buildSkuFieldChanges(pair.before, pair.after).map((field) => toSkuCompareField(field, pair));
+  return renderSkuComparePair(
+    pair,
+    fields,
+    formatSkuIdentity(pair.after || pair.before, pair.item),
+    <Tag color="green">新增SKU</Tag>,
+  );
+}
+
+function renderSkuSupplyPriceCompare(pair: SkuPair) {
+  const currency = pair.after?.currencyCode || pair.before?.currencyCode;
+  const fields: CompareField[] = [
+    buildCompareField(
+      'supplyPrice',
+      '供货价',
+      pair.before?.supplyPrice,
+      pair.after?.supplyPrice,
+      formatMoney(pair.before?.supplyPrice, currency),
+      formatMoney(pair.after?.supplyPrice, currency),
+    ),
+    buildCompareField(
+      'salePrice',
+      '当前销售价',
+      pair.before?.salePrice,
+      pair.after?.salePrice,
+      formatMoney(pair.before?.salePrice, currency),
+      formatMoney(pair.after?.salePrice, currency),
+    ),
+    buildCompareField('spec', '规格', formatSkuSpecs(pair.before), formatSkuSpecs(pair.after)),
+  ];
+  return renderSkuComparePair(
+    pair,
+    fields,
+    formatSkuIdentity(pair.after || pair.before, pair.item),
+    renderSupplyPriceRisk(pair.before, pair.after),
+  );
 }
 
 function renderSkuChangeTags(pair: SkuPair) {
@@ -838,13 +1134,20 @@ function renderSkuInfoChangeTable(pairs: SkuPair[]) {
 }
 
 function SkuInfoChangeReviewView({ review }: { review: API.ProductReview.Review }) {
+  const beforeProduct = getBeforeProduct(review);
+  const afterProduct = getAfterProduct(review);
   const pairs = getSkuPairs(review).filter((pair) => !!pair.after);
   const changedPairs = pairs.filter((pair) => getChangedSkuFields(pair).length > 0);
   const visiblePairs = changedPairs.length ? changedPairs : pairs;
 
   return (
     <div style={stackStyle}>
-      {renderSection('SKU 资料变化', renderSkuInfoChangeTable(visiblePairs), <Tag color="blue">{visiblePairs.length} 个SKU</Tag>)}
+      {beforeProduct || afterProduct ? renderProductBasicCompare(beforeProduct, afterProduct, review) : null}
+      {renderSection('SKU 资料左右对比', (
+        <div style={stackStyle}>
+          {visiblePairs.map((pair) => renderSkuDetailCompare(pair))}
+        </div>
+      ), <Tag color="blue">{visiblePairs.length} 个SKU</Tag>)}
     </div>
   );
 }
@@ -940,7 +1243,11 @@ function PriceChangeReviewView({ review }: { review: API.ProductReview.Review })
         {renderMetric('原供货价区间', formatRange(review.priceBeforeMin, review.priceBeforeMax, review.currencySummary))}
         {renderMetric('新供货价区间', formatRange(review.priceAfterMin, review.priceAfterMax, review.currencySummary))}
       </div>
-      {renderSection('SKU 供货价对比', renderPriceChangeTable(pairs))}
+      {renderSection('SKU 供货价左右对比', (
+        <div style={stackStyle}>
+          {pairs.map((pair) => renderSkuSupplyPriceCompare(pair))}
+        </div>
+      ))}
     </div>
   );
 }

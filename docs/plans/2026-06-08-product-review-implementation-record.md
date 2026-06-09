@@ -110,18 +110,20 @@
   - 调整新增商品审核的仓库展示：主列表新增 `仓库类型` 列，将 `official / third_party / MIXED` 映射为 `官方仓 / 三方仓 / 混合`；新增商品详情改为始终展示仓库类型，只有非官方仓时才展示 `发货仓库` 指标和具体发货仓库表，官方仓新增商品不再展示发货仓库区块。
   - 兼容历史审核单旧仓库文本：`product_review_request.warehouse_summary` 若已是仓库类型 code 则直接返回；若可从 `product_spu_warehouse` 聚合出仓库类型则使用聚合结果；否则将非空历史仓库名/编号归一为 `third_party`，避免主列表继续显示 `123213` 一类仓库文本。
   - 浏览器验证：`新增商品` 类型中官方仓待审核行显示 `仓库类型：官方仓`，审核重点不再出现 `发货仓库`；打开该官方仓详情后，变更预览首屏只显示 `SKU数量 / 销售价区间 / 仓库类型：官方仓`，不显示发货仓库指标和发货仓库表。
-  - 浏览器验证：打开 `SKU资料变更` 第一条详情后，`SKU 资料变化` 默认仅显示 `1 个SKU`，主表列为 `SKU / SKU图 / 规格摘要 / 变化项`；展开行后显示 `字段 / 修改前 / 修改后`，可直接看到 `客户SKU` 和 `型号` 的具体变更。
+  - 审核详情主预览升级为左右双栏对比：左侧固定为 `修改前`，右侧固定为 `修改后`，按商品详情阅读顺序展示商品基础信息、商品图片、SKU、商品属性和商品详情图文；旧值使用浅红色高亮，新值使用浅绿色高亮。
+  - `ADD_SKU` 改为左侧空态、右侧新增 SKU 绿色高亮；`EDIT_SKU_INFO` 改为按 SKU 展示左右字段对比，不再要求审核员展开表格才能看修改前后。
   - 自查并修正商品审核相关中文展示：商品状态、SKU 状态、仓库类型、库存状态、审计对象类型、变化类型、快照角色、载荷类型、图片角色、锁定/绑定状态、操作日志前后状态均不再直接展示 `DRAFT / READY / BEFORE / AFTER / SPU / NO_WAREHOUSE` 等英文 code；审计快照 JSON 预览会对常见状态、仓库类型、属性类型等值做中文化展示。
   - 补强商品属性值兜底：当历史快照或属性值缺少明确属性类型时，仍会优先通过类目属性选项映射展示中文选项名，避免单选/多选属性回退显示英文 option code。
   - 修正 `EDIT_PRICE` 业务口径：价格变更审核特指 SKU 供货价变更，管理端 SKU 销售价调整直接生效，不进入商品审核。
   - 后端新增 `ProductSkuSupplyPriceUpdateRequest` 和 `submitSkuSupplyPriceReview`，审批通过时只调用 `updateSkuSupplyPrice` 写入 `product_sku.supply_price`，不再通过审核链路写 `sale_price`。
   - 非草稿商品编辑如果只改 SKU 供货价，会被归类为 `EDIT_PRICE`；审核单主表的 `priceBeforeMin/Max`、`priceAfterMin/Max` 在该类型下保存供货价区间。
-  - 前端价格变更详情改为供货价口径：展示 `原供货价区间 / 新供货价区间 / SKU 供货价对比 / 原供货价 / 新供货价 / 当前销售价`，风险标签改为 `高于销售价` 等供货价风险。
+  - 前端价格变更详情改为供货价口径和左右双栏：展示 `原供货价区间 / 新供货价区间 / SKU 供货价左右对比 / 原供货价 / 新供货价 / 当前销售价`，风险标签改为 `高于销售价` 等供货价风险。
   - 商品列表 `调整售价` 成功提示改为直接生效语义，低于供货价确认文案不再描述审核风险。
   - `npm run tsc`：通过。
   - `npx jest --config jest.config.ts tests/product-distribution-permission-guard.test.ts --runInBand`：通过。
   - `mvn -pl product -am -Dtest=ProductReviewServiceImplTest "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，11 tests，0 failures/errors。
-  - 浏览器运行态验证：用拦截数据构造 `EDIT_PRICE` 供货价审核单，登录 `http://127.0.0.1:8001/review-center/product-distribution` 后打开价格变更详情，详情抽屉存在 `原供货价区间 / 新供货价区间 / SKU 供货价对比 / 原供货价 / 新供货价 / 当前销售价 / 高于销售价`，且不再出现 `原销售价 / 新销售价 / SKU 价格对比`。
+  - 浏览器运行态验证：用拦截数据构造 `EDIT_PRICE` 供货价审核单，登录 `http://127.0.0.1:8001/review-center/product-distribution` 后打开价格变更详情，详情抽屉存在 `修改前 / 修改后 / 原供货价区间 / 新供货价区间 / SKU 供货价左右对比 / 原供货价 / 新供货价 / 当前销售价 / 高于销售价`，且不再出现 `原销售价 / 新销售价 / SKU 价格对比`。
+  - 浏览器运行态验证：用拦截数据构造 `EDIT_SKU_INFO` SKU 资料变更审核单，详情抽屉存在 `修改前 / 修改后 / SKU 资料左右对比 / 客户SKU / OLD-SKU-A / NEW-SKU-A / 型号 / OLD-MODEL / NEW-MODEL`，审核员无需展开表格即可看到字段变化。
   - `codegraph sync .`：通过，已同步 CodeGraph 索引。
   - 浏览器运行态验证：登录管理端后打开 `http://127.0.0.1:8001/review-center/product-distribution`，商品审核页可加载，页面可见 `全部(1) / 新增商品(1) / 新增SKU(0) / 商品资料变更(0) / SKU资料变更(0) / 价格变更(0)` 类型 Tabs；页面标题、筛选区、类型化表头和列表数据正常出现。控制台仅有 Ant Design deprecated prop 警告，未出现页面运行错误。
 - `mvn -pl product -am -DskipTests compile`：通过。
