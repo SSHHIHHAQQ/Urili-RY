@@ -25,6 +25,8 @@ public interface IProductDistributionService
 
     int updateProduct(ProductSpu product);
 
+    int deleteDraftProduct(Long spuId);
+
     ProductSpu prepareReviewedProductUpdate(ProductSpu product);
 
     int applyReviewedProductUpdate(ProductSpu product);

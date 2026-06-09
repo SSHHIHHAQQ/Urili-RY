@@ -183,6 +183,9 @@ public class SqlExecutionGuardContractTest
         assertGuard(backendRoot, "sql/20260609_inventory_auto_wms_stock_sync_policy.sql",
                 "@confirm_inventory_auto_wms_stock_sync_policy",
                 "APPLY_INVENTORY_AUTO_WMS_STOCK_SYNC_POLICY", violations);
+        assertGuard(backendRoot, "sql/20260609_product_code_pool_job.sql",
+                "@confirm_product_code_pool_job",
+                "APPLY_PRODUCT_CODE_POOL_JOB", violations);
         assertGuard(backendRoot, "sql/20260608_overseas_channel_carrier_menu_restructure.sql",
                 "@confirm_overseas_channel_carrier_menu_restructure",
                 "APPLY_OVERSEAS_CHANNEL_CARRIER_MENU_RESTRUCTURE", violations);
@@ -2861,12 +2864,14 @@ public class SqlExecutionGuardContractTest
                 "(2484, 2402, 'F', '#', '', '', 'product:distribution:status')",
                 "(2485, 2402, 'F', '#', '', '', 'product:distribution:price')",
                 "(2486, 2402, 'F', '#', '', '', 'product:distribution:log')",
+                "(2488, 2402, 'F', '#', '', '', 'product:distribution:remove')",
                 "call assert_mall_product_distribution_sys_menu_guard();",
                 "call assert_mall_product_distribution_count_signature(",
                 "(2402, '商城商品列表', 2060, 15, 'distribution', 'Product/Distribution/index'",
                 "product:distribution:list",
                 "union all select 2485, '商城商品调价', 5, 'product:distribution:price'",
                 "union all select 2486, '商城商品操作日志', 6, 'product:distribution:log'",
+                "union all select 2488, '商城商品删除', 7, 'product:distribution:remove'",
                 "call assert_mall_product_distribution_seed_completed();",
                 "on duplicate key update",
                 "start transaction;",

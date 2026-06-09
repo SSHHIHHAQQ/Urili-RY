@@ -350,6 +350,40 @@ public class ProductReviewServiceImplTest
     }
 
     @Test
+    public void selectReviewByIdRecomputesSupplyPriceRangeForEveryReviewTypeFromSnapshots() throws Exception
+    {
+        assertReviewSupplyPriceRange("NEW_PRODUCT", new BigDecimal("10.00"), new BigDecimal("20.00"), null, null);
+        assertReviewSupplyPriceRange("ADD_SKU", new BigDecimal("10.00"), new BigDecimal("10.00"), null, null);
+        assertReviewSupplyPriceRange("EDIT_PRODUCT_INFO", new BigDecimal("10.00"), new BigDecimal("20.00"),
+                new BigDecimal("8.00"), new BigDecimal("18.00"));
+        assertReviewSupplyPriceRange("EDIT_SKU_INFO", new BigDecimal("10.00"), new BigDecimal("20.00"),
+                new BigDecimal("8.00"), new BigDecimal("18.00"));
+        assertReviewSupplyPriceRange("EDIT_PRICE", new BigDecimal("10.00"), new BigDecimal("20.00"),
+                new BigDecimal("8.00"), new BigDecimal("18.00"));
+    }
+
+    @Test
+    public void selectReviewListAlsoRecomputesSupplyPriceRangeFromSnapshots() throws Exception
+    {
+        RecordingProductReviewMapper reviewMapper = new RecordingProductReviewMapper();
+        ProductReviewRequest legacyReview = legacyReviewWithSalePriceRange("NEW_PRODUCT");
+        reviewMapper.reviewList = List.of(legacyReview);
+        reviewMapper.reviewItems = List.of(reviewItem(901L, "CREATE"));
+        ProductSku afterSku = reviewSku(100L, "10.00", "99.00");
+        reviewMapper.reviewSnapshots = List.of(skuSnapshot(reviewMapper.reviewItems.get(0), "AFTER", afterSku));
+        ProductReviewServiceImpl service = service(reviewMapper.proxy(),
+                new RecordingProductDistributionService().proxy(), new RecordingProductDistributionMapper().proxy(),
+                new RecordingOperationLogMapper().proxy());
+
+        List<ProductReviewRequest> result = service.selectReviewList(new ProductReviewRequest());
+
+        assertEquals(1, result.size());
+        assertSame(legacyReview, result.get(0));
+        assertEquals(new BigDecimal("10.00"), result.get(0).getPriceAfterMin());
+        assertEquals(new BigDecimal("10.00"), result.get(0).getPriceAfterMax());
+    }
+
+    @Test
     public void selectLatestRejectedReusableSubmissionRestoresAfterProductAndSkuSnapshots() throws Exception
     {
         RecordingProductReviewMapper reviewMapper = new RecordingProductReviewMapper();
@@ -384,6 +418,36 @@ public class ProductReviewServiceImplTest
         assertEquals(Long.valueOf(10L), result.getSkus().get(0).getSpuId());
         assertEquals("REJECTED-SKU", result.getSkus().get(0).getSellerSkuCode());
         assertEquals(Long.valueOf(10L), reviewMapper.latestRejectedReusableSpuId);
+    }
+
+    private void assertReviewSupplyPriceRange(String reviewType, BigDecimal expectedAfterMin,
+            BigDecimal expectedAfterMax, BigDecimal expectedBeforeMin, BigDecimal expectedBeforeMax) throws Exception
+    {
+        RecordingProductReviewMapper reviewMapper = new RecordingProductReviewMapper();
+        ProductReviewRequest legacyReview = legacyReviewWithSalePriceRange(reviewType);
+        reviewMapper.reviewById = legacyReview;
+        ProductReviewItem existingItem = reviewItem(901L, "UPDATE");
+        ProductReviewItem createdItem = reviewItem(902L, "CREATE");
+        reviewMapper.reviewItems = List.of(existingItem, createdItem);
+        ProductSku beforeExistingSku = reviewSku(100L, "8.00", "88.00");
+        ProductSku beforeCreatedSku = reviewSku(101L, "18.00", "188.00");
+        ProductSku afterExistingSku = reviewSku(100L, "20.00", "199.00");
+        ProductSku afterCreatedSku = reviewSku(101L, "10.00", "99.00");
+        reviewMapper.reviewSnapshots = List.of(
+                skuSnapshot(existingItem, "BEFORE", beforeExistingSku),
+                skuSnapshot(createdItem, "BEFORE", beforeCreatedSku),
+                skuSnapshot(existingItem, "AFTER", afterExistingSku),
+                skuSnapshot(createdItem, "AFTER", afterCreatedSku));
+        ProductReviewServiceImpl service = service(reviewMapper.proxy(),
+                new RecordingProductDistributionService().proxy(), new RecordingProductDistributionMapper().proxy(),
+                new RecordingOperationLogMapper().proxy());
+
+        ProductReviewRequest result = service.selectReviewById(900L);
+
+        assertEquals(expectedAfterMin, result.getPriceAfterMin());
+        assertEquals(expectedAfterMax, result.getPriceAfterMax());
+        assertEquals(expectedBeforeMin, result.getPriceBeforeMin());
+        assertEquals(expectedBeforeMax, result.getPriceBeforeMax());
     }
 
     private ProductReviewServiceImpl service(ProductReviewMapper reviewMapper,
@@ -502,6 +566,35 @@ public class ProductReviewServiceImplTest
         return item;
     }
 
+    private ProductReviewItem reviewItem(Long itemId, String changeType)
+    {
+        ProductReviewItem item = skuReviewItem();
+        item.setItemId(itemId);
+        item.setSkuId(itemId == 901L ? 100L : 101L);
+        item.setChangeType(changeType);
+        return item;
+    }
+
+    private ProductReviewRequest legacyReviewWithSalePriceRange(String reviewType)
+    {
+        ProductReviewRequest review = pendingNewProductReview();
+        review.setReviewType(reviewType);
+        review.setPriceBeforeMin(new BigDecimal("88.00"));
+        review.setPriceBeforeMax(new BigDecimal("188.00"));
+        review.setPriceAfterMin(new BigDecimal("99.00"));
+        review.setPriceAfterMax(new BigDecimal("199.00"));
+        return review;
+    }
+
+    private ProductSku reviewSku(Long skuId, String supplyPrice, String salePrice)
+    {
+        ProductSku sku = draftSku();
+        sku.setSkuId(skuId);
+        sku.setSupplyPrice(new BigDecimal(supplyPrice));
+        sku.setSalePrice(new BigDecimal(salePrice));
+        return sku;
+    }
+
     private ProductReviewSnapshot skuSnapshot(ProductReviewItem item, String role, ProductSku sku)
     {
         String payload = JSON.toJSONString(sku);
@@ -539,6 +632,7 @@ public class ProductReviewServiceImplTest
         private String pendingKey;
         private int insertReviewCalls;
         private ProductReviewRequest insertedReview;
+        private List<ProductReviewRequest> reviewList = new ArrayList<>();
         private ProductReviewRequest reviewById;
         private ProductReviewRequest latestRejectedReusableReview;
         private Long latestRejectedReusableSpuId;
@@ -564,7 +658,7 @@ public class ProductReviewServiceImplTest
             switch (method.getName())
             {
                 case "selectReviewList":
-                    return new ArrayList<ProductReviewRequest>();
+                    return reviewList;
                 case "selectReviewById":
                     return reviewById;
                 case "selectLatestRejectedReusableReviewBySpuId":

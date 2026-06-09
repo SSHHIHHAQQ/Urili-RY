@@ -93,32 +93,35 @@ const compactTagWrapStyle = {
   gap: 6,
 } as const;
 
-const compareGridStyle = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
-  gap: 12,
-  alignItems: 'start',
-} as const;
-
-const comparePanelStyle = {
+const compareTableStyle = {
   border: '1px solid #f0f0f0',
   borderRadius: 6,
   background: '#fff',
   overflow: 'hidden',
 } as const;
 
-const comparePanelHeaderStyle = {
-  padding: '8px 12px',
-  borderBottom: '1px solid #f0f0f0',
+const compareHeaderRowStyle = {
+  display: 'grid',
+  gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
   background: '#fafafa',
+  borderBottom: '1px solid #f0f0f0',
+} as const;
+
+const compareHeaderCellStyle = {
+  padding: '8px 12px',
   fontWeight: 600,
 } as const;
 
-const comparePanelBodyStyle = {
+const compareRowStyle = {
+  display: 'grid',
+  gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+  alignItems: 'stretch',
+} as const;
+
+const compareCellStyle = {
+  minWidth: 0,
   padding: 12,
   display: 'flex',
-  flexDirection: 'column',
-  gap: 10,
 } as const;
 
 const compareFieldStyle = {
@@ -126,6 +129,10 @@ const compareFieldStyle = {
   borderRadius: 6,
   padding: '8px 10px',
   minHeight: 48,
+  height: '100%',
+  width: '100%',
+  boxSizing: 'border-box',
+  overflowWrap: 'anywhere',
   background: '#fff',
 } as const;
 
@@ -433,23 +440,37 @@ function buildCompareField(
   };
 }
 
-function renderComparePanels(title: string, fields: CompareField[], extra?: ReactNode) {
-  return renderSection(title, (
-    <div style={compareGridStyle}>
-      <div style={comparePanelStyle}>
-        <div style={comparePanelHeaderStyle}>修改前</div>
-        <div style={comparePanelBodyStyle}>
-          {fields.map((field) => <div key={`${field.key}-before`}>{field.before}</div>)}
-        </div>
+function renderAlignedCompareGrid(fields: CompareField[], rowKeyPrefix = 'compare') {
+  return (
+    <div style={compareTableStyle} data-review-compare-grid>
+      <div style={compareHeaderRowStyle}>
+        <div style={{ ...compareHeaderCellStyle, borderRight: '1px solid #f0f0f0' }}>修改前</div>
+        <div style={compareHeaderCellStyle}>修改后</div>
       </div>
-      <div style={comparePanelStyle}>
-        <div style={comparePanelHeaderStyle}>修改后</div>
-        <div style={comparePanelBodyStyle}>
-          {fields.map((field) => <div key={`${field.key}-after`}>{field.after}</div>)}
+      {fields.map((field, index) => (
+        <div
+          key={`${rowKeyPrefix}-${field.key}`}
+          data-review-compare-row={field.key}
+          style={{
+            ...compareRowStyle,
+            borderBottom: index === fields.length - 1 ? undefined : '1px solid #f5f5f5',
+          }}
+        >
+          <div
+            data-review-compare-cell="before"
+            style={{ ...compareCellStyle, borderRight: '1px solid #f0f0f0' }}
+          >
+            {field.before}
+          </div>
+          <div data-review-compare-cell="after" style={compareCellStyle}>{field.after}</div>
         </div>
-      </div>
+      ))}
     </div>
-  ), extra);
+  );
+}
+
+function renderComparePanels(title: string, fields: CompareField[], extra?: ReactNode) {
+  return renderSection(title, renderAlignedCompareGrid(fields, title), extra);
 }
 
 function renderCompareContentBlock(content: ReactNode, tone: CompareTone = 'same') {
@@ -467,7 +488,6 @@ function renderProductBasicInfo(product?: API.ProductDistribution.Spu, review?: 
       <Descriptions.Item label="类目">{valueText(product?.categoryName || review?.categoryName)}</Descriptions.Item>
       <Descriptions.Item label="商品状态">{renderSalesStatus(product?.spuStatus)}</Descriptions.Item>
       <Descriptions.Item label="英文标题" span={2}>{valueText(product?.productNameEn)}</Descriptions.Item>
-      <Descriptions.Item label="卖点" span={2}>{valueText(product?.sellingPoint)}</Descriptions.Item>
     </Descriptions>
   );
 }
@@ -489,7 +509,6 @@ function buildProductBasicCompareFields(
     buildCompareField('spuStatus', '商品状态', before?.spuStatus, after?.spuStatus,
       renderSalesStatus(before?.spuStatus), renderSalesStatus(after?.spuStatus)),
     buildCompareField('productNameEn', '英文标题', before?.productNameEn, after?.productNameEn),
-    buildCompareField('sellingPoint', '卖点', before?.sellingPoint, after?.sellingPoint),
   ];
 }
 
@@ -779,7 +798,6 @@ function buildProductChangeRows(
     { key: 'productName', label: '商品标题', before: before?.productName, after: after?.productName },
     { key: 'productNameEn', label: '英文标题', before: before?.productNameEn, after: after?.productNameEn },
     { key: 'categoryName', label: '类目', before: before?.categoryName, after: after?.categoryName },
-    { key: 'sellingPoint', label: '卖点', before: before?.sellingPoint, after: after?.sellingPoint },
     { key: 'mainImageUrl', label: '主图', before: renderImage(before?.mainImageUrl), after: renderImage(after?.mainImageUrl) },
     { key: 'detailContent', label: '详情图文', before: before?.detailContent ? '已填写' : '未填写', after: after?.detailContent ? '已填写' : '未填写' },
     { key: 'attributeValues', label: '类目属性', before: `${before?.attributeValues?.length || 0} 项`, after: `${after?.attributeValues?.length || 0} 项` },
@@ -942,20 +960,7 @@ function renderSkuComparePair(pair: SkuPair, fields: CompareField[], title?: str
         <Typography.Text strong>{title || formatSkuIdentity(pair.after || pair.before, pair.item)}</Typography.Text>
         {extra}
       </div>
-      <div style={compareGridStyle}>
-        <div style={comparePanelStyle}>
-          <div style={comparePanelHeaderStyle}>修改前</div>
-          <div style={comparePanelBodyStyle}>
-            {fields.map((field) => <div key={`${pair.key}-${field.key}-before`}>{field.before}</div>)}
-          </div>
-        </div>
-        <div style={comparePanelStyle}>
-          <div style={comparePanelHeaderStyle}>修改后</div>
-          <div style={comparePanelBodyStyle}>
-            {fields.map((field) => <div key={`${pair.key}-${field.key}-after`}>{field.after}</div>)}
-          </div>
-        </div>
-      </div>
+      {renderAlignedCompareGrid(fields, pair.key)}
     </section>
   );
 }
@@ -992,14 +997,6 @@ function renderSkuSupplyPriceCompare(pair: SkuPair) {
       pair.after?.supplyPrice,
       formatMoney(pair.before?.supplyPrice, currency),
       formatMoney(pair.after?.supplyPrice, currency),
-    ),
-    buildCompareField(
-      'salePrice',
-      '当前销售价',
-      pair.before?.salePrice,
-      pair.after?.salePrice,
-      formatMoney(pair.before?.salePrice, currency),
-      formatMoney(pair.after?.salePrice, currency),
     ),
     buildCompareField('spec', '规格', formatSkuSpecs(pair.before), formatSkuSpecs(pair.after)),
   ];
@@ -1171,9 +1168,6 @@ function renderSupplyPriceRisk(before?: API.ProductDistribution.Sku, after?: API
   if (after?.supplyPrice == null) {
     return <Tag color="error">缺供货价</Tag>;
   }
-  if (after.salePrice != null && after.supplyPrice > after.salePrice) {
-    return <Tag color="error">高于销售价</Tag>;
-  }
   if (before?.supplyPrice != null && before.supplyPrice !== 0) {
     const percent = Math.abs((after.supplyPrice - before.supplyPrice) / before.supplyPrice) * 100;
     if (percent >= 30) {
@@ -1181,50 +1175,6 @@ function renderSupplyPriceRisk(before?: API.ProductDistribution.Sku, after?: API
     }
   }
   return <Tag color="success">供货价正常</Tag>;
-}
-
-function renderPriceChangeTable(pairs: SkuPair[]) {
-  const columns: ColumnsType<SkuPair> = [
-    {
-      title: 'SKU',
-      dataIndex: 'sku',
-      width: 180,
-      render: (_, row) => formatSkuIdentity(row.after || row.before, row.item),
-    },
-    { title: '规格', dataIndex: 'spec', render: (_, row) => formatSkuSpecs(row.after || row.before) },
-    {
-      title: '原供货价',
-      dataIndex: 'beforePrice',
-      width: 130,
-      render: (_, row) => formatMoney(row.before?.supplyPrice, row.before?.currencyCode || row.after?.currencyCode),
-    },
-    {
-      title: '新供货价',
-      dataIndex: 'afterPrice',
-      width: 130,
-      render: (_, row) => formatMoney(row.after?.supplyPrice, row.after?.currencyCode || row.before?.currencyCode),
-    },
-    { title: '变化', dataIndex: 'delta', width: 160, render: (_, row) => renderPriceDelta(row.before?.supplyPrice, row.after?.supplyPrice) },
-    {
-      title: '当前销售价',
-      dataIndex: 'salePrice',
-      width: 130,
-      render: (_, row) => formatMoney(row.after?.salePrice ?? row.before?.salePrice, row.after?.currencyCode || row.before?.currencyCode),
-    },
-    { title: '风险', dataIndex: 'risk', width: 140, render: (_, row) => renderSupplyPriceRisk(row.before, row.after) },
-  ];
-
-  return (
-    <Table
-      rowKey="key"
-      size="small"
-      columns={columns}
-      dataSource={pairs}
-      pagination={false}
-      scroll={{ x: 1080 }}
-      locale={{ emptyText: '没有供货价变化' }}
-    />
-  );
 }
 
 function PriceChangeReviewView({ review }: { review: API.ProductReview.Review }) {

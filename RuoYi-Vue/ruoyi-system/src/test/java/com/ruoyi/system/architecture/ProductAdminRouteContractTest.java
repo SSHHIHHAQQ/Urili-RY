@@ -72,6 +72,7 @@ public class ProductAdminRouteContractTest
                         "product:distribution:query",
                         "product:distribution:add",
                         "product:distribution:edit",
+                        "product:distribution:remove",
                         "product:distribution:status",
                         "product:distribution:price",
                         "product:distribution:log"
@@ -136,6 +137,8 @@ public class ProductAdminRouteContractTest
                 "distribution product JS service mirror must delegate to TS service", violations);
         assertContains(distributionServiceTs, "submitDistributionProductReview",
                 "distribution product TS service must expose submit review action", violations);
+        assertContains(distributionServiceTs, "deleteDistributionProduct",
+                "distribution product TS service must expose draft delete action", violations);
         assertContains(productCenterServiceTs, "const baseUrl = '/api/product/admin/product-center';",
                 "product center TS service must call the admin route", violations);
         assertEqualsTrimmed("export * from './productCenter.ts';", productCenterServiceJs,
@@ -162,6 +165,8 @@ public class ProductAdminRouteContractTest
                 "product distribution page must gate status action", violations);
         assertContains(distributionPage, "access.hasPerms('product:distribution:price')",
                 "product distribution page must gate price action", violations);
+        assertContains(distributionPage, "access.hasPerms('product:distribution:remove')",
+                "product distribution page must gate draft delete action", violations);
         assertContains(distributionPage, "const canViewDistributionDetail = access.hasPerms('product:distribution:query')",
                 "product distribution page must derive detail query permission", violations);
         assertContains(distributionPage, "if (!canViewDistributionDetail || record.spuId == null)",

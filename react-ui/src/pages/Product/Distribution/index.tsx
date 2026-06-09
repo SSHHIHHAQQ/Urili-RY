@@ -4,6 +4,7 @@ import { history, useAccess } from '@umijs/max';
 import {
   Alert,
   Button,
+  Descriptions,
   Dropdown,
   Image,
   Input,
@@ -27,6 +28,7 @@ import {
   batchUpdateDistributionControlStatus,
   batchUpdateDistributionSkuSalePrices,
   batchUpdateDistributionStatus,
+  deleteDistributionProduct,
   getDistributionProduct,
   getDistributionProductList,
   getDistributionSkuList,
@@ -264,6 +266,8 @@ export default function ProductDistributionPage() {
     && canMaintainDistributionProductDependencies;
   const canOperateDistributionStatus = access.hasPerms('product:distribution:status');
   const canSubmitDistributionReview = canEditDistributionProduct;
+  const canDeleteDraftDistributionProduct = access.hasPerms('product:distribution:remove');
+  const canAdjustDistributionPrice = access.hasPerms('product:distribution:price');
   const canAdjustInventory = access.hasPerms('inventory:overview:adjust') && access.hasPerms('inventory:overview:query');
   const actionRef = useRef<ActionType>(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -418,6 +422,28 @@ export default function ProductDistributionPage() {
     history.push(`/product/distribution/edit/${record.spuId}?skuId=${record.skuId || ''}`);
   };
 
+  const deleteDraftProduct = (record: API.ProductDistribution.Spu) => {
+    if (!canDeleteDraftDistributionProduct || record.spuId == null) {
+      message.warning('缺少草稿商品删除权限');
+      return;
+    }
+    if (record.spuStatus !== 'DRAFT') {
+      message.warning('仅草稿商品允许删除');
+      return;
+    }
+    modal.confirm({
+      title: '删除草稿商品',
+      content: `确认删除“${record.productName || record.systemSpuCode || '该草稿商品'}”？删除后会释放其来源 SKU 绑定，商品列表不再展示。`,
+      okText: '删除',
+      okButtonProps: { danger: true },
+      cancelText: '取消',
+      onOk: async () => {
+        const ok = resultOk(await deleteDistributionProduct(record.spuId as number), '草稿商品已删除');
+        if (ok) reload();
+      },
+    });
+  };
+
   const executeSalesStatus = (ownerType: ViewMode, ids: number[], targetStatus: string, label: string) => {
     if (ids.length === 0) {
       message.warning('请先选择商品');
@@ -467,6 +493,7 @@ export default function ProductDistributionPage() {
     const reasonInput = (
       <Input.TextArea
         rows={3}
+        style={{ width: '100%' }}
         maxLength={200}
         showCount
         placeholder="请输入状态调整原因"
@@ -477,22 +504,20 @@ export default function ProductDistributionPage() {
     );
     modal.confirm({
       title: label,
+      width: 'min(520px, calc(100vw - 32px))',
       content: shouldAskSkuSync ? (
-        <Space orientation="vertical" size={12}>
-          <div>{`确认对 ${ids.length} 个 SPU 执行“${label}”？`}</div>
-          <Alert
-            type="info"
-            showIcon
-            title="SKU同步处理"
-            description={`可以同时${skuSyncActionText}符合当前状态流转条件的 SKU，也可以只调整 SPU 状态。`}
-          />
+        <Space orientation="vertical" size={12} style={{ width: '100%', maxWidth: '100%' }}>
+          <Typography.Paragraph style={{ marginBottom: 0, wordBreak: 'break-word' }}>
+            {`确认对 ${ids.length} 个 SPU 执行“${label}”？`}
+          </Typography.Paragraph>
           <Radio.Group
             defaultValue="WITH_SKU"
+            style={{ width: '100%' }}
             onChange={(event) => {
               syncSkuStatus = event.target.value === 'WITH_SKU';
             }}
           >
-            <Space orientation="vertical">
+            <Space orientation="vertical" style={{ width: '100%' }}>
               <Radio value="WITH_SKU">{`同时${skuSyncActionText}可处理 SKU`}</Radio>
               <Radio value="SPU_ONLY">仅调整 SPU</Radio>
             </Space>
@@ -500,8 +525,10 @@ export default function ProductDistributionPage() {
           {reasonInput}
         </Space>
       ) : (
-        <Space orientation="vertical" size={12}>
-          <div>{`确认对 ${ids.length} 个${ownerType}执行“${label}”？`}</div>
+        <Space orientation="vertical" size={12} style={{ width: '100%', maxWidth: '100%' }}>
+          <Typography.Paragraph style={{ marginBottom: 0, wordBreak: 'break-word' }}>
+            {`确认对 ${ids.length} 个${ownerType}执行“${label}”？`}
+          </Typography.Paragraph>
           {reasonInput}
         </Space>
       ),
@@ -611,8 +638,28 @@ export default function ProductDistributionPage() {
       return;
     }
     setPriceRows(rows);
+    setPriceMode('FIXED');
+    setPriceAdjustDirection('UP');
+    setPriceNumberType('AMOUNT');
+    setTailRule('NONE');
+    setPriceAmount(
+      rows.length === 1 && rows[0].salePrice !== undefined && rows[0].salePrice !== null
+        ? Number(rows[0].salePrice)
+        : undefined,
+    );
     setPriceReason('');
     setPriceModalOpen(true);
+  };
+
+  const priceTarget = priceRows.length === 1 ? priceRows[0] : undefined;
+
+  const changePriceMode = (mode: PriceMode) => {
+    setPriceMode(mode);
+    setPriceAmount(
+      mode === 'FIXED' && priceTarget?.salePrice !== undefined && priceTarget?.salePrice !== null
+        ? Number(priceTarget.salePrice)
+        : undefined,
+    );
   };
 
   const submitSalePrice = async () => {
@@ -731,13 +778,13 @@ export default function ProductDistributionPage() {
           ...(canAdjustInventory && record.skuId
             ? [{ key: 'inventory', label: '调整库存' }]
             : []),
-          ...(access.hasPerms('product:distribution:price')
-            ? [{ key: 'price', label: '调价' }]
+          ...(canAdjustDistributionPrice
+            ? [{ key: 'price', label: '调整价格' }]
             : []),
           ...(flow && !parentDisabled && !skuDisabled && canOperateDistributionStatus
             ? [{ key: `status:${flow.targetStatus}`, label: flow.label }]
             : []),
-          ...(!parentDisabled && !skuDisabled && canOperateDistributionStatus
+          ...(!parentDisabled && !skuDisabled && record.skuStatus !== 'DRAFT' && record.spuStatus !== 'DRAFT' && canOperateDistributionStatus
             ? [{ key: 'disable', label: '停用', danger: true }]
             : []),
           ...(skuDisabled && canOperateDistributionStatus
@@ -912,8 +959,15 @@ export default function ProductDistributionPage() {
             ? [{ key: 'inventory', label: '调整库存' }]
             : []),
           ...(flow && !disabled && canUseFlow ? [{ key: `status:${flow.targetStatus}`, label: flow.label }] : []),
-          ...(!disabled && canOperateDistributionStatus ? [{ key: 'disable', label: '停用', danger: true }] : []),
+          ...(!disabled && record.spuStatus !== 'DRAFT' && canOperateDistributionStatus
+            ? [{ key: 'disable', label: '停用', danger: true }]
+            : []),
           ...(disabled && canOperateDistributionStatus ? [{ key: 'recover', label: '恢复' }] : []),
+          ...(record.spuStatus === 'DRAFT'
+            && record.latestReviewStatus !== 'PENDING'
+            && canDeleteDraftDistributionProduct
+            ? [{ key: 'delete', label: '删除', danger: true }]
+            : []),
         ];
         return [
           <Button key="view" type="link" size="small" hidden={!canViewDistributionDetail} onClick={() => openDetail(record)}>
@@ -940,6 +994,8 @@ export default function ProductDistributionPage() {
                   openControlModal('SPU', compactIds([record], 'SPU'), 'DISABLED');
                 } else if (key === 'recover') {
                   openControlModal('SPU', compactIds([record], 'SPU'), 'NORMAL');
+                } else if (key === 'delete') {
+                  deleteDraftProduct(record);
                 } else if (String(key).startsWith('status:')) {
                   executeSalesStatus('SPU', compactIds([record], 'SPU'), String(key).slice(7), flow?.label || '调整状态');
                 }
@@ -1072,16 +1128,16 @@ export default function ProductDistributionPage() {
         const parentDisabled = record.spuControlStatus === 'DISABLED';
         const skuDisabled = record.controlStatus === 'DISABLED';
         const items: MenuProps['items'] = [
+          ...(canEditDistributionProduct
+            ? [{ key: 'edit', label: '编辑商品' }]
+            : []),
           ...(canAdjustInventory && record.skuId
             ? [{ key: 'inventory', label: '调整库存' }]
-            : []),
-          ...(access.hasPerms('product:distribution:price')
-            ? [{ key: 'price', label: '调价' }]
             : []),
           ...(flow && !parentDisabled && !skuDisabled && canOperateDistributionStatus
             ? [{ key: `status:${flow.targetStatus}`, label: flow.label }]
             : []),
-          ...(!parentDisabled && !skuDisabled && canOperateDistributionStatus
+          ...(!parentDisabled && !skuDisabled && record.skuStatus !== 'DRAFT' && record.spuStatus !== 'DRAFT' && canOperateDistributionStatus
             ? [{ key: 'disable', label: '停用', danger: true }]
             : []),
           ...(skuDisabled && canOperateDistributionStatus ? [{ key: 'recover', label: '恢复' }] : []),
@@ -1094,13 +1150,13 @@ export default function ProductDistributionPage() {
             查看SPU
           </Button>,
           <Button
-            key="edit"
+            key="price"
             type="link"
             size="small"
-            hidden={!canEditDistributionProduct}
-            onClick={() => openSkuEdit(record)}
+            hidden={!canAdjustDistributionPrice || !record.skuId}
+            onClick={() => openPriceModal([record])}
           >
-            编辑商品
+            调整价格
           </Button>,
           <Dropdown
             key="status"
@@ -1108,10 +1164,10 @@ export default function ProductDistributionPage() {
             menu={{
               items,
               onClick: ({ key }) => {
-                if (key === 'inventory') {
+                if (key === 'edit') {
+                  openSkuEdit(record);
+                } else if (key === 'inventory') {
                   openInventoryAdjust('SKU', buildSkuInventoryOverviewRecord(record));
-                } else if (key === 'price') {
-                  openPriceModal([record]);
                 } else if (key === 'disable') {
                   openControlModal('SKU', compactIds([record], 'SKU'), 'DISABLED');
                 } else if (key === 'recover') {
@@ -1184,22 +1240,10 @@ export default function ProductDistributionPage() {
           key="disable"
           danger
           disabled={!selectedIds.length}
-          hidden={!canOperateDistributionStatus}
+          hidden={!canOperateDistributionStatus || currentFlow.targetStatus === 'SUBMIT_REVIEW'}
           onClick={() => openControlModal(viewMode, selectedIds, 'DISABLED')}
         >
           批量停用
-        </Button>,
-      );
-    }
-    if (viewMode === 'SKU') {
-      actions.push(
-        <Button
-          key="price"
-          disabled={!selectedSkuRows.length}
-          hidden={!access.hasPerms('product:distribution:price')}
-          onClick={() => openPriceModal(selectedSkuRows)}
-        >
-          调整售价
         </Button>,
       );
     }
@@ -1361,109 +1405,193 @@ export default function ProductDistributionPage() {
       </Modal>
 
       <Modal
-        title="调整售价"
+        title={priceTarget ? '调整SKU价格' : '调整售价'}
         open={priceModalOpen}
-        width={1040}
-        okText="保存调价"
+        width={priceTarget ? 620 : 1040}
+        okText={priceTarget ? '保存价格' : '保存调价'}
         cancelText="取消"
         onOk={submitSalePrice}
         onCancel={() => setPriceModalOpen(false)}
       >
-        <Space orientation="vertical" size={14} style={{ width: '100%' }}>
-          <Radio.Group
-            buttonStyle="solid"
-            value={priceMode}
-            options={priceModeOptions}
-            onChange={(event) => setPriceMode(event.target.value)}
-          />
-          <Space wrap>
-            {priceMode === 'CURRENT_ADJUST' ? (
-              <Select
-                value={priceAdjustDirection}
-                style={{ width: 96 }}
-                options={[
-                  { label: '上调', value: 'UP' },
-                  { label: '下调', value: 'DOWN' },
-                ]}
-                onChange={(value) => setPriceAdjustDirection(value as PriceAdjustDirection)}
-              />
-            ) : null}
-            {priceMode !== 'FIXED' ? (
-              <Select
-                value={priceNumberType}
-                style={{ width: 110 }}
-                options={[
-                  { label: '百分比', value: 'PERCENT' },
-                  { label: '金额', value: 'AMOUNT' },
-                ]}
-                onChange={(value) => setPriceNumberType(value as PriceNumberType)}
-              />
-            ) : null}
-            <InputNumber
-              min={0}
-              precision={4}
-              value={priceAmount}
-              style={{ width: 180 }}
-              suffix={priceMode === 'FIXED' || priceNumberType === 'AMOUNT' ? priceCurrencyText : '%'}
-              placeholder={priceMode === 'FIXED' ? '输入统一售价' : '输入调价值'}
-              onChange={(value) => setPriceAmount(value === null ? undefined : Number(value))}
+        {priceTarget ? (
+          <Space orientation="vertical" size={14} style={{ width: '100%' }}>
+            <Descriptions size="small" column={2} bordered>
+              <Descriptions.Item label="系统SKU">{priceTarget.systemSkuCode || '--'}</Descriptions.Item>
+              <Descriptions.Item label="客户SKU">{priceTarget.sellerSkuCode || '--'}</Descriptions.Item>
+              <Descriptions.Item label="规格" span={2}>{buildSkuSpecText(priceTarget) || '--'}</Descriptions.Item>
+              <Descriptions.Item label="供货价">
+                {formatAmount(priceTarget.supplyPrice as number)} {priceTarget.currencyCode || ''}
+              </Descriptions.Item>
+              <Descriptions.Item label="当前售价">
+                {formatAmount(priceTarget.salePrice as number)} {priceTarget.currencyCode || ''}
+              </Descriptions.Item>
+              <Descriptions.Item label="调整后售价" span={2}>
+                {pricePreviewRows[0]?.priceError ? (
+                  <Typography.Text type="secondary">{pricePreviewRows[0].priceError}</Typography.Text>
+                ) : (
+                  <Typography.Text strong>
+                    {formatAmount(pricePreviewRows[0]?.nextSalePrice)} {priceTarget.currencyCode || ''}
+                  </Typography.Text>
+                )}
+              </Descriptions.Item>
+            </Descriptions>
+            <Radio.Group
+              buttonStyle="solid"
+              value={priceMode}
+              options={priceModeOptions}
+              onChange={(event) => changePriceMode(event.target.value)}
             />
-            <Select
-              value={tailRule}
-              style={{ width: 140 }}
-              options={tailRuleOptions}
-              onChange={(value) => setTailRule(value as TailRule)}
-            />
-            <Input
+            <Space wrap>
+              {priceMode === 'CURRENT_ADJUST' ? (
+                <Select
+                  value={priceAdjustDirection}
+                  style={{ width: 96 }}
+                  options={[
+                    { label: '上调', value: 'UP' },
+                    { label: '下调', value: 'DOWN' },
+                  ]}
+                  onChange={(value) => setPriceAdjustDirection(value as PriceAdjustDirection)}
+                />
+              ) : null}
+              {priceMode !== 'FIXED' ? (
+                <Select
+                  value={priceNumberType}
+                  style={{ width: 110 }}
+                  options={[
+                    { label: '百分比', value: 'PERCENT' },
+                    { label: '金额', value: 'AMOUNT' },
+                  ]}
+                  onChange={(value) => setPriceNumberType(value as PriceNumberType)}
+                />
+              ) : null}
+              <InputNumber
+                min={0}
+                precision={4}
+                value={priceAmount}
+                style={{ width: 180 }}
+                suffix={priceMode === 'FIXED' || priceNumberType === 'AMOUNT' ? priceTarget.currencyCode || '金额' : '%'}
+                placeholder={priceMode === 'FIXED' ? '输入统一售价' : '输入调价值'}
+                onChange={(value) => setPriceAmount(value === null ? undefined : Number(value))}
+              />
+              <Select
+                value={tailRule}
+                style={{ width: 140 }}
+                options={tailRuleOptions}
+                onChange={(value) => setTailRule(value as TailRule)}
+              />
+            </Space>
+            <Input.TextArea
+              rows={3}
               value={priceReason}
-              style={{ width: 260 }}
+              maxLength={200}
+              showCount
               placeholder="调价原因（可选）"
               onChange={(event) => setPriceReason(event.target.value)}
             />
+            {pricePreviewRows[0]?.nextSalePrice !== undefined
+              && priceTarget.supplyPrice !== undefined
+              && priceTarget.supplyPrice !== null
+              && pricePreviewRows[0].nextSalePrice < Number(priceTarget.supplyPrice) ? (
+                <Alert type="warning" showIcon title="新销售价低于供货价，保存前请确认风险。" />
+              ) : null}
           </Space>
-          {priceCurrencyText === '多币种' ? (
-            <Alert type="warning" showIcon title="当前选择包含多币种 SKU，请确认调价规则对所有币种都适用。" />
-          ) : null}
-          <Table<PricePreviewRow>
-            rowKey="skuId"
-            size="small"
-            pagination={false}
-            dataSource={pricePreviewRows}
-            scroll={{ x: 980, y: 320 }}
-            columns={[
-              { title: '系统SKU', dataIndex: 'systemSkuCode', width: 160 },
-              { title: '客户SKU', dataIndex: 'sellerSkuCode', width: 140 },
-              { title: '供货价', dataIndex: 'supplyPrice', width: 100, render: (value) => formatAmount(value as number) },
-              { title: '原销售价', dataIndex: 'salePrice', width: 100, render: (value) => formatAmount(value as number) },
-              {
-                title: '新销售价',
-                dataIndex: 'nextSalePrice',
-                width: 120,
-                render: (_, record) => record.priceError ? (
-                  <Typography.Text type="secondary">{record.priceError}</Typography.Text>
-                ) : (
-                  <Typography.Text
-                    type={
-                      record.nextSalePrice !== undefined
-                      && record.supplyPrice !== undefined
-                      && record.nextSalePrice < Number(record.supplyPrice)
-                        ? 'warning'
-                        : undefined
-                    }
-                  >
-                    {formatAmount(record.nextSalePrice)}
-                  </Typography.Text>
-                ),
-              },
-              { title: '币种', dataIndex: 'currencyCode', width: 90 },
-              {
-                title: '规格',
-                width: 220,
-                render: (_, record) => buildSkuSpecText(record) || '--',
-              },
-            ]}
-          />
-        </Space>
+        ) : (
+          <Space orientation="vertical" size={14} style={{ width: '100%' }}>
+            <Radio.Group
+              buttonStyle="solid"
+              value={priceMode}
+              options={priceModeOptions}
+              onChange={(event) => setPriceMode(event.target.value)}
+            />
+            <Space wrap>
+              {priceMode === 'CURRENT_ADJUST' ? (
+                <Select
+                  value={priceAdjustDirection}
+                  style={{ width: 96 }}
+                  options={[
+                    { label: '上调', value: 'UP' },
+                    { label: '下调', value: 'DOWN' },
+                  ]}
+                  onChange={(value) => setPriceAdjustDirection(value as PriceAdjustDirection)}
+                />
+              ) : null}
+              {priceMode !== 'FIXED' ? (
+                <Select
+                  value={priceNumberType}
+                  style={{ width: 110 }}
+                  options={[
+                    { label: '百分比', value: 'PERCENT' },
+                    { label: '金额', value: 'AMOUNT' },
+                  ]}
+                  onChange={(value) => setPriceNumberType(value as PriceNumberType)}
+                />
+              ) : null}
+              <InputNumber
+                min={0}
+                precision={4}
+                value={priceAmount}
+                style={{ width: 180 }}
+                suffix={priceMode === 'FIXED' || priceNumberType === 'AMOUNT' ? priceCurrencyText : '%'}
+                placeholder={priceMode === 'FIXED' ? '输入统一售价' : '输入调价值'}
+                onChange={(value) => setPriceAmount(value === null ? undefined : Number(value))}
+              />
+              <Select
+                value={tailRule}
+                style={{ width: 140 }}
+                options={tailRuleOptions}
+                onChange={(value) => setTailRule(value as TailRule)}
+              />
+              <Input
+                value={priceReason}
+                style={{ width: 260 }}
+                placeholder="调价原因（可选）"
+                onChange={(event) => setPriceReason(event.target.value)}
+              />
+            </Space>
+            {priceCurrencyText === '多币种' ? (
+              <Alert type="warning" showIcon title="当前选择包含多币种 SKU，请确认调价规则对所有币种都适用。" />
+            ) : null}
+            <Table<PricePreviewRow>
+              rowKey="skuId"
+              size="small"
+              pagination={false}
+              dataSource={pricePreviewRows}
+              scroll={{ x: 980, y: 320 }}
+              columns={[
+                { title: '系统SKU', dataIndex: 'systemSkuCode', width: 160 },
+                { title: '客户SKU', dataIndex: 'sellerSkuCode', width: 140 },
+                { title: '供货价', dataIndex: 'supplyPrice', width: 100, render: (value) => formatAmount(value as number) },
+                { title: '原销售价', dataIndex: 'salePrice', width: 100, render: (value) => formatAmount(value as number) },
+                {
+                  title: '新销售价',
+                  dataIndex: 'nextSalePrice',
+                  width: 120,
+                  render: (_, record) => record.priceError ? (
+                    <Typography.Text type="secondary">{record.priceError}</Typography.Text>
+                  ) : (
+                    <Typography.Text
+                      type={
+                        record.nextSalePrice !== undefined
+                        && record.supplyPrice !== undefined
+                        && record.nextSalePrice < Number(record.supplyPrice)
+                          ? 'warning'
+                          : undefined
+                      }
+                    >
+                      {formatAmount(record.nextSalePrice)}
+                    </Typography.Text>
+                  ),
+                },
+                { title: '币种', dataIndex: 'currencyCode', width: 90 },
+                {
+                  title: '规格',
+                  width: 220,
+                  render: (_, record) => buildSkuSpecText(record) || '--',
+                },
+              ]}
+            />
+          </Space>
+        )}
       </Modal>
     </PageContainer>
   );

@@ -186,6 +186,8 @@ public class PortalDirectLoginSupport
         }
         if (!StringUtils.equals(portalType, ticket.getTerminal()))
         {
+            markTicketUsedAfterFailedAttempt(ticket, now, ticket.getTerminal(), tokenHash);
+            deletePayloadCacheKeys(portalType, tokenHash);
             throw new ServiceException("免密登录票据端类型不匹配");
         }
         if (!STATUS_ISSUED.equals(ticket.getStatus()) || ticket.getUsedTime() != null)

@@ -102,6 +102,35 @@ public class ProductDistributionMapperContractTest
             "upstream_system_sku_inventory_snapshot");
 
     @Test
+    public void systemSpuSkuCodeGenerationMustUseRedisCodePoolWithoutDatabaseDedupLookup() throws IOException
+    {
+        String mapperXmlSource = readMapperSource();
+        String mapperApiSource = Files.readString(findBackendRoot().resolve(
+                "product/src/main/java/com/ruoyi/product/mapper/ProductDistributionMapper.java"),
+                StandardCharsets.UTF_8);
+        String serviceSource = Files.readString(findBackendRoot().resolve(
+                "product/src/main/java/com/ruoyi/product/service/impl/ProductDistributionServiceImpl.java"),
+                StandardCharsets.UTF_8);
+        List<String> violations = new ArrayList<>();
+
+        requireContains(serviceSource, "productCodePoolService.allocateSpuCode()", violations);
+        requireContains(serviceSource, "productCodePoolService.allocateSkuCodes", violations);
+        requireNotContains(serviceSource, "generateSpuCode", violations);
+        requireNotContains(serviceSource, "generateSkuCode", violations);
+        requireNotContains(serviceSource, "dateTimeNow(\"yyyyMMdd\")", violations);
+        requireNotContains(mapperApiSource, "countSystemSpuCode", violations);
+        requireNotContains(mapperApiSource, "countSystemSkuCode", violations);
+        requireNotContains(mapperXmlSource, "countSystemSpuCode", violations);
+        requireNotContains(mapperXmlSource, "countSystemSkuCode", violations);
+
+        if (!violations.isEmpty())
+        {
+            fail("system SPU/SKU codes must be allocated from Redis code pool instead of DB lookup loops:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    @Test
     public void spuResultMustNotMapSkuSourceBindingFields() throws IOException
     {
         String source = readMapperSource();

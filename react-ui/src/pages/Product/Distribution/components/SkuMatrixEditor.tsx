@@ -20,6 +20,7 @@ type SkuMatrixEditorProps = {
   sourceToolbarExtra?: ReactNode;
   onPairSourceSku?: (row: SkuRow) => void;
   onClearSourceSku?: (row: SkuRow) => void;
+  onSpecFieldsChange?: (fields: (keyof API.ProductDistribution.Sku)[]) => void;
   onChange: (value: SkuRow[]) => void;
 };
 
@@ -227,6 +228,7 @@ export default function SkuMatrixEditor({
   sourceToolbarExtra,
   onPairSourceSku,
   onClearSourceSku,
+  onSpecFieldsChange,
   onChange,
 }: SkuMatrixEditorProps) {
   const [selectedSpecs, setSelectedSpecs] = useState<(keyof API.ProductDistribution.Sku)[]>(['color', 'size']);
@@ -254,6 +256,7 @@ export default function SkuMatrixEditor({
       values[field] = unique(value.map((row) => row[field] as string));
     });
     setSelectedSpecs(selected);
+    onSpecFieldsChange?.(selected);
     setSpecValues(values);
     const normalizedRows = value.map((row) => normalizeSkuMeasurements(row, nextUnitSystem));
     if (hasMeasurementChange(value, normalizedRows)) {
@@ -287,7 +290,9 @@ export default function SkuMatrixEditor({
   };
 
   const changeSelectedSpecs = (checked: (keyof API.ProductDistribution.Sku)[]) => {
-    setSelectedSpecs(checked.slice(0, maxSelectedSpecCount));
+    const nextSpecs = checked.slice(0, maxSelectedSpecCount);
+    setSelectedSpecs(nextSpecs);
+    onSpecFieldsChange?.(nextSpecs);
   };
 
   const changeUnitSystem = (nextUnitSystem: MeasurementUnitSystem) => {

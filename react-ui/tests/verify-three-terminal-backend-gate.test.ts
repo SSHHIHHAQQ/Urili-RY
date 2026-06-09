@@ -15,6 +15,19 @@ function runManifestCheck() {
   });
 }
 
+function runTypecheck() {
+  return spawnSync(process.execPath, [
+    path.join('node_modules', 'typescript', 'bin', 'tsc'),
+    '--noEmit',
+    '--pretty',
+    'false',
+  ], {
+    cwd: uiRoot,
+    encoding: 'utf8',
+    maxBuffer: 20 * 1024 * 1024,
+  });
+}
+
 function withMutatedJsonFile(relativePath: string, mutate: (value: any) => void, run: () => void) {
   const target = path.join(uiRoot, relativePath);
   const original = fs.readFileSync(target, 'utf8');
@@ -117,6 +130,36 @@ describe('verify-three-terminal backend gate', () => {
       expect(result.status).toBe(0);
     } finally {
       tempFiles.forEach((file) => fs.rmSync(file, { force: true }));
+    }
+  });
+
+  it('keeps generated frontend directories out of typecheck and git noise', () => {
+    const tsconfig = JSON.parse(readSource('tsconfig.json'));
+    const reactGitignore = readSource('.gitignore');
+    const rootGitignore = fs.readFileSync(path.resolve(uiRoot, '..', '.gitignore'), 'utf8');
+
+    expect(tsconfig.exclude).toEqual(expect.arrayContaining([
+      'src/.umi-undefined',
+      'test-results',
+    ]));
+    expect(reactGitignore).toContain('/src/.umi-undefined');
+    expect(reactGitignore).toContain('/test-results');
+    expect(rootGitignore).toContain('.codegraph/');
+    expect(rootGitignore).toContain('.umi-test/');
+    expect(rootGitignore).toContain('node_modules/');
+    expect(rootGitignore).toContain('react-ui/src/.umi-undefined/');
+    expect(rootGitignore).toContain('react-ui/test-results/');
+
+    const generatedFile = path.join(uiRoot, 'src', '.umi-undefined', 'generated-typecheck-noise.ts');
+    try {
+      fs.mkdirSync(path.dirname(generatedFile), { recursive: true });
+      fs.writeFileSync(generatedFile, 'const generatedNoise: string = 1;\n', 'utf8');
+
+      const result = runTypecheck();
+
+      expect(result.status).toBe(0);
+    } finally {
+      fs.rmSync(generatedFile, { force: true });
     }
   });
 

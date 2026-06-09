@@ -257,6 +257,7 @@ public class ProductCenterServiceImplTest
         @Override public ProductSpu selectProductById(Long spuId, Long sellerId) { throw new UnsupportedOperationException(); }
         @Override public int insertProduct(ProductSpu product) { throw new UnsupportedOperationException(); }
         @Override public int updateProduct(ProductSpu product) { throw new UnsupportedOperationException(); }
+        @Override public int deleteDraftProduct(Long spuId) { throw new UnsupportedOperationException(); }
         @Override public ProductSpu prepareReviewedProductUpdate(ProductSpu product) { throw new UnsupportedOperationException(); }
         @Override public int applyReviewedProductUpdate(ProductSpu product) { throw new UnsupportedOperationException(); }
         @Override public int updateSpuStatus(Long spuId, String status, String reason) { throw new UnsupportedOperationException(); }

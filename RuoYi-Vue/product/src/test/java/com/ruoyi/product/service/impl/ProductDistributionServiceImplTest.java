@@ -170,6 +170,45 @@ public class ProductDistributionServiceImplTest
         assertEquals(List.of(1L), mapper.activeSourceBindingSkuIds);
     }
 
+    @Test
+    public void validateSkuSpecsForSaveRejectsBlankSkuSpecs() throws Exception
+    {
+        ProductDistributionServiceImpl service = service(new RecordingProductDistributionMapper().proxy());
+
+        try
+        {
+            invokeValidateSkuSpecsForSave(service, List.of(new ProductSku()));
+        }
+        catch (ServiceException e)
+        {
+            assertEquals("请至少填写一个 SKU 规格属性", e.getMessage());
+            return;
+        }
+        throw new AssertionError("Expected ServiceException");
+    }
+
+    @Test
+    public void validateSkuSpecsForSaveRejectsMissingValueForActiveSpec() throws Exception
+    {
+        ProductDistributionServiceImpl service = service(new RecordingProductDistributionMapper().proxy());
+        ProductSku first = new ProductSku();
+        first.setColor("白色");
+        first.setSize("M");
+        ProductSku second = new ProductSku();
+        second.setColor("黑色");
+
+        try
+        {
+            invokeValidateSkuSpecsForSave(service, List.of(first, second));
+        }
+        catch (ServiceException e)
+        {
+            assertEquals("第 2 个 SKU 未填写规格属性：尺寸", e.getMessage());
+            return;
+        }
+        throw new AssertionError("Expected ServiceException");
+    }
+
     private ProductDistributionServiceImpl service(ProductDistributionMapper mapper) throws Exception
     {
         return service(mapper, new RecordingSourceSkuPairingProjectionService());
@@ -224,6 +263,25 @@ public class ProductDistributionServiceImplTest
         try
         {
             method.invoke(service, product, skus);
+        }
+        catch (InvocationTargetException e)
+        {
+            if (e.getCause() instanceof ServiceException)
+            {
+                throw (ServiceException) e.getCause();
+            }
+            throw e;
+        }
+    }
+
+    private void invokeValidateSkuSpecsForSave(ProductDistributionServiceImpl service, List<ProductSku> skus)
+            throws Exception
+    {
+        Method method = ProductDistributionServiceImpl.class.getDeclaredMethod("validateSkuSpecsForSave", List.class);
+        method.setAccessible(true);
+        try
+        {
+            method.invoke(service, skus);
         }
         catch (InvocationTargetException e)
         {

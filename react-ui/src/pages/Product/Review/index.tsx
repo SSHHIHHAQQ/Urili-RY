@@ -724,7 +724,7 @@ function renderReviewBasicInfo(
       <Descriptions.Item label="提交时间">{review.submitTime || '--'}</Descriptions.Item>
       <Descriptions.Item label="审核人">{review.reviewerName || '--'}</Descriptions.Item>
       <Descriptions.Item label="审核时间">{review.reviewTime || '--'}</Descriptions.Item>
-      <Descriptions.Item label="价格">{formatPriceRange(review)}</Descriptions.Item>
+      <Descriptions.Item label="供货价区间">{formatPriceRange(review)}</Descriptions.Item>
       <Descriptions.Item label="仓库类型">{formatWarehouseKindLabel(review.warehouseSummary)}</Descriptions.Item>
       <Descriptions.Item label="变化摘要" span={2}>
         {review.diffSummary || '--'}

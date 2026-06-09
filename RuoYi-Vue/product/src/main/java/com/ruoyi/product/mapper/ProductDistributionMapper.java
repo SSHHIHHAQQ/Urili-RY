@@ -38,7 +38,7 @@ public interface ProductDistributionMapper
     int updateSpuControlStatus(@Param("spuId") Long spuId, @Param("controlStatus") String controlStatus,
         @Param("reason") String reason, @Param("updateBy") String updateBy);
 
-    int countSystemSpuCode(@Param("systemSpuCode") String systemSpuCode);
+    int deleteSpuById(@Param("spuId") Long spuId, @Param("updateBy") String updateBy);
 
     int countSellerSpuCode(@Param("sellerId") Long sellerId, @Param("sellerSpuCode") String sellerSpuCode,
         @Param("excludeSpuId") Long excludeSpuId);
@@ -71,8 +71,6 @@ public interface ProductDistributionMapper
     int deleteSkuById(@Param("spuId") Long spuId, @Param("skuId") Long skuId, @Param("updateBy") String updateBy);
 
     int deleteSkusBySpuId(@Param("spuId") Long spuId, @Param("updateBy") String updateBy);
-
-    int countSystemSkuCode(@Param("systemSkuCode") String systemSkuCode);
 
     int countSellerSkuCode(@Param("sellerId") Long sellerId, @Param("sellerSkuCode") String sellerSkuCode,
         @Param("excludeSkuId") Long excludeSkuId);

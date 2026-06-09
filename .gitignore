@@ -2,10 +2,15 @@
 logs/
 output/
 .playwright-cli/
+.codegraph/
+.umi-test/
+node_modules/
 docs/status/
 AGENTS.md
 RuoYi-Vue/.github/
 react-ui/.github/
+react-ui/src/.umi-undefined/
+react-ui/test-results/
 react-ui/.claude/
 react-ui/.husky/
 react-ui/public/CNAME

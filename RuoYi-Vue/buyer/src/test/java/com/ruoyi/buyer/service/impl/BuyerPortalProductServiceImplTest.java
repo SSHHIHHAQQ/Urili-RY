@@ -412,6 +412,12 @@ public class BuyerPortalProductServiceImplTest
         }
 
         @Override
+        public int deleteDraftProduct(Long spuId)
+        {
+            return 0;
+        }
+
+        @Override
         public ProductSpu prepareReviewedProductUpdate(ProductSpu product)
         {
             return product;

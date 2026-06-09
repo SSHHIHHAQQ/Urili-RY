@@ -117,3 +117,98 @@
 ## 一句话总结
 
 本轮用 6 个 `gpt-5.4` 子 Agent 做 P0/P1 切片审计，修复 4 类可坐实 P1，并通过三端总门验证。
+
+## 追补检查点：错端免密票据与前端契约 P1
+
+本追补继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为参考方向，仍执行快速推进模式：只修 P0/P1，不做浏览器、截图、DOM 或 UI 细调。
+
+### 新增 P1
+
+1. 错端消费免密票据时，`PortalDirectLoginSupport` 只拒绝请求，没有消费票据，也没有删除真实端 `portal_direct_login:{terminal}:{token_hash}` Redis payload。跨端误投后票据仍可在正确端继续消费，不符合一次性票据 fail-closed 预期。
+2. `react-ui/src/.umi-undefined/` 已被 `verify-three-terminal` 的测试发现忽略，但仍会被 `tsconfig` 全量 include 纳入 `tsc`，本地生成物会污染类型检查。
+3. 根目录与 `react-ui` 的 `.gitignore` 未覆盖 `.codegraph/`、根级 `.umi-test/`、根级 `node_modules/`、`react-ui/src/.umi-undefined/`、`react-ui/test-results/`，生成物持续污染工作树。
+4. Partner 管理端前端除 `partner-audit-modal` 外，缺少显式 Jest 契约测试固定高风险行为：临时密码重置、分配角色三权限组合、seller/buyer service URL 隔离、`session:list` 与 `forceLogout` 分权。
+
+### 已修复
+
+- `RuoYi-Vue/ruoyi-system/src/main/java/com/ruoyi/system/service/support/PortalDirectLoginSupport.java`
+  - terminal mismatch 分支现在会先按票据真实 `terminal` 标记票据已使用并删除真实端 Redis payload。
+  - 同时删除当前端 scoped key 和 legacy key，避免错端残留。
+  - 仍不把外端票据上下文写入当前端登录日志。
+- `RuoYi-Vue/ruoyi-system/src/test/java/com/ruoyi/system/service/support/PortalDirectLoginSupportTest.java`
+  - 将错端消费测试改为断言票据已消费、真实端和当前端 Redis key 均删除、失败 auditor 不接收外端 payload。
+- `react-ui/tsconfig.json`
+  - 显式 exclude `src/.umi-undefined` 和 `test-results`，避免本地生成物污染 `tsc`。
+- `.gitignore` 与 `react-ui/.gitignore`
+  - 补齐 `.codegraph/`、根级 `.umi-test/`、根级 `node_modules/`、`react-ui/src/.umi-undefined/`、`react-ui/test-results/` 等本地生成物忽略规则。
+- `react-ui/tests/partner-management-contract.test.ts`
+  - 新增 Partner 管理显式契约测试，固定临时密码语义、分配角色权限组合、seller/buyer service URL 隔离、session list / force logout 分权。
+- `react-ui/tests/three-terminal.manifest.json`
+  - 将 `tests/partner-management-contract.test.ts` 加入 `frontendTestPaths` 和 `criticalFrontendExplicitTestPaths`。
+- `react-ui/tests/verify-three-terminal-backend-gate.test.ts`
+  - 补充生成目录必须被 `tsconfig` 和 `.gitignore` 隔离的 gate。
+  - 临时写入一个会报错的 `src/.umi-undefined/**/*.ts` 文件，验证 `tsc` 不受污染。
+
+### 冲突处理
+
+一个子 Agent 建议在错端失败日志里保留 `ticketId`、`actingAdminId/Name`、`directLoginReason`。该建议未采纳。
+
+原因：`AGENTS.md` 的三端独立账号权限规则已经明确要求：卖家端、买家端消费免密票据时，如果票据 `terminal` 与当前端不匹配，不得把外端票据的 `ticketId`、`actingAdmin*`、`reason`、目标主体或目标账号写入当前端登录日志、操作日志或会话；应按当前端普通失败记录或直接拒绝。
+
+因此当前实现选择：
+
+- 票据和 Redis payload fail-closed，防止继续消费。
+- 当前端失败日志不写外端 ticket/admin/reason/subject/account。
+- 票据表本身保留签发人、目标端和使用状态，可供管理端审计。
+
+### 远端只读核验
+
+- 配置来源：
+  - MySQL：`application-druid.yml` 通过 `RUOYI_DB_URL` / `RUOYI_DB_USERNAME` / `RUOYI_DB_PASSWORD` 注入。
+  - Redis：`application.yml` 通过 `RUOYI_REDIS_*` 注入。
+- 目标 schema：`fenxiao`。
+- 本次远端动作：只执行 `information_schema` 与 `sys_menu` SELECT。
+- 本次未执行远端 MySQL DDL/DML。
+- 本次未读取或写入 Redis。
+
+只读结果：
+
+```text
+terminal_audit_column_missing_count=0
+direct_login_ticket_column_missing_count=0
+admin_sys_menu_perm_missing_count=0
+```
+
+### 追补验证
+
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system -Dtest=PortalDirectLoginSupportTest test`
+  - 通过，14 tests。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl seller,buyer -am "-Dtest=SellerServiceImplTest#directLoginSellerDoesNotWriteForeignTicketAuditIntoSellerLog,BuyerServiceImplTest#directLoginBuyerDoesNotWriteForeignTicketAuditIntoBuyerLog" "-Dsurefire.failIfNoSpecifiedTests=false" test`
+  - 通过，seller 1 test、buyer 1 test。
+- `cd E:\Urili-Ruoyi\react-ui; .\node_modules\.bin\jest.cmd --config jest.config.ts --runTestsByPath tests\partner-management-contract.test.ts tests\verify-three-terminal-backend-gate.test.ts --runInBand`
+  - 通过，2 suites / 23 tests。
+- `cd E:\Urili-Ruoyi\react-ui; node scripts\verify-three-terminal.mjs --check-manifest`
+  - 通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run verify:three-terminal`
+  - 通过。
+  - Frontend Jest：24 suites / 191 tests 通过。
+  - Backend reactor test-compile：14 个模块全部 SUCCESS，包含 `ruoyi-admin`。
+  - Backend three-terminal contracts：seller 100 tests、buyer 101 tests 通过。
+- 清理重复判断后再次运行：
+  - `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system -Dtest=PortalDirectLoginSupportTest test`
+  - 通过，14 tests。
+
+### 子 Agent 使用记录
+
+- 本追补轮已关闭 6 个子 Agent。
+- 全部使用 `gpt-5.4`。
+- 未使用 GPT-5.3 Codex。
+
+### CodeGraph
+
+- `cd E:\Urili-Ruoyi; codegraph sync .`：通过，输出 `Synced 79 changed files`。
+
+### P2 记录
+
+- 当前 worktree 仍包含 product review/distribution 与 `application.yml` 等相邻脏改动；这些不是本追补修复范围，未回滚。
+- 远端 `portal.seller.web.url` / `portal.buyer.web.url` 仍是本地验证占位地址，继续作为 P2，不阻塞当前 P0/P1。

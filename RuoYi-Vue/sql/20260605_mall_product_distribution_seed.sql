@@ -528,7 +528,8 @@ insert into tmp_mall_product_distribution_sys_menu_guard(menu_id, parent_id, men
     (2483, 2402, 'F', '#', '', '', 'product:distribution:edit'),
     (2484, 2402, 'F', '#', '', '', 'product:distribution:status'),
     (2485, 2402, 'F', '#', '', '', 'product:distribution:price'),
-    (2486, 2402, 'F', '#', '', '', 'product:distribution:log');
+    (2486, 2402, 'F', '#', '', '', 'product:distribution:log'),
+    (2488, 2402, 'F', '#', '', '', 'product:distribution:remove');
 
 insert into tmp_mall_product_distribution_seed_expected
     (menu_id, menu_name, parent_id, order_num, menu_type, visible, status,
@@ -540,7 +541,8 @@ values
     (2483, '商城商品修改', 2402, 3, 'F', '0', '0', '#', '', '', 'product:distribution:edit', '#', '商城商品按钮：修改'),
     (2484, '商城商品状态', 2402, 4, 'F', '0', '0', '#', '', '', 'product:distribution:status', '#', '商城商品按钮：状态切换'),
     (2485, '商城商品调价', 2402, 5, 'F', '0', '0', '#', '', '', 'product:distribution:price', '#', '商城商品按钮：调整销售价'),
-    (2486, '商城商品操作日志', 2402, 6, 'F', '0', '0', '#', '', '', 'product:distribution:log', '#', '商城商品按钮：操作日志');
+    (2486, '商城商品操作日志', 2402, 6, 'F', '0', '0', '#', '', '', 'product:distribution:log', '#', '商城商品按钮：操作日志'),
+    (2488, '商城商品删除', 2402, 7, 'F', '0', '0', '#', '', '', 'product:distribution:remove', '#', '商城商品按钮：删除草稿');
 
 call assert_mall_product_distribution_sys_menu_guard();
 
@@ -662,6 +664,7 @@ from (
     union all select 2484, '商城商品状态', 4, 'product:distribution:status', '商城商品按钮：状态切换'
     union all select 2485, '商城商品调价', 5, 'product:distribution:price', '商城商品按钮：调整销售价'
     union all select 2486, '商城商品操作日志', 6, 'product:distribution:log', '商城商品按钮：操作日志'
+    union all select 2488, '商城商品删除', 7, 'product:distribution:remove', '商城商品按钮：删除草稿'
 ) seed
 on duplicate key update
     menu_name = values(menu_name),

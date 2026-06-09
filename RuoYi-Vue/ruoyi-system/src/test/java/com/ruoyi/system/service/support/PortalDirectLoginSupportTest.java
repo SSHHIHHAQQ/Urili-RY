@@ -318,7 +318,7 @@ public class PortalDirectLoginSupportTest
     }
 
     @Test
-    public void consumeTokenShouldRejectTerminalMismatchWithoutConsumingTicket()
+    public void consumeTokenShouldConsumeTicketAndRealScopedPayloadOnTerminalMismatch()
     {
         PortalDirectLoginResult result = support.createToken("seller", 7L, "SAAA010001",
                 activeAccount(44L, "seller-owner"), "Support inspection",
@@ -336,10 +336,12 @@ public class PortalDirectLoginSupportTest
         assertEquals("免密登录票据端类型不匹配", exception.getMessage());
         assertNull(auditedException[0]);
         assertNull(auditedPayload[0]);
-        assertEquals(0, ticketMapper.usedCalls);
+        assertEquals(1, ticketMapper.usedCalls);
+        assertEquals(result.getTicketId(), ticketMapper.usedTicketId);
         assertEquals(0, ticketMapper.expiredCalls);
-        assertFalse(redisCache.deletedKeys.contains(cacheKey(result.getToken())));
-        assertNotNull(redisCache.getCacheObject(cacheKey(result.getToken())));
+        assertTrue(redisCache.deletedKeys.contains(cacheKey(result.getToken())));
+        assertTrue(redisCache.deletedKeys.contains(cacheKey("buyer", result.getToken())));
+        assertNull(redisCache.getCacheObject(cacheKey(result.getToken())));
     }
 
     @Test

@@ -20,6 +20,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.core.task.TaskExecutor;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -50,6 +51,7 @@ import com.ruoyi.product.domain.ProductSpuWarehouse;
 import com.ruoyi.product.mapper.ProductDistributionMapper;
 import com.ruoyi.product.mapper.ProductDistributionOperationLogMapper;
 import com.ruoyi.product.mapper.ProductReviewMapper;
+import com.ruoyi.product.service.IProductCodePoolService;
 import com.ruoyi.product.service.IProductConfigService;
 import com.ruoyi.product.service.IProductDistributionService;
 import com.ruoyi.product.service.ProductSellerLookupService;
@@ -83,6 +85,8 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
     private static final String WAREHOUSE_THIRD_PARTY = "third_party";
     private static final String SOURCE_SCOPE_OFFICIAL_MASTER = "OFFICIAL_MASTER";
     private static final String SOURCE_REF_TYPE_SOURCE_SKU_GROUP = "SOURCE_SKU_GROUP";
+    private static final List<String> SKU_SPEC_FIELDS =
+        List.of("color", "size", "material", "style", "model", "packageQuantity", "capacity");
     private static final String BINDING_ACTIVE = "ACTIVE";
     private static final String BINDING_LOCKED = "LOCKED";
     private static final String BINDING_UNLOCKED = "UNLOCKED";
@@ -108,6 +112,9 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
 
     @Autowired
     private ProductReviewMapper productReviewMapper;
+
+    @Autowired
+    private IProductCodePoolService productCodePoolService;
 
     @Autowired
     private IProductConfigService productConfigService;
@@ -245,16 +252,18 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
     {
         OfficialSourceSaveContext sourceContext = buildOfficialSourceSaveContext(product);
         normalizeSpuForSave(product, null, sourceContext);
-        product.setSystemSpuCode(generateSpuCode());
+        int skuCount = requireSubmittedSkuCount(product.getSkus());
+        product.setSystemSpuCode(productCodePoolService.allocateSpuCode());
+        List<String> systemSkuCodes = productCodePoolService.allocateSkuCodes(skuCount);
         String operator = currentUsername();
         product.setCreateBy(operator);
         product.setUpdateBy(operator);
         long saveStartedAt = System.currentTimeMillis();
-        int rows = productDistributionMapper.insertSpu(product);
+        int rows = insertSpuWithCodeGuard(product);
         long spuSavedAt = System.currentTimeMillis();
         saveWarehouses(product);
         long warehousesSavedAt = System.currentTimeMillis();
-        saveSkus(product, List.of(), sourceContext);
+        saveSkus(product, List.of(), sourceContext, systemSkuCodes);
         long skusSavedAt = System.currentTimeMillis();
         saveAttributeValues(product);
         long attributesSavedAt = System.currentTimeMillis();
@@ -293,6 +302,42 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
         refreshInventoryOverviewAfterCommit(product.getSpuId());
         logCoreSaveCost("update", product.getSpuId(), saveStartedAt, spuSavedAt, warehousesSavedAt, skusSavedAt,
             attributesSavedAt, imagesSavedAt);
+        return rows;
+    }
+
+    @Override
+    @Transactional
+    public int deleteDraftProduct(Long spuId)
+    {
+        ProductSpu product = requireProduct(spuId);
+        if (!STATUS_DRAFT.equals(product.getSpuStatus()))
+        {
+            throw new ServiceException("仅草稿商品允许删除");
+        }
+        ensureNoPendingProductReview(product.getSpuId());
+
+        String operator = currentUsername();
+        List<ProductSku> skus = productDistributionMapper.selectSkuListBySpuId(product.getSpuId());
+        for (ProductSku sku : skus)
+        {
+            ProductSkuSourceBinding binding = sku == null || sku.getSkuId() == null ? null
+                : productDistributionMapper.selectActiveSourceBindingBySkuId(sku.getSkuId());
+            if (binding != null && BINDING_LOCKED.equals(binding.getLockStatus()))
+            {
+                throw new ServiceException("已锁定来源 SKU 绑定的草稿 SKU 不能删除");
+            }
+            releaseUnlockedSkuSourceBinding(product, sku, "删除草稿商品释放来源SKU绑定");
+        }
+        productDistributionMapper.deleteImagesBySpuId(product.getSpuId());
+        productDistributionMapper.deleteAttributeValuesBySpuId(product.getSpuId());
+        productDistributionMapper.deleteWarehousesBySpuId(product.getSpuId());
+        productDistributionMapper.deleteSkusBySpuId(product.getSpuId(), operator);
+        int rows = productDistributionMapper.deleteSpuById(product.getSpuId(), operator);
+        if (rows <= 0)
+        {
+            throw new ServiceException("草稿商品删除失败");
+        }
+        refreshInventoryOverviewAfterCommit(product.getSpuId());
         return rows;
     }
 
@@ -485,6 +530,10 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
         for (Long spuId : ids)
         {
             ProductSpu product = requireProduct(spuId);
+            if (CONTROL_DISABLED.equals(targetStatus) && STATUS_DRAFT.equals(product.getSpuStatus()))
+            {
+                throw new ServiceException("草稿商品无需停用，可删除或继续编辑");
+            }
             validateControlTransition(product.getControlStatus(), targetStatus, "商品");
             rows += productDistributionMapper.updateSpuControlStatus(spuId, targetStatus, normalizedReason,
                 currentUsername());
@@ -510,6 +559,11 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
                 throw new ServiceException("商品 SKU 不存在：" + skuId);
             }
             ProductSpu product = requireProduct(sku.getSpuId());
+            if (CONTROL_DISABLED.equals(targetStatus)
+                && (STATUS_DRAFT.equals(product.getSpuStatus()) || STATUS_DRAFT.equals(sku.getSkuStatus())))
+            {
+                throw new ServiceException("草稿 SKU 无需停用，可删除或继续编辑商品");
+            }
             validateControlTransition(sku.getControlStatus(), targetStatus, "SKU");
             rows += productDistributionMapper.updateSkuControlStatus(skuId, targetStatus, normalizedReason,
                 currentUsername());
@@ -684,6 +738,7 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
         {
             normalizeSku(product, sku, currentSkuMap.get(sku.getSkuId()), index++, sourceContext);
         }
+        validateSkuSpecsForSave(skus);
     }
 
     private void fillSellerSnapshot(ProductSpu product)
@@ -950,6 +1005,12 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
 
     private void saveSkus(ProductSpu product, List<ProductSku> currentSkus, OfficialSourceSaveContext sourceContext)
     {
+        saveSkus(product, currentSkus, sourceContext, null);
+    }
+
+    private void saveSkus(ProductSpu product, List<ProductSku> currentSkus, OfficialSourceSaveContext sourceContext,
+        List<String> preallocatedNewSkuCodes)
+    {
         List<ProductSku> skus = product.getSkus();
         if (skus == null || skus.isEmpty())
         {
@@ -969,13 +1030,19 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
         for (ProductSku sku : skus)
         {
             normalizeSku(product, sku, currentSkuMap.get(sku.getSkuId()), index++, sourceContext);
+        }
+        validateSkuSpecsForSave(skus);
+        List<String> newSkuCodes = prepareNewSkuCodes(skus, preallocatedNewSkuCodes);
+        int newSkuCodeIndex = 0;
+        for (ProductSku sku : skus)
+        {
             if (sku.getSkuId() == null)
             {
-                sku.setSystemSkuCode(generateSkuCode());
+                sku.setSystemSkuCode(newSkuCodes.get(newSkuCodeIndex++));
                 String operator = currentUsername();
                 sku.setCreateBy(operator);
                 sku.setUpdateBy(operator);
-                productDistributionMapper.insertSku(sku);
+                insertSkuWithCodeGuard(sku);
             }
             else
             {
@@ -998,6 +1065,140 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
                 handleRemovedSkuSourceBinding(product, currentSku);
                 productDistributionMapper.deleteSkuById(product.getSpuId(), currentSku.getSkuId(), currentUsername());
             }
+        }
+    }
+
+    private int requireSubmittedSkuCount(List<ProductSku> skus)
+    {
+        if (skus == null || skus.isEmpty())
+        {
+            throw new ServiceException("至少需要维护一个 SKU");
+        }
+        return skus.size();
+    }
+
+    private List<String> prepareNewSkuCodes(List<ProductSku> skus, List<String> preallocatedNewSkuCodes)
+    {
+        long newSkuCount = skus.stream().filter(sku -> sku.getSkuId() == null).count();
+        if (newSkuCount == 0)
+        {
+            return List.of();
+        }
+        if (preallocatedNewSkuCodes != null)
+        {
+            if (preallocatedNewSkuCodes.size() != newSkuCount)
+            {
+                throw new ServiceException("预分配 SKU 编码数量与新增 SKU 数量不一致");
+            }
+            return preallocatedNewSkuCodes;
+        }
+        return productCodePoolService.allocateSkuCodes(Math.toIntExact(newSkuCount));
+    }
+
+    private int insertSpuWithCodeGuard(ProductSpu product)
+    {
+        try
+        {
+            return productDistributionMapper.insertSpu(product);
+        }
+        catch (DuplicateKeyException ex)
+        {
+            log.error("商城商品SPU系统编码发生唯一索引冲突，systemSpuCode={}", product.getSystemSpuCode(), ex);
+            throw new ServiceException("系统SPU编码冲突，请检查编码池生成逻辑");
+        }
+    }
+
+    private int insertSkuWithCodeGuard(ProductSku sku)
+    {
+        try
+        {
+            return productDistributionMapper.insertSku(sku);
+        }
+        catch (DuplicateKeyException ex)
+        {
+            log.error("商城商品SKU系统编码发生唯一索引冲突，systemSkuCode={}", sku.getSystemSkuCode(), ex);
+            throw new ServiceException("系统SKU编码冲突，请检查编码池生成逻辑");
+        }
+    }
+
+    private void validateSkuSpecsForSave(List<ProductSku> skus)
+    {
+        LinkedHashSet<String> activeFields = new LinkedHashSet<>();
+        for (ProductSku sku : skus)
+        {
+            for (String field : SKU_SPEC_FIELDS)
+            {
+                if (StringUtils.isNotBlank(readSkuSpecValue(sku, field)))
+                {
+                    activeFields.add(field);
+                }
+            }
+        }
+        if (activeFields.isEmpty())
+        {
+            throw new ServiceException("请至少填写一个 SKU 规格属性");
+        }
+        if (activeFields.size() > 2)
+        {
+            throw new ServiceException("SKU 规格属性最多只能使用 2 个");
+        }
+        int rowNo = 1;
+        for (ProductSku sku : skus)
+        {
+            for (String field : activeFields)
+            {
+                if (StringUtils.isBlank(readSkuSpecValue(sku, field)))
+                {
+                    throw new ServiceException("第 " + rowNo + " 个 SKU 未填写规格属性：" + skuSpecLabel(field));
+                }
+            }
+            rowNo++;
+        }
+    }
+
+    private String readSkuSpecValue(ProductSku sku, String field)
+    {
+        switch (field)
+        {
+            case "color":
+                return sku.getColor();
+            case "size":
+                return sku.getSize();
+            case "material":
+                return sku.getMaterial();
+            case "style":
+                return sku.getStyle();
+            case "model":
+                return sku.getModel();
+            case "packageQuantity":
+                return sku.getPackageQuantity();
+            case "capacity":
+                return sku.getCapacity();
+            default:
+                return "";
+        }
+    }
+
+    private String skuSpecLabel(String field)
+    {
+        switch (field)
+        {
+            case "color":
+                return "颜色";
+            case "size":
+                return "尺寸";
+            case "material":
+                return "材质";
+            case "style":
+                return "风格";
+            case "model":
+                return "型号";
+            case "packageQuantity":
+                return "商品数量";
+            case "capacity":
+                return "容量";
+            default:
+                return field;
         }
     }
 
@@ -2079,30 +2280,6 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
         {
             throw new ServiceException("当前商品存在待审核单，审核完成后再修改商品");
         }
-    }
-
-    private String generateSpuCode()
-    {
-        return generateCode("SPU", productDistributionMapper::countSystemSpuCode);
-    }
-
-    private String generateSkuCode()
-    {
-        return generateCode("SKU", productDistributionMapper::countSystemSkuCode);
-    }
-
-    private String generateCode(String prefix, Function<String, Integer> existsCounter)
-    {
-        String dayPrefix = prefix + DateUtils.dateTimeNow("yyyyMMdd");
-        for (int i = 1; i <= 9999; i++)
-        {
-            String code = dayPrefix + String.format("%04d", i);
-            if (existsCounter.apply(code) == 0)
-            {
-                return code;
-            }
-        }
-        throw new ServiceException(prefix + "编码当天序号已用尽");
     }
 
     private String normalizeStatus(String status)

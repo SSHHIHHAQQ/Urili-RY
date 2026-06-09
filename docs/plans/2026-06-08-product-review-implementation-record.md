@@ -96,7 +96,7 @@
   - `EDIT_PRODUCT_INFO` 默认展示商品资料变更字段、主图对比和修改后的详情图文。
   - `EDIT_SKU_INFO` 默认只展示发生变化的 SKU 资料字段。
   - 优化 `EDIT_SKU_INFO` 的详情显示：默认表格只展示真正发生字段变化的 SKU，规格从整段 before/after 文本改为短标签摘要，变化内容改为 `变化项` 标签；需要细看时展开当前行，按 `字段 / 修改前 / 修改后` 查看差异。
-  - `EDIT_PRICE` 独立展示供货价审核总览、供货价涨价/降价数量、原新供货价区间、SKU 供货价左右对比和高于销售价等风险。
+  - `EDIT_PRICE` 独立展示供货价审核总览、供货价涨价/降价数量、原新供货价区间和 SKU 供货价左右对比。
   - 原 `对象明细` / `审核快照` 改为 `审计对象` / `审计快照`，保留追溯能力但不再作为主审核入口。
   - 浏览器验证：`新增商品 / 新增SKU / 商品资料变更 / SKU资料变更 / 供货价变更` 五个 type 均进入各自 `变更预览`，且保留 `审计快照`；干净会话控制台 error/warning 为 0。
   - 按审核员视角精简新增商品详情：删除 `新增商品审核需要看完整商品` 这类系统说明和 `审核检查清单 / 已完整` 自检内容，新增商品详情直接展示真实商品资料区块。
@@ -117,27 +117,42 @@
   - 修正 `EDIT_PRICE` 业务口径：供货价变更审核特指 SKU 供货价变更，管理端 SKU 销售价调整直接生效，不进入商品审核。
   - 后端新增 `ProductSkuSupplyPriceUpdateRequest` 和 `submitSkuSupplyPriceReview`，审批通过时只调用 `updateSkuSupplyPrice` 写入 `product_sku.supply_price`，不再通过审核链路写 `sale_price`。
   - 非草稿商品编辑如果只改 SKU 供货价，会被归类为 `EDIT_PRICE`；审核单主表的 `priceBeforeMin/Max`、`priceAfterMin/Max` 在该类型下保存供货价区间。
-  - 前端供货价变更详情改为供货价口径和左右双栏：展示 `原供货价区间 / 新供货价区间 / SKU 供货价左右对比 / 原供货价 / 新供货价 / 当前销售价`，风险标签改为 `高于销售价` 等供货价风险。
+  - 前端供货价变更详情改为供货价口径和左右双栏：展示 `原供货价区间 / 新供货价区间 / SKU 供货价左右对比 / 原供货价 / 新供货价`，不再展示或对比销售价。
   - 商品列表 `调整售价` 成功提示改为直接生效语义，低于供货价确认文案不再描述审核风险。
   - `npm run tsc`：通过。
   - `npx jest --config jest.config.ts tests/product-distribution-permission-guard.test.ts --runInBand`：通过。
   - `mvn -pl product -am -Dtest=ProductReviewServiceImplTest "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，11 tests，0 failures/errors。
-  - 浏览器运行态验证：用拦截数据构造 `EDIT_PRICE` 供货价审核单，登录 `http://127.0.0.1:8001/review-center/product-distribution` 后打开供货价变更详情，详情抽屉存在 `修改前 / 修改后 / 原供货价区间 / 新供货价区间 / SKU 供货价左右对比 / 原供货价 / 新供货价 / 当前销售价 / 高于销售价`，且不再出现 `原销售价 / 新销售价 / SKU 价格对比`。
+  - 浏览器运行态验证：用拦截数据构造 `EDIT_PRICE` 供货价审核单，登录 `http://127.0.0.1:8001/review-center/product-distribution` 后打开供货价变更详情，详情抽屉存在 `修改前 / 修改后 / 原供货价区间 / 新供货价区间 / SKU 供货价左右对比 / 原供货价 / 新供货价`，且不再出现 `原销售价 / 新销售价 / SKU 价格对比`。
 
 ### 2026-06-09 商品审核价格口径统一
 
 - 商品审核主表的 `priceBeforeMin/priceBeforeMax/priceAfterMin/priceAfterMax` 在审核工作台中统一作为供货价区间使用。
-- 新增商品、新增 SKU、商品资料变更、SKU 资料变更和供货价变更的列表重点、详情摘要和首屏指标不再强调销售价区间；销售价仅保留在 SKU 列表或供货价风险上下文中作为普通参考字段。
+- 新增商品、新增 SKU、商品资料变更、SKU 资料变更和供货价变更的列表重点、详情摘要和首屏指标不再强调销售价区间；供货价变更主审核视图不再展示或对比销售价，销售价只保留在非供货价变更场景的 SKU 资料列表中作为普通字段。
 - 后端 `ProductReviewServiceImpl` 新增商品和商品编辑审核单均从 SKU 供货价聚合区间，避免商品列表接入时把审核摘要重新带回销售价口径。
+- 后端列表和详情读取审核单时，会按审核快照重新计算供货价区间并覆盖返回值：
+  - `NEW_PRODUCT`：取 `AFTER` SKU 快照的 `supplyPrice` 区间。
+  - `ADD_SKU`：只取本次 `CREATE` SKU 对应 `AFTER` 快照的 `supplyPrice` 区间。
+  - `EDIT_PRODUCT_INFO` / `EDIT_SKU_INFO` / `EDIT_PRICE`：取 `BEFORE` 与 `AFTER` SKU 快照的 `supplyPrice` 区间。
+  - 当缺少独立 SKU 快照时，回退到 SPU 快照中的 SKU 供货价和商品供货价区间。
+  - 这样可以修正历史审核单主表 `price_*` 字段曾保存销售价的情况，避免前端虽然显示“供货价区间”但实际取到销售价。
+- 商品审核详情不再展示已废弃的 `卖点/sellingPoint` 字段；商品基础信息、商品图片、商品属性、详情图文和 SKU 左右对比统一改为同一字段一行的对齐式网格，避免修改前/修改后因为内容高度不同而错位。
   - 浏览器运行态验证：用拦截数据构造 `EDIT_SKU_INFO` SKU 资料变更审核单，详情抽屉存在 `修改前 / 修改后 / SKU 资料左右对比 / 客户SKU / OLD-SKU-A / NEW-SKU-A / 型号 / OLD-MODEL / NEW-MODEL`，审核员无需展开表格即可看到字段变化。
   - `codegraph sync .`：通过，已同步 CodeGraph 索引。
   - 浏览器运行态验证：登录管理端后打开 `http://127.0.0.1:8001/review-center/product-distribution`，商品审核页可加载，页面可见 `全部(1) / 新增商品(1) / 新增SKU(0) / 商品资料变更(0) / SKU资料变更(0) / 供货价变更(0)` 类型 Tabs；页面标题、筛选区、类型化表头和列表数据正常出现。控制台仅有 Ant Design deprecated prop 警告，未出现页面运行错误。
 - `mvn -pl product -am -DskipTests compile`：通过。
+- `mvn -pl product -am -Dtest=ProductReviewServiceImplTest "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，13 tests，0 failures/errors；覆盖 `NEW_PRODUCT`、`ADD_SKU`、`EDIT_PRODUCT_INFO`、`EDIT_SKU_INFO`、`EDIT_PRICE` 五类审核从快照 `supplyPrice` 重算供货价区间，验证历史主表销售价旧值不会继续透出到审核工作台。
+- `EDIT_PRICE` 主审核视图再次收口为只审核供货价变化：删除 `当前销售价` 左右对比行、删除 `高于销售价` 风险判断、删除未使用的价格变更表格旧实现；销售价不再进入供货价变更审核主视图。
 - `mvn -pl ruoyi-system -Dtest=ProductAdminRouteContractTest test`：通过。
 - `mvn -pl ruoyi-system -Dtest=SqlExecutionGuardContractTest test`：通过。
 - `mvn -pl product -am -Dtest=ProductDistributionServiceImplTest "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过。
 - `npm run tsc`：通过。
 - `npx jest --config jest.config.ts tests/product-distribution-permission-guard.test.ts --runInBand`：通过。
+- 2026-06-09 本次补充验证：
+  - `npm run tsc -- --pretty false`：通过。
+  - `npx jest --config jest.config.ts tests/product-distribution-permission-guard.test.ts --runInBand`：通过，10 tests，0 failures/errors；契约固定 `ProductReviewBusinessPreview` 不得包含 `当前销售价` / `高于销售价`。
+  - `rg "当前销售价|高于销售价|原销售价|新销售价|SKU 价格对比|renderPriceChangeTable"`：商品审核源码中无命中，仅保留测试的禁止断言和文档说明。
+  - 浏览器运行态验证：`http://127.0.0.1:8001/review-center/product-distribution` 可加载，当前运行数据中 `全部(0)` 且 `供货价变更(0)`，因此未打开真实详情单。
+  - `codegraph sync .`：通过，已同步 2 个变更文件。
 - `npx playwright screenshot --timeout=15000 http://127.0.0.1:8001/user/login E:\Urili-Ruoyi\logs\product-review-login-check.png`：通过，仅验证当前前端服务可加载；商品审核业务页等待 SQL 迁移后验证。
 
 ## 后续建议

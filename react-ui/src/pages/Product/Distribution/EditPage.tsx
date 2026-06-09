@@ -21,6 +21,7 @@ import { message } from '@/utils/feedback';
 import { SEARCHABLE_SELECT_PROPS, SEARCHABLE_TREE_SELECT_PROPS } from '@/utils/selectSearch';
 import { buildCategoryTree, findCategoryDisplayPath } from '../categoryTree';
 import { yesNoOptions } from '../constants';
+import { skuSpecFields } from './constants';
 import DetailContentBuilder from './components/DetailContentBuilder';
 import ProductImageSection from './components/ProductImageSection';
 import SkuMatrixEditor from './components/SkuMatrixEditor';
@@ -109,6 +110,26 @@ function findMissingSkuImageWhenColorSpecEnabled(rows: API.ProductDistribution.S
   const colorSpecEnabled = rows.some((sku) => hasText(sku.color));
   if (!colorSpecEnabled) return undefined;
   return rows.find((sku) => !hasText(sku.skuImageUrl));
+}
+
+function getSkuSpecLabel(field: keyof API.ProductDistribution.Sku) {
+  return skuSpecFields.find((item) => item.value === field)?.label || String(field);
+}
+
+function findSkuSpecValidationError(
+  rows: API.ProductDistribution.Sku[],
+  selectedFields: (keyof API.ProductDistribution.Sku)[],
+) {
+  if (!selectedFields.length) {
+    return '请选择至少一个规格属性';
+  }
+  for (const field of selectedFields) {
+    const missingIndex = rows.findIndex((sku) => !hasText(sku[field] as string | undefined));
+    if (missingIndex >= 0) {
+      return `第 ${missingIndex + 1} 个 SKU 未填写规格属性：${getSkuSpecLabel(field)}`;
+    }
+  }
+  return undefined;
 }
 
 function formatNumber(value?: number, digits = 2) {
@@ -462,6 +483,10 @@ export default function ProductDistributionEditPage() {
   const [selectedSourceSkuMap, setSelectedSourceSkuMap] = useState<Record<string, API.Integration.SourceProductItem>>({});
   const [buyerPreviewOpen, setBuyerPreviewOpen] = useState(false);
   const [buyerPreviewData, setBuyerPreviewData] = useState<BuyerProductPreviewData>();
+  const [selectedSkuSpecFields, setSelectedSkuSpecFields] = useState<(keyof API.ProductDistribution.Sku)[]>([
+    'color',
+    'size',
+  ]);
   const [skuRows, setSkuRows] = useState<(API.ProductDistribution.Sku & { rowKey?: string })[]>([
     createEmptySkuRow(),
   ]);
@@ -1065,6 +1090,11 @@ export default function ProductDistributionEditPage() {
         ? 'READY'
         : sku.skuStatus || 'DRAFT',
     }));
+    const skuSpecError = findSkuSpecValidationError(cleanSkus, selectedSkuSpecFields);
+    if (skuSpecError) {
+      message.error(skuSpecError);
+      return;
+    }
     if (isOfficialWarehouse && cleanSkus.some((sku) => !sku.sourceDimensionGroupKey)) {
       message.error('官方仓 SKU 必须全部配对来源 SKU；未配对的 SKU 请配对或删除');
       return;
@@ -1270,6 +1300,7 @@ export default function ProductDistributionEditPage() {
               ) : undefined}
               onPairSourceSku={openSourceSelectorForRow}
               onClearSourceSku={clearSourceSkuForRow}
+              onSpecFieldsChange={setSelectedSkuSpecFields}
               onChange={setSkuRows}
             />
           </section>

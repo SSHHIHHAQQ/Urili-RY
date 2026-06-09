@@ -45,6 +45,12 @@ export async function updateDistributionProduct(
   });
 }
 
+export async function deleteDistributionProduct(spuId: number) {
+  return request<API.Result>(`${baseUrl}/${spuId}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function updateDistributionProductStatus(
   spuId: number,
   status: string,

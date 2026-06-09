@@ -13401,3 +13401,43 @@ P2 记录：
 
 CodeGraph：
 - `cd E:\Urili-Ruoyi; codegraph sync .`：通过，输出 `Already up to date`。
+
+## 2026-06-09 检查点：错端免密票据与前端契约 P1 修复
+
+本检查点继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为参考方向。当前仍是快速推进模式：只修 P0/P1，不做浏览器、截图、DOM 或 UI 细调。
+
+子 Agent 使用记录：
+- 本轮已关闭 6 个子 Agent，全部使用 `gpt-5.4`，未使用 GPT-5.3 Codex。
+- 坐实并修复 P1：错端免密票据不消费真实端 payload、`src/.umi-undefined` 污染 `tsc`、生成目录 ignore 不完整、Partner 管理缺显式前端契约。
+
+已修复：
+- 错端 direct-login 现在会消费票据并删除真实端/current/legacy Redis payload，但当前端日志仍不写外端 `ticketId`、`actingAdmin*`、`reason`、目标主体或目标账号，遵守 AGENTS 的跨端日志隔离规则。
+- `react-ui/tsconfig.json` 已排除 `src/.umi-undefined` 和 `test-results`。
+- 根目录与 `react-ui` ignore 已覆盖 `.codegraph/`、根级 `.umi-test/`、根级 `node_modules/`、`react-ui/src/.umi-undefined/`、`react-ui/test-results/`。
+- 新增 `react-ui/tests/partner-management-contract.test.ts` 并加入三端 manifest critical。
+- `verify-three-terminal-backend-gate.test.ts` 已固定生成目录隔离规则。
+
+远端只读核验：
+- 目标 schema：`fenxiao`。
+- 只执行 SELECT，无远端 DDL/DML，无 Redis 读写。
+- `terminal_audit_column_missing_count=0`。
+- `direct_login_ticket_column_missing_count=0`。
+- `admin_sys_menu_perm_missing_count=0`。
+
+验证：
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system -Dtest=PortalDirectLoginSupportTest test`：最终通过，14 tests。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl seller,buyer -am "-Dtest=SellerServiceImplTest#directLoginSellerDoesNotWriteForeignTicketAuditIntoSellerLog,BuyerServiceImplTest#directLoginBuyerDoesNotWriteForeignTicketAuditIntoBuyerLog" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，seller 1 test、buyer 1 test。
+- `cd E:\Urili-Ruoyi\react-ui; .\node_modules\.bin\jest.cmd --config jest.config.ts --runTestsByPath tests\partner-management-contract.test.ts tests\verify-three-terminal-backend-gate.test.ts --runInBand`：通过，2 suites / 23 tests。
+- `cd E:\Urili-Ruoyi\react-ui; node scripts\verify-three-terminal.mjs --check-manifest`：通过。
+- `cd E:\Urili-Ruoyi\react-ui; npm run verify:three-terminal`：通过；Frontend Jest 24 suites / 191 tests；后端 reactor test-compile 14 个模块 SUCCESS；seller 100 tests、buyer 101 tests 通过。
+
+涉及记录：
+- `docs/plans/2026-06-09-three-terminal-p0p1-gpt54-manifest-sql-guard-record.md`。
+- 子 Agent 只读报告：`docs/reviews/2026-06-09-slice-5-verify-three-terminal-readonly-audit.md`。
+
+CodeGraph：
+- `cd E:\Urili-Ruoyi; codegraph sync .`：通过，输出 `Synced 79 changed files`。
+
+P2 记录：
+- 当前 worktree 仍包含 product review/distribution 与 `application.yml` 等相邻脏改动，不属于本检查点修复范围，未回滚。
+- 远端 `portal.seller.web.url` / `portal.buyer.web.url` 仍是本地验证占位地址，继续作为 P2，不阻塞当前 P0/P1。

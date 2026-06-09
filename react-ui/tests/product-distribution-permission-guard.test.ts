@@ -297,7 +297,16 @@ describe('product distribution permission guard', () => {
     expect(reviewBusinessPreviewTsx).not.toContain('这里只展示发生变化的 SKU');
     expect(reviewBusinessPreviewTsx).not.toContain('价格变更审核');
     expect(reviewBusinessPreviewTsx).not.toContain('暂未识别到专用审核视图');
+    expect(reviewBusinessPreviewTsx).not.toContain('卖点');
+    expect(reviewBusinessPreviewTsx).not.toContain('sellingPoint');
     expect(reviewBusinessPreviewTsx).toContain('function renderComparePanels');
+    expect(reviewBusinessPreviewTsx).toContain('function renderAlignedCompareGrid');
+    expect(reviewBusinessPreviewTsx).toContain('data-review-compare-grid');
+    expect(reviewBusinessPreviewTsx).toContain('data-review-compare-row');
+    expect(reviewBusinessPreviewTsx).toContain('data-review-compare-cell="before"');
+    expect(reviewBusinessPreviewTsx).toContain('const compareRowStyle');
+    expect(reviewBusinessPreviewTsx).not.toContain('const compareGridStyle');
+    expect(reviewBusinessPreviewTsx).not.toContain('const comparePanelStyle');
     expect(reviewBusinessPreviewTsx).toContain('修改前');
     expect(reviewBusinessPreviewTsx).toContain('修改后');
     expect(reviewBusinessPreviewTsx).toContain("borderColor: '#ffccc7'");
@@ -309,10 +318,11 @@ describe('product distribution permission guard', () => {
     expect(reviewBusinessPreviewTsx).toContain("renderComparePanels('商品详情图文'");
     expect(reviewBusinessPreviewTsx).toContain("renderSection('SKU 资料左右对比'");
     expect(reviewBusinessPreviewTsx).toContain("renderSection('SKU 供货价左右对比'");
-    expect(reviewBusinessPreviewTsx).toContain("title: '原供货价'");
-    expect(reviewBusinessPreviewTsx).toContain("title: '新供货价'");
-    expect(reviewBusinessPreviewTsx).toContain("title: '当前销售价'");
-    expect(reviewBusinessPreviewTsx).toContain("高于销售价");
+    expect(reviewBusinessPreviewTsx).toContain("renderMetric('原供货价区间'");
+    expect(reviewBusinessPreviewTsx).toContain("renderMetric('新供货价区间'");
+    expect(reviewBusinessPreviewTsx).toContain("'供货价'");
+    expect(reviewBusinessPreviewTsx).not.toContain("当前销售价");
+    expect(reviewBusinessPreviewTsx).not.toContain("高于销售价");
   });
 
   it('keeps sales status changes reasoned before calling the admin API', () => {

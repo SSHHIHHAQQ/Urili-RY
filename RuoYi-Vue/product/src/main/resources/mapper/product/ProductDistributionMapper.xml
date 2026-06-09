@@ -518,11 +518,14 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
           and del_flag = '0'
     </update>
 
-    <select id="countSystemSpuCode" resultType="int">
-        select count(1)
-        from product_spu
-        where system_spu_code = #{systemSpuCode}
-    </select>
+    <update id="deleteSpuById">
+        update product_spu
+        set del_flag = '2',
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where spu_id = #{spuId}
+          and del_flag = '0'
+    </update>
 
     <select id="countSellerSpuCode" resultType="int">
         select count(1)
@@ -844,12 +847,6 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         where spu_id = #{spuId}
           and del_flag = '0'
     </update>
-
-    <select id="countSystemSkuCode" resultType="int">
-        select count(1)
-        from product_sku
-        where system_sku_code = #{systemSkuCode}
-    </select>
 
     <select id="countSellerSkuCode" resultType="int">
         select count(1)

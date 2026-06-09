@@ -4,6 +4,7 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -95,6 +96,14 @@ public class AdminProductDistributionController extends BaseController
             return rows > 0 ? success("已提交审核") : error();
         }
         return toAjax(productDistributionService.updateProduct(product));
+    }
+
+    @PreAuthorize("@ss.hasPermi('product:distribution:remove')")
+    @Log(title = "商城商品", businessType = BusinessType.DELETE)
+    @DeleteMapping("/{spuId}")
+    public AjaxResult remove(@PathVariable("spuId") Long spuId)
+    {
+        return toAjax(productDistributionService.deleteDraftProduct(spuId));
     }
 
     @PreAuthorize("@ss.hasPermi('product:distribution:status')")

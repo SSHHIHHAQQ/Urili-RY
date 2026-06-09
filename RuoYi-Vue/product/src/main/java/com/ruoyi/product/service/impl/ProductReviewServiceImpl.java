@@ -85,7 +85,11 @@ public class ProductReviewServiceImpl implements IProductReviewService
     @Override
     public List<ProductReviewRequest> selectReviewList(ProductReviewRequest query)
     {
-        return productReviewMapper.selectReviewList(query);
+        List<ProductReviewRequest> reviews = productReviewMapper.selectReviewList(query);
+        reviews.forEach(review -> enrichReviewSupplyPriceRange(review,
+            productReviewMapper.selectReviewItems(review.getReviewId()),
+            productReviewMapper.selectReviewSnapshots(review.getReviewId())));
+        return reviews;
     }
 
     @Override
@@ -94,6 +98,7 @@ public class ProductReviewServiceImpl implements IProductReviewService
         ProductReviewRequest review = requireReview(reviewId);
         review.setItems(productReviewMapper.selectReviewItems(reviewId));
         review.setSnapshots(productReviewMapper.selectReviewSnapshots(reviewId));
+        enrichReviewSupplyPriceRange(review, review.getItems(), review.getSnapshots());
         return review;
     }
 
@@ -311,6 +316,97 @@ public class ProductReviewServiceImpl implements IProductReviewService
     {
         requireReview(reviewId);
         return productReviewMapper.selectReviewOperationLogs(reviewId);
+    }
+
+    private void enrichReviewSupplyPriceRange(ProductReviewRequest review, List<ProductReviewItem> items,
+        List<ProductReviewSnapshot> snapshots)
+    {
+        if (review == null || snapshots == null || snapshots.isEmpty())
+        {
+            return;
+        }
+        PriceRange beforeRange;
+        PriceRange afterRange;
+        if (REVIEW_TYPE_NEW_PRODUCT.equals(review.getReviewType()))
+        {
+            beforeRange = PriceRange.empty();
+            afterRange = supplyPriceRangeFromSkuSnapshots(snapshots, SNAPSHOT_AFTER, null);
+        }
+        else if (REVIEW_TYPE_ADD_SKU.equals(review.getReviewType()))
+        {
+            beforeRange = PriceRange.empty();
+            afterRange = supplyPriceRangeFromSkuSnapshots(snapshots, SNAPSHOT_AFTER, createdSkuItemIds(items));
+        }
+        else
+        {
+            beforeRange = supplyPriceRangeFromSkuSnapshots(snapshots, SNAPSHOT_BEFORE, null);
+            afterRange = supplyPriceRangeFromSkuSnapshots(snapshots, SNAPSHOT_AFTER, null);
+        }
+        if (!beforeRange.hasValue())
+        {
+            beforeRange = supplyPriceRangeFromProductSnapshot(snapshots, SNAPSHOT_BEFORE);
+        }
+        if (!afterRange.hasValue())
+        {
+            afterRange = supplyPriceRangeFromProductSnapshot(snapshots, SNAPSHOT_AFTER);
+        }
+        applySupplyPriceRange(review, beforeRange, afterRange);
+    }
+
+    private void applySupplyPriceRange(ProductReviewRequest review, PriceRange beforeRange, PriceRange afterRange)
+    {
+        review.setPriceBeforeMin(beforeRange.getMin());
+        review.setPriceBeforeMax(beforeRange.getMax());
+        review.setPriceAfterMin(afterRange.getMin());
+        review.setPriceAfterMax(afterRange.getMax());
+    }
+
+    private List<Long> createdSkuItemIds(List<ProductReviewItem> items)
+    {
+        if (items == null)
+        {
+            return List.of();
+        }
+        return items.stream()
+            .filter(item -> ITEM_TYPE_SKU.equals(item.getItemType()))
+            .filter(item -> CHANGE_CREATE.equals(item.getChangeType()))
+            .map(ProductReviewItem::getItemId)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toList());
+    }
+
+    private PriceRange supplyPriceRangeFromSkuSnapshots(List<ProductReviewSnapshot> snapshots, String role,
+        List<Long> itemIds)
+    {
+        PriceRange range = PriceRange.empty();
+        for (ProductReviewSnapshot snapshot : snapshots)
+        {
+            if (!role.equals(snapshot.getSnapshotRole()) || !PAYLOAD_SKU.equals(snapshot.getPayloadType()))
+            {
+                continue;
+            }
+            if (itemIds != null && !itemIds.isEmpty() && !itemIds.contains(snapshot.getItemId()))
+            {
+                continue;
+            }
+            range.accept(parseSkuSnapshot(snapshot.getPayloadJson()).getSupplyPrice());
+        }
+        return range;
+    }
+
+    private PriceRange supplyPriceRangeFromProductSnapshot(List<ProductReviewSnapshot> snapshots, String role)
+    {
+        ProductReviewSnapshot productSnapshot = findProductSnapshot(snapshots, role);
+        if (productSnapshot == null)
+        {
+            return PriceRange.empty();
+        }
+        ProductSpu product = parseProductSnapshot(productSnapshot.getPayloadJson());
+        PriceRange range = PriceRange.empty();
+        safeSkus(product).forEach(sku -> range.accept(sku.getSupplyPrice()));
+        range.accept(product.getSupplyPriceMin());
+        range.accept(product.getSupplyPriceMax());
+        return range;
     }
 
     private ProductReviewRequest buildNewProductReview(ProductSpu product, List<ProductSku> skus, String operator,
@@ -1033,6 +1129,48 @@ public class ProductReviewServiceImpl implements IProductReviewService
     private List<ProductSku> safeSkus(ProductSpu product)
     {
         return product == null || product.getSkus() == null ? List.of() : product.getSkus();
+    }
+
+    private static class PriceRange
+    {
+        private BigDecimal min;
+        private BigDecimal max;
+
+        private static PriceRange empty()
+        {
+            return new PriceRange();
+        }
+
+        private boolean hasValue()
+        {
+            return min != null || max != null;
+        }
+
+        private void accept(BigDecimal value)
+        {
+            if (value == null)
+            {
+                return;
+            }
+            if (min == null || value.compareTo(min) < 0)
+            {
+                min = value;
+            }
+            if (max == null || value.compareTo(max) > 0)
+            {
+                max = value;
+            }
+        }
+
+        private BigDecimal getMin()
+        {
+            return min;
+        }
+
+        private BigDecimal getMax()
+        {
+            return max;
+        }
     }
 
     private BigDecimal minSupplyPrice(ProductSpu product)
