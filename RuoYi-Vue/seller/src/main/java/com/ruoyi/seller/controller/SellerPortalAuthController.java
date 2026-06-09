@@ -30,8 +30,8 @@ public class SellerPortalAuthController extends BaseController
         return success(sellerService.loginSeller(loginBody));
     }
 
-    @PortalLog(terminal = "seller", title = "卖家端免密登录", isSaveResponseData = false, allowAnonymous = true,
-            excludeParamNames = { "directLoginToken" })
+    @PortalLog(terminal = "seller", title = "卖家端免密登录", isSaveRequestData = false,
+            isSaveResponseData = false, allowAnonymous = true, excludeParamNames = { "directLoginToken" })
     @PostMapping("/direct-login")
     public AjaxResult directLogin(@RequestBody(required = false) Map<String, String> body)
     {

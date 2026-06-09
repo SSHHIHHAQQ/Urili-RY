@@ -41,7 +41,7 @@ begin
     from seller_menu
     where perms = p_perms
       and (
-        parent_id <> p_parent_id
+        coalesce(parent_id, -1) <> p_parent_id
         or coalesce(menu_type, '') <> coalesce(p_menu_type, '')
         or coalesce(path, '') <> coalesce(p_path, '')
         or coalesce(component, '') <> coalesce(p_component, '')
@@ -68,7 +68,7 @@ begin
     from buyer_menu
     where perms = p_perms
       and (
-        parent_id <> p_parent_id
+        coalesce(parent_id, -1) <> p_parent_id
         or coalesce(menu_type, '') <> coalesce(p_menu_type, '')
         or coalesce(path, '') <> coalesce(p_path, '')
         or coalesce(component, '') <> coalesce(p_component, '')
@@ -115,6 +115,39 @@ begin
     signal sqlstate '45000' set message_text = 'seller_menu auto_increment must be between 100000 and 199999 before terminal menu seed inserts';
   end if;
 
+  if exists (
+    select 1
+    from seller_menu
+    where coalesce(perms, '') = ''
+       or coalesce(perms, '') = '*'
+       or coalesce(perms, '') not like 'seller:%'
+       or coalesce(perms, '') like 'seller:admin:%'
+       or coalesce(perms, '') like 'buyer:%'
+  ) then
+    signal sqlstate '45000' set message_text = 'seller_menu contains invalid terminal perms';
+  end if;
+
+  if exists (
+    select 1
+    from seller_menu
+    where menu_type = 'C'
+      and coalesce(component, '') = ''
+  ) then
+    signal sqlstate '45000' set message_text = 'seller_menu page menus require component';
+  end if;
+
+  if exists (
+    select 1
+    from (
+      select perms
+      from seller_menu
+      group by perms
+      having count(1) > 1
+    ) duplicate_seller_menu_perms
+  ) then
+    signal sqlstate '45000' set message_text = 'seller_menu perms must be unique before terminal role grants';
+  end if;
+
   select count(1)
     into v_table_count
   from information_schema.tables
@@ -144,11 +177,183 @@ begin
       or coalesce(v_auto_increment, 0) >= 300000 then
     signal sqlstate '45000' set message_text = 'buyer_menu auto_increment must be between 200000 and 299999 before terminal menu seed inserts';
   end if;
+
+  if exists (
+    select 1
+    from buyer_menu
+    where coalesce(perms, '') = ''
+       or coalesce(perms, '') = '*'
+       or coalesce(perms, '') not like 'buyer:%'
+       or coalesce(perms, '') like 'buyer:admin:%'
+       or coalesce(perms, '') like 'seller:%'
+  ) then
+    signal sqlstate '45000' set message_text = 'buyer_menu contains invalid terminal perms';
+  end if;
+
+  if exists (
+    select 1
+    from buyer_menu
+    where menu_type = 'C'
+      and coalesce(component, '') = ''
+  ) then
+    signal sqlstate '45000' set message_text = 'buyer_menu page menus require component';
+  end if;
+
+  if exists (
+    select 1
+    from (
+      select perms
+      from buyer_menu
+      group by perms
+      having count(1) > 1
+    ) duplicate_buyer_menu_perms
+  ) then
+    signal sqlstate '45000' set message_text = 'buyer_menu perms must be unique before terminal role grants';
+  end if;
+end//
+
+drop procedure if exists assert_portal_account_list_permission_seed_completed//
+create procedure assert_portal_account_list_permission_seed_completed()
+begin
+  if exists (
+    select 1
+    from seller s
+    where s.status = '0'
+      and not exists (
+        select 1
+        from seller_role r
+        where r.seller_id = s.seller_id
+          and r.role_key = 'owner'
+          and r.status = '0'
+          and r.del_flag = '0'
+      )
+  ) then
+    signal sqlstate '45000' set message_text = 'active sellers must have default owner roles';
+  end if;
+
+  if exists (
+    select 1
+    from buyer b
+    where b.status = '0'
+      and not exists (
+        select 1
+        from buyer_role r
+        where r.buyer_id = b.buyer_id
+          and r.role_key = 'owner'
+          and r.status = '0'
+          and r.del_flag = '0'
+      )
+  ) then
+    signal sqlstate '45000' set message_text = 'active buyers must have default owner roles';
+  end if;
+
+  if exists (
+    select 1
+    from seller_account a
+    where a.account_role = 'OWNER'
+      and not exists (
+        select 1
+        from seller_account_role ar
+        join seller_role r on r.seller_role_id = ar.seller_role_id
+        where ar.seller_account_id = a.seller_account_id
+          and r.seller_id = a.seller_id
+          and r.role_key = 'owner'
+          and r.status = '0'
+          and r.del_flag = '0'
+      )
+  ) then
+    signal sqlstate '45000' set message_text = 'seller owner accounts must bind default owner role';
+  end if;
+
+  if exists (
+    select 1
+    from buyer_account a
+    where a.account_role = 'OWNER'
+      and not exists (
+        select 1
+        from buyer_account_role ar
+        join buyer_role r on r.buyer_role_id = ar.buyer_role_id
+        where ar.buyer_account_id = a.buyer_account_id
+          and r.buyer_id = a.buyer_id
+          and r.role_key = 'owner'
+          and r.status = '0'
+          and r.del_flag = '0'
+      )
+  ) then
+    signal sqlstate '45000' set message_text = 'buyer owner accounts must bind default owner role';
+  end if;
+
+  if not exists (
+    select 1
+    from seller_menu
+    where perms = 'seller:account:list'
+      and parent_id = 0
+      and menu_type = 'F'
+      and coalesce(path, '') = ''
+      and coalesce(component, '') = ''
+      and coalesce(route_name, '') = ''
+  ) then
+    signal sqlstate '45000' set message_text = 'seller account list permission was not created';
+  end if;
+
+  if not exists (
+    select 1
+    from buyer_menu
+    where perms = 'buyer:account:list'
+      and parent_id = 0
+      and menu_type = 'F'
+      and coalesce(path, '') = ''
+      and coalesce(component, '') = ''
+      and coalesce(route_name, '') = ''
+  ) then
+    signal sqlstate '45000' set message_text = 'buyer account list permission was not created';
+  end if;
+
+  if exists (
+    select 1
+    from seller_role r
+    where r.del_flag = '0'
+      and r.status = '0'
+      and r.role_key = 'owner'
+      and not exists (
+        select 1
+        from seller_role_menu rm
+        join seller_menu m on m.seller_menu_id = rm.seller_menu_id
+        where rm.seller_role_id = r.seller_role_id
+          and m.perms = 'seller:account:list'
+      )
+  ) then
+    signal sqlstate '45000' set message_text = 'seller owner roles must have account list permission';
+  end if;
+
+  if exists (
+    select 1
+    from buyer_role r
+    where r.del_flag = '0'
+      and r.status = '0'
+      and r.role_key = 'owner'
+      and not exists (
+        select 1
+        from buyer_role_menu rm
+        join buyer_menu m on m.buyer_menu_id = rm.buyer_menu_id
+        where rm.buyer_role_id = r.buyer_role_id
+          and m.perms = 'buyer:account:list'
+      )
+  ) then
+    signal sqlstate '45000' set message_text = 'buyer owner roles must have account list permission';
+  end if;
 end//
 
 delimiter ;
 
 call assert_terminal_menu_range_ready();
+
+call assert_seller_menu_permission_slot('seller:account:list', 0, 'F', '', null, '',
+    'seller:account:list menu slot is occupied by another signature');
+call assert_buyer_menu_permission_slot('buyer:account:list', 0, 'F', '', null, '',
+    'buyer:account:list menu slot is occupied by another signature');
+
+start transaction;
 
 insert into seller_role
     (seller_id, role_name, role_key, role_sort, status, del_flag,
@@ -162,6 +367,7 @@ where s.status = '0'
       from seller_role r
       where r.seller_id = s.seller_id
         and r.role_key = 'owner'
+        and r.status = '0'
         and r.del_flag = '0'
   );
 
@@ -177,13 +383,9 @@ where b.status = '0'
       from buyer_role r
       where r.buyer_id = b.buyer_id
         and r.role_key = 'owner'
+        and r.status = '0'
         and r.del_flag = '0'
   );
-
-call assert_seller_menu_permission_slot('seller:account:list', 0, 'F', '', null, '',
-    'seller:account:list menu slot is occupied by another signature');
-call assert_buyer_menu_permission_slot('buyer:account:list', 0, 'F', '', null, '',
-    'buyer:account:list menu slot is occupied by another signature');
 
 insert into seller_menu
     (menu_name, parent_id, order_num, path, component, query, route_name,
@@ -214,6 +416,7 @@ select a.seller_account_id, r.seller_role_id
 from seller_account a
 join seller_role r on r.seller_id = a.seller_id
                   and r.role_key = 'owner'
+                  and r.status = '0'
                   and r.del_flag = '0'
 where a.account_role = 'OWNER'
   and not exists (
@@ -228,6 +431,7 @@ select a.buyer_account_id, r.buyer_role_id
 from buyer_account a
 join buyer_role r on r.buyer_id = a.buyer_id
                  and r.role_key = 'owner'
+                 and r.status = '0'
                  and r.del_flag = '0'
 where a.account_role = 'OWNER'
   and not exists (
@@ -275,6 +479,10 @@ where r.del_flag = '0'
         and rm.buyer_menu_id = m.buyer_menu_id
   );
 
+call assert_portal_account_list_permission_seed_completed();
+commit;
+
 drop procedure if exists assert_seller_menu_permission_slot;
 drop procedure if exists assert_buyer_menu_permission_slot;
 drop procedure if exists assert_terminal_menu_range_ready;
+drop procedure if exists assert_portal_account_list_permission_seed_completed;

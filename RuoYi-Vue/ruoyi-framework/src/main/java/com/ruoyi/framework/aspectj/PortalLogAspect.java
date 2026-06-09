@@ -1,7 +1,11 @@
 package com.ruoyi.framework.aspectj;
 
 import java.util.Collection;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.apache.commons.lang3.ArrayUtils;
@@ -46,7 +50,10 @@ public class PortalLogAspect
 
     /** Excluded sensitive properties. */
     public static final String[] EXCLUDE_PROPERTIES = { "password", "oldPassword", "newPassword", "confirmPassword",
-            "token", "jwt", "directLoginToken", "loginUrl", "accessToken", "refreshToken", "authorization" };
+            "token", "jwt", "directLoginToken", "loginUrl", "accessToken", "refreshToken", "authorization",
+            "subjectId", "accountId", "sellerId", "buyerId", "sellerAccountId", "buyerAccountId",
+            "directLoginTicketId", "actingAdminId", "actingAdminName", "directLoginReason", "terminal",
+            "tokenId", "operParam", "jsonResult" };
 
     /** Cost time holder. */
     private static final ThreadLocal<Long> TIME_THREADLOCAL = new NamedThreadLocal<Long>("Portal Cost Time");
@@ -170,7 +177,9 @@ public class PortalLogAspect
         }
         else
         {
-            operLog.setOperParam(StringUtils.substring(JSON.toJSONString(paramsMap, excludePropertyPreFilter(excludeParamNames)), 0, PARAM_MAX_LENGTH));
+            Map<?, ?> filteredParamsMap = filterRequestParamMap(paramsMap, excludeParamNames);
+            operLog.setOperParam(StringUtils.substring(JSON.toJSONString(filteredParamsMap,
+                    excludePropertyPreFilter(excludeParamNames)), 0, PARAM_MAX_LENGTH));
         }
     }
 
@@ -258,6 +267,33 @@ public class PortalLogAspect
     public PropertyPreExcludeFilter excludePropertyPreFilter(String[] excludeParamNames)
     {
         return new PropertyPreExcludeFilter().addExcludes(ArrayUtils.addAll(EXCLUDE_PROPERTIES, excludeParamNames));
+    }
+
+    private Map<?, ?> filterRequestParamMap(Map<?, ?> paramsMap, String[] excludeParamNames)
+    {
+        if (StringUtils.isEmpty(paramsMap))
+        {
+            return paramsMap;
+        }
+        Set<String> excludedNames = new HashSet<>();
+        for (String name : ArrayUtils.addAll(EXCLUDE_PROPERTIES, excludeParamNames))
+        {
+            if (StringUtils.isNotEmpty(name))
+            {
+                excludedNames.add(name.toLowerCase(Locale.ROOT));
+            }
+        }
+        Map<Object, Object> filteredParamsMap = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : paramsMap.entrySet())
+        {
+            Object key = entry.getKey();
+            if (key != null && excludedNames.contains(String.valueOf(key).toLowerCase(Locale.ROOT)))
+            {
+                continue;
+            }
+            filteredParamsMap.put(key, entry.getValue());
+        }
+        return filteredParamsMap;
     }
 
     @SuppressWarnings("rawtypes")

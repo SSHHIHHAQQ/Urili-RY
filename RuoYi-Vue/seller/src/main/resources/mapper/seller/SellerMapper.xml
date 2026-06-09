@@ -108,6 +108,14 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="costTime"      column="cost_time"         />
     </resultMap>
 
+    <resultMap type="WarehouseSellerProfile" id="WarehouseSellerProfileResult">
+        <id     property="sellerId"        column="seller_id"         />
+        <result property="sellerNo"        column="seller_no"         />
+        <result property="sellerCode"      column="seller_code"       />
+        <result property="sellerName"      column="seller_name"       />
+        <result property="sellerShortName" column="seller_short_name" />
+    </resultMap>
+
     <sql id="selectSellerColumns">
         select s.seller_id, s.seller_no, s.seller_code, s.seller_name,
                s.seller_short_name, s.seller_type, s.seller_level, s.status,
@@ -214,6 +222,57 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <include refid="sellerJoins"/>
         where s.seller_code = #{sellerCode}
         limit 1
+    </select>
+
+    <select id="selectWarehouseSellerProfileById" parameterType="Long" resultMap="WarehouseSellerProfileResult">
+        select seller_id, seller_no, seller_code, seller_name, seller_short_name
+        from seller
+        where seller_id = #{sellerId}
+        limit 1
+    </select>
+
+    <select id="selectWarehouseSellerProfilesByIds" resultMap="WarehouseSellerProfileResult">
+        select seller_id, seller_no, seller_code, seller_name, seller_short_name
+        from seller
+        where seller_id in
+        <foreach collection="sellerIds" item="sellerId" open="(" separator="," close=")">
+            #{sellerId}
+        </foreach>
+    </select>
+
+    <select id="selectWarehouseSellerProfilesByKeyword" resultMap="WarehouseSellerProfileResult">
+        select seller_id, seller_no, seller_code, seller_name, seller_short_name
+        from seller
+        where (
+            seller_no like concat('%', #{keyword}, '%')
+            or seller_code like concat('%', #{keyword}, '%')
+            or seller_name like concat('%', #{keyword}, '%')
+            or seller_short_name like concat('%', #{keyword}, '%')
+        )
+        order by seller_code asc, seller_id asc
+    </select>
+
+    <select id="selectNormalWarehouseSellerOptions" resultMap="WarehouseSellerProfileResult">
+        select seller_id, seller_no, seller_code, seller_name, seller_short_name
+        from seller
+        where status = '0'
+        <if test="keyword != null and keyword != ''">
+            and (
+                seller_no like concat('%', #{keyword}, '%')
+                or seller_code like concat('%', #{keyword}, '%')
+                or seller_name like concat('%', #{keyword}, '%')
+                or seller_short_name like concat('%', #{keyword}, '%')
+            )
+        </if>
+        order by seller_code asc, seller_id asc
+        limit 100
+    </select>
+
+    <select id="countNormalSellerById" resultType="int">
+        select count(1)
+        from seller
+        where seller_id = #{sellerId}
+          and status = '0'
     </select>
 
     <insert id="insertSeller" parameterType="Seller" useGeneratedKeys="true" keyProperty="sellerId">

@@ -4,7 +4,7 @@
 
 ## 子 Agent 使用情况
 
-- 本轮按用户要求优先尝试 GPT-5.3 Codex；由于当前已知额度限制，本轮实际使用并关闭 6 个 `gpt-5.4` 只读扫描子 Agent。
+- 历史记录（已过期口径）：本轮按用户要求优先尝试 GPT-5.3 Codex；由于当前已知额度限制，本轮实际使用并关闭 6 个 `gpt-5.4` 只读扫描子 Agent。
 - 本切片采纳 seller/buyer 登录日志 actor 扫描结论：`seller_login_log` / `buyer_login_log` 已有 `acting_admin_id` 和 `acting_admin_name` 字段，不需要 DDL。
 - 其它子 Agent 结论已作为后续 P1 排队：静态 `/seller` / `/buyer` 路由 fallback guard、admin 角色 SQL wildcard 授权、旧 SQL 动态补列 guard、端内 oper_log direct-login 结构化审计。
 

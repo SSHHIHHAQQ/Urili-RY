@@ -20,6 +20,12 @@ public class TerminalAccountIsolationTest
             "\\b(?:sys_user|sys_role|sys_menu|sys_dept|sys_user_role|sys_role_menu|SysUser|SysRole|SysMenu|SysDept|LoginUser|PortalAccountSupport|PortalAccountMapper)\\b"
                     + "|\\b(?:seller_account|buyer_account)\\.user_id\\b",
             Pattern.CASE_INSENSITIVE);
+    private static final Pattern ACCOUNT_ID_ONLY_SIGNATURE = Pattern.compile(
+            "\\b(?:public\\s+)?[\\w<>\\[\\], ?]+\\s+\\w*Account\\w*\\s*\\(\\s*(?:@Param\\(\"(?:sellerAccountId|buyerAccountId|accountId)\"\\)\\s*)?Long\\s+(?:sellerAccountId|buyerAccountId|accountId)\\s*\\)",
+            Pattern.CASE_INSENSITIVE);
+    private static final Pattern XML_STATEMENT = Pattern.compile(
+            "<(select|update|delete|insert)\\b[^>]*id=\"([^\"]+)\"[\\s\\S]*?</\\1>",
+            Pattern.CASE_INSENSITIVE);
 
     @Test
     public void sellerAndBuyerModulesMustNotReuseAdminSysAccountControlPlane() throws IOException
@@ -148,12 +154,96 @@ public class TerminalAccountIsolationTest
                 backendRoot.resolve("buyer/src/test/java"),
                 "\"selectBuyerAccountById\".equals(methodName)",
                 backendRoot, violations);
+        scanForbiddenGenericAccountIdOnlySignatures(backendRoot, "seller", violations);
+        scanForbiddenGenericAccountIdOnlySignatures(backendRoot, "buyer", violations);
+        scanForbiddenAccountSqlWithoutSubjectScope(backendRoot, "seller", violations);
+        scanForbiddenAccountSqlWithoutSubjectScope(backendRoot, "buyer", violations);
 
         if (!violations.isEmpty())
         {
             fail("terminal account mapper accountId-only lookup is forbidden in production service code:\n"
                     + String.join("\n", violations));
         }
+    }
+
+    private void scanForbiddenGenericAccountIdOnlySignatures(Path backendRoot, String terminal,
+            List<String> violations) throws IOException
+    {
+        Path sourceRoot = backendRoot.resolve(terminal).resolve("src/main/java");
+        try (Stream<Path> paths = Files.walk(sourceRoot))
+        {
+            for (Path path : paths.filter(path -> path.toString().endsWith(".java")).toList())
+            {
+                String relativePath = backendRoot.relativize(path).toString().replace('\\', '/');
+                if (!relativePath.contains("/controller/") && !relativePath.contains("/service/")
+                        && !relativePath.contains("/mapper/"))
+                {
+                    continue;
+                }
+                String source = normalizeWhitespace(Files.readString(path, StandardCharsets.UTF_8));
+                Matcher matcher = ACCOUNT_ID_ONLY_SIGNATURE.matcher(source);
+                while (matcher.find())
+                {
+                    violations.add(backendRoot.relativize(path)
+                            + " must not expose accountId-only method signature: " + matcher.group());
+                }
+            }
+        }
+    }
+
+    private void scanForbiddenAccountSqlWithoutSubjectScope(Path backendRoot, String terminal,
+            List<String> violations) throws IOException
+    {
+        Path mapperRoot = backendRoot.resolve(terminal).resolve("src/main/resources");
+        String accountTable = terminal + "_account";
+        String accountRoleTable = terminal + "_account_role";
+        String accountIdColumn = terminal + "_account_id";
+        String subjectIdColumn = terminal + "_id";
+        String subjectIdParam = terminal + "Id";
+
+        try (Stream<Path> paths = Files.walk(mapperRoot))
+        {
+            for (Path path : paths.filter(path -> path.toString().endsWith(".xml")).toList())
+            {
+                String source = Files.readString(path, StandardCharsets.UTF_8);
+                Matcher matcher = XML_STATEMENT.matcher(source);
+                while (matcher.find())
+                {
+                    String statementId = matcher.group(2);
+                    String statement = normalizeWhitespace(matcher.group());
+                    if (!statement.contains(accountIdColumn + " = #{")
+                            || !touchesAccountScopeTable(statement, accountTable, accountRoleTable))
+                    {
+                        continue;
+                    }
+                    if (statement.contains(subjectIdColumn + " = #{" + subjectIdParam + "}"))
+                    {
+                        continue;
+                    }
+                    violations.add(backendRoot.relativize(path) + "#" + statementId
+                            + " must scope " + accountIdColumn + " filters by " + subjectIdColumn);
+                }
+            }
+        }
+    }
+
+    private boolean touchesAccountScopeTable(String statement, String accountTable, String accountRoleTable)
+    {
+        return statement.contains("from " + accountTable + " ")
+                || statement.contains("join " + accountTable + " ")
+                || statement.contains("update " + accountTable + " ")
+                || statement.contains("delete from " + accountTable + " ")
+                || statement.contains("insert into " + accountTable)
+                || statement.contains("from " + accountRoleTable + " ")
+                || statement.contains("join " + accountRoleTable + " ")
+                || statement.contains("update " + accountRoleTable + " ")
+                || statement.contains("delete from " + accountRoleTable + " ")
+                || statement.contains("insert into " + accountRoleTable);
+    }
+
+    private String normalizeWhitespace(String source)
+    {
+        return source.replaceAll("\\s+", " ").trim();
     }
 
     private void collectForbiddenReferences(Path backendRoot, String module, String sourceDirectory,

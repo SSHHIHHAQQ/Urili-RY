@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 import com.ruoyi.integration.domain.SourceWarehouseStockItem;
 import com.ruoyi.integration.domain.UpstreamInventorySyncState;
 import com.ruoyi.integration.domain.UpstreamSkuPairing;
+import com.ruoyi.integration.domain.UpstreamSystemConnection;
 import com.ruoyi.integration.domain.UpstreamWarehousePairing;
 import com.ruoyi.integration.domain.UpstreamWarehouseSyncItem;
 import com.ruoyi.integration.lingxing.LingxingInventoryProductPage;
@@ -86,10 +87,11 @@ public class UpstreamInventorySyncComponent
     private Map<String, UpstreamWarehousePairing> buildWarehousePairingMap(String connectionCode)
     {
         Map<String, UpstreamWarehousePairing> result = new HashMap<>();
+        String expectedPairingRole = pairingRoleForConnection(connectionCode);
         List<UpstreamWarehousePairing> pairings = upstreamSystemMapper.selectWarehousePairingList(connectionCode);
         for (UpstreamWarehousePairing pairing : pairings)
         {
-            if (UpstreamSystemConstants.PAIRING_ROLE_FULFILLMENT.equals(pairing.getPairingRole())
+            if (expectedPairingRole.equals(pairing.getPairingRole())
                 && UpstreamSystemConstants.STATUS_ACTIVE.equals(pairing.getStatus())
                 && StringUtils.isNotBlank(pairing.getUpstreamWarehouseCode()))
             {
@@ -97,6 +99,17 @@ public class UpstreamInventorySyncComponent
             }
         }
         return result;
+    }
+
+    private String pairingRoleForConnection(String connectionCode)
+    {
+        UpstreamSystemConnection connection = upstreamSystemMapper.selectConnectionByCode(connectionCode);
+        if (connection != null
+            && UpstreamSystemConstants.SETTLEMENT_TYPE_SELF_OPERATED_RECEIVABLE.equals(connection.getSettlementType()))
+        {
+            return UpstreamSystemConstants.PAIRING_ROLE_QUOTE;
+        }
+        return UpstreamSystemConstants.PAIRING_ROLE_FULFILLMENT;
     }
 
     private Map<String, UpstreamWarehouseSyncItem> buildWarehouseSyncMap(String connectionCode)

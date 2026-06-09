@@ -21,6 +21,8 @@ public interface IWarehouseService
 
     List<Warehouse> selectThirdPartyWarehouseList(Warehouse query);
 
+    boolean prepareThirdPartyWarehouseQuery(Warehouse query);
+
     Warehouse selectWarehouseById(Long warehouseId);
 
     Warehouse selectOfficialWarehouseById(Long warehouseId);

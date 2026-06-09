@@ -26,8 +26,14 @@ public class FinanceAdminRouteContractTest
                 "react-ui/src/services/finance/currency.js"), StandardCharsets.UTF_8);
         String currencyPage = Files.readString(repoRoot.resolve(
                 "react-ui/src/pages/Finance/Currency/index.tsx"), StandardCharsets.UTF_8);
+        String currencyPageJs = Files.readString(repoRoot.resolve(
+                "react-ui/src/pages/Finance/Currency/index.js"), StandardCharsets.UTF_8);
+        String currencyConstantsJs = Files.readString(repoRoot.resolve(
+                "react-ui/src/pages/Finance/Currency/constants.js"), StandardCharsets.UTF_8);
         String syncSettingsPanel = Files.readString(repoRoot.resolve(
                 "react-ui/src/pages/Finance/Currency/components/SyncSettingsPanel.tsx"), StandardCharsets.UTF_8);
+        String syncSettingsPanelJs = Files.readString(repoRoot.resolve(
+                "react-ui/src/pages/Finance/Currency/components/SyncSettingsPanel.js"), StandardCharsets.UTF_8);
         List<String> violations = new ArrayList<>();
 
         assertContains(controller, "@RequestMapping(\"/finance/admin\")",
@@ -67,8 +73,14 @@ public class FinanceAdminRouteContractTest
 
         assertContains(currencyServiceTs, "const baseUrl = '/api/finance/admin';",
                 "finance currency TS service must call the admin route", violations);
-        assertContains(currencyServiceJs, "const baseUrl = '/api/finance/admin';",
-                "finance currency JS service mirror must call the admin route", violations);
+        assertEqualsTrimmed(currencyServiceJs, "export * from './currency.ts';",
+                "finance currency JS service mirror must be a pure TS re-export", violations);
+        assertEqualsTrimmed(currencyPageJs, "export { default } from './index.tsx';",
+                "finance currency page JS mirror must be a pure TSX re-export", violations);
+        assertEqualsTrimmed(currencyConstantsJs, "export * from './constants.ts';",
+                "finance currency constants JS mirror must be a pure TS re-export", violations);
+        assertEqualsTrimmed(syncSettingsPanelJs, "export { default } from './SyncSettingsPanel.tsx';",
+                "finance sync settings panel JS mirror must be a pure TSX re-export", violations);
         assertContains(currencyPage, "access.hasPerms('finance:currency:add')",
                 "finance currency page must gate add action", violations);
         assertContains(currencyPage, "access.hasPerms('finance:currency:edit')",
@@ -118,6 +130,14 @@ public class FinanceAdminRouteContractTest
         if (source.contains(forbidden))
         {
             violations.add(message + ": found " + forbidden);
+        }
+    }
+
+    private void assertEqualsTrimmed(String source, String expected, String message, List<String> violations)
+    {
+        if (!source.trim().equals(expected))
+        {
+            violations.add(message + ": expected " + expected);
         }
     }
 

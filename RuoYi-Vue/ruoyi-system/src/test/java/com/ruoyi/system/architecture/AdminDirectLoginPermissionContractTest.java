@@ -207,12 +207,18 @@ public class AdminDirectLoginPermissionContractTest
     private void assertAdminButtonGrantsStayAdminOnly(Path sqlFile, String sql, List<String> violations)
     {
         assertContains(sql, "select distinct r.role_id, child.menu_id", sqlFile, violations);
-        assertContains(sql, "join sys_role_menu page_grant on page_grant.role_id = r.role_id", sqlFile, violations);
+        assertContains(sql, "join sys_menu page_menu on page_menu.menu_id in (2011, 2012)", sqlFile, violations);
         assertContains(sql, "where r.role_key = 'admin'", sqlFile, violations);
+        assertContains(sql, "and r.status = '0'", sqlFile, violations);
         assertContains(sql, "and r.del_flag = '0'", sqlFile, violations);
         assertContains(sql,
                 "and substring_index(child.perms, ':', 1) = substring_index(page_menu.perms, ':', 1)",
                 sqlFile, violations);
+        if (sql.contains("join sys_role_menu page_grant on page_grant.role_id = r.role_id"))
+        {
+            violations.add(sqlFile.getFileName()
+                    + " must calculate child grants from final signed partner pages, not existing page grants");
+        }
         if (sql.contains("select distinct page_grant.role_id, child.menu_id"))
         {
             violations.add(sqlFile.getFileName()
@@ -295,16 +301,13 @@ public class AdminDirectLoginPermissionContractTest
     private void assertFrontendPermissionGates(Path workspaceRoot, List<String> violations) throws IOException
     {
         Path[] pages = new Path[] {
-                workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerManagementPage.tsx"),
-                workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerManagementPage.js")
+                workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerManagementPage.tsx")
         };
         Path[] accountModals = new Path[] {
-                workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerAccountModal.tsx"),
-                workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerAccountModal.js")
+                workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerAccountModal.tsx")
         };
         Path[] auditModals = new Path[] {
-                workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerAuditModal.tsx"),
-                workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerAuditModal.js")
+                workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerAuditModal.tsx")
         };
 
         for (Path page : pages)
@@ -339,6 +342,25 @@ public class AdminDirectLoginPermissionContractTest
             }
             assertContains(auditModalSource, "access.hasPerms(`${permPrefix}:ticket:list`)", auditModal, violations);
         }
+
+        assertPureDefaultReExport(
+                readRequired(workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerManagementPage.js"),
+                        violations),
+                "./PartnerManagementPage.tsx",
+                workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerManagementPage.js"),
+                violations);
+        assertPureDefaultReExport(
+                readRequired(workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerAccountModal.js"),
+                        violations),
+                "./PartnerAccountModal.tsx",
+                workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerAccountModal.js"),
+                violations);
+        assertExactSource(
+                readRequired(workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerAuditModal.js"),
+                        violations),
+                "export { default, buildAuditParams } from './PartnerAuditModal.tsx';",
+                workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerAuditModal.js"),
+                violations);
     }
 
     private String readRequired(Path path, List<String> violations) throws IOException
@@ -356,6 +378,20 @@ public class AdminDirectLoginPermissionContractTest
         if (!source.contains(expected))
         {
             violations.add(path.getFileName() + " must contain " + expected);
+        }
+    }
+
+    private void assertPureDefaultReExport(String source, String target, Path path, List<String> violations)
+    {
+        assertExactSource(source, "export { default } from '" + target + "';", path, violations);
+    }
+
+    private void assertExactSource(String source, String expected, Path path, List<String> violations)
+    {
+        String normalized = source.replace("\r\n", "\n").trim();
+        if (!expected.equals(normalized))
+        {
+            violations.add(path.getFileName() + " must equal " + expected);
         }
     }
 

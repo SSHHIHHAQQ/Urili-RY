@@ -22,7 +22,7 @@ const ACTION_SAFE_SEARCH_COLUMN_CANDIDATES = {
     sm: [2],
     md: [2, 3],
     lg: [4, 3, 2],
-    xl: [6, 4, 3],
+    xl: [8, 6, 4],
     xxl: [8, 6, 4],
 };
 const DEFAULT_PRO_TABLE_SEARCH_LAYOUT = {

@@ -102,10 +102,27 @@ function normalizeAuthority(authority: unknown): string[] {
   return typeof authority === 'string' && authority.length > 0 ? [authority] : [];
 }
 
-export function RemoteMenuRouteGuard({ authority, children }: { authority?: unknown; children?: React.ReactNode }) {
+function toRouteAuthority(perms?: string) {
+  const permission = typeof perms === 'string' ? perms.trim() : '';
+  return permission ? [permission] : [];
+}
+
+type RouteAuthorityMode = 'any' | 'all';
+
+export function RemoteMenuRouteGuard({
+  authority,
+  authorityMode = 'any',
+  children,
+}: {
+  authority?: unknown;
+  authorityMode?: RouteAuthorityMode;
+  children?: React.ReactNode;
+}) {
   const permissions = normalizeAuthority(authority);
   const access = useAccess();
-  const allowed = permissions.length > 0 && permissions.some((permission) => access.hasPerms(permission));
+  const allowed = permissions.length > 0 && (authorityMode === 'all'
+    ? permissions.every((permission) => access.hasPerms(permission))
+    : permissions.some((permission) => access.hasPerms(permission)));
 
   if (!allowed) {
     return React.createElement(Result, {
@@ -118,25 +135,48 @@ export function RemoteMenuRouteGuard({ authority, children }: { authority?: unkn
   return React.createElement(React.Fragment, null, children);
 }
 
-function createGuardedMenuElement(pagePath: string, authority: unknown) {
+function createGuardedMenuElement(pagePath: string, authority: unknown, authorityMode?: RouteAuthorityMode) {
   return React.createElement(
     RemoteMenuRouteGuard,
-    { authority },
+    { authority, authorityMode },
     React.createElement(lazy(() => loadMenuPage(pagePath))),
   );
 }
 
-const STATIC_GUARDED_LAYOUT_ROUTES = [
+const STATIC_GUARDED_LAYOUT_ROUTES: Array<{
+  path: string;
+  pagePath: string;
+  authority: string[];
+  authorityMode?: RouteAuthorityMode;
+  name: string;
+}> = [
   {
     path: '/product/distribution/create',
     pagePath: 'Product/Distribution/EditPage.tsx',
-    authority: ['product:distribution:add'],
+    authority: [
+      'product:distribution:add',
+      'seller:admin:list',
+      'product:category:list',
+      'product:categoryAttribute:preview',
+      'warehouse:official:list',
+      'warehouse:thirdParty:list',
+    ],
+    authorityMode: 'all',
     name: '新增商城商品',
   },
   {
     path: '/product/distribution/edit/:spuId',
     pagePath: 'Product/Distribution/EditPage.tsx',
-    authority: ['product:distribution:edit'],
+    authority: [
+      'product:distribution:query',
+      'product:distribution:edit',
+      'seller:admin:list',
+      'product:category:list',
+      'product:categoryAttribute:preview',
+      'warehouse:official:list',
+      'warehouse:thirdParty:list',
+    ],
+    authorityMode: 'all',
     name: '编辑商城商品',
   },
 ];
@@ -150,12 +190,13 @@ function upsertLayoutRoute(route: any, routeItem: any) {
   }
 
   const newRoute = {
-    element: createGuardedMenuElement(routeItem.pagePath, routeItem.authority),
+    element: createGuardedMenuElement(routeItem.pagePath, routeItem.authority, routeItem.authorityMode),
     path: routeItem.path,
     name: routeItem.name,
     hideChildrenInMenu: true,
     hideInMenu: true,
     authority: routeItem.authority,
+    authorityMode: routeItem.authorityMode,
   };
   const routeIndex = route.routes.findIndex((item: any) => item.path === newRoute.path);
   if (routeIndex >= 0) {
@@ -295,18 +336,25 @@ export function convertCompatRouters(childrens: API.RoutersMenuItem[]): any[] {
       hideChildrenInMenu: item.hidden,
       hideInMenu: item.hidden,
       component: item.component,
-      authority: item.perms,
+      authority: toRouteAuthority(item.perms),
     };
   });
 }
 
 export async function getRoutersInfo(): Promise<MenuDataItem[]> {
   return getRouters().then((res) => {
-    if (res.code === 200) {
-      return convertCompatRouters(res.data);
-    } else {
-      return [];
+    if (Number(res?.code) === 200) {
+      return convertCompatRouters(res.data || []);
     }
+    const error = new Error(res?.msg || res?.message || 'Failed to load remote menus') as Error & {
+      code?: unknown;
+      info?: { errorCode?: unknown; errorMessage?: unknown };
+      response?: { data?: unknown };
+    };
+    error.code = res?.code;
+    error.info = { errorCode: res?.code, errorMessage: res?.msg || res?.message };
+    error.response = { data: res };
+    throw error;
   });
 }
 

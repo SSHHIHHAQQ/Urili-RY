@@ -1,4 +1,4 @@
-import { ArrowLeftOutlined, EyeOutlined, SaveOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, EyeOutlined, HistoryOutlined, SaveOutlined } from '@ant-design/icons';
 import { PageContainer, ProTable, type ProColumns } from '@ant-design/pro-components';
 import { history, useAccess, useParams } from '@umijs/max';
 import { Affix, Button, Card, DatePicker, Form, Input, InputNumber, Modal, Radio, Select, Space, Tag, TreeSelect, Typography } from 'antd';
@@ -8,6 +8,7 @@ import { getCategoryList, getCategorySchema } from '@/services/product/product';
 import {
   addDistributionProduct,
   getDistributionProduct,
+  getDistributionLatestRejectedSubmission,
   updateDistributionProduct,
 } from '@/services/product/distributionProduct';
 import { getSourceProductList } from '@/services/integration/sourceProduct';
@@ -18,7 +19,7 @@ import {
 } from '@/services/warehouse/warehouse';
 import { message } from '@/utils/feedback';
 import { SEARCHABLE_SELECT_PROPS, SEARCHABLE_TREE_SELECT_PROPS } from '@/utils/selectSearch';
-import { buildCategoryTree } from '../categoryTree';
+import { buildCategoryTree, findCategoryDisplayPath } from '../categoryTree';
 import { yesNoOptions } from '../constants';
 import DetailContentBuilder from './components/DetailContentBuilder';
 import ProductImageSection from './components/ProductImageSection';
@@ -45,6 +46,8 @@ const ATTRIBUTE_DATE_FORMAT = 'YYYY-MM-DD';
 type WarehouseOption = {
   label: string;
   value: number;
+  warehouseCode?: string;
+  warehouseName?: string;
   currencyCode: string;
   currencyLabel: string;
   warehouseKind: string;
@@ -96,6 +99,16 @@ function toPublishCategoryTreeData(categories: API.Product.Category[]): any[] {
 
 function stripSkuRows(rows: (API.ProductDistribution.Sku & { rowKey?: string })[]) {
   return rows.map(({ rowKey: _rowKey, ...row }) => row);
+}
+
+function hasText(value?: string) {
+  return !!value?.trim();
+}
+
+function findMissingSkuImageWhenColorSpecEnabled(rows: API.ProductDistribution.Sku[]) {
+  const colorSpecEnabled = rows.some((sku) => hasText(sku.color));
+  if (!colorSpecEnabled) return undefined;
+  return rows.find((sku) => !hasText(sku.skuImageUrl));
 }
 
 function formatNumber(value?: number, digits = 2) {
@@ -180,6 +193,14 @@ function getSkuSourceKey(row?: Pick<API.ProductDistribution.Sku, 'sourceDimensio
   return row?.sourceDimensionGroupKey || row?.sourceSkuGroupKey || row?.masterSku || '';
 }
 
+function ensureSkuRowKeys(rows: (API.ProductDistribution.Sku & { rowKey?: string })[]) {
+  return rows.map((row, index) => ({
+    ...row,
+    rowKey: row.rowKey || String(row.skuId || `sku-row-${index}-${Date.now()}`),
+    sortOrder: row.sortOrder ?? index,
+  }));
+}
+
 function toSourceItemFromSkuRow(row: API.ProductDistribution.Sku): API.Integration.SourceProductItem | undefined {
   if (!row.sourceDimensionGroupKey && !row.sourceSkuGroupKey) return undefined;
   return {
@@ -197,6 +218,30 @@ function toSourceItemFromSkuRow(row: API.ProductDistribution.Sku): API.Integrati
     height: row.measureHeightCm,
     weight: row.measureWeightKg,
     sourcePayloadHash: row.sourcePayloadHash,
+  };
+}
+
+function clearSkuSourceBinding(row: API.ProductDistribution.Sku & { rowKey?: string }) {
+  return {
+    ...row,
+    sourceBindingId: undefined,
+    sourceScope: undefined,
+    sourceSkuGroupKey: undefined,
+    sourceDimensionGroupKey: undefined,
+    masterSku: undefined,
+    masterProductNameSnapshot: undefined,
+    sourcePayloadHash: undefined,
+    wmsPayloadHash: undefined,
+    measureLengthCm: undefined,
+    measureWidthCm: undefined,
+    measureHeightCm: undefined,
+    measureWeightKg: undefined,
+    measureSource: undefined,
+    sourceWarehouseNames: undefined,
+    sourceWarehouseCount: undefined,
+    bindingStatus: undefined,
+    lockStatus: undefined,
+    lockedTime: undefined,
   };
 }
 
@@ -236,6 +281,8 @@ function toWarehouseOption(warehouse: API.Warehouse.Warehouse): WarehouseOption 
   return {
     label: `${warehouseText}（${warehouse.warehouseCode || '-'} / ${warehouseKindLabel} / ${currencyCode || '-'}）`,
     value,
+    warehouseCode: warehouse.warehouseCode,
+    warehouseName: warehouseText,
     currencyCode,
     currencyLabel: currencyCode,
     warehouseKind,
@@ -253,6 +300,8 @@ function toBoundWarehouseOption(warehouse: API.ProductDistribution.ProductWareho
   return {
     label: `${warehouseText}（${warehouse.warehouseCode || '-'} / ${warehouseKindLabel} / ${currencyCode || '-'}）`,
     value,
+    warehouseCode: warehouse.warehouseCode,
+    warehouseName: warehouseText,
     currencyCode,
     currencyLabel: currencyCode,
     warehouseKind,
@@ -272,16 +321,6 @@ function mergeWarehouseOptions(options: WarehouseOption[], boundWarehouses?: API
     }
   });
   return Array.from(map.values());
-}
-
-function findCategoryName(categories: API.Product.Category[], categoryId?: number): string | undefined {
-  if (!categoryId) return undefined;
-  for (const item of categories) {
-    if (item.categoryId === categoryId) return item.categoryName;
-    const childName = findCategoryName(item.children || [], categoryId);
-    if (childName) return childName;
-  }
-  return undefined;
 }
 
 function formatPreviewAttributeValue(item: API.Product.CategoryAttribute, value: any) {
@@ -356,10 +395,14 @@ function buildPreviewWarehouses(
     const officialNames = Array.from(new Set(rows.flatMap((row) =>
       (row.sourceWarehouseNames || '').split(/[,\uFF0C/]/).map((item) => item.trim()).filter(Boolean))));
     const names = officialNames.length ? officialNames : ['平台官方仓'];
+    const currencyCode = rows.find((row) => row.currencyCode)?.currencyCode;
     return names.map((name, index) => ({
       key: `official-${name}-${index}`,
       name,
+      code: name,
       kind: 'official',
+      kindLabel: '平台官方仓',
+      currencyCode,
       stockText: `官方现货 ${186 + index * 42} 件`,
       deliveryText: '平台官方仓现货发货 / 运费下单时计算',
     }));
@@ -367,6 +410,8 @@ function buildPreviewWarehouses(
   const warehouses = selectedWarehouses.length ? selectedWarehouses : [{
     label: '默认发货仓',
     value: 0,
+    warehouseCode: '',
+    warehouseName: '默认发货仓',
     currencyCode: 'CNY',
     currencyLabel: 'CNY',
     warehouseKind: warehouseKind || 'third_party',
@@ -374,8 +419,11 @@ function buildPreviewWarehouses(
   }];
   return warehouses.map((warehouse, index) => ({
     key: String(warehouse.value || index),
-    name: String(warehouse.label || `发货仓 ${index + 1}`).split('/')[0].trim(),
+    name: warehouse.warehouseName || String(warehouse.label || `发货仓 ${index + 1}`).split('（')[0].trim(),
+    code: warehouse.warehouseCode,
     kind: warehouse.warehouseKind,
+    kindLabel: warehouse.warehouseKindLabel,
+    currencyCode: warehouse.currencyCode,
     stockText: `现货 ${96 + index * 28} 件`,
     deliveryText: '仓库现货发货 / 运费下单时计算',
   }));
@@ -397,8 +445,11 @@ export default function ProductDistributionEditPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [product, setProduct] = useState<API.ProductDistribution.Spu>();
+  const [rejectedSubmission, setRejectedSubmission] = useState<API.ProductDistribution.Spu>();
+  const [rejectedSubmissionLoading, setRejectedSubmissionLoading] = useState(false);
   const [categories, setCategories] = useState<API.Product.Category[]>([]);
   const [schema, setSchema] = useState<API.Product.CategoryAttribute[]>([]);
+  const [schemaLoadedCategoryId, setSchemaLoadedCategoryId] = useState<number>();
   const [sellerOptions, setSellerOptions] = useState<{ label: string; value: number }[]>([]);
   const [warehouseOptions, setWarehouseOptions] = useState<WarehouseOption[]>([]);
   const [galleryUrls, setGalleryUrls] = useState<string[]>([]);
@@ -406,15 +457,31 @@ export default function ProductDistributionEditPage() {
   const [selectedWarehouseKind, setSelectedWarehouseKind] = useState<string>();
   const [selectedWarehouseIds, setSelectedWarehouseIds] = useState<number[]>([]);
   const [sourceSelectorOpen, setSourceSelectorOpen] = useState(false);
+  const [sourceSelectorMode, setSourceSelectorMode] = useState<'bulk' | 'row'>('bulk');
+  const [pairingTargetRowKey, setPairingTargetRowKey] = useState<string>();
   const [selectedSourceSkuMap, setSelectedSourceSkuMap] = useState<Record<string, API.Integration.SourceProductItem>>({});
   const [buyerPreviewOpen, setBuyerPreviewOpen] = useState(false);
   const [buyerPreviewData, setBuyerPreviewData] = useState<BuyerProductPreviewData>();
   const [skuRows, setSkuRows] = useState<(API.ProductDistribution.Sku & { rowKey?: string })[]>([
     createEmptySkuRow(),
   ]);
-  const canQuerySourceProducts = access.hasPerms('product:list:list');
+  const canQuerySourceProducts = access.hasPerms('integration:upstream:query');
   const canQueryOfficialWarehouses = access.hasPerms('warehouse:official:list');
   const canQueryThirdPartyWarehouses = access.hasPerms('warehouse:thirdParty:list');
+  const canQueryDistributionProduct = access.hasPerms('product:distribution:query');
+  const canCreateDistributionProduct = access.hasPerms('product:distribution:add');
+  const canEditDistributionProduct = isEdit
+    ? (canQueryDistributionProduct && access.hasPerms('product:distribution:edit'))
+    : canCreateDistributionProduct;
+  const canQueryAdminSellers = access.hasPerms('seller:admin:list');
+  const canQueryProductCategories = access.hasPerms('product:category:list');
+  const canPreviewCategorySchema = access.hasPerms('product:categoryAttribute:preview');
+  const canMaintainDistributionProductDependencies =
+    canQueryAdminSellers
+    && canQueryProductCategories
+    && canPreviewCategorySchema
+    && canQueryOfficialWarehouses
+    && canQueryThirdPartyWarehouses;
 
   const categoryTreeData = useMemo(
     () => toPublishCategoryTreeData(buildCategoryTree(categories)),
@@ -430,11 +497,19 @@ export default function ProductDistributionEditPage() {
 
   const persistedWarehouseKind = product?.warehouses?.find((item) => item.warehouseKind)?.warehouseKind;
   const canChangeWarehouseKind = !isEdit || product?.spuStatus === 'DRAFT' || !persistedWarehouseKind;
+  const isReviewedEdit = isEdit && !!product && product.spuStatus !== 'DRAFT';
 
   useEffect(() => {
+    const categoryRequest = canQueryProductCategories
+      ? getCategoryList({ status: '0' })
+      : Promise.resolve({ code: 200, msg: 'ok', data: [] } as API.Product.InfoResult<API.Product.Category[]>);
+    const sellerRequest = canQueryAdminSellers
+      ? getAdminSellerList({ pageNum: 1, pageSize: 100, status: '0' })
+      : Promise.resolve({ code: 200, msg: 'ok', total: 0, rows: [] } as API.Partner.SellerPageResult);
+
     Promise.all([
-      getCategoryList({ status: '0' }),
-      getAdminSellerList({ pageNum: 1, pageSize: 100, status: '0' }),
+      categoryRequest,
+      sellerRequest,
     ]).then(([categoryResp, sellerResp]) => {
       setCategories(categoryResp.data || []);
       setSellerOptions(
@@ -449,7 +524,7 @@ export default function ProductDistributionEditPage() {
       );
     });
 
-  }, []);
+  }, [canQueryAdminSellers, canQueryProductCategories]);
 
   useEffect(() => {
     const officialWarehouseRequest = canQueryOfficialWarehouses
@@ -480,45 +555,83 @@ export default function ProductDistributionEditPage() {
       form.setFieldsValue({ spuStatus: 'DRAFT' });
       return;
     }
+    if (!canQueryDistributionProduct) {
+      message.error('缺少商品详情查看权限');
+      history.replace('/product/distribution');
+      return;
+    }
     setLoading(true);
     getDistributionProduct(spuId)
       .then((resp) => {
         const current = resp.data;
-        setProduct(current);
-        const attributeValueMap: Record<string, any> = {};
-        (current.attributeValues || []).forEach((item) => {
-          if (item.attributeId) {
-            attributeValueMap[String(item.attributeId)] = valueFromAttribute(item);
-          }
-        });
-        form.setFieldsValue({ ...current, attributeValueMap });
-        setDetailBlocks(parseDetailContent(current.detailContent));
-        setSkuRows((current.skus || []).map((sku) => ({ ...sku, rowKey: String(sku.skuId) })));
-        setSelectedWarehouseKind(current.warehouses?.[0]?.warehouseKind);
-        setSelectedWarehouseIds(current.warehouseIds || (current.warehouses || [])
-          .map((item) => item.warehouseId)
-          .filter((warehouseId): warehouseId is number => warehouseId != null));
-        setWarehouseOptions((options) => mergeWarehouseOptions(options, current.warehouses));
-        setGalleryUrls(
-          (current.images || [])
-            .filter((item): item is API.ProductDistribution.ProductImage & { imageUrl: string } =>
-              item.imageRole === 'GALLERY' && !!item.imageUrl)
-            .map((item) => item.imageUrl),
-        );
-        if (current.categoryId) {
-          loadSchema(current.categoryId);
+        applyProductToEditor(current, { updateProductState: true });
+        if (current.latestReviewStatus === 'REJECTED') {
+          setRejectedSubmissionLoading(true);
+          getDistributionLatestRejectedSubmission(spuId)
+            .then((rejectedResp) => {
+              setRejectedSubmission(rejectedResp.data || undefined);
+            })
+            .catch(() => {
+              setRejectedSubmission(undefined);
+            })
+            .finally(() => setRejectedSubmissionLoading(false));
+        } else {
+          setRejectedSubmission(undefined);
         }
       })
       .finally(() => setLoading(false));
-  }, [form, spuId]);
+  }, [canQueryDistributionProduct, form, spuId]);
 
   const loadSchema = async (categoryId: number) => {
+    if (!canPreviewCategorySchema) {
+      setSchema([]);
+      setSchemaLoadedCategoryId(undefined);
+      return;
+    }
     const resp = await getCategorySchema(categoryId);
     setSchema(resp.data || []);
+    setSchemaLoadedCategoryId(categoryId);
+  };
+
+  const applyProductToEditor = (
+    current: API.ProductDistribution.Spu,
+    options: { updateProductState?: boolean } = { updateProductState: true },
+  ) => {
+    if (options.updateProductState) {
+      setProduct(current);
+    }
+    const attributeValueMap: Record<string, any> = {};
+    (current.attributeValues || []).forEach((item) => {
+      if (item.attributeId) {
+        attributeValueMap[String(item.attributeId)] = valueFromAttribute(item);
+      }
+    });
+    form.setFieldsValue({ ...current, attributeValueMap });
+    setDetailBlocks(parseDetailContent(current.detailContent));
+    setSkuRows(ensureSkuRowKeys(current.skus?.length ? current.skus : [createEmptySkuRow()]));
+    setSelectedWarehouseKind(current.warehouseKind || current.warehouses?.[0]?.warehouseKind);
+    setSelectedWarehouseIds(current.warehouseIds || (current.warehouses || [])
+      .map((item) => item.warehouseId)
+      .filter((warehouseId): warehouseId is number => warehouseId != null));
+    setWarehouseOptions((options) => mergeWarehouseOptions(options, current.warehouses));
+    setGalleryUrls(
+      (current.images || [])
+        .filter((item): item is API.ProductDistribution.ProductImage & { imageUrl: string } =>
+          item.imageRole === 'GALLERY' && !!item.imageUrl)
+        .map((item) => item.imageUrl),
+    );
+    setSelectedSourceSkuMap({});
+    if (current.categoryId) {
+      loadSchema(current.categoryId);
+    } else {
+      setSchema([]);
+      setSchemaLoadedCategoryId(undefined);
+    }
   };
 
   const handleCategoryChange = (categoryId: number) => {
     form.setFieldValue('attributeValueMap', {});
+    setSchemaLoadedCategoryId(undefined);
     if (categoryId) {
       loadSchema(categoryId);
     } else {
@@ -538,13 +651,14 @@ export default function ProductDistributionEditPage() {
     setSelectedWarehouseKind(kind);
     setSelectedWarehouseIds([]);
     setSkuRows((currentRows) => {
+      const rows = ensureSkuRowKeys(currentRows.length ? currentRows : [createEmptySkuRow()]);
       if (kind === 'official') {
-        return currentRows.filter((row) => !!row.sourceDimensionGroupKey || !!row.sourceSkuGroupKey);
+        return rows;
       }
       if (selectedWarehouseKind === 'official') {
-        return [createEmptySkuRow()];
+        return rows.map(clearSkuSourceBinding);
       }
-      return currentRows.length ? currentRows : [createEmptySkuRow()];
+      return rows;
     });
   };
 
@@ -595,6 +709,8 @@ export default function ProductDistributionEditPage() {
       message.warning('缺少来源 SKU 查询权限');
       return;
     }
+    setSourceSelectorMode('bulk');
+    setPairingTargetRowKey(undefined);
     const nextSelectedMap: Record<string, API.Integration.SourceProductItem> = {};
     skuRows.forEach((row) => {
       const sourceItem = toSourceItemFromSkuRow(row);
@@ -607,6 +723,20 @@ export default function ProductDistributionEditPage() {
     setSourceSelectorOpen(true);
   };
 
+  const openSourceSelectorForRow = (row: API.ProductDistribution.Sku & { rowKey?: string }) => {
+    if (!canQuerySourceProducts) {
+      message.warning('缺少来源 SKU 查询权限');
+      return;
+    }
+    const nextRow = ensureSkuRowKeys([row])[0];
+    setSourceSelectorMode('row');
+    setPairingTargetRowKey(nextRow.rowKey);
+    const sourceItem = toSourceItemFromSkuRow(row);
+    const sourceKey = getSourceSkuKey(sourceItem);
+    setSelectedSourceSkuMap(sourceItem && sourceKey ? { [sourceKey]: sourceItem } : {});
+    setSourceSelectorOpen(true);
+  };
+
   const updateSelectedSourceSku = (item: API.Integration.SourceProductItem, selected: boolean) => {
     const sourceKey = getSourceSkuKey(item);
     if (!sourceKey || !item.sourceSkuGroupKey || !item.sourceDimensionGroupKey) {
@@ -616,6 +746,9 @@ export default function ProductDistributionEditPage() {
       return;
     }
     setSelectedSourceSkuMap((current) => {
+      if (sourceSelectorMode === 'row') {
+        return selected ? { [sourceKey]: item } : {};
+      }
       const next = { ...current };
       if (selected) {
         next[sourceKey] = item;
@@ -638,26 +771,98 @@ export default function ProductDistributionEditPage() {
     setSelectedSourceSkuMap({});
   };
 
+  const applySelectedSourceSkuToRow = () => {
+    const sourceItem = selectedSourceSkuItems[0];
+    if (!sourceItem) {
+      message.warning('请选择来源 SKU');
+      return;
+    }
+    if (!pairingTargetRowKey) {
+      message.warning('未找到要配对的 SKU 行');
+      return;
+    }
+    const sourceKey = getSourceSkuKey(sourceItem);
+    if (!sourceKey) {
+      message.warning('来源 SKU 缺少稳定绑定键，不能配对');
+      return;
+    }
+    const currentRows = ensureSkuRowKeys(skuRows.length ? skuRows : [createEmptySkuRow()]);
+    const duplicatedRow = currentRows.find((row) => row.rowKey !== pairingTargetRowKey && getSkuSourceKey(row) === sourceKey);
+    if (duplicatedRow) {
+      message.warning('该来源 SKU 已经配对到当前商品的其他 SKU');
+      return;
+    }
+    const targetRow = currentRows.find((row) => row.rowKey === pairingTargetRowKey);
+    if (!targetRow) {
+      message.warning('未找到要配对的 SKU 行');
+      return;
+    }
+    const sourceRow = toSourceSkuRow(sourceItem, targetRow.sortOrder ?? 0);
+    const nextRows = currentRows.map((row) => (
+      row.rowKey === pairingTargetRowKey
+        ? mergeSourceSkuRow(row, sourceRow, row.sortOrder ?? 0)
+        : row
+    ));
+    setSkuRows(nextRows);
+    setSelectedSourceSkuMap({});
+    setPairingTargetRowKey(undefined);
+    setSourceSelectorOpen(false);
+  };
+
   const applySelectedSourceSkus = () => {
+    if (sourceSelectorMode === 'row') {
+      applySelectedSourceSkuToRow();
+      return;
+    }
     if (!selectedSourceSkuItems.length) {
       message.warning('请选择来源 SKU');
       return;
     }
+    const currentRows = ensureSkuRowKeys(skuRows.length ? skuRows : [createEmptySkuRow()]);
     const currentSkuMap = new Map<string, API.ProductDistribution.Sku & { rowKey?: string }>();
-    skuRows.forEach((row) => {
+    currentRows.forEach((row) => {
       const sourceKey = getSkuSourceKey(row);
       if (sourceKey) {
         currentSkuMap.set(sourceKey, row);
       }
     });
-    const nextRows = selectedSourceSkuItems.map((item, index) => {
+    const selectedSourceKeys = new Set<string>();
+    const patchedRows = new Map<string, API.ProductDistribution.Sku & { rowKey?: string }>();
+    const extraRows: (API.ProductDistribution.Sku & { rowKey?: string })[] = [];
+    selectedSourceSkuItems.forEach((item, index) => {
       const sourceKey = getSourceSkuKey(item);
+      if (!sourceKey) return;
+      selectedSourceKeys.add(sourceKey);
       const sourceRow = toSourceSkuRow(item, index);
       const currentRow = currentSkuMap.get(sourceKey);
-      return currentRow ? mergeSourceSkuRow(currentRow, sourceRow, index) : sourceRow;
+      const nextRow = currentRow
+        ? mergeSourceSkuRow(currentRow, sourceRow, currentRow.sortOrder ?? index)
+        : sourceRow;
+      if (currentRow) {
+        patchedRows.set(currentRow.rowKey!, nextRow);
+      } else {
+        extraRows.push(nextRow);
+      }
     });
+    const nextRows = currentRows.map((row) => {
+      const patchedRow = patchedRows.get(row.rowKey!);
+      if (patchedRow) return patchedRow;
+      const sourceKey = getSkuSourceKey(row);
+      return sourceKey && !selectedSourceKeys.has(sourceKey) ? clearSkuSourceBinding(row) : row;
+    }).concat(extraRows).map((row, index) => ({
+      ...row,
+      sortOrder: row.sortOrder ?? index,
+    }));
     setSkuRows(nextRows);
+    setSelectedSourceSkuMap({});
     setSourceSelectorOpen(false);
+  };
+
+  const clearSourceSkuForRow = (row: API.ProductDistribution.Sku & { rowKey?: string }) => {
+    const targetRowKey = ensureSkuRowKeys([row])[0].rowKey;
+    setSkuRows((currentRows) => ensureSkuRowKeys(currentRows).map((item) => (
+      item.rowKey === targetRowKey ? clearSkuSourceBinding(item) : item
+    )));
   };
 
   const sourceColumns: ProColumns<API.Integration.SourceProductItem>[] = [
@@ -733,6 +938,23 @@ export default function ProductDistributionEditPage() {
       })
       .filter(Boolean) as API.ProductDistribution.AttributeValue[];
 
+  const restoreLatestRejectedSubmission = () => {
+    if (!rejectedSubmission) {
+      message.warning('暂无可恢复的上次提交内容');
+      return;
+    }
+    Modal.confirm({
+      title: '恢复上次提交内容',
+      content: '将使用最近一次被驳回的提交内容覆盖当前页面表单。恢复后不会立即保存，请检查后再保存或提交审核。',
+      okText: '确认恢复',
+      cancelText: '取消',
+      onOk: () => {
+        applyProductToEditor(rejectedSubmission, { updateProductState: false });
+        message.success('已恢复上次提交内容，请检查后保存');
+      },
+    });
+  };
+
   const renderAttributeField = (item: API.Product.CategoryAttribute) => {
     const itemKey = item.attributeId;
     const name = ['attributeValueMap', String(item.attributeId)];
@@ -807,7 +1029,20 @@ export default function ProductDistributionEditPage() {
   };
 
   const submit = async (targetStatus?: string) => {
+    if (!canEditDistributionProduct) {
+      message.error('缺少商品编辑权限');
+      return;
+    }
+    if (!canMaintainDistributionProductDependencies) {
+      message.error('缺少卖家、类目或类目属性维护权限');
+      return;
+    }
     const values = await form.validateFields();
+    const categoryId = Number(values.categoryId);
+    if (Number.isFinite(categoryId) && schemaLoadedCategoryId !== categoryId) {
+      message.error('类目属性未加载，不能保存商品');
+      return;
+    }
     if (!skuRows.length) {
       message.error('至少需要维护一个 SKU');
       return;
@@ -831,7 +1066,12 @@ export default function ProductDistributionEditPage() {
         : sku.skuStatus || 'DRAFT',
     }));
     if (isOfficialWarehouse && cleanSkus.some((sku) => !sku.sourceDimensionGroupKey)) {
-      message.error('官方仓 SKU 必须从来源商品库选择');
+      message.error('官方仓 SKU 必须全部配对来源 SKU；未配对的 SKU 请配对或删除');
+      return;
+    }
+    const missingColorSkuImage = findMissingSkuImageWhenColorSpecEnabled(cleanSkus);
+    if (missingColorSkuImage) {
+      message.error('启用颜色规格时，每个 SKU 都必须上传 SKU 图');
       return;
     }
     const invalidPriceSku = cleanSkus.find((sku) => sku.supplyPrice === undefined);
@@ -844,9 +1084,10 @@ export default function ProductDistributionEditPage() {
       message.error('请选择发货仓库以确定 SKU 币种');
       return;
     }
+    const { sellingPoint: _ignoredSellingPoint, ...payloadValues } = values;
     setSaving(true);
     const payload: API.ProductDistribution.Spu = {
-      ...values,
+      ...payloadValues,
       detailContent: serializeDetailContent(detailBlocks),
       spuStatus: nextSpuStatus,
       warehouseKind: selectedWarehouseKind,
@@ -865,8 +1106,15 @@ export default function ProductDistributionEditPage() {
       ? updateDistributionProduct(spuId, payload)
       : addDistributionProduct(payload)).finally(() => setSaving(false));
     if (resp.code === 200) {
-      message.success(isEdit ? '商品已更新' : '商品已新增');
-      history.push('/product/distribution');
+      message.success(resp.msg || (isReviewedEdit ? '已提交审核' : isEdit ? '已保存' : '已保存，后台正在刷新库存和来源数据'));
+      const createdSpuId = (resp.data as API.ProductDistribution.Spu | undefined)?.spuId;
+      if (isEdit) {
+        history.push('/product/distribution');
+        return;
+      }
+      if (!isEdit && createdSpuId) {
+        history.replace(`/product/distribution/edit/${createdSpuId}`);
+      }
       return;
     }
     message.error(resp.msg || '保存失败');
@@ -877,11 +1125,12 @@ export default function ProductDistributionEditPage() {
     const currencyCode = isOfficialWarehouse
       ? skuRows.find((row) => row.currencyCode)?.currencyCode
       : derivedCurrencyCode;
+    const categoryPath = findCategoryDisplayPath(categories, values.categoryId || product?.categoryId, product?.categoryName);
     setBuyerPreviewData({
       productName: values.productName || product?.productName || '平台精选现货商品',
       productNameEn: values.productNameEn || product?.productNameEn || 'Platform Ready Stock Product',
-      sellingPoint: values.sellingPoint || product?.sellingPoint || '适合分销现货履约，支持多规格快速下单。',
-      categoryName: findCategoryName(categories, values.categoryId) || product?.categoryName,
+      categoryName: product?.categoryName || categoryPath,
+      categoryPath,
       mainImageUrl: values.mainImageUrl || mainImageUrl,
       galleryUrls: galleryUrls.filter(Boolean),
       warehouseKind: selectedWarehouseKind,
@@ -976,9 +1225,6 @@ export default function ProductDistributionEditPage() {
                 <Input value={isOfficialWarehouse ? '由官方履约仓派生' : derivedCurrencyLabel || derivedCurrencyCode || '-'} disabled />
               </Form.Item>
             </div>
-            <Form.Item name="sellingPoint" label="商品卖点">
-              <Input.TextArea rows={2} placeholder="用于列表或详情摘要展示" />
-            </Form.Item>
           </section>
 
           <section className={styles.formSection}>
@@ -1010,10 +1256,10 @@ export default function ProductDistributionEditPage() {
               <div className={styles.sourceSkuToolbar}>
                 <Space>
                   <Button type="primary" disabled={!canQuerySourceProducts} onClick={openSourceSelector}>
-                    选择来源 SKU
+                    批量选择来源 SKU
                   </Button>
                   <Typography.Text type="secondary">
-                    官方仓商品的尺寸重量和发货仓库由来源 SKU 派生。
+                    官方仓商品的尺寸重量和发货仓库由来源 SKU 派生；已有 SKU 请在行内配对，批量选择只新增来源 SKU 行。
                   </Typography.Text>
                 </Space>
               </div>
@@ -1024,6 +1270,8 @@ export default function ProductDistributionEditPage() {
               currencyCode={isOfficialWarehouse ? undefined : derivedCurrencyCode}
               currencyLabel={isOfficialWarehouse ? '由官方履约仓派生' : derivedCurrencyLabel}
               sourceMode={isOfficialWarehouse}
+              onPairSourceSku={openSourceSelectorForRow}
+              onClearSourceSku={clearSourceSkuForRow}
               onChange={setSkuRows}
             />
           </section>
@@ -1032,16 +1280,46 @@ export default function ProductDistributionEditPage() {
         <Affix offsetBottom={0}>
           <Card size="small" className={styles.editActionCard}>
             <Space>
+              {isEdit && product?.latestReviewStatus === 'REJECTED' ? (
+                <Button
+                  icon={<HistoryOutlined />}
+                  loading={rejectedSubmissionLoading}
+                  disabled={!rejectedSubmission || loading || saving}
+                  onClick={restoreLatestRejectedSubmission}
+                >
+                  恢复上次提交内容
+                </Button>
+              ) : null}
               <Button onClick={() => history.push('/product/distribution')}>取消</Button>
               <Button icon={<EyeOutlined />} onClick={openBuyerPreview}>预览买家视图</Button>
               {isEdit ? (
-                <Button type="primary" loading={saving} icon={<SaveOutlined />} onClick={() => submit()}>
-                  保存
+                <Button
+                  type="primary"
+                  loading={saving}
+                  icon={<SaveOutlined />}
+                  disabled={!canEditDistributionProduct || !canMaintainDistributionProductDependencies}
+                  onClick={() => submit()}
+                >
+                  {isReviewedEdit ? '提交审核' : '保存'}
                 </Button>
               ) : (
                 <>
-                  <Button loading={saving} icon={<SaveOutlined />} onClick={() => submit('DRAFT')}>保存草稿</Button>
-                  <Button type="primary" loading={saving} onClick={() => submit('READY')}>保存为待上架</Button>
+                  <Button
+                    loading={saving}
+                    icon={<SaveOutlined />}
+                    disabled={!canEditDistributionProduct || !canMaintainDistributionProductDependencies}
+                    onClick={() => submit('DRAFT')}
+                  >
+                    保存草稿
+                  </Button>
+                  <Button
+                    type="primary"
+                    loading={saving}
+                    disabled={!canEditDistributionProduct || !canMaintainDistributionProductDependencies}
+                    onClick={() => submit('READY')}
+                  >
+                    保存为待上架
+                  </Button>
                 </>
               )}
             </Space>
@@ -1049,15 +1327,18 @@ export default function ProductDistributionEditPage() {
         </Affix>
 
         <Modal
-          title="选择来源 SKU"
+          title={sourceSelectorMode === 'row' ? '配对来源 SKU' : '批量选择来源 SKU'}
           open={sourceSelectorOpen}
           width={1120}
-          okText={`确认选择（${selectedSourceSkuItems.length}）`}
+          okText={sourceSelectorMode === 'row' ? '确认配对' : `确认选择（${selectedSourceSkuItems.length}）`}
           cancelText="取消"
           okButtonProps={{ disabled: !selectedSourceSkuItems.length }}
           destroyOnClose
           onOk={applySelectedSourceSkus}
-          onCancel={() => setSourceSelectorOpen(false)}
+          onCancel={() => {
+            setSourceSelectorOpen(false);
+            setPairingTargetRowKey(undefined);
+          }}
         >
           <div className={styles.sourceSkuSelectionBoard}>
             <div className={styles.sourceSkuSelectionHeader}>
@@ -1084,7 +1365,9 @@ export default function ProductDistributionEditPage() {
               </Space>
             ) : (
               <Typography.Text type="secondary">
-                跨页勾选会保留在这里，确认后写入 SKU 列表。
+                {sourceSelectorMode === 'row'
+                  ? '请选择一个来源 SKU，确认后只配对当前 SKU 行。'
+                  : '跨页勾选会保留在这里，确认后新增来源 SKU 行；不会按顺序套到未配对行。'}
               </Typography.Text>
             )}
           </div>
@@ -1098,6 +1381,7 @@ export default function ProductDistributionEditPage() {
             tableAlertRender={false}
             tableAlertOptionRender={false}
             rowSelection={{
+              type: sourceSelectorMode === 'row' ? 'radio' : 'checkbox',
               preserveSelectedRowKeys: true,
               selectedRowKeys: selectedSourceSkuKeys,
               onSelect: (record, selected) => updateSelectedSourceSku(record, selected),

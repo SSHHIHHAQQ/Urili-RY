@@ -387,6 +387,38 @@ function assertIncludes(source, relativePath, expected, message) {
   }
 }
 
+function assertExactSource(source, relativePath, expected, message) {
+  const normalize = (value) => value.replace(/\r\n/g, '\n').trim();
+  if (normalize(source) !== normalize(expected)) {
+    violations.push(`${relativePath} ${message}`);
+  }
+}
+
+function assertPureDefaultReExport(source, relativePath, target) {
+  assertExactSource(
+    source,
+    relativePath,
+    `export { default } from '${target}';`,
+    `must be a pure re-export to ${target}`,
+  );
+}
+
+function assertPureNamedReExport(source, relativePath, target) {
+  assertExactSource(
+    source,
+    relativePath,
+    `export * from '${target}';`,
+    `must be a pure re-export to ${target}`,
+  );
+}
+
+function assertOptionalPureDefaultReExport(source, relativePath, target) {
+  if (!source) {
+    return;
+  }
+  assertPureDefaultReExport(source, relativePath, target);
+}
+
 function assertIncludesAny(source, relativePath, expectedValues, message) {
   if (!expectedValues.some((expected) => source.includes(expected))) {
     violations.push(`${relativePath} ${message}`);
@@ -626,73 +658,7 @@ function checkPage(module) {
   const jsSource = readOptional(jsFile);
   if (jsSource) {
     const jsRelativePath = toRelative(jsFile);
-    assertIncludes(
-      jsSource,
-      jsRelativePath,
-      "import PartnerManagementPage from '@/components/PartnerManagement/PartnerManagementPage';",
-      'must use the shared PartnerManagementPage template',
-    );
-    assertIncludes(
-      jsSource,
-      jsRelativePath,
-      `from '${module.serviceImport}'`,
-      `must import only ${module.key} admin services`,
-    );
-    assertNotIncludes(
-      jsSource,
-      jsRelativePath,
-      `resetAdmin${capitalize(module.key)}OwnerPassword`,
-      'must not import subject-level owner password reset service',
-    );
-    assertNoPattern(
-      jsSource,
-      jsRelativePath,
-      /\brequest\s*(?:<[^;]+?>)?\s*\(/,
-      'must not call request(...) directly',
-    );
-    assertNoPattern(
-      jsSource,
-      jsRelativePath,
-      forbiddenServiceImport,
-      'must not import cross-terminal or system services',
-    );
-    for (const forbidden of module.forbiddenWords) {
-      assertNotIncludes(
-        jsSource,
-        jsRelativePath,
-        forbidden,
-        `must not reference cross-terminal token ${forbidden}`,
-      );
-    }
-    const jsConfigBlock = extractConfigBlock(jsSource, module.key);
-    if (!jsConfigBlock) {
-      violations.push(`${jsRelativePath} must define ${module.key}Config`);
-    } else {
-      for (const [fieldName, value] of [
-        ['moduleKey', module.key],
-        ['idField', module.idField],
-        ['noField', module.noField],
-        ['codeField', module.codeField],
-        ['nameField', module.nameField],
-        ['ownerIdField', module.idField],
-        ['accountIdField', module.accountIdField],
-        ['listTemplate', 'standard'],
-        ['searchStorageKey', module.searchStorageKey],
-      ]) {
-        assertIncludes(
-          jsConfigBlock,
-          jsRelativePath,
-          `${fieldName}: '${value}'`,
-          `must configure ${fieldName}: '${value}'`,
-        );
-      }
-      assertNotIncludes(
-        jsConfigBlock,
-        jsRelativePath,
-        'resetOwnerPassword',
-        'must not wire subject-level owner password reset',
-      );
-    }
+    assertPureDefaultReExport(jsSource, jsRelativePath, './index.tsx');
   }
 }
 
@@ -773,7 +739,7 @@ function checkService(module) {
   const jsFile = files[module.serviceJsKey];
   const jsSource = readOptional(jsFile);
   if (jsSource) {
-    checkServiceSource(module, jsSource, toRelative(jsFile));
+    assertPureNamedReExport(jsSource, toRelative(jsFile), `./${module.key}.ts`);
   }
 }
 
@@ -1191,6 +1157,26 @@ function checkPageTemplateSource(source, relativePath, requireTypeExport) {
     'fieldCount: config.searchFieldCount',
     'must pass configured fieldCount into getPersistedProTableSearch',
   );
+  for (const expected of [
+    'function buildListParams(params: Record<string, any>, current?: number, pageSize?: number)',
+    'const { current, pageSize, ...rest } = params;',
+    '.list(buildListParams(rest, current, pageSize))',
+    'pageNum: current',
+    'pageSize,',
+  ]) {
+    assertIncludes(
+      source,
+      relativePath,
+      expected,
+      `must keep partner list pagination mapped to RuoYi page parameters: ${expected}`,
+    );
+  }
+  assertNoPattern(
+    source,
+    relativePath,
+    /config\.services\s*\.\s*list\s*\(\s*params\s*\)/,
+    'must not pass ProTable params directly to partner list service',
+  );
   assertIncludesAny(source, relativePath, ['hidden={!canEditPartner}', 'hidden: !canEditPartner'],
     'must gate partner edit by canEditPartner');
   for (const expected of [
@@ -1354,23 +1340,58 @@ function checkSharedTemplate() {
   const menuModalJsSource = readOptional(files.menuModalJs);
 
   checkPageTemplateSource(pageTemplateSource, toRelative(files.pageTemplate), true);
-  checkPageTemplateSource(pageTemplateJsSource, toRelative(files.pageTemplateJs), false);
+  assertOptionalPureDefaultReExport(
+    pageTemplateJsSource,
+    toRelative(files.pageTemplateJs),
+    './PartnerManagementPage.tsx',
+  );
 
   checkAccountModalSource(accountModalSource, toRelative(files.accountModal));
-  checkAccountModalSource(accountModalJsSource, toRelative(files.accountModalJs));
+  assertOptionalPureDefaultReExport(
+    accountModalJsSource,
+    toRelative(files.accountModalJs),
+    './PartnerAccountModal.tsx',
+  );
   checkAccountRoleModalSource(accountRoleModalSource, toRelative(files.accountRoleModal));
-  checkAccountRoleModalSource(accountRoleModalJsSource, toRelative(files.accountRoleModalJs));
+  assertOptionalPureDefaultReExport(
+    accountRoleModalJsSource,
+    toRelative(files.accountRoleModalJs),
+    './PartnerAccountRoleModal.tsx',
+  );
   checkDeptModalSource(deptModalSource, toRelative(files.deptModal));
-  checkDeptModalSource(deptModalJsSource, toRelative(files.deptModalJs));
+  assertOptionalPureDefaultReExport(
+    deptModalJsSource,
+    toRelative(files.deptModalJs),
+    './PartnerDeptModal.tsx',
+  );
   checkRoleModalSource(roleModalSource, toRelative(files.roleModal));
-  checkRoleModalSource(roleModalJsSource, toRelative(files.roleModalJs));
+  assertOptionalPureDefaultReExport(
+    roleModalJsSource,
+    toRelative(files.roleModalJs),
+    './PartnerRoleModal.tsx',
+  );
 
   checkSessionModalSource(sessionModalSource, toRelative(files.sessionModal));
-  checkSessionModalSource(sessionModalJsSource, toRelative(files.sessionModalJs));
+  assertOptionalPureDefaultReExport(
+    sessionModalJsSource,
+    toRelative(files.sessionModalJs),
+    './PartnerSessionModal.tsx',
+  );
   checkMenuModalSource(menuModalSource, toRelative(files.menuModal));
-  checkMenuModalSource(menuModalJsSource, toRelative(files.menuModalJs));
+  assertOptionalPureDefaultReExport(
+    menuModalJsSource,
+    toRelative(files.menuModalJs),
+    './PartnerMenuModal.tsx',
+  );
   checkAuditModalSource(auditModalSource, toRelative(files.auditModal), true);
-  checkAuditModalSource(auditModalJsSource, toRelative(files.auditModalJs), false);
+  if (auditModalJsSource) {
+    assertExactSource(
+      auditModalJsSource,
+      toRelative(files.auditModalJs),
+      "export { default, buildAuditParams } from './PartnerAuditModal.tsx';",
+      'must be a pure re-export to the guarded TSX audit modal implementation',
+    );
+  }
 
   if (auditModalSource) {
     const relativePath = toRelative(files.auditModal);
@@ -1402,8 +1423,8 @@ function checkSharedTemplate() {
 function checkStaticPartnerRoutes() {
   const routeSources = [
     { file: files.routes, source: readRequired(files.routes) },
-    { file: files.routesJs, source: readRequired(files.routesJs) },
   ];
+  const routesJsSource = readRequired(files.routesJs);
   const routeGuardWrapperSource = readRequired(files.routeGuardWrapper);
   const routeGuardWrapperJsSource = readRequired(files.routeGuardWrapperJs);
   const sessionServiceSource = readRequired(files.sessionService);
@@ -1443,6 +1464,14 @@ function checkStaticPartnerRoutes() {
       );
     }
   }
+  if (routesJsSource) {
+    assertExactSource(
+      routesJsSource,
+      toRelative(files.routesJs),
+      "export { default } from './routes.ts';",
+      'must be a pure re-export to the guarded TS route source',
+    );
+  }
 
   if (sessionServiceSource) {
     assertIncludes(
@@ -1466,8 +1495,20 @@ function checkStaticPartnerRoutes() {
     assertIncludes(
       sessionServiceSource,
       toRelative(files.sessionService),
-      'permissions.length > 0 && permissions.some',
+      "authorityMode === 'all'",
       'must fail closed when a remote menu route has no authority',
+    );
+    assertIncludes(
+      sessionServiceSource,
+      toRelative(files.sessionService),
+      'permissions.every((permission) => access.hasPerms(permission))',
+      'must support all-permission guarded static routes',
+    );
+    assertIncludes(
+      sessionServiceSource,
+      toRelative(files.sessionService),
+      'permissions.some((permission) => access.hasPerms(permission))',
+      'must keep any-permission remote menu semantics',
     );
   }
   if (sessionServiceJsSource) {
@@ -1479,59 +1520,61 @@ function checkStaticPartnerRoutes() {
     );
   }
 
-  for (const { file, source } of [
-    { file: files.remoteMenuStorage, source: remoteMenuStorageSource },
-    { file: files.remoteMenuStorageJs, source: remoteMenuStorageJsSource },
-  ]) {
-    const relativePath = toRelative(file);
-    if (!source) {
-      continue;
-    }
-    for (const expected of [
-      "['admin', 'seller', 'buyer']",
-      'getRemoteMenuStorageKey',
-      'admin_remote_menu:${scope}',
-    ]) {
+  if (remoteMenuStorageSource) {
+    const relativePath = toRelative(files.remoteMenuStorage);
+    for (const expected of ["['admin', 'seller', 'buyer']", 'getRemoteMenuStorageKey', 'admin_remote_menu:${scope}']) {
       assertIncludes(
-        source,
+        remoteMenuStorageSource,
         relativePath,
         expected,
         `must keep scoped remote menu storage support for ${expected}`,
       );
     }
   }
+  if (remoteMenuStorageJsSource) {
+    assertExactSource(
+      remoteMenuStorageJsSource,
+      toRelative(files.remoteMenuStorageJs),
+      "export * from './remoteMenuStorage.ts';",
+      'must be a pure re-export to the guarded TS remote menu storage implementation',
+    );
+  }
 
-  for (const { file, source } of [
-    { file: files.routeGuardWrapper, source: routeGuardWrapperSource },
-    { file: files.routeGuardWrapperJs, source: routeGuardWrapperJsSource },
-  ]) {
-    const relativePath = toRelative(file);
-    if (!source) {
-      continue;
-    }
+  if (routeGuardWrapperSource) {
+    const relativePath = toRelative(files.routeGuardWrapper);
     for (const expected of [
       'RemoteMenuRouteGuard',
       'useLocation',
-      'STATIC_ROUTE_AUTHORITIES',
+      'STATIC_ROUTE_REQUIREMENTS',
       'PUBLIC_PORTAL_ROUTE_PATHS',
       'getStaticRouteAuthority',
+      'getStaticRouteAuthorityMode',
       "route?.authority",
       'normalizePathname',
       'startsWith',
-      "'/seller': ['seller:admin:list']",
-      "'/buyer': ['buyer:admin:list']",
+      "'/seller': { authority: ['seller:admin:list'] }",
+      "'/buyer': { authority: ['buyer:admin:list'] }",
+      "authorityMode: 'all'",
       "'/seller/direct-login'",
       "'/buyer/direct-login'",
       "'/seller/portal'",
       "'/buyer/portal'",
     ]) {
       assertIncludes(
-        source,
+        routeGuardWrapperSource,
         relativePath,
         expected,
         `must keep static partner route guard support for ${expected}`,
       );
     }
+  }
+  if (routeGuardWrapperJsSource) {
+    assertExactSource(
+      routeGuardWrapperJsSource,
+      toRelative(files.routeGuardWrapperJs),
+      "export { default } from './RemoteMenuRouteGuard.tsx';\nexport * from './RemoteMenuRouteGuard.tsx';",
+      'must be a pure re-export to the guarded TSX route guard implementation',
+    );
   }
 }
 

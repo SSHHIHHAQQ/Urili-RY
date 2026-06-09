@@ -8,7 +8,7 @@
 
 ## 子 Agent 使用情况
 
-- 用户要求优先使用 GPT-5.3 Codex；当前可用子 Agent 实际按降级方案使用 `gpt-5.4`。
+- 历史记录（已过期口径）：用户要求优先使用 GPT-5.3 Codex；当前可用子 Agent 实际按降级方案使用 `gpt-5.4`。
 - 已并行使用 6 个 `gpt-5.4` 子 Agent 做只读审计，覆盖后端 seller/buyer 主链路、portal auth/log、SQL/seed、React 管理端、验证脚本、integration/product/inventory 边界。
 - 采纳的 P0/P1：验证入口可绕过、SQL 缺少运行时确认 guard、库存权限与集成权限串线、portal 请求/直登消息缺最小单测、远端清理 SQL 在 MySQL collation 下失败。
 - 未采纳为阻塞项：seller/buyer 后端账号权限主链路未发现继续写回 `sys_*`；product/integration/warehouse 传递依赖偏重记录为后续结构治理项。

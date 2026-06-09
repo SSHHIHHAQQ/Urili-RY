@@ -24,9 +24,25 @@ public class IntegrationAdminRouteContractTest
                 "AdminSourceProductController",
                 "@RequestMapping(\"/integration/admin/source-products\")",
                 new String[] {
-                        "product:list:list"
+                        "integration:upstream:query"
                 },
                 violations);
+        String sourceProductController = Files.readString(backendRoot.resolve(
+                "integration/src/main/java/com/ruoyi/integration/controller/AdminSourceProductController.java"),
+                StandardCharsets.UTF_8);
+        assertNotContains(sourceProductController, "product:list:list",
+                "AdminSourceProductController must not treat product permissions as integration query permissions",
+                violations);
+        assertNotContains(sourceProductController, "@ss.hasAnyPermi",
+                "AdminSourceProductController must not keep mixed permission alternatives", violations);
+        String upstreamSystemService = Files.readString(backendRoot.resolve(
+                "integration/src/main/java/com/ruoyi/integration/service/impl/UpstreamSystemServiceImpl.java"),
+                StandardCharsets.UTF_8);
+        assertContains(upstreamSystemService,
+                "!SourceProductReadModelService.REPOSITORY_SCOPE_OFFICIAL_MASTER.equals(normalized.getRepositoryScope())",
+                "source product read model queries must reject unsupported repository scopes", violations);
+        assertContains(upstreamSystemService, "Unsupported source product repository scope",
+                "source product read model queries must fail closed on unsupported repository scopes", violations);
         assertAdminController(backendRoot,
                 "integration/src/main/java/com/ruoyi/integration/controller/AdminSourceWarehouseStockController.java",
                 "AdminSourceWarehouseStockController",
@@ -55,14 +71,14 @@ public class IntegrationAdminRouteContractTest
 
         assertServiceBaseUrl(repoRoot, "react-ui/src/services/integration/sourceProduct.ts",
                 "const baseUrl = '/api/integration/admin/source-products';", violations);
-        assertServiceBaseUrl(repoRoot, "react-ui/src/services/integration/sourceProduct.js",
-                "const baseUrl = '/api/integration/admin/source-products';", violations);
+        assertExactSource(repoRoot, "react-ui/src/services/integration/sourceProduct.js",
+                "export * from './sourceProduct.ts';", violations);
         assertServiceBaseUrl(repoRoot, "react-ui/src/services/integration/sourceWarehouseStock.ts",
                 "const baseUrl = '/api/integration/admin/source-warehouse-stocks';", violations);
         assertServiceBaseUrl(repoRoot, "react-ui/src/services/integration/upstreamSystem.ts",
                 "const baseUrl = '/api/integration/admin/upstream-systems';", violations);
-        assertServiceBaseUrl(repoRoot, "react-ui/src/services/integration/upstreamSystem.js",
-                "const baseUrl = '/api/integration/admin/upstream-systems';", violations);
+        assertExactSource(repoRoot, "react-ui/src/services/integration/upstreamSystem.js",
+                "export * from './upstreamSystem.ts';", violations);
         assertFrontendPermissionGate(repoRoot,
                 "react-ui/src/pages/UpstreamSystem/components/SyncTabs.tsx",
                 new String[] {
@@ -134,6 +150,16 @@ public class IntegrationAdminRouteContractTest
                 relativePath + " must not call a non-admin integration route", violations);
         assertNotContains(service, "const baseUrl = '/api/integration/upstream",
                 relativePath + " must not call a non-admin integration route", violations);
+    }
+
+    private void assertExactSource(Path repoRoot, String relativePath, String expectedSource,
+            List<String> violations) throws IOException
+    {
+        String source = Files.readString(repoRoot.resolve(relativePath), StandardCharsets.UTF_8).trim();
+        if (!source.equals(expectedSource))
+        {
+            violations.add(relativePath + " must be an exact source mirror: expected " + expectedSource);
+        }
     }
 
     private void assertFrontendPermissionGate(Path repoRoot, String relativePath, String[] expectedSnippets,

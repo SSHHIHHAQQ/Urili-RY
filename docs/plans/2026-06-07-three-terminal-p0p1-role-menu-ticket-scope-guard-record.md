@@ -45,7 +45,7 @@
 - 本轮未执行远程 MySQL DDL/DML，未读取或写入 Redis。
 - 本轮未启动或重启后端。
 - 本轮未做浏览器、截图、DOM 或 UI 细调验收。
-- `AGENTS.md` 已包含“子 Agent 优先 GPT-5.3 Codex，失败再回退 gpt-5.4”的规则，本轮未改 AGENTS。
+- 历史记录（已过期口径）：`AGENTS.md` 已包含“子 Agent 优先 GPT-5.3 Codex，失败再回退 gpt-5.4”的规则，本轮未改 AGENTS。
 
 ## 残留项
 

@@ -1,4 +1,3 @@
-import { Image } from 'antd';
 import { parseDetailContent } from '../detailContent';
 import { resolveResourceUrl } from '../constants';
 import styles from '../style.module.css';
@@ -18,17 +17,24 @@ export default function DetailContentPreview({ value }: DetailContentPreviewProp
     <div className={styles.detailPreview}>
       {blocks.map((block) => {
         if (block.type === 'TEXT') {
-          return <p key={block.id}>{block.text || '--'}</p>;
+          return (
+            <section className={styles.detailPreviewTextSection} key={block.id}>
+              {block.title ? <div className={styles.detailPreviewTitle}>{block.title}</div> : null}
+              <p>{block.text || '--'}</p>
+            </section>
+          );
         }
         if (block.type === 'IMAGE') {
           return block.imageUrl ? (
-            <Image key={block.id} width={160} src={resolveResourceUrl(block.imageUrl)} />
+            <div className={styles.detailPreviewImageBlock} key={block.id}>
+              <img src={resolveResourceUrl(block.imageUrl)} alt={block.title || '商品详情图'} />
+            </div>
           ) : <div key={block.id} className={styles.mutedText}>图片未上传</div>;
         }
         if (block.type === 'IMAGE_TEXT') {
           return (
             <div className={styles.detailPreviewImageText} key={block.id}>
-              {block.imageUrl ? <Image width={120} src={resolveResourceUrl(block.imageUrl)} /> : null}
+              {block.imageUrl ? <img src={resolveResourceUrl(block.imageUrl)} alt={block.title || '商品详情图'} /> : null}
               <div>
                 {block.title ? <div className={styles.detailPreviewTitle}>{block.title}</div> : null}
                 <p>{block.text || '--'}</p>

@@ -3,7 +3,10 @@ package com.ruoyi.integration.mapper;
 import java.util.List;
 import com.ruoyi.integration.domain.IntegrationOption;
 import org.apache.ibatis.annotations.Param;
+import com.ruoyi.integration.domain.SourceOfficialWarehouseOption;
+import com.ruoyi.integration.domain.SourceProductBindingSnapshot;
 import com.ruoyi.integration.domain.SourceProductItem;
+import com.ruoyi.integration.domain.SourceSkuPairingProjection;
 import com.ruoyi.integration.domain.SourceWarehouseStockGroupItem;
 import com.ruoyi.integration.domain.SourceWarehouseStockItem;
 import com.ruoyi.integration.domain.UpstreamLogisticsChannelPairing;
@@ -18,9 +21,12 @@ import com.ruoyi.integration.domain.UpstreamSyncBatch;
 import com.ruoyi.integration.domain.UpstreamSyncState;
 import com.ruoyi.integration.domain.UpstreamSystemConnection;
 import com.ruoyi.integration.domain.UpstreamWarehousePairing;
+import com.ruoyi.integration.domain.UpstreamWarehousePairingSnapshot;
 import com.ruoyi.integration.domain.UpstreamWarehouseSyncItem;
 import com.ruoyi.integration.domain.query.SourceProductQuery;
 import com.ruoyi.integration.domain.query.SourceWarehouseStockQuery;
+import com.ruoyi.inventory.domain.InventoryOfficialSourceStock;
+import com.ruoyi.inventory.domain.InventorySourceSkuKey;
 
 /**
  * 上游系统管理 Mapper。
@@ -90,6 +96,9 @@ public interface UpstreamSystemMapper
         @Param("warehouseCode") String warehouseCode);
 
     List<UpstreamWarehousePairing> selectWarehousePairingList(@Param("connectionCode") String connectionCode);
+
+    List<UpstreamWarehousePairingSnapshot> selectActiveWarehousePairingSnapshotsBySystemWarehouseCodes(
+        @Param("systemWarehouseCodes") List<String> systemWarehouseCodes);
 
     int insertWarehousePairing(UpstreamWarehousePairing pairing);
 
@@ -211,6 +220,10 @@ public interface UpstreamSystemMapper
     int markMissingSourceWarehouseStocks(@Param("connectionCode") String connectionCode,
         @Param("syncBatchId") String syncBatchId);
 
+    int refreshInventorySnapshotWarehousePairingByConnection(@Param("connectionCode") String connectionCode);
+
+    int refreshInventorySnapshotSkuPairingByConnection(@Param("connectionCode") String connectionCode);
+
     List<SourceWarehouseStockItem> selectSourceWarehouseStockList(SourceWarehouseStockQuery query);
 
     long countSourceWarehouseStockGroupList(SourceWarehouseStockQuery query);
@@ -222,6 +235,29 @@ public interface UpstreamSystemMapper
     List<IntegrationOption> selectSourceWarehouseStockMasterWarehouseOptions(SourceWarehouseStockQuery query);
 
     List<IntegrationOption> selectSourceWarehouseStockUpstreamWarehouseOptions(SourceWarehouseStockQuery query);
+
+    List<SourceOfficialWarehouseOption> selectOfficialWarehousesBySourceDimensionGroup(
+        @Param("sourceDimensionGroupKey") String sourceDimensionGroupKey);
+
+    List<SourceOfficialWarehouseOption> selectOfficialWarehousesBySourceDimensionGroups(
+        @Param("sourceDimensionGroupKeys") List<String> sourceDimensionGroupKeys);
+
+    SourceProductBindingSnapshot selectOfficialSourceBindingSnapshot(
+        @Param("sourceDimensionGroupKey") String sourceDimensionGroupKey);
+
+    List<SourceProductBindingSnapshot> selectOfficialSourceBindingSnapshots(
+        @Param("sourceDimensionGroupKeys") List<String> sourceDimensionGroupKeys);
+
+    List<String> selectSourceConnectionCodesByDimensionGroup(
+        @Param("sourceDimensionGroupKey") String sourceDimensionGroupKey);
+
+    List<String> selectUpstreamSkuPairingConnectionCodesBySystemSkuAndMasterSku(@Param("systemSku") String systemSku,
+        @Param("masterSku") String masterSku);
+
+    int deleteUpstreamSkuPairingsBySystemSkuAndConnectionCodes(@Param("systemSku") String systemSku,
+        @Param("connectionCodes") List<String> connectionCodes);
+
+    int upsertUpstreamSkuPairingsForProjection(SourceSkuPairingProjection projection);
 
     int deleteAllSourceWarehouseStockFilterMetrics();
 
@@ -240,6 +276,12 @@ public interface UpstreamSystemMapper
     int insertAllSourceWarehouseStockGroups(@Param("connectionCode") String connectionCode);
 
     int insertAllSourceWarehouseStockFilterMetrics(@Param("connectionCode") String connectionCode);
+
+    List<InventorySourceSkuKey> selectAffectedOfficialMasterSourceSkuKeysByConnection(
+        @Param("connectionCode") String connectionCode);
+
+    List<InventoryOfficialSourceStock> selectOfficialMasterSourceStocksBySourceSkuKeys(
+        @Param("sourceKeys") List<InventorySourceSkuKey> sourceKeys);
 
     int upsertInventorySyncState(UpstreamInventorySyncState state);
 

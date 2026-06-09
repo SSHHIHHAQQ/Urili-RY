@@ -6,7 +6,7 @@
 
 ## 子 Agent
 
-- 先按最新规则尝试启动 6 个 `gpt-5.3-codex-spark` 只读子 Agent；平台返回额度限制，失败 Agent 已关闭。
+- 历史记录（已过期口径）：先按最新规则尝试启动 6 个 `gpt-5.3-codex-spark` 只读子 Agent；平台返回额度限制，失败 Agent 已关闭。
 - 随后回退启动 6 个 `gpt-5.4` 只读子 Agent，覆盖 SQL seed、seller 后端、buyer 后端、React 端隔离、验证入口、日志/会话/免密链路；6 个子 Agent 均已关闭。
 - 已采纳 SQL 子 Agent 的 P1：`seller_buyer_management_seed.sql` 基础端内菜单 seed 缺 fail-closed signature guard，且默认 Owner 授权 join 只按 `perms` 绑定。
 - 其余只读结论：seller 后端、buyer 后端、React 端隔离、日志/会话/免密链路未发现新的 P0/P1。验证入口子 Agent 指出 `verify-three-terminal.mjs` 仍有验证范围漂移和测试发现过宽问题，本切片记录为后续独立 P1，不混入 SQL guard 修复。

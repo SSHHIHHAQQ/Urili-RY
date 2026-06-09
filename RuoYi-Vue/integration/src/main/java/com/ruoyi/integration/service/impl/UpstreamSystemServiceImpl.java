@@ -1,5 +1,6 @@
 package com.ruoyi.integration.service.impl;
 
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
@@ -7,12 +8,14 @@ import java.util.Set;
 import java.util.UUID;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.alibaba.fastjson2.JSON;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
+import com.ruoyi.inventory.service.IInventoryOverviewService;
 import com.ruoyi.integration.domain.IntegrationOption;
 import com.ruoyi.integration.domain.SourceProductItem;
 import com.ruoyi.integration.domain.SourceWarehouseStockGroupItem;
@@ -28,6 +31,7 @@ import com.ruoyi.integration.domain.UpstreamSkuSyncState;
 import com.ruoyi.integration.domain.UpstreamSyncState;
 import com.ruoyi.integration.domain.UpstreamSystemConnection;
 import com.ruoyi.integration.domain.UpstreamWarehousePairing;
+import com.ruoyi.integration.domain.WarehouseFact;
 import com.ruoyi.integration.domain.UpstreamWarehouseSyncItem;
 import com.ruoyi.integration.domain.query.SourceProductQuery;
 import com.ruoyi.integration.domain.query.SourceWarehouseStockQuery;
@@ -40,6 +44,7 @@ import com.ruoyi.integration.domain.request.WarehousePairingRequest;
 import com.ruoyi.integration.domain.response.SourceProductGroupDetail;
 import com.ruoyi.integration.lingxing.LingxingOpenApiClient;
 import com.ruoyi.integration.mapper.UpstreamSystemMapper;
+import com.ruoyi.integration.service.IWarehouseFactLookupService;
 import com.ruoyi.integration.service.IUpstreamSystemService;
 import com.ruoyi.integration.support.UpstreamMaskUtils;
 import com.ruoyi.integration.support.UpstreamSystemConstants;
@@ -60,6 +65,12 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
 
     @Autowired
     private SourceWarehouseStockReadModelService sourceWarehouseStockReadModelService;
+
+    @Autowired
+    private ObjectProvider<IInventoryOverviewService> inventoryOverviewService;
+
+    @Autowired
+    private ObjectProvider<IWarehouseFactLookupService> warehouseFactLookupService;
 
     @Autowired
     private SecretCipherSupport secretCipherSupport;
@@ -126,6 +137,7 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
     public int updateConnectionInfo(String connectionCode, UpstreamConnectionInfoRequest request)
     {
         selectConnectionByCode(connectionCode);
+        List<Long> affectedSpuIds = selectSourceInventoryOverviewSpuIds(connectionCode);
         UpstreamSystemConnection connection = new UpstreamSystemConnection();
         connection.setConnectionCode(connectionCode);
         connection.setMasterWarehouseName(trimRequired(request.getMasterWarehouseName(), "主仓名称不能为空"));
@@ -134,6 +146,8 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
         connection.setRemark(trimOptional(request.getRemark()));
         int rows = upstreamSystemMapper.updateConnectionInfo(connection);
         sourceProductReadModelService.rebuildOfficialMasterByConnection(connectionCode);
+        sourceWarehouseStockReadModelService.rebuildOfficialMasterByConnection(connectionCode);
+        refreshSourceInventoryOverview(connectionCode, affectedSpuIds);
         return rows;
     }
 
@@ -347,19 +361,26 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
         {
             throw new ServiceException("领星仓库不是可配对状态");
         }
+        WarehouseFact systemWarehouse = requireNormalOfficialWarehouse(
+            trimRequired(request.getSystemWarehouseCode(), "系统仓库代码不能为空"));
+        List<Long> affectedSpuIds = selectSourceInventoryOverviewSpuIds(connectionCode);
         UpstreamWarehousePairing pairing = new UpstreamWarehousePairing();
         pairing.setConnectionCode(connectionCode);
         pairing.setUpstreamWarehouseCode(upstreamWarehouseCode);
         pairing.setUpstreamWarehouseName(candidate.getWarehouseName());
-        pairing.setSystemWarehouseCode(trimRequired(request.getSystemWarehouseCode(), "系统仓库代码不能为空"));
-        pairing.setSystemWarehouseName(trimRequired(request.getSystemWarehouseName(), "系统仓库名称不能为空"));
+        pairing.setSystemWarehouseCode(systemWarehouse.getWarehouseCode());
+        pairing.setSystemWarehouseName(systemWarehouse.getWarehouseName());
         pairing.setPairingRole(pairingRole);
         pairing.setStatus(UpstreamSystemConstants.STATUS_ACTIVE);
         pairing.setCreateBy(SecurityUtils.getUsername());
         pairing.setRemark(trimOptional(request.getRemark()));
         try
         {
-            return upstreamSystemMapper.insertWarehousePairing(pairing);
+            int rows = upstreamSystemMapper.insertWarehousePairing(pairing);
+            upstreamSystemMapper.refreshInventorySnapshotWarehousePairingByConnection(connectionCode);
+            sourceWarehouseStockReadModelService.rebuildOfficialMasterByConnection(connectionCode);
+            refreshSourceInventoryOverview(connectionCode, affectedSpuIds);
+            return rows;
         }
         catch (DuplicateKeyException ex)
         {
@@ -368,10 +389,19 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
     }
 
     @Override
+    @Transactional
     public int deleteWarehousePairing(String connectionCode, Long warehousePairingId)
     {
         selectConnectionByCode(connectionCode);
-        return upstreamSystemMapper.deleteWarehousePairing(connectionCode, warehousePairingId);
+        List<Long> affectedSpuIds = selectSourceInventoryOverviewSpuIds(connectionCode);
+        int rows = upstreamSystemMapper.deleteWarehousePairing(connectionCode, warehousePairingId);
+        if (rows > 0)
+        {
+            upstreamSystemMapper.refreshInventorySnapshotWarehousePairingByConnection(connectionCode);
+            sourceWarehouseStockReadModelService.rebuildOfficialMasterByConnection(connectionCode);
+            refreshSourceInventoryOverview(connectionCode, affectedSpuIds);
+        }
+        return rows;
     }
 
     @Override
@@ -457,6 +487,7 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
     public int insertSkuPairing(String connectionCode, SkuPairingRequest request)
     {
         selectConnectionByCode(connectionCode);
+        List<Long> affectedSpuIds = selectSourceInventoryOverviewSpuIds(connectionCode);
         String masterSku = trimRequired(request.getMasterSku(), "领星masterSku不能为空");
         UpstreamSkuSyncItem candidate = upstreamSystemMapper.selectSkuSyncItem(connectionCode, masterSku);
         if (candidate == null)
@@ -476,6 +507,9 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
             int rows = upstreamSystemMapper.insertSkuPairing(pairing);
             insertSkuAudit("PAIR", pairing, null, pairing, request.getRemark());
             sourceProductReadModelService.rebuildOfficialMasterByConnection(connectionCode);
+            upstreamSystemMapper.refreshInventorySnapshotSkuPairingByConnection(connectionCode);
+            sourceWarehouseStockReadModelService.rebuildOfficialMasterByConnection(connectionCode);
+            refreshSourceInventoryOverview(connectionCode, affectedSpuIds);
             return rows;
         }
         catch (DuplicateKeyException ex)
@@ -494,9 +528,13 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
         {
             return 0;
         }
+        List<Long> affectedSpuIds = selectSourceInventoryOverviewSpuIds(connectionCode);
         int rows = upstreamSystemMapper.deleteSkuPairing(connectionCode, skuPairingId);
         insertSkuAudit("UNPAIR", current, current, null, "解除SKU配对");
         sourceProductReadModelService.rebuildOfficialMasterByConnection(current.getConnectionCode());
+        upstreamSystemMapper.refreshInventorySnapshotSkuPairingByConnection(current.getConnectionCode());
+        sourceWarehouseStockReadModelService.rebuildOfficialMasterByConnection(current.getConnectionCode());
+        refreshSourceInventoryOverview(current.getConnectionCode(), affectedSpuIds);
         return rows;
     }
 
@@ -518,6 +556,45 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
     public List<UpstreamRequestLog> selectRequestLogList(String connectionCode)
     {
         return upstreamSystemMapper.selectRequestLogList(connectionCode);
+    }
+
+    private void refreshSourceInventoryOverview(String connectionCode)
+    {
+        refreshSourceInventoryOverview(connectionCode, null);
+    }
+
+    private void refreshSourceInventoryOverview(String connectionCode, List<Long> affectedSpuIds)
+    {
+        IInventoryOverviewService overviewService = inventoryOverviewService.getIfAvailable();
+        if (overviewService != null)
+        {
+            overviewService.refreshSourceInventoryOverviewByConnection(connectionCode, affectedSpuIds);
+        }
+    }
+
+    private List<Long> selectSourceInventoryOverviewSpuIds(String connectionCode)
+    {
+        IInventoryOverviewService overviewService = inventoryOverviewService.getIfAvailable();
+        if (overviewService == null)
+        {
+            return new ArrayList<>();
+        }
+        return overviewService.selectSourceInventoryOverviewSpuIdsByConnection(connectionCode);
+    }
+
+    private WarehouseFact requireNormalOfficialWarehouse(String warehouseCode)
+    {
+        IWarehouseFactLookupService lookupService = warehouseFactLookupService.getIfAvailable();
+        if (lookupService == null)
+        {
+            throw new ServiceException("仓库事实源服务不可用，不能保存仓库配对");
+        }
+        WarehouseFact warehouse = lookupService.selectNormalOfficialWarehouseByCode(warehouseCode);
+        if (warehouse == null)
+        {
+            throw new ServiceException("系统仓库不存在或不是正常官方仓");
+        }
+        return warehouse;
     }
 
     private String normalizePairingRole(UpstreamSystemConnection connection, String requestedRole)
@@ -572,6 +649,10 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
         if (StringUtils.isBlank(normalized.getRepositoryScope()))
         {
             normalized.setRepositoryScope(SourceProductReadModelService.REPOSITORY_SCOPE_OFFICIAL_MASTER);
+        }
+        if (!SourceProductReadModelService.REPOSITORY_SCOPE_OFFICIAL_MASTER.equals(normalized.getRepositoryScope()))
+        {
+            throw new ServiceException("Unsupported source product repository scope");
         }
         normalized.setSourceSkuGroupKey(trimOptional(normalized.getSourceSkuGroupKey()));
         normalized.setConnectionCode(trimOptional(normalized.getConnectionCode()));

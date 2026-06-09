@@ -654,7 +654,13 @@ public class LingxingOpenApiClient
             }
             if (value instanceof Number number)
             {
-                return BigDecimal.valueOf(number.doubleValue());
+                try
+                {
+                    return new BigDecimal(number.toString());
+                }
+                catch (NumberFormatException ignored)
+                {
+                }
             }
             if (value instanceof String string && StringUtils.isNotBlank(string))
             {

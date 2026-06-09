@@ -109,6 +109,57 @@ begin
   end if;
 end//
 
+drop procedure if exists assert_top_menu_seed_completed//
+create procedure assert_top_menu_seed_completed()
+begin
+  if (
+    select count(1)
+    from sys_menu m
+    join tmp_top_menu_seed_expected seed on seed.menu_id = m.menu_id
+    where coalesce(m.parent_id, -1) = seed.parent_id
+      and coalesce(m.menu_type, '') = seed.menu_type
+      and coalesce(m.path, '') = seed.path
+      and coalesce(m.component, '') = seed.component
+      and coalesce(m.route_name, '') = seed.route_name
+      and coalesce(m.perms, '') = seed.perms
+      and coalesce(m.order_num, -1) = seed.order_num
+      and coalesce(m.visible, '') = seed.visible
+      and coalesce(m.status, '') = seed.status
+  ) <> (select count(1) from tmp_top_menu_seed_expected) then
+    signal sqlstate '45000' set message_text = 'top menu seed completion mismatch';
+  end if;
+
+  if exists (
+    select 1
+    from sys_menu
+    where menu_id = 2040
+      and (
+        coalesce(parent_id, -1) <> 0
+        or coalesce(menu_name, '') <> '渠道管理'
+        or coalesce(menu_type, '') <> 'M'
+        or coalesce(order_num, -1) <> 80
+        or coalesce(visible, '') <> '1'
+        or coalesce(status, '') <> '1'
+      )
+  ) then
+    signal sqlstate '45000' set message_text = 'top menu legacy 2040 cleanup completion mismatch';
+  end if;
+
+  if exists (
+    select 1
+    from sys_menu
+    where menu_id = 2000
+      and (
+        coalesce(menu_type, '') <> 'M'
+        or coalesce(order_num, -1) <> 100
+        or coalesce(visible, '') <> '1'
+        or coalesce(status, '') <> '1'
+      )
+  ) then
+    signal sqlstate '45000' set message_text = 'top menu legacy 2000 cleanup completion mismatch';
+  end if;
+end//
+
 delimiter ;
 
 call assert_top_menu_seed_confirmed();
@@ -164,7 +215,43 @@ values
     (2040, 0, '渠道管理', 'channel', '', '', '', 'M'),
     (2000, 0, 'URILI运营后台', null, null, null, '', 'M');
 
+create temporary table if not exists tmp_top_menu_seed_expected (
+  menu_id    bigint       not null,
+  parent_id  bigint       not null,
+  order_num  int          not null,
+  menu_type  char(1)      not null,
+  visible    char(1)      not null,
+  status     char(1)      not null,
+  path       varchar(200) not null default '',
+  component  varchar(255) not null default '',
+  route_name varchar(50)  not null default '',
+  perms      varchar(100) not null default '',
+  key idx_top_menu_seed_expected_id (menu_id)
+) engine=memory;
+
+truncate table tmp_top_menu_seed_expected;
+
+insert into tmp_top_menu_seed_expected
+    (menu_id, parent_id, order_num, menu_type, visible, status, path, component, route_name, perms)
+values
+    (2010, 0, 5, 'M', '0', '0', 'partner', '', 'PartnerManagement', ''),
+    (2060, 0, 10, 'M', '0', '0', 'product', '', 'ProductManagement', ''),
+    (2070, 0, 15, 'M', '0', '0', 'order', '', 'OrderManagement', ''),
+    (2080, 0, 20, 'M', '0', '0', 'inventory', '', 'InventoryManagement', ''),
+    (2020, 0, 25, 'M', '0', '0', 'warehouse', '', 'WarehouseManagement', ''),
+    (2030, 0, 30, 'M', '0', '0', 'overseas-warehouse-service', '', 'OverseasWarehouseServiceManagement', ''),
+    (2050, 0, 35, 'M', '0', '0', 'finance', '', 'FinanceManagement', ''),
+    (2090, 0, 40, 'M', '0', '0', 'basic-config', '', 'BasicConfig', ''),
+    (2100, 0, 45, 'M', '0', '0', 'review-center', '', 'ReviewCenter', ''),
+    (108, 0, 50, 'M', '0', '0', 'log-center', '', 'LogCenter', ''),
+    (3, 0, 55, 'M', '0', '0', 'tool', '', '', ''),
+    (1, 0, 90, 'M', '0', '0', 'system', '', '', ''),
+    (2, 0, 95, 'M', '0', '0', 'monitor', '', '', '');
+
 call assert_top_menu_sys_menu_guard();
+call assert_top_menu_legacy_cleanup_guard();
+
+start transaction;
 
 insert into sys_menu
     (menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
@@ -238,8 +325,6 @@ where menu_id = 2;
 
 -- The previous channel draft is not part of the requested top-level menu list.
 -- Keep it for reference, but disable it so it does not appear as an active top-level menu.
-call assert_top_menu_legacy_cleanup_guard();
-
 update sys_menu
 set order_num = 80,
     visible = '1',
@@ -259,7 +344,13 @@ set visible = '1',
     remark = '已由独立顶级菜单替代，保留历史草案'
 where menu_id = 2000;
 
+call assert_top_menu_seed_completed();
+
+commit;
+
 drop temporary table if exists tmp_top_menu_sys_menu_guard;
 drop temporary table if exists tmp_top_menu_legacy_cleanup_guard;
+drop temporary table if exists tmp_top_menu_seed_expected;
 drop procedure if exists assert_top_menu_sys_menu_guard;
 drop procedure if exists assert_top_menu_legacy_cleanup_guard;
+drop procedure if exists assert_top_menu_seed_completed;

@@ -41,6 +41,12 @@
             <artifactId>integration</artifactId>
         </dependency>
 
+        <!-- 库存总览读模型刷新 -->
+        <dependency>
+            <groupId>com.ruoyi</groupId>
+            <artifactId>inventory</artifactId>
+        </dependency>
+
         <!-- 单元测试 -->
         <dependency>
             <groupId>junit</groupId>

@@ -4,19 +4,25 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.Test;
 import com.github.pagehelper.Page;
+import com.ruoyi.common.constant.HttpStatus;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.product.domain.ProductDistributionOperationLog;
 import com.ruoyi.product.domain.ProductSku;
 import com.ruoyi.product.domain.ProductSkuSalePriceUpdateRequest;
 import com.ruoyi.product.domain.ProductSpu;
 import com.ruoyi.product.service.IProductDistributionService;
+import com.ruoyi.seller.domain.SellerAccount;
 import com.ruoyi.seller.domain.SellerPortalProduct;
 import com.ruoyi.seller.domain.SellerPortalProductSku;
+import com.ruoyi.seller.mapper.SellerMapper;
 import com.ruoyi.system.domain.PortalLoginSession;
 
 public class SellerPortalProductServiceImplTest
@@ -25,7 +31,10 @@ public class SellerPortalProductServiceImplTest
     public void selectOwnProductListUsesSessionScopeAndIgnoresClientSellerId()
     {
         RecordingProductDistributionService productService = new RecordingProductDistributionService();
-        productService.productListResult.add(product(1L, 11L, "SELLER-SPU-1"));
+        ProductSpu product = product(1L, 11L, "SELLER-SPU-1");
+        product.setSkus(List.of(sku(99L, 1L, 99L, "ROGUE-SKU")));
+        productService.productListResult.add(product);
+        productService.skuListResult.add(sku(2L, 1L, 11L, "SELLER-SKU-1"));
         SellerPortalProductServiceImpl service = service(productService);
         PortalLoginSession session = session(11L, 22L);
         ProductSpu request = new ProductSpu();
@@ -57,6 +66,10 @@ public class SellerPortalProductServiceImplTest
         assertEquals(null, productService.productListQuery.getSystemSkuCode());
         assertEquals(null, productService.productListQuery.getSourceType());
         assertEquals(Long.valueOf(99L), request.getSellerId());
+        assertEquals(Long.valueOf(1L), productService.skuListSpuId);
+        assertEquals(Long.valueOf(11L), productService.skuListSellerId);
+        assertEquals(1, result.get(0).getSkus().size());
+        assertEquals("SELLER-SKU-1", result.get(0).getSkus().get(0).getSellerSkuCode());
     }
 
     @Test
@@ -94,6 +107,33 @@ public class SellerPortalProductServiceImplTest
     }
 
     @Test
+    public void selectOwnProductListRejectsBlankTokenBeforeQueryingProducts()
+    {
+        RecordingProductDistributionService productService = new RecordingProductDistributionService();
+        SellerPortalProductServiceImpl service = service(productService);
+        PortalLoginSession session = session(11L, 22L);
+        session.setTokenId(" ");
+
+        assertLoginException(() -> service.selectOwnProductList(session, new ProductSpu()));
+
+        assertEquals(null, productService.productListQuery);
+    }
+
+    @Test
+    public void selectOwnProductListRejectsMissingAccountBindingBeforeQueryingProducts()
+    {
+        RecordingProductDistributionService productService = new RecordingProductDistributionService();
+        RecordingSellerMapper sellerMapper = new RecordingSellerMapper(false);
+        SellerPortalProductServiceImpl service = service(productService, sellerMapper(sellerMapper));
+
+        assertLoginException(() -> service.selectOwnProductList(session(11L, 22L), new ProductSpu()));
+
+        assertEquals(Long.valueOf(11L), sellerMapper.sellerId);
+        assertEquals(Long.valueOf(22L), sellerMapper.sellerAccountId);
+        assertEquals(null, productService.productListQuery);
+    }
+
+    @Test
     public void selectOwnProductByIdRejectsProductFromAnotherSeller()
     {
         RecordingProductDistributionService productService = new RecordingProductDistributionService();
@@ -101,6 +141,9 @@ public class SellerPortalProductServiceImplTest
         SellerPortalProductServiceImpl service = service(productService);
 
         assertServiceException(() -> service.selectOwnProductById(session(11L, 22L), 1L));
+
+        assertEquals(Long.valueOf(1L), productService.productByIdArg);
+        assertEquals(Long.valueOf(11L), productService.productByIdSellerId);
     }
 
     @Test
@@ -114,7 +157,8 @@ public class SellerPortalProductServiceImplTest
         product.setProductNameEn("Table");
         product.setSupplyPriceMin(new BigDecimal("10.00"));
         product.setSalePriceMin(new BigDecimal("20.00"));
-        product.setSkus(List.of(sku(2L, 1L, 11L, "SELLER-SKU-1")));
+        product.setSkus(List.of(sku(99L, 1L, 99L, "ROGUE-SKU")));
+        productService.skuListResult.add(sku(2L, 1L, 11L, "SELLER-SKU-1"));
         productService.productByIdResult = product;
         SellerPortalProductServiceImpl service = service(productService);
 
@@ -127,6 +171,9 @@ public class SellerPortalProductServiceImplTest
         assertEquals(new BigDecimal("20.00"), result.getSalePriceMin());
         assertEquals(1, result.getSkus().size());
         assertEquals("SELLER-SKU-1", result.getSkus().get(0).getSellerSkuCode());
+        assertEquals(Long.valueOf(1L), productService.skuListSpuId);
+        assertEquals(Long.valueOf(11L), productService.skuListSellerId);
+        assertEquals(Long.valueOf(11L), productService.productByIdSellerId);
         assertFalse(hasGetter(SellerPortalProduct.class, "getSellerId"));
         assertFalse(hasGetter(SellerPortalProduct.class, "getSystemSpuCode"));
         assertFalse(hasGetter(SellerPortalProductSku.class, "getSellerId"));
@@ -144,7 +191,9 @@ public class SellerPortalProductServiceImplTest
         List<SellerPortalProductSku> result = service.selectOwnSkuList(session(11L, 22L), 1L);
 
         assertEquals(Long.valueOf(1L), productService.productByIdArg);
+        assertEquals(Long.valueOf(11L), productService.productByIdSellerId);
         assertEquals(Long.valueOf(1L), productService.skuListSpuId);
+        assertEquals(Long.valueOf(11L), productService.skuListSellerId);
         assertEquals(1, result.size());
         assertEquals("SELLER-SKU-1", result.get(0).getSellerSkuCode());
     }
@@ -162,6 +211,7 @@ public class SellerPortalProductServiceImplTest
 
         assertEquals(null, productService.productByIdArg);
         assertEquals(null, productService.skuListSpuId);
+        assertEquals(null, productService.skuListSellerId);
     }
 
     @Test
@@ -174,13 +224,26 @@ public class SellerPortalProductServiceImplTest
         assertServiceException(() -> service.selectOwnSkuList(session(11L, 22L), 1L));
 
         assertEquals(null, productService.skuListSpuId);
+        assertEquals(null, productService.skuListSellerId);
     }
 
     private SellerPortalProductServiceImpl service(IProductDistributionService productService)
     {
+        return service(productService, sellerMapper(new RecordingSellerMapper(true)));
+    }
+
+    private SellerPortalProductServiceImpl service(IProductDistributionService productService, SellerMapper sellerMapper)
+    {
         SellerPortalProductServiceImpl service = new SellerPortalProductServiceImpl();
         setField(service, "productDistributionService", productService);
+        setField(service, "sellerMapper", sellerMapper);
         return service;
+    }
+
+    private SellerMapper sellerMapper(RecordingSellerMapper recording)
+    {
+        return (SellerMapper) Proxy.newProxyInstance(SellerMapper.class.getClassLoader(),
+            new Class<?>[] { SellerMapper.class }, recording);
     }
 
     private PortalLoginSession session(Long sellerId, Long accountId)
@@ -251,6 +314,7 @@ public class SellerPortalProductServiceImplTest
         catch (ServiceException e)
         {
             assertEquals("登录状态已失效", e.getMessage());
+            assertEquals(Integer.valueOf(HttpStatus.UNAUTHORIZED), e.getCode());
             return;
         }
         throw new AssertionError("Expected ServiceException");
@@ -284,7 +348,9 @@ public class SellerPortalProductServiceImplTest
         private List<ProductSpu> returnedProductListSource;
         private ProductSpu productByIdResult;
         private Long productByIdArg;
+        private Long productByIdSellerId;
         private Long skuListSpuId;
+        private Long skuListSellerId;
 
         @Override
         public List<ProductSpu> selectProductList(ProductSpu query)
@@ -308,6 +374,14 @@ public class SellerPortalProductServiceImplTest
         }
 
         @Override
+        public ProductSpu selectProductById(Long spuId, Long sellerId)
+        {
+            productByIdArg = spuId;
+            productByIdSellerId = sellerId;
+            return productByIdResult;
+        }
+
+        @Override
         public ProductSpu selectOnSaleProductById(Long spuId)
         {
             return productByIdResult;
@@ -326,25 +400,37 @@ public class SellerPortalProductServiceImplTest
         }
 
         @Override
-        public int updateSpuStatus(Long spuId, String status)
+        public ProductSpu prepareReviewedProductUpdate(ProductSpu product)
+        {
+            return product;
+        }
+
+        @Override
+        public int applyReviewedProductUpdate(ProductSpu product)
         {
             return 0;
         }
 
         @Override
-        public int updateSkuStatus(Long spuId, Long skuId, String status)
+        public int updateSpuStatus(Long spuId, String status, String reason)
         {
             return 0;
         }
 
         @Override
-        public int batchUpdateSpuStatus(List<Long> spuIds, String status, boolean syncSkuStatus)
+        public int updateSkuStatus(Long spuId, Long skuId, String status, String reason)
         {
             return 0;
         }
 
         @Override
-        public int batchUpdateSkuStatus(List<Long> skuIds, String status)
+        public int batchUpdateSpuStatus(List<Long> spuIds, String status, boolean syncSkuStatus, String reason)
+        {
+            return 0;
+        }
+
+        @Override
+        public int batchUpdateSkuStatus(List<Long> skuIds, String status, String reason)
         {
             return 0;
         }
@@ -387,9 +473,63 @@ public class SellerPortalProductServiceImplTest
         }
 
         @Override
+        public List<ProductSku> selectSkuList(Long spuId, Long sellerId)
+        {
+            skuListSpuId = spuId;
+            skuListSellerId = sellerId;
+            return skuListResult;
+        }
+
+        @Override
         public List<ProductSku> selectOnSaleSkuList(Long spuId)
         {
-            return selectSkuList(spuId);
+            skuListSpuId = spuId;
+            return skuListResult;
+        }
+    }
+
+    private static class RecordingSellerMapper implements InvocationHandler
+    {
+        private final boolean accountExists;
+        private Long sellerId;
+        private Long sellerAccountId;
+
+        private RecordingSellerMapper(boolean accountExists)
+        {
+            this.accountExists = accountExists;
+        }
+
+        @Override
+        public Object invoke(Object proxy, Method method, Object[] args)
+        {
+            if ("selectSellerAccountByIdAndSellerId".equals(method.getName()))
+            {
+                sellerId = (Long) args[0];
+                sellerAccountId = (Long) args[1];
+                return accountExists ? new SellerAccount() : null;
+            }
+            if ("toString".equals(method.getName()))
+            {
+                return "RecordingSellerMapper";
+            }
+            Class<?> returnType = method.getReturnType();
+            if (Integer.TYPE.equals(returnType))
+            {
+                return 0;
+            }
+            if (Long.TYPE.equals(returnType))
+            {
+                return 0L;
+            }
+            if (Boolean.TYPE.equals(returnType))
+            {
+                return false;
+            }
+            if (List.class.isAssignableFrom(returnType))
+            {
+                return new ArrayList<>();
+            }
+            return null;
         }
     }
 }

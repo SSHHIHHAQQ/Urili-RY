@@ -44,6 +44,70 @@ begin
   end if;
 end//
 
+drop procedure if exists assert_source_product_read_model_completed//
+create procedure assert_source_product_read_model_completed()
+begin
+  declare v_expected_count bigint default 0;
+  declare v_actual_count bigint default 0;
+  declare v_missing_count bigint default 0;
+
+  select count(1) into v_expected_count from tmp_source_product_group;
+  select count(1) into v_actual_count
+  from source_product_group
+  where repository_scope = 'OFFICIAL_MASTER';
+  if v_actual_count <> v_expected_count then
+    signal sqlstate '45000' set message_text = 'source product group read model completed count mismatch';
+  end if;
+
+  select count(1) into v_missing_count
+  from tmp_source_product_group t
+  left join source_product_group g
+    on g.source_sku_group_key = t.source_sku_group_key
+   and g.repository_scope = t.repository_scope
+  where g.source_sku_group_key is null;
+  if v_missing_count <> 0 then
+    signal sqlstate '45000' set message_text = 'source product group read model completed missing expected keys';
+  end if;
+
+  select count(1) into v_expected_count from tmp_source_product_dimension_group;
+  select count(1) into v_actual_count
+  from source_product_dimension_group
+  where repository_scope = 'OFFICIAL_MASTER';
+  if v_actual_count <> v_expected_count then
+    signal sqlstate '45000' set message_text = 'source product dimension read model completed count mismatch';
+  end if;
+
+  select count(1) into v_missing_count
+  from tmp_source_product_dimension_group t
+  left join source_product_dimension_group g
+    on g.source_dimension_group_key = t.source_dimension_group_key
+   and g.repository_scope = t.repository_scope
+  where g.source_dimension_group_key is null;
+  if v_missing_count <> 0 then
+    signal sqlstate '45000' set message_text = 'source product dimension read model completed missing expected keys';
+  end if;
+
+  select count(1) into v_expected_count from tmp_source_product_warehouse_detail;
+  select count(1) into v_actual_count
+  from source_product_warehouse_detail
+  where repository_scope = 'OFFICIAL_MASTER';
+  if v_actual_count <> v_expected_count then
+    signal sqlstate '45000' set message_text = 'source product warehouse read model completed count mismatch';
+  end if;
+
+  select count(1) into v_missing_count
+  from tmp_source_product_warehouse_detail t
+  left join source_product_warehouse_detail d
+    on d.repository_scope = t.repository_scope
+   and d.connection_code = t.connection_code
+   and d.master_sku = t.master_sku
+   and d.source_dimension_group_key = t.source_dimension_group_key
+  where d.id is null;
+  if v_missing_count <> 0 then
+    signal sqlstate '45000' set message_text = 'source product warehouse read model completed missing expected rows';
+  end if;
+end//
+
 delimiter ;
 
 call assert_source_product_read_model_confirmed();
@@ -690,8 +754,11 @@ select source_sku_group_key, source_dimension_group_key, repository_scope, conne
        source_payload_hash, wms_payload_hash, first_seen_time, last_seen_time, update_time, rebuild_time
 from tmp_source_product_warehouse_detail;
 
+call assert_source_product_read_model_completed();
+
 commit;
 
 drop temporary table if exists tmp_source_product_warehouse_detail;
 drop temporary table if exists tmp_source_product_dimension_group;
 drop temporary table if exists tmp_source_product_group;
+drop procedure if exists assert_source_product_read_model_completed;

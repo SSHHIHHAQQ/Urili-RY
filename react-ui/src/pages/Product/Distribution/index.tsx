@@ -20,6 +20,7 @@ import {
 import type { MenuProps } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { InventoryAdjustModal } from '@/components/InventoryAdjust/InventoryAdjustButton';
 import { getAdminSellerList } from '@/services/seller/seller';
 import { getCategoryList } from '@/services/product/product';
 import {
@@ -29,6 +30,7 @@ import {
   getDistributionProduct,
   getDistributionProductList,
   getDistributionSkuList,
+  submitDistributionProductReview,
 } from '@/services/product/distributionProduct';
 import { message, modal } from '@/utils/feedback';
 import { getPersistedProTableSearch, getProTableScroll } from '@/utils/proTableSearch';
@@ -39,6 +41,8 @@ import {
   buildSkuSpecText,
   formatPriceRange,
   getControlStatusText,
+  inventoryStatusColor,
+  inventoryStatusText,
   getSalesStatusText,
   resolveResourceUrl,
   salesStatusTabOptions,
@@ -66,6 +70,11 @@ type PricePreviewRow = API.ProductDistribution.Sku & {
   nextSalePrice?: number;
   priceError?: string;
 };
+type InventoryAdjustTarget = {
+  open: boolean;
+  scope: 'SPU' | 'SKU';
+  overviewRecord?: API.InventoryOverview.OverviewItem;
+};
 
 const viewModeOptions = [
   { label: 'SPU视图', value: 'SPU' },
@@ -79,8 +88,22 @@ const salesStatusColor: Record<string, string> = {
   OFF_SALE: 'processing',
 };
 
+const reviewStatusColor: Record<string, string> = {
+  PENDING: 'processing',
+  APPROVED: 'success',
+  REJECTED: 'error',
+  WITHDRAWN: 'default',
+};
+
+const reviewStatusText: Record<string, string> = {
+  PENDING: '待审核',
+  APPROVED: '审核通过',
+  REJECTED: '已驳回',
+  WITHDRAWN: '已撤回',
+};
+
 const statusFlowMap: Record<string, { targetStatus: string; label: string; batchLabel: string }> = {
-  DRAFT: { targetStatus: 'READY', label: '提交待上架', batchLabel: '提交待上架' },
+  DRAFT: { targetStatus: 'SUBMIT_REVIEW', label: '提交审核', batchLabel: '批量提交审核' },
   READY: { targetStatus: 'ON_SALE', label: '上架', batchLabel: '批量上架' },
   ON_SALE: { targetStatus: 'OFF_SALE', label: '下架', batchLabel: '批量下架' },
   OFF_SALE: { targetStatus: 'ON_SALE', label: '上架', batchLabel: '批量上架' },
@@ -100,7 +123,7 @@ const tailRuleOptions = [
   { label: '取整数', value: 'INTEGER' },
 ];
 const TABLE_SELECTION_COLUMN_WIDTH = 48;
-const SPU_TABLE_SCROLL_X = 2580;
+const SPU_TABLE_SCROLL_X = 2860;
 const SKU_TABLE_SCROLL_X = 3240;
 const SKU_DETAIL_TABLE_SCROLL_X = 1900;
 
@@ -120,8 +143,53 @@ function compactIds<T extends { spuId?: number; skuId?: number }>(rows: T[], own
     .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
 }
 
+function buildSpuInventoryOverviewRecord(record: API.ProductDistribution.Spu): API.InventoryOverview.OverviewItem {
+  return {
+    spuId: record.spuId,
+    systemSpuCode: record.systemSpuCode,
+    productName: record.productName,
+    skuCount: record.skuCount,
+    warehouseKindSummary: record.warehouseKindSummary,
+    warehouseCount: record.warehouseCount,
+    platformAvailableQty: record.availableStock,
+    inventoryStatus: record.inventoryStatus,
+  };
+}
+
+function buildSkuInventoryOverviewRecord(record: API.ProductDistribution.Sku): API.InventoryOverview.OverviewItem {
+  return {
+    spuId: record.spuId,
+    skuId: record.skuId,
+    systemSpuCode: record.systemSpuCode,
+    systemSkuCode: record.systemSkuCode,
+    productName: record.productName,
+    skuName: buildSkuSpecText(record) || record.sellerSkuCode,
+    skuImageUrl: record.skuImageUrl,
+    warehouseKindSummary: record.warehouseKindSummary,
+    warehouseCount: record.warehouseCount,
+    platformAvailableQty: record.availableStock,
+    inventoryStatus: record.inventoryStatus,
+  };
+}
+
 function renderSalesStatusTag(status?: string) {
   return <Tag color={salesStatusColor[status || '']}>{getSalesStatusText(status)}</Tag>;
+}
+
+function renderLatestReviewStatus(record: Pick<API.ProductDistribution.Spu, 'latestReviewStatus'>) {
+  if (!record.latestReviewStatus) return '--';
+  return <Tag color={reviewStatusColor[record.latestReviewStatus] || 'default'}>
+    {reviewStatusText[record.latestReviewStatus] || record.latestReviewStatus}
+  </Tag>;
+}
+
+function renderLatestReviewFeedback(record: Pick<API.ProductDistribution.Spu, 'latestReviewFeedback'>) {
+  if (!record.latestReviewFeedback?.trim()) return '--';
+  return (
+    <Typography.Text ellipsis={{ tooltip: record.latestReviewFeedback }}>
+      {record.latestReviewFeedback}
+    </Typography.Text>
+  );
 }
 
 function renderSpuControlStatusTag(record: Pick<API.ProductDistribution.Spu, 'controlStatus'>) {
@@ -177,6 +245,26 @@ function applyTailRule(value: number, rule: TailRule) {
 export default function ProductDistributionPage() {
   const access = useAccess();
   const canViewDistributionDetail = access.hasPerms('product:distribution:query');
+  const canQueryAdminSellers = access.hasPerms('seller:admin:list');
+  const canQueryProductCategories = access.hasPerms('product:category:list');
+  const canPreviewCategorySchema = access.hasPerms('product:categoryAttribute:preview');
+  const canQueryOfficialWarehouses = access.hasPerms('warehouse:official:list');
+  const canQueryThirdPartyWarehouses = access.hasPerms('warehouse:thirdParty:list');
+  const canMaintainDistributionProductDependencies =
+    canQueryAdminSellers
+    && canQueryProductCategories
+    && canPreviewCategorySchema
+    && canQueryOfficialWarehouses
+    && canQueryThirdPartyWarehouses;
+  const canCreateDistributionProduct =
+    access.hasPerms('product:distribution:add') && canMaintainDistributionProductDependencies;
+  const canEditDistributionProduct =
+    canViewDistributionDetail
+    && access.hasPerms('product:distribution:edit')
+    && canMaintainDistributionProductDependencies;
+  const canOperateDistributionStatus = access.hasPerms('product:distribution:status');
+  const canSubmitDistributionReview = canEditDistributionProduct;
+  const canAdjustInventory = access.hasPerms('inventory:overview:adjust') && access.hasPerms('inventory:overview:query');
   const actionRef = useRef<ActionType>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [current, setCurrent] = useState<API.ProductDistribution.Spu>();
@@ -202,11 +290,36 @@ export default function ProductDistributionPage() {
   const [tailRule, setTailRule] = useState<TailRule>('NONE');
   const [priceReason, setPriceReason] = useState('');
   const [operationLogOpen, setOperationLogOpen] = useState(false);
+  const [inventoryAdjustTarget, setInventoryAdjustTarget] = useState<InventoryAdjustTarget>({
+    open: false,
+    scope: 'SPU',
+  });
 
   const categoryTreeData = useMemo(
     () => toCategoryTreeSelectData(buildCategoryTree(categories)),
     [categories],
   );
+  const categoryNameMap = useMemo(() => {
+    const map = new Map<number, string>();
+    const visit = (items: API.Product.Category[]) => {
+      items.forEach((item) => {
+        if (item.categoryId && item.categoryName?.trim()) {
+          map.set(item.categoryId, item.categoryName.trim());
+        }
+        if (item.children?.length) {
+          visit(item.children);
+        }
+      });
+    };
+    visit(categories);
+    return map;
+  }, [categories]);
+  const renderListCategoryName = (record: Pick<API.ProductDistribution.Spu, 'categoryId' | 'categoryName'>) => {
+    const categoryName = record.categoryName?.trim();
+    if (categoryName) return categoryName;
+    const categoryId = Number(record.categoryId);
+    return Number.isFinite(categoryId) ? categoryNameMap.get(categoryId) || '--' : '--';
+  };
 
   const selectedRows = viewMode === 'SPU' ? selectedSpuRows : selectedSkuRows;
   const selectedIds = compactIds(selectedRows, viewMode);
@@ -219,16 +332,25 @@ export default function ProductDistributionPage() {
   }, [priceRows]);
 
   useEffect(() => {
-    getAdminSellerList({ pageNum: 1, pageSize: 100, status: '0' }).then((resp) => {
-      setSellerOptions(
-        (resp.rows || []).map((seller) => ({
-          label: `${seller.sellerName || seller.sellerShortName || seller.sellerNo}（${seller.sellerNo || '-'}）`,
-          value: seller.sellerId as number,
-        })),
-      );
-    });
-    getCategoryList({ status: '0' }).then((resp) => setCategories(resp.data || []));
-  }, []);
+    if (canQueryAdminSellers) {
+      getAdminSellerList({ pageNum: 1, pageSize: 100, status: '0' }).then((resp) => {
+        setSellerOptions(
+          (resp.rows || []).map((seller) => ({
+            label: `${seller.sellerName || seller.sellerShortName || seller.sellerNo}（${seller.sellerNo || '-'}）`,
+            value: seller.sellerId as number,
+          })),
+        );
+      });
+    } else {
+      setSellerOptions([]);
+    }
+
+    if (canQueryProductCategories) {
+      getCategoryList({ status: '0' }).then((resp) => setCategories(resp.data || []));
+    } else {
+      setCategories([]);
+    }
+  }, [canQueryAdminSellers, canQueryProductCategories]);
 
   useEffect(() => {
     setSelectedSpuRows([]);
@@ -236,6 +358,17 @@ export default function ProductDistributionPage() {
   }, [statusTab, viewMode]);
 
   const reload = () => actionRef.current?.reload();
+
+  const openInventoryAdjust = (
+    scope: 'SPU' | 'SKU',
+    overviewRecord: API.InventoryOverview.OverviewItem,
+  ) => {
+    if (!canAdjustInventory) {
+      message.warning('缺少库存调整权限');
+      return;
+    }
+    setInventoryAdjustTarget({ open: true, scope, overviewRecord });
+  };
 
   const statusTabItems = useMemo(
     () => salesStatusTabOptions.map((item) => ({ key: item.value, label: item.label })),
@@ -246,14 +379,15 @@ export default function ProductDistributionPage() {
 
   const renderInventoryStatus = (record: { availableStock?: number | null; warehouseCount?: number | null; inventoryStatus?: string | null }) => {
     if (record.inventoryStatus) {
-      return <Tag>{record.inventoryStatus}</Tag>;
+      const status = record.inventoryStatus;
+      return <Tag color={inventoryStatusColor[status] || 'default'}>{inventoryStatusText[status] || status}</Tag>;
     }
     if (record.availableStock == null && record.warehouseCount == null) {
       return '--';
     }
     return record.availableStock && record.availableStock > 0
-      ? <Tag color="success">有库存</Tag>
-      : <Tag>无库存</Tag>;
+      ? <Tag color="success">有货</Tag>
+      : <Tag>缺货</Tag>;
   };
 
   const openDetail = async (record: API.ProductDistribution.Spu) => {
@@ -266,10 +400,18 @@ export default function ProductDistributionPage() {
   };
 
   const openEdit = async (record: API.ProductDistribution.Spu) => {
+    if (!canEditDistributionProduct) {
+      message.warning('缺少商品维护依赖权限');
+      return;
+    }
     history.push(`/product/distribution/edit/${record.spuId}`);
   };
 
   const openSkuEdit = (record: API.ProductDistribution.Sku) => {
+    if (!canEditDistributionProduct) {
+      message.warning('缺少商品维护依赖权限');
+      return;
+    }
     if (record.spuId == null) {
       return;
     }
@@ -281,9 +423,58 @@ export default function ProductDistributionPage() {
       message.warning('请先选择商品');
       return;
     }
+    if (targetStatus === 'SUBMIT_REVIEW') {
+      if (!canSubmitDistributionReview) {
+        message.warning('缺少商品提交审核权限');
+        return;
+      }
+      if (ownerType !== 'SPU') {
+        message.warning('请在 SPU 视图提交商品审核');
+        return;
+      }
+      modal.confirm({
+        title: label,
+        content: `确认提交 ${ids.length} 个草稿商品进入商品审核？`,
+        okText: '确认',
+        cancelText: '取消',
+        onOk: async () => {
+          let successCount = 0;
+          let firstError = '';
+          for (const spuId of ids) {
+            const resp = await submitDistributionProductReview(spuId);
+            if (resp.code === 200) {
+              successCount += 1;
+            } else if (!firstError) {
+              firstError = resp.msg || '提交审核失败';
+            }
+          }
+          if (successCount === ids.length) {
+            message.success('已提交商品审核');
+          } else if (successCount > 0) {
+            message.warning(`已提交 ${successCount} 个商品，部分失败：${firstError}`);
+          } else {
+            message.error(firstError || '提交审核失败');
+          }
+          if (successCount > 0) reload();
+        },
+      });
+      return;
+    }
     const shouldAskSkuSync = ownerType === 'SPU' && ['ON_SALE', 'OFF_SALE'].includes(targetStatus);
     let syncSkuStatus = true;
+    let statusReason = '';
     const skuSyncActionText = targetStatus === 'OFF_SALE' ? '下架' : '上架';
+    const reasonInput = (
+      <Input.TextArea
+        rows={3}
+        maxLength={200}
+        showCount
+        placeholder="请输入状态调整原因"
+        onChange={(event) => {
+          statusReason = event.target.value;
+        }}
+      />
+    );
     modal.confirm({
       title: label,
       content: shouldAskSkuSync ? (
@@ -306,16 +497,28 @@ export default function ProductDistributionPage() {
               <Radio value="SPU_ONLY">仅调整 SPU</Radio>
             </Space>
           </Radio.Group>
+          {reasonInput}
         </Space>
-      ) : `确认对 ${ids.length} 个${ownerType}执行“${label}”？`,
+      ) : (
+        <Space orientation="vertical" size={12}>
+          <div>{`确认对 ${ids.length} 个${ownerType}执行“${label}”？`}</div>
+          {reasonInput}
+        </Space>
+      ),
       okText: '确认',
       cancelText: '取消',
       onOk: async () => {
+        const normalizedReason = statusReason.trim();
+        if (!normalizedReason) {
+          message.warning('请输入状态调整原因');
+          throw new Error('status reason required');
+        }
         const ok = resultOk(
           await batchUpdateDistributionStatus(
             ownerType,
             ids,
             targetStatus,
+            normalizedReason,
             shouldAskSkuSync ? syncSkuStatus : undefined,
           ),
           '状态已更新',
@@ -428,12 +631,15 @@ export default function ProductDistributionPage() {
       && row.supplyPrice !== null
       && row.nextSalePrice < Number(row.supplyPrice));
     const items = pricePreviewRows
-      .filter((row) => row.skuId && row.nextSalePrice !== undefined)
-      .map((row) => ({ skuId: row.skuId!, salePrice: row.nextSalePrice! }));
+      .flatMap((row) => (
+        row.skuId && row.nextSalePrice !== undefined
+          ? [{ skuId: row.skuId, salePrice: row.nextSalePrice }]
+          : []
+      ));
     const run = async () => {
       const ok = resultOk(
         await batchUpdateDistributionSkuSalePrices(items, priceReason.trim()),
-        '销售价已更新',
+        '已提交调价审核',
       );
       if (ok) {
         setPriceModalOpen(false);
@@ -518,20 +724,23 @@ export default function ProductDistributionPage() {
       title: '操作',
       width: 130,
       render: (_, record) => {
-        const flow = statusFlowMap[record.skuStatus || ''];
+        const flow = record.skuStatus === 'DRAFT' ? undefined : statusFlowMap[record.skuStatus || ''];
         const parentDisabled = record.spuControlStatus === 'DISABLED';
         const skuDisabled = record.controlStatus === 'DISABLED';
         const items: MenuProps['items'] = [
+          ...(canAdjustInventory && record.skuId
+            ? [{ key: 'inventory', label: '调整库存' }]
+            : []),
           ...(access.hasPerms('product:distribution:price')
             ? [{ key: 'price', label: '调价' }]
             : []),
-          ...(flow && !parentDisabled && !skuDisabled
+          ...(flow && !parentDisabled && !skuDisabled && canOperateDistributionStatus
             ? [{ key: `status:${flow.targetStatus}`, label: flow.label }]
             : []),
-          ...(!parentDisabled && !skuDisabled
+          ...(!parentDisabled && !skuDisabled && canOperateDistributionStatus
             ? [{ key: 'disable', label: '停用', danger: true }]
             : []),
-          ...(skuDisabled
+          ...(skuDisabled && canOperateDistributionStatus
             ? [{ key: 'recover', label: '恢复' }]
             : []),
           ...(parentDisabled && !skuDisabled
@@ -540,10 +749,15 @@ export default function ProductDistributionPage() {
         ];
         return (
           <Dropdown
+            trigger={['click']}
             menu={{
               items,
               onClick: ({ key }) => {
-                if (key === 'disable') {
+                if (key === 'inventory') {
+                  openInventoryAdjust('SKU', buildSkuInventoryOverviewRecord(record));
+                } else if (key === 'price') {
+                  openPriceModal([record]);
+                } else if (key === 'disable') {
                   openControlModal('SKU', compactIds([record], 'SKU'), 'DISABLED');
                 } else if (key === 'recover') {
                   openControlModal('SKU', compactIds([record], 'SKU'), 'NORMAL');
@@ -553,8 +767,8 @@ export default function ProductDistributionPage() {
               },
             }}
           >
-            <Button type="link" size="small" hidden={!access.hasPerms('product:distribution:status')}>
-              状态 <DownOutlined />
+            <Button type="link" size="small" hidden={items.length === 0}>
+              更多 <DownOutlined />
             </Button>
           </Dropdown>
         );
@@ -601,7 +815,7 @@ export default function ProductDistributionPage() {
       dataIndex: 'categoryId',
       valueType: 'treeSelect',
       fieldProps: { ...SEARCHABLE_TREE_SELECT_PROPS, treeData: categoryTreeData, treeDefaultExpandAll: true },
-      render: (_, record) => record.categoryName || '--',
+      render: (_, record) => renderListCategoryName(record),
       width: 160,
     },
     { title: 'SKU数', dataIndex: 'skuCount', search: false, width: 80 },
@@ -654,6 +868,20 @@ export default function ProductDistributionPage() {
       render: (_, record) => renderSalesStatusTag(record.spuStatus),
     },
     {
+      title: '审核状态',
+      dataIndex: 'latestReviewStatus',
+      search: false,
+      width: 110,
+      render: (_, record) => renderLatestReviewStatus(record),
+    },
+    {
+      title: '审核反馈',
+      dataIndex: 'latestReviewFeedback',
+      search: false,
+      width: 170,
+      render: (_, record) => renderLatestReviewFeedback(record),
+    },
+    {
       title: '管控',
       dataIndex: 'controlStatus',
       search: false,
@@ -676,10 +904,16 @@ export default function ProductDistributionPage() {
       render: (_, record) => {
         const flow = statusFlowMap[record.spuStatus || ''];
         const disabled = record.controlStatus === 'DISABLED';
+        const canUseFlow = flow?.targetStatus === 'SUBMIT_REVIEW'
+          ? canSubmitDistributionReview
+          : canOperateDistributionStatus;
         const items: MenuProps['items'] = [
-          ...(flow && !disabled ? [{ key: `status:${flow.targetStatus}`, label: flow.label }] : []),
-          ...(!disabled ? [{ key: 'disable', label: '停用', danger: true }] : []),
-          ...(disabled ? [{ key: 'recover', label: '恢复' }] : []),
+          ...(canAdjustInventory && record.spuId
+            ? [{ key: 'inventory', label: '调整库存' }]
+            : []),
+          ...(flow && !disabled && canUseFlow ? [{ key: `status:${flow.targetStatus}`, label: flow.label }] : []),
+          ...(!disabled && canOperateDistributionStatus ? [{ key: 'disable', label: '停用', danger: true }] : []),
+          ...(disabled && canOperateDistributionStatus ? [{ key: 'recover', label: '恢复' }] : []),
         ];
         return [
           <Button key="view" type="link" size="small" hidden={!canViewDistributionDetail} onClick={() => openDetail(record)}>
@@ -689,17 +923,20 @@ export default function ProductDistributionPage() {
             key="edit"
             type="link"
             size="small"
-            hidden={!access.hasPerms('product:distribution:edit')}
+            hidden={!canEditDistributionProduct}
             onClick={() => openEdit(record)}
           >
             编辑
           </Button>,
           <Dropdown
             key="more"
+            trigger={['click']}
             menu={{
               items,
               onClick: ({ key }) => {
-                if (key === 'disable') {
+                if (key === 'inventory') {
+                  openInventoryAdjust('SPU', buildSpuInventoryOverviewRecord(record));
+                } else if (key === 'disable') {
                   openControlModal('SPU', compactIds([record], 'SPU'), 'DISABLED');
                 } else if (key === 'recover') {
                   openControlModal('SPU', compactIds([record], 'SPU'), 'NORMAL');
@@ -709,7 +946,7 @@ export default function ProductDistributionPage() {
               },
             }}
           >
-            <Button type="link" size="small" hidden={!access.hasPerms('product:distribution:status')}>
+            <Button type="link" size="small" hidden={items.length === 0}>
               更多 <DownOutlined />
             </Button>
           </Dropdown>,
@@ -770,7 +1007,7 @@ export default function ProductDistributionPage() {
       dataIndex: 'categoryId',
       valueType: 'treeSelect',
       fieldProps: { ...SEARCHABLE_TREE_SELECT_PROPS, treeData: categoryTreeData, treeDefaultExpandAll: true },
-      render: (_, record) => record.categoryName || '--',
+      render: (_, record) => renderListCategoryName(record),
       width: 160,
     },
     {
@@ -831,20 +1068,23 @@ export default function ProductDistributionPage() {
       width: 210,
       fixed: 'right',
       render: (_, record) => {
-        const flow = statusFlowMap[record.skuStatus || ''];
+        const flow = record.skuStatus === 'DRAFT' ? undefined : statusFlowMap[record.skuStatus || ''];
         const parentDisabled = record.spuControlStatus === 'DISABLED';
         const skuDisabled = record.controlStatus === 'DISABLED';
         const items: MenuProps['items'] = [
+          ...(canAdjustInventory && record.skuId
+            ? [{ key: 'inventory', label: '调整库存' }]
+            : []),
           ...(access.hasPerms('product:distribution:price')
             ? [{ key: 'price', label: '调价' }]
             : []),
-          ...(flow && !parentDisabled && !skuDisabled
+          ...(flow && !parentDisabled && !skuDisabled && canOperateDistributionStatus
             ? [{ key: `status:${flow.targetStatus}`, label: flow.label }]
             : []),
-          ...(!parentDisabled && !skuDisabled
+          ...(!parentDisabled && !skuDisabled && canOperateDistributionStatus
             ? [{ key: 'disable', label: '停用', danger: true }]
             : []),
-          ...(skuDisabled ? [{ key: 'recover', label: '恢复' }] : []),
+          ...(skuDisabled && canOperateDistributionStatus ? [{ key: 'recover', label: '恢复' }] : []),
           ...(parentDisabled && !skuDisabled
             ? [{ key: 'parent-disabled', label: 'SPU已停用', disabled: true }]
             : []),
@@ -857,17 +1097,20 @@ export default function ProductDistributionPage() {
             key="edit"
             type="link"
             size="small"
-            hidden={!access.hasPerms('product:distribution:edit')}
+            hidden={!canEditDistributionProduct}
             onClick={() => openSkuEdit(record)}
           >
             编辑商品
           </Button>,
           <Dropdown
             key="status"
+            trigger={['click']}
             menu={{
               items,
               onClick: ({ key }) => {
-                if (key === 'price') {
+                if (key === 'inventory') {
+                  openInventoryAdjust('SKU', buildSkuInventoryOverviewRecord(record));
+                } else if (key === 'price') {
                   openPriceModal([record]);
                 } else if (key === 'disable') {
                   openControlModal('SKU', compactIds([record], 'SKU'), 'DISABLED');
@@ -879,7 +1122,7 @@ export default function ProductDistributionPage() {
               },
             }}
           >
-            <Button type="link" size="small" hidden={!access.hasPerms('product:distribution:status')}>
+            <Button type="link" size="small" hidden={items.length === 0}>
               更多 <DownOutlined />
             </Button>
           </Dropdown>,
@@ -919,18 +1162,18 @@ export default function ProductDistributionPage() {
         <Button
           key="recover"
           disabled={!selectedIds.length}
-          hidden={!access.hasPerms('product:distribution:status')}
+          hidden={!canOperateDistributionStatus}
           onClick={() => openControlModal(viewMode, selectedIds, 'NORMAL')}
         >
           恢复
         </Button>,
       );
-    } else if (currentFlow) {
+    } else if (currentFlow && !(viewMode === 'SKU' && currentFlow.targetStatus === 'SUBMIT_REVIEW')) {
       actions.push(
         <Button
           key="flow"
           disabled={!selectedIds.length}
-          hidden={!access.hasPerms('product:distribution:status')}
+          hidden={currentFlow.targetStatus === 'SUBMIT_REVIEW' ? !canSubmitDistributionReview : !canOperateDistributionStatus}
           onClick={() => executeSalesStatus(viewMode, selectedIds, currentFlow.targetStatus, currentFlow.batchLabel)}
         >
           {currentFlow.batchLabel}
@@ -941,7 +1184,7 @@ export default function ProductDistributionPage() {
           key="disable"
           danger
           disabled={!selectedIds.length}
-          hidden={!access.hasPerms('product:distribution:status')}
+          hidden={!canOperateDistributionStatus}
           onClick={() => openControlModal(viewMode, selectedIds, 'DISABLED')}
         >
           批量停用
@@ -975,7 +1218,7 @@ export default function ProductDistributionPage() {
         key="add"
         type="primary"
         icon={<PlusOutlined />}
-        hidden={!access.hasPerms('product:distribution:add')}
+        hidden={!canCreateDistributionProduct}
         onClick={() => history.push('/product/distribution/create')}
       >
         新增商品
@@ -1069,9 +1312,19 @@ export default function ProductDistributionPage() {
         />
       )}
 
+      <InventoryAdjustModal
+        open={inventoryAdjustTarget.open}
+        onOpenChange={(open) => setInventoryAdjustTarget((prev) => ({ ...prev, open }))}
+        scope={inventoryAdjustTarget.scope}
+        overviewRecord={inventoryAdjustTarget.overviewRecord}
+        canAdjust={canAdjustInventory}
+        onChanged={reload}
+      />
+
       <ProductDetailDrawer
         open={detailOpen}
         product={current}
+        categoryPath={current ? renderListCategoryName(current) : undefined}
         onClose={() => setDetailOpen(false)}
       />
       <ProductDistributionOperationLogDrawer

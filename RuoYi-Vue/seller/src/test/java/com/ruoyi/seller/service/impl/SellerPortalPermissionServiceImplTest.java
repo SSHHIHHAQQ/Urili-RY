@@ -200,6 +200,21 @@ public class SellerPortalPermissionServiceImplTest
     }
 
     @Test
+    public void selectMenuByIdRejectsMenuOutsideSellerTerminalRange()
+    {
+        Seller seller = seller(11L);
+        SellerAccount account = account(22L, 11L);
+        RecordingSellerPortalPermissionMapper permissionMapper = new RecordingSellerPortalPermissionMapper(1)
+                .withSelectedMenus(menu(99999L, "M", "", ""));
+        SellerPortalPermissionServiceImpl service = service(sellerService(seller), sellerMapper(account),
+                permissionMapper.proxy());
+
+        assertServiceException(() -> service.selectMenuById(99999L));
+
+        assertEquals(1, permissionMapper.selectMenuByIdCallCount);
+    }
+
+    @Test
     public void updateRoleRejectsMenuIdsOutsideSellerTerminalBeforeMutatingRoleOrBindings()
     {
         Seller seller = seller(11L);

@@ -6,7 +6,7 @@
 
 ## 子 Agent 使用
 
-- 按用户最新规则先尝试 `gpt-5.3-codex-spark` 子 Agent。
+- 历史记录（已过期口径）：当时按旧规则先尝试 `gpt-5.3-codex-spark` 子 Agent；当前现行规则已改为默认使用 `gpt-5.4`。
 - 平台返回 GPT-5.3 Codex Spark 用量限制，失败 Agent 已关闭。
 - 按 fallback 规则启动并关闭 `gpt-5.4` 只读子 Agent，共收敛 8 份结果。
 - 采纳的 P1：
@@ -44,7 +44,7 @@
 ## 验证
 
 - `cd E:\Urili-Ruoyi\react-ui; npm run guard:portal-token`：通过。
-- `cd E:\Urili-Ruoyi\react-ui; npm run test:unit -- --runTestsByPath tests/portal-session-request.test.ts tests/terminal-session-token.test.ts --runInBand`：通过，2 个 suite / 9 个测试。
+- 历史记录（已过期命令口径）：`cd E:\Urili-Ruoyi\react-ui; npm run test:unit -- --runTestsByPath tests/portal-session-request.test.ts tests/terminal-session-token.test.ts --runInBand`：当时通过，2 个 suite / 9 个测试；当前公开 `npm run test:unit` 入口已收口为 `verify-three-terminal`，复核请使用 `npm run verify:three-terminal` 或直接调用 Jest 二进制。
 - `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system "-Dtest=SqlExecutionGuardContractTest,IntegrationAdminRouteContractTest" test`：通过，43 个测试。
 - `cd E:\Urili-Ruoyi\react-ui; node scripts\verify-three-terminal.mjs --check-manifest`：通过。
 - `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system "-Dtest=TerminalSqlIsolationContractTest,IntegrationAdminRouteContractTest,SqlExecutionGuardContractTest" test`：通过，55 个测试。

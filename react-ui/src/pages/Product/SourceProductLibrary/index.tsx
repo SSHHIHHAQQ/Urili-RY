@@ -5,6 +5,7 @@ import {
   type ProColumns,
   ProTable,
 } from '@ant-design/pro-components';
+import { useAccess } from '@umijs/max';
 import { Button, Space, Tag, Typography } from 'antd';
 import { useRef, useState } from 'react';
 import {
@@ -39,7 +40,6 @@ const SOURCE_PRODUCT_SEARCH_FIELD_COUNT = 8;
 
 const repositoryTabs = [
   { key: 'OFFICIAL_MASTER', label: '官方主仓' },
-  { key: 'THIRD_PARTY_MASTER', label: '三方主仓' },
 ];
 
 function cleanParams(params: Record<string, any>) {
@@ -106,14 +106,19 @@ function renderProduct(record: API.Integration.SourceProductItem) {
 }
 
 export default function SourceProductLibraryPage() {
+  const access = useAccess();
   const actionRef = useRef<ActionType>(null);
   const [repositoryScope, setRepositoryScope] = useState('OFFICIAL_MASTER');
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [groupDetail, setGroupDetail] = useState<API.Integration.SourceProductGroupDetail>();
   const [currentRecord, setCurrentRecord] = useState<API.Integration.SourceProductItem>();
+  const canQuerySourceProducts = access.hasPerms('integration:upstream:query');
 
   const openDetail = (record: API.Integration.SourceProductItem) => {
+    if (!canQuerySourceProducts) {
+      return;
+    }
     setCurrentRecord(record);
     setGroupDetail(undefined);
     setDetailLoading(false);
@@ -315,6 +320,7 @@ export default function SourceProductLibraryPage() {
           size="small"
           icon={<EyeOutlined />}
           onClick={() => openDetail(record)}
+          disabled={!canQuerySourceProducts}
         >
           查看
         </Button>,
@@ -336,6 +342,9 @@ export default function SourceProductLibraryPage() {
           'source-product-library',
         )}
         request={async (params) => {
+          if (!canQuerySourceProducts) {
+            return { data: [], total: 0, success: true };
+          }
           const { current, pageSize, repositoryScope: scope, ...filters } = params;
           const resp = await getSourceProductList(
             cleanParams({

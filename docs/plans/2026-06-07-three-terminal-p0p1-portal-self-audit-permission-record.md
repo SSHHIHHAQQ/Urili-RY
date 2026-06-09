@@ -8,7 +8,7 @@
 
 ## 子 Agent 使用情况
 
-- 当前规则：子 Agent 优先使用 GPT-5.3 Codex；不可用、额度限制或上下文失败时降级 `gpt-5.4`。
+- 历史记录（已过期口径）：当前规则：子 Agent 优先使用 GPT-5.3 Codex；不可用、额度限制或上下文失败时降级 `gpt-5.4`。
 - 本检查点采纳上一轮 6 个 `gpt-5.4` 只读子 Agent 的 P1 扫描结果，所有子 Agent 已关闭。
 - 已采纳并收口：seller/buyer 端内 `/account/login-logs`、`/account/oper-logs`、`/account/sessions` 不能只校验 terminal，还必须具备端内细粒度权限。
 - 继续记录为残留 P1：余额/充值仍是占位口径、部分旧 DDL 可重放性、`sys_menu` 旧 seed slot/signature guard、部门/角色隔离契约测试。

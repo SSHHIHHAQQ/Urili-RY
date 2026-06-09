@@ -5,8 +5,13 @@
 -- 3. Split RuoYi sys_job entries by sync type and move heavy dimension sync to 23:59 Beijing time.
 
 set names utf8mb4;
+set session group_concat_max_len = greatest(@@session.group_concat_max_len, 1048576);
 
 set @confirm_upstream_sync_staging_diff := coalesce(@confirm_upstream_sync_staging_diff, '');
+set @upstream_sync_staging_diff_job_expected_count :=
+    coalesce(@upstream_sync_staging_diff_job_expected_count, '');
+set @upstream_sync_staging_diff_job_expected_signature :=
+    coalesce(@upstream_sync_staging_diff_job_expected_signature, '');
 
 delimiter //
 
@@ -16,6 +21,13 @@ begin
   if coalesce(@confirm_upstream_sync_staging_diff, '')
       <> 'APPLY_UPSTREAM_SYNC_STAGING_DIFF' then
     signal sqlstate '45000' set message_text = 'set @confirm_upstream_sync_staging_diff = APPLY_UPSTREAM_SYNC_STAGING_DIFF before running this migration';
+  end if;
+
+  if coalesce(@upstream_sync_staging_diff_job_expected_count, '') not regexp '^[0-9]+$' then
+    signal sqlstate '45000' set message_text = 'set @upstream_sync_staging_diff_job_expected_count after previewing exact upstream sync staging diff sys_job rows';
+  end if;
+  if coalesce(@upstream_sync_staging_diff_job_expected_signature, '') not regexp '^[0-9a-fA-F]{64}$' then
+    signal sqlstate '45000' set message_text = 'set @upstream_sync_staging_diff_job_expected_signature after previewing exact upstream sync staging diff sys_job rows';
   end if;
 end//
 
@@ -47,6 +59,100 @@ begin
       and column_name = p_column
   ) then
     signal sqlstate '45000' set message_text = p_message;
+  end if;
+end//
+
+drop procedure if exists assert_upstream_sync_staging_diff_job_targets//
+create procedure assert_upstream_sync_staging_diff_job_targets()
+begin
+  declare v_count int default 0;
+  declare v_signature varchar(64) default '';
+  declare v_group_count int default 0;
+
+  select count(1)
+    into v_group_count
+  from sys_job
+  where invoke_target in ('upstreamSystemTask.syncSkus', 'upstreamSystemTask.syncSkuInfo');
+  if v_group_count > 1 then
+    signal sqlstate '45000' set message_text = 'upstream sync staging diff SKU info sys_job target must be unique before upsert';
+  end if;
+
+  select count(1)
+    into v_group_count
+  from sys_job
+  where invoke_target = 'upstreamSystemTask.syncWarehouses';
+  if v_group_count > 1 then
+    signal sqlstate '45000' set message_text = 'upstream sync staging diff warehouse sys_job target must be unique before upsert';
+  end if;
+
+  select count(1)
+    into v_group_count
+  from sys_job
+  where invoke_target = 'upstreamSystemTask.syncLogisticsChannels';
+  if v_group_count > 1 then
+    signal sqlstate '45000' set message_text = 'upstream sync staging diff logistics channel sys_job target must be unique before upsert';
+  end if;
+
+  select count(1)
+    into v_group_count
+  from sys_job
+  where invoke_target = 'upstreamSystemTask.syncSkuDimensions';
+  if v_group_count > 1 then
+    signal sqlstate '45000' set message_text = 'upstream sync staging diff SKU dimension sys_job target must be unique before upsert';
+  end if;
+
+  select count(1)
+    into v_group_count
+  from sys_job
+  where invoke_target = 'upstreamSystemTask.syncInventory';
+  if v_group_count > 1 then
+    signal sqlstate '45000' set message_text = 'upstream sync staging diff inventory sys_job target must be unique before upsert';
+  end if;
+
+  select count(1)
+    into v_group_count
+  from sys_job
+  where invoke_target in (
+      'upstreamSkuInfoSyncTask.sync',
+      'upstreamWarehouseSyncTask.sync',
+      'upstreamLogisticsChannelSyncTask.sync',
+      'upstreamSkuDimensionSyncTask.sync',
+      'upstreamInventorySyncTask.sync'
+  );
+  if v_group_count > 0 then
+    signal sqlstate '45000' set message_text = 'upstream sync staging diff must run before upstream task component split sys_job targets exist';
+  end if;
+
+  select count(1),
+         sha2(coalesce(group_concat(
+           concat_ws(':',
+             job_id,
+             coalesce(job_name, ''),
+             coalesce(job_group, ''),
+             coalesce(invoke_target, ''),
+             coalesce(cron_expression, ''),
+             coalesce(misfire_policy, ''),
+             coalesce(concurrent, ''),
+             coalesce(status, '')
+           )
+           order by job_id separator '|'
+         ), ''), 256)
+    into v_count, v_signature
+  from sys_job
+  where invoke_target in (
+      'upstreamSystemTask.syncSkus',
+      'upstreamSystemTask.syncSkuInfo',
+      'upstreamSystemTask.syncWarehouses',
+      'upstreamSystemTask.syncLogisticsChannels',
+      'upstreamSystemTask.syncSkuDimensions',
+      'upstreamSystemTask.syncInventory'
+  );
+
+  if v_count <> cast(@upstream_sync_staging_diff_job_expected_count as unsigned) then
+    signal sqlstate '45000' set message_text = 'upstream sync staging diff sys_job exact target count mismatch';
+  end if;
+  if lower(v_signature) <> lower(@upstream_sync_staging_diff_job_expected_signature) then
+    signal sqlstate '45000' set message_text = 'upstream sync staging diff sys_job exact target signature mismatch';
   end if;
 end//
 
@@ -224,11 +330,9 @@ create table if not exists upstream_system_sku_dimension_stage (
   key idx_stage_sku_dimension_batch (connection_code, sync_batch_id)
 ) engine=innodb comment='上游SKU仓库尺寸重量同步staging';
 
-set @job_id := (
-  select job_id from sys_job
-  where invoke_target in ('upstreamSystemTask.syncSkus', 'upstreamSystemTask.syncSkuInfo')
-  limit 1
-);
+call assert_upstream_sync_staging_diff_job_targets();
+
+start transaction;
 
 update sys_job
 set job_name = '领星SKU信息每日同步',
@@ -241,18 +345,14 @@ set job_name = '领星SKU信息每日同步',
     update_by = 'admin',
     update_time = sysdate(),
     remark = '每天23:40同步领星SKU基础信息，不包含SKU仓库尺寸重量。'
-where @job_id is not null
-  and job_id = @job_id;
+where invoke_target in ('upstreamSystemTask.syncSkus', 'upstreamSystemTask.syncSkuInfo');
 
 insert into sys_job(job_name, job_group, invoke_target, cron_expression, misfire_policy, concurrent, status, create_by, create_time, remark)
 select '领星SKU信息每日同步', 'SYSTEM', 'upstreamSystemTask.syncSkuInfo', '0 40 23 * * ?', '3', '1', '0', 'admin', sysdate(),
        '每天23:40同步领星SKU基础信息，不包含SKU仓库尺寸重量。'
-where @job_id is null;
-
-set @job_id := (
-  select job_id from sys_job
-  where invoke_target = 'upstreamSystemTask.syncWarehouses'
-  limit 1
+where not exists (
+  select 1 from sys_job
+  where invoke_target in ('upstreamSystemTask.syncSkus', 'upstreamSystemTask.syncSkuInfo')
 );
 
 update sys_job
@@ -266,18 +366,14 @@ set job_name = '领星仓库每日同步',
     update_by = 'admin',
     update_time = sysdate(),
     remark = '每天23:20同步领星仓库清单。'
-where @job_id is not null
-  and job_id = @job_id;
+where invoke_target = 'upstreamSystemTask.syncWarehouses';
 
 insert into sys_job(job_name, job_group, invoke_target, cron_expression, misfire_policy, concurrent, status, create_by, create_time, remark)
 select '领星仓库每日同步', 'SYSTEM', 'upstreamSystemTask.syncWarehouses', '0 20 23 * * ?', '3', '1', '0', 'admin', sysdate(),
        '每天23:20同步领星仓库清单。'
-where @job_id is null;
-
-set @job_id := (
-  select job_id from sys_job
-  where invoke_target = 'upstreamSystemTask.syncLogisticsChannels'
-  limit 1
+where not exists (
+  select 1 from sys_job
+  where invoke_target = 'upstreamSystemTask.syncWarehouses'
 );
 
 update sys_job
@@ -291,18 +387,14 @@ set job_name = '领星物流渠道每日同步',
     update_by = 'admin',
     update_time = sysdate(),
     remark = '每天23:30同步领星物流渠道清单。'
-where @job_id is not null
-  and job_id = @job_id;
+where invoke_target = 'upstreamSystemTask.syncLogisticsChannels';
 
 insert into sys_job(job_name, job_group, invoke_target, cron_expression, misfire_policy, concurrent, status, create_by, create_time, remark)
 select '领星物流渠道每日同步', 'SYSTEM', 'upstreamSystemTask.syncLogisticsChannels', '0 30 23 * * ?', '3', '1', '0', 'admin', sysdate(),
        '每天23:30同步领星物流渠道清单。'
-where @job_id is null;
-
-set @job_id := (
-  select job_id from sys_job
-  where invoke_target = 'upstreamSystemTask.syncSkuDimensions'
-  limit 1
+where not exists (
+  select 1 from sys_job
+  where invoke_target = 'upstreamSystemTask.syncLogisticsChannels'
 );
 
 update sys_job
@@ -316,18 +408,14 @@ set job_name = '领星SKU仓库尺寸重量每日限速同步',
     update_by = 'admin',
     update_time = sysdate(),
     remark = '每天23:59限速同步领星SKU仓库尺寸重量。'
-where @job_id is not null
-  and job_id = @job_id;
+where invoke_target = 'upstreamSystemTask.syncSkuDimensions';
 
 insert into sys_job(job_name, job_group, invoke_target, cron_expression, misfire_policy, concurrent, status, create_by, create_time, remark)
 select '领星SKU仓库尺寸重量每日限速同步', 'SYSTEM', 'upstreamSystemTask.syncSkuDimensions', '0 59 23 * * ?', '3', '1', '0', 'admin', sysdate(),
        '每天23:59限速同步领星SKU仓库尺寸重量。'
-where @job_id is null;
-
-set @job_id := (
-  select job_id from sys_job
-  where invoke_target = 'upstreamSystemTask.syncInventory'
-  limit 1
+where not exists (
+  select 1 from sys_job
+  where invoke_target = 'upstreamSystemTask.syncSkuDimensions'
 );
 
 update sys_job
@@ -341,10 +429,16 @@ set job_name = '领星SKU库存每10分钟同步',
     update_by = 'admin',
     update_time = sysdate(),
     remark = '每10分钟增量同步领星SKU库存。'
-where @job_id is not null
-  and job_id = @job_id;
+where invoke_target = 'upstreamSystemTask.syncInventory';
 
 insert into sys_job(job_name, job_group, invoke_target, cron_expression, misfire_policy, concurrent, status, create_by, create_time, remark)
 select '领星SKU库存每10分钟同步', 'SYSTEM', 'upstreamSystemTask.syncInventory', '0 0/10 * * * ?', '3', '1', '0', 'admin', sysdate(),
        '每10分钟增量同步领星SKU库存。'
-where @job_id is null;
+where not exists (
+  select 1 from sys_job
+  where invoke_target = 'upstreamSystemTask.syncInventory'
+);
+
+commit;
+
+drop procedure if exists assert_upstream_sync_staging_diff_job_targets;

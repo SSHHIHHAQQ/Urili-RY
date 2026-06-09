@@ -111,9 +111,9 @@
    - 结果: passed
 3. `node scripts/check-partner-management-template.mjs`
    - 结果: passed
-4. `npm run test:unit -- --runTestsByPath tests/portal-unauthorized-redirect.test.ts tests/remote-menu-route-guard.test.ts tests/terminal-session-token.test.ts --runInBand`
+4. 历史记录（已过期命令口径）：当时执行 `npm run test:unit -- --runTestsByPath tests/portal-unauthorized-redirect.test.ts tests/remote-menu-route-guard.test.ts tests/terminal-session-token.test.ts --runInBand`；当前定向 Jest 请使用 `.\node_modules\.bin\jest.cmd --config jest.config.ts --runTestsByPath tests/portal-unauthorized-redirect.test.ts tests/remote-menu-route-guard.test.ts tests/terminal-session-token.test.ts --runInBand`
    - 结果: 3 suites passed, 20 tests passed
-5. `npm run test:unit -- --runTestsByPath tests/portal-session-request.test.ts --runInBand`
+5. 历史记录（已过期命令口径）：当时执行 `npm run test:unit -- --runTestsByPath tests/portal-session-request.test.ts --runInBand`；当前定向 Jest 请使用 `.\node_modules\.bin\jest.cmd --config jest.config.ts --runTestsByPath tests/portal-session-request.test.ts --runInBand`
    - 结果: 1 suite passed, 3 tests passed
 
 ### 覆盖到的风险面

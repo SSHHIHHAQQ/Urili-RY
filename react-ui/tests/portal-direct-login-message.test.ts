@@ -1,8 +1,10 @@
 import {
+  buildPortalDirectLoginWindowUrl,
   openPortalDirectLoginWindow,
   PORTAL_DIRECT_LOGIN_READY_MESSAGE,
   PORTAL_DIRECT_LOGIN_RESULT_MESSAGE,
   PORTAL_DIRECT_LOGIN_TOKEN_MESSAGE,
+  resolvePortalDirectLoginOpenerOrigin,
 } from '@/utils/portalDirectLoginMessage';
 
 function dispatchMessage(source: any, origin: string, data: unknown) {
@@ -42,6 +44,8 @@ describe('portal direct-login message bridge', () => {
     );
 
     expect(bridge).not.toBe(false);
+    const openedUrl = new URL((window.open as jest.Mock).mock.calls[0][0]);
+    expect(openedUrl.searchParams.get('openerOrigin')).toBe(window.location.origin);
     jest.advanceTimersByTime(1000);
     expect(popup.postMessage).not.toHaveBeenCalled();
 
@@ -128,6 +132,21 @@ describe('portal direct-login message bridge', () => {
       ),
     ).toBe(false);
     expect(openSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes and resolves explicit opener origin without relying on document referrer', () => {
+    const url = buildPortalDirectLoginWindowUrl('https://seller.example.test/direct-login?ticket=7');
+    const parsed = new URL(url);
+
+    expect(parsed.origin).toBe('https://seller.example.test');
+    expect(parsed.searchParams.get('ticket')).toBe('7');
+    expect(parsed.searchParams.get('openerOrigin')).toBe(window.location.origin);
+
+    expect(
+      resolvePortalDirectLoginOpenerOrigin(
+        '?openerOrigin=https%3A%2F%2Fadmin.example.test',
+      ),
+    ).toBe('https://admin.example.test');
   });
 
   it('rejects when the target popup reports direct-login consume failure', async () => {

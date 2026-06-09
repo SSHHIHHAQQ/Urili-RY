@@ -26,6 +26,13 @@ type ConnectionSummaryProps = {
 
 const settlementText = (value?: string) =>
   settlementTypeText[value || ''] || value || '-';
+
+const manualSyncEntryPermissions = [
+  'integration:upstream:sync',
+  'integration:upstream:dimensionSync',
+  'integration:upstream:inventorySync',
+];
+
 type SummaryItemProps = {
   label: string;
   value: ReactNode;
@@ -57,6 +64,9 @@ export default function ConnectionSummary({
   const [detailsOpen, setDetailsOpen] = useState(false);
   const systemKind =
     systemKindText[connection.systemKind || ''] || connection.systemKind || '-';
+  const canOpenSync = manualSyncEntryPermissions.some((permission) =>
+    access.hasPerms(permission),
+  );
 
   useEffect(() => {
     setDetailsOpen(false);
@@ -98,7 +108,7 @@ export default function ConnectionSummary({
           <Tooltip title="选择同步内容">
             <Button
               icon={<SyncOutlined />}
-              hidden={!access.hasPerms('integration:upstream:sync')}
+              hidden={!canOpenSync}
               onClick={onSync}
             >
               同步

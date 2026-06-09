@@ -5,8 +5,17 @@
 -- 3. Register the RuoYi sys_job entry for 10-minute inventory sync.
 
 set names utf8mb4;
+set session group_concat_max_len = greatest(@@session.group_concat_max_len, 1048576);
 
 set @confirm_upstream_inventory_dimension_sync := coalesce(@confirm_upstream_inventory_dimension_sync, '');
+set @upstream_inventory_role_menu_expected_count :=
+    coalesce(@upstream_inventory_role_menu_expected_count, '');
+set @upstream_inventory_role_menu_expected_signature :=
+    coalesce(@upstream_inventory_role_menu_expected_signature, '');
+set @upstream_inventory_sync_job_expected_count :=
+    coalesce(@upstream_inventory_sync_job_expected_count, '');
+set @upstream_inventory_sync_job_expected_signature :=
+    coalesce(@upstream_inventory_sync_job_expected_signature, '');
 
 delimiter //
 
@@ -16,6 +25,19 @@ begin
   if coalesce(@confirm_upstream_inventory_dimension_sync, '')
       <> 'APPLY_UPSTREAM_INVENTORY_DIMENSION_SYNC' then
     signal sqlstate '45000' set message_text = 'set @confirm_upstream_inventory_dimension_sync = APPLY_UPSTREAM_INVENTORY_DIMENSION_SYNC before running this migration';
+  end if;
+
+  if coalesce(@upstream_inventory_role_menu_expected_count, '') not regexp '^[0-9]+$' then
+    signal sqlstate '45000' set message_text = 'set @upstream_inventory_role_menu_expected_count after previewing exact upstream inventory sys_role_menu grant rows';
+  end if;
+  if coalesce(@upstream_inventory_role_menu_expected_signature, '') not regexp '^[0-9a-fA-F]{64}$' then
+    signal sqlstate '45000' set message_text = 'set @upstream_inventory_role_menu_expected_signature after previewing exact upstream inventory sys_role_menu grant rows';
+  end if;
+  if coalesce(@upstream_inventory_sync_job_expected_count, '') not regexp '^[0-9]+$' then
+    signal sqlstate '45000' set message_text = 'set @upstream_inventory_sync_job_expected_count after previewing exact upstream inventory sys_job row';
+  end if;
+  if coalesce(@upstream_inventory_sync_job_expected_signature, '') not regexp '^[0-9a-fA-F]{64}$' then
+    signal sqlstate '45000' set message_text = 'set @upstream_inventory_sync_job_expected_signature after previewing exact upstream inventory sys_job row';
   end if;
 end//
 
@@ -56,10 +78,96 @@ begin
   end if;
 end//
 
+drop procedure if exists assert_upstream_inventory_role_menu_targets//
+create procedure assert_upstream_inventory_role_menu_targets()
+begin
+  declare v_count int default 0;
+  declare v_signature varchar(64) default '';
+
+  select count(1),
+         sha2(coalesce(group_concat(
+           concat_ws(':', grant_target.role_id, grant_target.menu_id)
+           order by grant_target.role_id, grant_target.menu_id separator '|'
+         ), ''), 256)
+    into v_count, v_signature
+  from (
+      select distinct source_role.role_id, target_menu.menu_id
+      from sys_role_menu source_role
+      inner join sys_menu source_menu on source_menu.menu_id = source_role.menu_id
+      inner join sys_menu target_menu on target_menu.perms in (
+          'integration:upstream:dimensionSync',
+          'integration:upstream:inventorySync'
+      )
+      where source_menu.perms = 'integration:upstream:sync'
+        and not exists (
+            select 1
+            from sys_role_menu existing
+            where existing.role_id = source_role.role_id
+              and existing.menu_id = target_menu.menu_id
+        )
+      union
+      select distinct source_role.role_id, target_menu.menu_id
+      from sys_role_menu source_role
+      inner join sys_menu source_menu on source_menu.menu_id = source_role.menu_id
+      inner join sys_menu target_menu on target_menu.perms = 'integration:upstream:inventoryQuery'
+      where source_menu.perms = 'integration:upstream:query'
+        and not exists (
+            select 1
+            from sys_role_menu existing
+            where existing.role_id = source_role.role_id
+              and existing.menu_id = target_menu.menu_id
+        )
+  ) grant_target;
+
+  if v_count <> cast(@upstream_inventory_role_menu_expected_count as unsigned) then
+    signal sqlstate '45000' set message_text = 'upstream inventory role-menu exact target count mismatch';
+  end if;
+  if lower(v_signature) <> lower(@upstream_inventory_role_menu_expected_signature) then
+    signal sqlstate '45000' set message_text = 'upstream inventory role-menu exact target signature mismatch';
+  end if;
+end//
+
+drop procedure if exists assert_upstream_inventory_sync_job_targets//
+create procedure assert_upstream_inventory_sync_job_targets()
+begin
+  declare v_count int default 0;
+  declare v_signature varchar(64) default '';
+
+  select count(1),
+         sha2(coalesce(group_concat(
+           concat_ws(':',
+             job_id,
+             coalesce(job_name, ''),
+             coalesce(job_group, ''),
+             coalesce(invoke_target, ''),
+             coalesce(cron_expression, ''),
+             coalesce(misfire_policy, ''),
+             coalesce(concurrent, ''),
+             coalesce(status, '')
+           )
+           order by job_id separator '|'
+         ), ''), 256)
+    into v_count, v_signature
+  from sys_job
+  where invoke_target = 'upstreamSystemTask.syncInventory';
+
+  if v_count > 1 then
+    signal sqlstate '45000' set message_text = 'upstream inventory sys_job invoke_target must be unique before upsert';
+  end if;
+  if v_count <> cast(@upstream_inventory_sync_job_expected_count as unsigned) then
+    signal sqlstate '45000' set message_text = 'upstream inventory sys_job exact target count mismatch';
+  end if;
+  if lower(v_signature) <> lower(@upstream_inventory_sync_job_expected_signature) then
+    signal sqlstate '45000' set message_text = 'upstream inventory sys_job exact target signature mismatch';
+  end if;
+end//
+
 delimiter ;
 
 call assert_upstream_inventory_dimension_sync_confirmed();
 call assert_upstream_inventory_menu_owner_ready();
+call assert_upstream_inventory_role_menu_targets();
+call assert_upstream_inventory_sync_job_targets();
 drop procedure if exists assert_upstream_inventory_dimension_sync_confirmed;
 drop procedure if exists assert_upstream_inventory_menu_owner_ready;
 
@@ -119,6 +227,8 @@ create table if not exists upstream_system_inventory_sync_state (
   primary key (connection_code)
 ) engine=innodb comment='上游库存同步状态';
 
+start transaction;
+
 insert into sys_role_menu(role_id, menu_id)
 select distinct source_role.role_id, target_menu.menu_id
 from sys_role_menu source_role
@@ -148,13 +258,6 @@ where source_menu.perms = 'integration:upstream:query'
         and existing.menu_id = target_menu.menu_id
   );
 
-set @job_id := (
-    select job_id
-    from sys_job
-    where invoke_target = 'upstreamSystemTask.syncInventory'
-    limit 1
-);
-
 update sys_job
 set job_name = '领星SKU库存每10分钟同步',
     job_group = 'SYSTEM',
@@ -166,8 +269,7 @@ set job_name = '领星SKU库存每10分钟同步',
     update_by = 'admin',
     update_time = sysdate(),
     remark = '每10分钟同步已启用领星主仓的SKU库存快照，使用若依定时任务调度'
-where @job_id is not null
-  and job_id = @job_id;
+where invoke_target = 'upstreamSystemTask.syncInventory';
 
 insert into sys_job (
     job_name,
@@ -192,4 +294,13 @@ select
     'admin',
     sysdate(),
     '每10分钟同步已启用领星主仓的SKU库存快照，使用若依定时任务调度'
-where @job_id is null;
+where not exists (
+    select 1
+    from sys_job
+    where invoke_target = 'upstreamSystemTask.syncInventory'
+);
+
+commit;
+
+drop procedure if exists assert_upstream_inventory_role_menu_targets;
+drop procedure if exists assert_upstream_inventory_sync_job_targets;

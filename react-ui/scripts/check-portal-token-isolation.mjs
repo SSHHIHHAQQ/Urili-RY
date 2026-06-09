@@ -19,8 +19,8 @@ const directLoginPageJsFile = path.join(
 );
 const portalServiceFiles = [
   path.join(root, 'src', 'services', 'portal', 'session.ts'),
-  path.join(root, 'src', 'services', 'portal', 'session.js'),
 ];
+const portalServiceJsFile = path.join(root, 'src', 'services', 'portal', 'session.js');
 const appFile = path.join(root, 'src', 'app.tsx');
 const appJsFile = path.join(root, 'src', 'app.js');
 const accessFile = path.join(root, 'src', 'access.ts');
@@ -29,26 +29,24 @@ const requestErrorConfigFile = path.join(root, 'src', 'requestErrorConfig.ts');
 const requestErrorConfigJsFile = path.join(root, 'src', 'requestErrorConfig.js');
 const proxyConfigFile = path.join(root, 'config', 'proxy.ts');
 const proxyConfigJsFile = path.join(root, 'config', 'proxy.js');
-const routeConfigFiles = [
-  path.join(root, 'config', 'routes.ts'),
-  path.join(root, 'config', 'routes.js'),
-];
+const routeConfigFile = path.join(root, 'config', 'routes.ts');
+const routeConfigJsFile = path.join(root, 'config', 'routes.js');
 const portalRequestFile = path.join(root, 'src', 'utils', 'portalRequest.ts');
 const portalRequestJsFile = path.join(root, 'src', 'utils', 'portalRequest.js');
 const portalPathsFiles = [
   path.join(root, 'src', 'utils', 'portalPaths.ts'),
-  path.join(root, 'src', 'utils', 'portalPaths.js'),
 ];
+const portalPathsJsFile = path.join(root, 'src', 'utils', 'portalPaths.js');
 const remoteMenuRouteGuardFiles = [
   path.join(root, 'src', 'wrappers', 'RemoteMenuRouteGuard.tsx'),
-  path.join(root, 'src', 'wrappers', 'RemoteMenuRouteGuard.js'),
 ];
+const remoteMenuRouteGuardJsFile = path.join(root, 'src', 'wrappers', 'RemoteMenuRouteGuard.js');
 const adminSessionFile = path.join(root, 'src', 'services', 'session.ts');
 const adminSessionJsFile = path.join(root, 'src', 'services', 'session.js');
 const remoteMenuStorageFiles = [
   path.join(root, 'src', 'utils', 'remoteMenuStorage.ts'),
-  path.join(root, 'src', 'utils', 'remoteMenuStorage.js'),
 ];
+const remoteMenuStorageJsFile = path.join(root, 'src', 'utils', 'remoteMenuStorage.js');
 const portalTerminalFile = path.join(root, 'src', 'pages', 'Portal', 'terminal.ts');
 const portalTerminalJsFile = path.join(root, 'src', 'pages', 'Portal', 'terminal.js');
 const portalLoginPageFile = path.join(root, 'src', 'pages', 'Portal', 'Login', 'index.tsx');
@@ -56,7 +54,9 @@ const portalLoginPageJsFile = path.join(root, 'src', 'pages', 'Portal', 'Login',
 const portalHomePageFile = path.join(root, 'src', 'pages', 'Portal', 'Home', 'index.tsx');
 const portalHomePageJsFile = path.join(root, 'src', 'pages', 'Portal', 'Home', 'index.js');
 const sellerPageFile = path.join(root, 'src', 'pages', 'Seller', 'index.tsx');
+const sellerPageJsFile = path.join(root, 'src', 'pages', 'Seller', 'index.js');
 const buyerPageFile = path.join(root, 'src', 'pages', 'Buyer', 'index.tsx');
+const buyerPageJsFile = path.join(root, 'src', 'pages', 'Buyer', 'index.js');
 const partnerManagementPageFile = path.join(
   root,
   'src',
@@ -166,6 +166,13 @@ function assertIncludes(source, relativePath, expected, description) {
   }
 }
 
+function assertExactSource(source, relativePath, expected, description) {
+  const normalize = (value) => value.replace(/\r\n/g, '\n').trim();
+  if (normalize(source) !== normalize(expected)) {
+    violations.push(`${relativePath} must ${description}; expected exact source: ${expected}`);
+  }
+}
+
 function assertDoesNotInclude(source, relativePath, forbidden, description) {
   if (source.includes(forbidden)) {
     violations.push(`${relativePath} must ${description}; found ${forbidden}`);
@@ -254,7 +261,17 @@ for (const portalServiceFile of portalServiceFiles) {
   }
 }
 
-for (const file of [directLoginPageFile, directLoginPageJsFile]) {
+const portalServiceJs = assertFileExists(portalServiceJsFile);
+if (portalServiceJs) {
+  assertExactSource(
+    portalServiceJs.source,
+    portalServiceJs.relativePath,
+    "export * from './session.ts';",
+    'be a pure re-export to the guarded TS portal session service implementation',
+  );
+}
+
+for (const file of [directLoginPageFile]) {
   const relativePath = path.relative(root, file).replaceAll(path.sep, '/');
   if (!fs.existsSync(file)) {
     violations.push(`${relativePath} is missing`);
@@ -270,7 +287,7 @@ for (const file of [directLoginPageFile, directLoginPageJsFile]) {
     'window.opener?.postMessage',
     'event.source !== window.opener',
     'event.origin !== openerOrigin',
-    'resolveOpenerOrigin',
+    'resolvePortalDirectLoginOpenerOrigin(location.search)',
   ]) {
     if (!source.includes(expected)) {
       violations.push(
@@ -290,8 +307,8 @@ for (const file of [directLoginPageFile, directLoginPageJsFile]) {
   }
   for (const forbidden of [
     'new URLSearchParams',
-    'location.search',
     'location.hash',
+    'directLoginToken=',
     'Back to admin login',
     "history.replace('/user/login')",
   ]) {
@@ -306,6 +323,16 @@ for (const file of [directLoginPageFile, directLoginPageJsFile]) {
     relativePath,
     'clearPortalLogin',
     'not clear existing portal token before direct-login succeeds',
+  );
+}
+
+const directLoginPageJs = assertFileExists(directLoginPageJsFile);
+if (directLoginPageJs) {
+  assertExactSource(
+    directLoginPageJs.source,
+    directLoginPageJs.relativePath,
+    "export { default } from './index.tsx';",
+    'be a pure re-export to the guarded TSX direct-login page implementation',
   );
 }
 
@@ -329,15 +356,26 @@ for (const portalPathsFile of portalPathsFiles) {
   }
 }
 
+const portalPathsJs = assertFileExists(portalPathsJsFile);
+if (portalPathsJs) {
+  assertExactSource(
+    portalPathsJs.source,
+    portalPathsJs.relativePath,
+    "export * from './portalPaths.ts';",
+    'be a pure re-export to the guarded TS portal path implementation',
+  );
+}
+
 for (const remoteMenuRouteGuardFile of remoteMenuRouteGuardFiles) {
   const file = assertFileExists(remoteMenuRouteGuardFile);
   if (!file) {
     continue;
   }
   for (const expected of [
-    'STATIC_ROUTE_AUTHORITIES',
-    "'/seller': ['seller:admin:list']",
-    "'/buyer': ['buyer:admin:list']",
+    'STATIC_ROUTE_REQUIREMENTS',
+    "'/seller': { authority: ['seller:admin:list'] }",
+    "'/buyer': { authority: ['buyer:admin:list'] }",
+    "authorityMode: 'all'",
     'PUBLIC_PORTAL_ROUTE_PATHS',
     '/seller/login',
     '/buyer/login',
@@ -347,6 +385,7 @@ for (const remoteMenuRouteGuardFile of remoteMenuRouteGuardFiles) {
     '/buyer/portal',
     'return undefined;',
     'getStaticRouteAuthority(location.pathname)',
+    'getStaticRouteAuthorityMode(location.pathname)',
     'route?.authority ?? getStaticRouteAuthority(location.pathname) ?? []',
   ]) {
     assertIncludes(
@@ -358,6 +397,16 @@ for (const remoteMenuRouteGuardFile of remoteMenuRouteGuardFiles) {
   }
 }
 
+const remoteMenuRouteGuardJs = assertFileExists(remoteMenuRouteGuardJsFile);
+if (remoteMenuRouteGuardJs) {
+  assertExactSource(
+    remoteMenuRouteGuardJs.source,
+    remoteMenuRouteGuardJs.relativePath,
+    "export { default } from './RemoteMenuRouteGuard.tsx';\nexport * from './RemoteMenuRouteGuard.tsx';",
+    'be a pure re-export to the guarded TSX remote menu route guard implementation',
+  );
+}
+
 const adminSession = assertFileExists(adminSessionFile);
 if (adminSession) {
   for (const expected of [
@@ -365,9 +414,11 @@ if (adminSession) {
     'window.sessionStorage.getItem(storageKey)',
     'window.sessionStorage.setItem(storageKey, JSON.stringify(data))',
     'window.sessionStorage.removeItem(storageKey)',
-    'permissions.length > 0 && permissions.some',
+    "authorityMode === 'all'",
+    'permissions.every((permission) => access.hasPerms(permission))',
+    'permissions.some((permission) => access.hasPerms(permission))',
     "status: '403'",
-    'createGuardedMenuElement(pagePath, menuItem.authority)',
+    'createGuardedMenuElement(pagePath: string, authority: unknown, authorityMode?: RouteAuthorityMode)',
   ]) {
     assertIncludes(
       adminSession.source,
@@ -380,11 +431,11 @@ if (adminSession) {
 
 const adminSessionJs = assertFileExists(adminSessionJsFile);
 if (adminSessionJs) {
-  assertIncludes(
+  assertExactSource(
     adminSessionJs.source,
     adminSessionJs.relativePath,
     "export * from './session.ts';",
-    'delegate to the guarded TS session implementation',
+    'be a pure re-export to the guarded TS session implementation',
   );
 }
 
@@ -405,6 +456,16 @@ for (const remoteMenuStorageFile of remoteMenuStorageFiles) {
       'keep remote menu cache keys scoped by terminal',
     );
   }
+}
+
+const remoteMenuStorageJs = assertFileExists(remoteMenuStorageJsFile);
+if (remoteMenuStorageJs) {
+  assertExactSource(
+    remoteMenuStorageJs.source,
+    remoteMenuStorageJs.relativePath,
+    "export * from './remoteMenuStorage.ts';",
+    'be a pure re-export to the guarded TS remote menu storage implementation',
+  );
 }
 
 const portalLoginPage = assertFileExists(portalLoginPageFile);
@@ -434,11 +495,11 @@ if (portalLoginPage) {
 
 const portalLoginPageJs = assertFileExists(portalLoginPageJsFile);
 if (portalLoginPageJs) {
-  assertIncludes(
+  assertExactSource(
     portalLoginPageJs.source,
     portalLoginPageJs.relativePath,
     "export { default } from './index.tsx';",
-    'delegate to the guarded TSX login page implementation',
+    'be a pure re-export to the guarded TSX login page implementation',
   );
   assertDoesNotInclude(
     portalLoginPageJs.source,
@@ -455,7 +516,7 @@ if (portalHomePage) {
     'history.replace(PORTAL_META[terminal].loginPath)',
     'loadData(terminal);',
     'loadSessions(terminal);',
-    'clearPortalLogin(currentTerminal);',
+    "message.error('门户数据加载失败，请稍后重试')",
   ]) {
     assertIncludes(
       portalHomePage.source,
@@ -464,15 +525,27 @@ if (portalHomePage) {
       'keep portal home token gate and terminal-scoped recovery',
     );
   }
+  assertDoesNotInclude(
+    portalHomePage.source,
+    portalHomePage.relativePath,
+    'clearPortalLogin(currentTerminal);',
+    'leave 401 redirect and token clearing to the request layer',
+  );
+  assertDoesNotInclude(
+    portalHomePage.source,
+    portalHomePage.relativePath,
+    'history.replace(PORTAL_META[currentTerminal].loginPath)',
+    'not overwrite request-layer portal redirect from loadData failures',
+  );
 }
 
 const portalHomePageJs = assertFileExists(portalHomePageJsFile);
 if (portalHomePageJs) {
-  assertIncludes(
+  assertExactSource(
     portalHomePageJs.source,
     portalHomePageJs.relativePath,
     "export { default } from './index.tsx';",
-    'delegate to the guarded TSX home page implementation',
+    'be a pure re-export to the guarded TSX home page implementation',
   );
 }
 
@@ -492,6 +565,16 @@ if (sellerPage) {
   }
 }
 
+const sellerPageJs = assertFileExists(sellerPageJsFile);
+if (sellerPageJs) {
+  assertExactSource(
+    sellerPageJs.source,
+    sellerPageJs.relativePath,
+    "export { default } from './index.tsx';",
+    'be a pure re-export to the guarded TSX seller management page implementation',
+  );
+}
+
 const buyerPage = assertFileExists(buyerPageFile);
 if (buyerPage) {
   for (const expected of [
@@ -508,6 +591,16 @@ if (buyerPage) {
   }
 }
 
+const buyerPageJs = assertFileExists(buyerPageJsFile);
+if (buyerPageJs) {
+  assertExactSource(
+    buyerPageJs.source,
+    buyerPageJs.relativePath,
+    "export { default } from './index.tsx';",
+    'be a pure re-export to the guarded TSX buyer management page implementation',
+  );
+}
+
 for (const filePath of [partnerManagementPageFile, partnerAccountModalFile]) {
   const file = assertFileExists(filePath);
   if (!file) {
@@ -521,13 +614,8 @@ for (const filePath of [partnerManagementPageFile, partnerAccountModalFile]) {
   );
 }
 
-for (const routeConfigFile of routeConfigFiles) {
-  const relativePath = path.relative(root, routeConfigFile).replaceAll(path.sep, '/');
-  if (!fs.existsSync(routeConfigFile)) {
-    violations.push(`${relativePath} is missing`);
-    continue;
-  }
-  const source = read(routeConfigFile);
+const routeConfig = assertFileExists(routeConfigFile);
+if (routeConfig) {
   for (const expected of [
     "'/seller/login'",
     "'/buyer/login'",
@@ -537,16 +625,26 @@ for (const routeConfigFile of routeConfigFiles) {
     "'/seller/portal'",
     "'/buyer/portal'",
   ]) {
-    if (!source.includes(expected)) {
-      violations.push(`${relativePath} must keep portal route with ${expected}`);
+    if (!routeConfig.source.includes(expected)) {
+      violations.push(`${routeConfig.relativePath} must keep portal route with ${expected}`);
     }
   }
 }
 
+const routeConfigJs = assertFileExists(routeConfigJsFile);
+if (routeConfigJs) {
+  assertExactSource(
+    routeConfigJs.source,
+    routeConfigJs.relativePath,
+    "export { default } from './routes.ts';",
+    'be a pure re-export to the TypeScript route source',
+  );
+}
+
 const directLoginMessageFiles = [
   path.join(root, 'src', 'utils', 'portalDirectLoginMessage.ts'),
-  path.join(root, 'src', 'utils', 'portalDirectLoginMessage.js'),
 ];
+const directLoginMessageJsFile = path.join(root, 'src', 'utils', 'portalDirectLoginMessage.js');
 for (const directLoginMessageFile of directLoginMessageFiles) {
   const relativePath = path.relative(root, directLoginMessageFile).replaceAll(path.sep, '/');
   if (!fs.existsSync(directLoginMessageFile)) {
@@ -556,9 +654,12 @@ for (const directLoginMessageFile of directLoginMessageFiles) {
   const source = read(directLoginMessageFile);
   for (const expected of [
     'PORTAL_DIRECT_LOGIN_RESULT_MESSAGE',
+    'PORTAL_DIRECT_LOGIN_OPENER_ORIGIN_PARAM',
+    'buildPortalDirectLoginWindowUrl',
     'resolveTargetOrigin',
     'isResultMessage',
-    'const targetOrigin = resolveTargetOrigin(result.loginUrl)',
+    'const loginUrl = buildPortalDirectLoginWindowUrl(result.loginUrl)',
+    'const targetOrigin = resolveTargetOrigin(loginUrl)',
     'event.origin !== targetOrigin',
     'popup.postMessage(payload, targetOrigin)',
     'DIRECT_LOGIN_CONSUME_TIMEOUT',
@@ -582,7 +683,17 @@ for (const directLoginMessageFile of directLoginMessageFiles) {
   }
 }
 
-for (const file of [portalRequestFile, portalRequestJsFile]) {
+const directLoginMessageJs = assertFileExists(directLoginMessageJsFile);
+if (directLoginMessageJs) {
+  assertExactSource(
+    directLoginMessageJs.source,
+    directLoginMessageJs.relativePath,
+    "export * from './portalDirectLoginMessage.ts';",
+    'be a pure re-export to the guarded TS direct-login message bridge implementation',
+  );
+}
+
+for (const file of [portalRequestFile]) {
   const relativePath = path.relative(root, file).replaceAll(path.sep, '/');
   if (fs.existsSync(file)) {
     const source = read(file);
@@ -603,7 +714,17 @@ for (const file of [portalRequestFile, portalRequestJsFile]) {
   }
 }
 
-for (const file of [portalTerminalFile, portalTerminalJsFile]) {
+const portalRequestJs = assertFileExists(portalRequestJsFile);
+if (portalRequestJs) {
+  assertExactSource(
+    portalRequestJs.source,
+    portalRequestJs.relativePath,
+    "export * from './portalRequest.ts';",
+    'be a pure re-export to the guarded TS portal request classifier implementation',
+  );
+}
+
+for (const file of [portalTerminalFile]) {
   const relativePath = path.relative(root, file).replaceAll(path.sep, '/');
   if (!fs.existsSync(file)) {
     violations.push(`${relativePath} is missing`);
@@ -613,7 +734,6 @@ for (const file of [portalTerminalFile, portalTerminalJsFile]) {
   for (const expected of [
     'persistPortalLogin',
     'result.terminal !== expectedTerminal',
-    'clearPortalLogin(expectedTerminal)',
     'setTerminalSessionToken(terminal, result.token',
   ]) {
     if (!source.includes(expected)) {
@@ -623,8 +743,24 @@ for (const file of [portalTerminalFile, portalTerminalJsFile]) {
   assertDoesNotMatch(
     source,
     relativePath,
+    /if\s*\(\s*!result\?\.token\s*\|\|\s*result\.terminal\s*!==\s*expectedTerminal\s*\)\s*\{[^}]*clearPortalLogin\(/,
+    'not clear any existing portal token when a login or direct-login response is invalid',
+  );
+  assertDoesNotMatch(
+    source,
+    relativePath,
     /clearPortalLogin\(\s*result\??\.terminal\s*\)/,
     'not clear another portal terminal on login terminal mismatch',
+  );
+}
+
+const portalTerminalJs = assertFileExists(portalTerminalJsFile);
+if (portalTerminalJs) {
+  assertExactSource(
+    portalTerminalJs.source,
+    portalTerminalJs.relativePath,
+    "export * from './terminal.ts';",
+    'be a pure re-export to the guarded TS portal terminal implementation',
   );
 }
 
@@ -724,7 +860,7 @@ if (fs.existsSync(portalTypeFile)) {
   violations.push('src/types/seller-buyer/party.d.ts is missing');
 }
 
-for (const file of [appFile, appJsFile, requestErrorConfigFile, requestErrorConfigJsFile]) {
+for (const file of [appFile, requestErrorConfigFile]) {
   const relativePath = path.relative(root, file).replaceAll(path.sep, '/');
   if (!fs.existsSync(file)) {
     violations.push(`${relativePath} is missing`);
@@ -762,12 +898,101 @@ for (const file of [appFile, appJsFile, requestErrorConfigFile, requestErrorConf
   }
 }
 
-for (const file of [appFile, appJsFile]) {
+const appJs = assertFileExists(appJsFile);
+if (appJs) {
+  assertExactSource(
+    appJs.source,
+    appJs.relativePath,
+    "export {\n"
+      + "  getInitialState,\n"
+      + "  layout,\n"
+      + "  rootContainer,\n"
+      + "  onRouteChange,\n"
+      + "  patchClientRoutes,\n"
+      + "  render,\n"
+      + "  request,\n"
+      + "} from './app.tsx';",
+    'explicitly bridge guarded TSX app runtime exports',
+  );
+}
+
+const requestErrorConfigJs = assertFileExists(requestErrorConfigJsFile);
+if (requestErrorConfigJs) {
+  assertExactSource(
+    requestErrorConfigJs.source,
+    requestErrorConfigJs.relativePath,
+    "export * from './requestErrorConfig.ts';",
+    'be a pure re-export to the guarded TS request error implementation',
+  );
+}
+
+for (const file of [requestErrorConfigFile]) {
   const relativePath = path.relative(root, file).replaceAll(path.sep, '/');
   if (!fs.existsSync(file)) {
     continue;
   }
   const source = read(file);
+  if (
+    /case\s+ErrorShowType\.REDIRECT\s*:\s*handleUnauthorized\s*\(\s*requestUrl\s*\)\s*;/.test(source)
+  ) {
+    violations.push(
+      `${relativePath} must not clear tokens or redirect login for non-401 BizError REDIRECT responses`,
+    );
+  }
+  if (
+    !/if\s*\(\s*isUnauthorizedCode\s*\(\s*errorCode\s*\)\s*\)\s*\{[\s\S]*?handleUnauthorized\s*\(\s*requestUrl\s*\)\s*;[\s\S]*?throw\s+error\s*;[\s\S]*?\}/.test(source)
+  ) {
+    violations.push(
+      `${relativePath} must keep token cleanup and login redirect scoped to 401 BizError responses`,
+    );
+  }
+}
+
+if (fs.existsSync(adminSessionFile)) {
+  const source = read(adminSessionFile);
+  if (
+    !/export\s+async\s+function\s+getRoutersInfo\s*\(\s*\)[^{]*\{[\s\S]*?throw\s+error\s*;/.test(source)
+  ) {
+    violations.push(
+      'src/services/session.ts getRoutersInfo must throw on non-success responses instead of caching an empty menu',
+    );
+  }
+  if (
+    /export\s+async\s+function\s+getRoutersInfo\s*\(\s*\)[\s\S]*?else\s*\{\s*return\s+\[\]\s*;?\s*\}/.test(source)
+  ) {
+    violations.push(
+      'src/services/session.ts getRoutersInfo must not silently return [] for failed remote menu responses',
+    );
+  }
+} else {
+  violations.push('src/services/session.ts is missing');
+}
+
+for (const file of [appFile]) {
+  const relativePath = path.relative(root, file).replaceAll(path.sep, '/');
+  if (!fs.existsSync(file)) {
+    continue;
+  }
+  const source = read(file);
+  if (!source.includes('function isUnauthorizedError') || !source.includes('function handleUnauthorizedError')) {
+    violations.push(
+      `${relativePath} must distinguish 401 failures before clearing admin session during bootstrap/menu loading`,
+    );
+  }
+  if (
+    /catch\s*\(\s*error\s*\)\s*\{[\s\S]{0,160}?clearAdminSession\s*\(\s*\)\s*;[\s\S]{0,80}?redirectToLogin\s*\(\s*\)\s*;/.test(source)
+  ) {
+    violations.push(
+      `${relativePath} must not clear admin session and redirect login from generic catch(error) blocks`,
+    );
+  }
+  if (
+    /getRoutersInfo\s*\(\s*\)[\s\S]{0,260}?catch\s*\(\s*error\s*\)\s*=>\s*\{[\s\S]{0,160}?clearAdminSession\s*\(\s*\)\s*;/.test(source)
+  ) {
+    violations.push(
+      `${relativePath} must not clear admin session for non-401 getRoutersInfo failures`,
+    );
+  }
   if (
     !/if\s*\(\s*isUnauthorizedCode\s*\(\s*getResponseCode\s*\(\s*response\?\.data\s*\)\s*\)\s*\)\s*\{[\s\S]*?handleUnauthorizedResponse\s*\(\s*response\?\.config\?\.url\s*\)\s*;[\s\S]*?return\s+Promise\.reject\s*\(\s*response\s*\)\s*;[\s\S]*?\}/.test(source)
   ) {
@@ -777,7 +1002,7 @@ for (const file of [appFile, appJsFile]) {
   }
 }
 
-for (const proxyFile of [proxyConfigFile, proxyConfigJsFile]) {
+for (const proxyFile of [proxyConfigFile]) {
   const relativePath = path.relative(root, proxyFile).replaceAll(path.sep, '/');
   if (!fs.existsSync(proxyFile)) {
     violations.push(`${relativePath} is missing`);
@@ -792,7 +1017,17 @@ for (const proxyFile of [proxyConfigFile, proxyConfigJsFile]) {
   }
 }
 
-for (const accessTokenFile of [accessFile, accessJsFile]) {
+const proxyConfigJs = assertFileExists(proxyConfigJsFile);
+if (proxyConfigJs) {
+  assertExactSource(
+    proxyConfigJs.source,
+    proxyConfigJs.relativePath,
+    "export { default } from './proxy.ts';",
+    'be a pure re-export to the guarded TS proxy configuration',
+  );
+}
+
+for (const accessTokenFile of [accessFile]) {
   const relativePath = path.relative(root, accessTokenFile).replaceAll(path.sep, '/');
   if (!fs.existsSync(accessTokenFile)) {
     violations.push(`${relativePath} is missing`);
@@ -814,6 +1049,16 @@ for (const accessTokenFile of [accessFile, accessJsFile]) {
       violations.push(`${relativePath} must keep terminal token isolation support for ${expected}`);
     }
   }
+}
+
+const accessJs = assertFileExists(accessJsFile);
+if (accessJs) {
+  assertExactSource(
+    accessJs.source,
+    accessJs.relativePath,
+    "export { default } from './access.ts';\nexport * from './access.ts';",
+    'be a pure re-export to the guarded TS access implementation',
+  );
 }
 
 if (violations.length > 0) {

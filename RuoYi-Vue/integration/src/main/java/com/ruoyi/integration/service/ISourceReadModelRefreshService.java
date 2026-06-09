@@ -6,4 +6,6 @@ package com.ruoyi.integration.service;
 public interface ISourceReadModelRefreshService
 {
     int refreshOfficialMasterByConnection(String connectionCode);
+
+    int refreshOfficialMasterSkuPairingByConnection(String connectionCode);
 }

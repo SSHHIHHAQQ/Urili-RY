@@ -6,7 +6,7 @@
 
 ## 子 Agent 使用记录
 
-- 先按最新规则尝试 `gpt-5.3-codex-spark` 子 Agent；平台返回额度限制，失败 Agent 已关闭。
+- 历史记录（已过期口径）：先按最新规则尝试 `gpt-5.3-codex-spark` 子 Agent；平台返回额度限制，失败 Agent 已关闭。
 - 随后回退使用 6 个 `gpt-5.4` 只读子 Agent，分别扫描 SQL seed、端内菜单权限、React token/route guard、管理端账号与免密、自助接口、验证脚本清单。
 - 已采纳 P1：
   - `updateMenu` 需要补齐空 `perms`、非法 `component` 的 fail-closed 回归测试。

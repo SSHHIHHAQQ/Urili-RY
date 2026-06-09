@@ -51,6 +51,11 @@ public class ProductSpu extends BaseEntity
     private Integer warehouseCount;
     private String inventoryStatus;
     private Date stockUpdateTime;
+    private Long latestReviewId;
+    private String latestReviewNo;
+    private String latestReviewStatus;
+    private String latestReviewFeedback;
+    private Date latestReviewTime;
     private String warehouseKind;
     private List<Long> warehouseIds;
     private List<ProductSpuWarehouse> warehouses;
@@ -136,6 +141,16 @@ public class ProductSpu extends BaseEntity
     public void setInventoryStatus(String inventoryStatus) { this.inventoryStatus = inventoryStatus; }
     public Date getStockUpdateTime() { return stockUpdateTime; }
     public void setStockUpdateTime(Date stockUpdateTime) { this.stockUpdateTime = stockUpdateTime; }
+    public Long getLatestReviewId() { return latestReviewId; }
+    public void setLatestReviewId(Long latestReviewId) { this.latestReviewId = latestReviewId; }
+    public String getLatestReviewNo() { return latestReviewNo; }
+    public void setLatestReviewNo(String latestReviewNo) { this.latestReviewNo = latestReviewNo; }
+    public String getLatestReviewStatus() { return latestReviewStatus; }
+    public void setLatestReviewStatus(String latestReviewStatus) { this.latestReviewStatus = latestReviewStatus; }
+    public String getLatestReviewFeedback() { return latestReviewFeedback; }
+    public void setLatestReviewFeedback(String latestReviewFeedback) { this.latestReviewFeedback = latestReviewFeedback; }
+    public Date getLatestReviewTime() { return latestReviewTime; }
+    public void setLatestReviewTime(Date latestReviewTime) { this.latestReviewTime = latestReviewTime; }
     public String getWarehouseKind() { return warehouseKind; }
     public void setWarehouseKind(String warehouseKind) { this.warehouseKind = warehouseKind; }
     public List<Long> getWarehouseIds() { return warehouseIds; }

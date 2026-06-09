@@ -1,4 +1,4 @@
-import { Button, InputNumber, Modal, Space, Typography, message } from 'antd';
+import { Button, Input, InputNumber, Modal, Space, Typography, message } from 'antd';
 import { useState } from 'react';
 import {
   confirmInventoryOverviewAdjust,
@@ -23,14 +23,16 @@ export default function QuantityCell({
 }) {
   const [editing, setEditing] = useState(false);
   const [nextValue, setNextValue] = useState<number>(value || 0);
+  const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
 
   const close = () => {
     setEditing(false);
     setNextValue(value || 0);
+    setReason('');
   };
 
-  const doConfirm = async (confirmed: boolean, preview?: API.InventoryOverview.AdjustPreview) => {
+  const doConfirm = async (confirmed: boolean) => {
     setSaving(true);
     try {
       const resp = await confirmInventoryOverviewAdjust({
@@ -38,10 +40,12 @@ export default function QuantityCell({
         adjustField: field,
         targetQty: nextValue,
         confirmed,
-        reason: preview?.message,
+        reason: reason.trim(),
       });
       if (resp.code === 200) {
-        message.success('库存已更新');
+        message.success(resp.data?.reviewRequired
+          ? `已生成库存调整审核单${resp.data.reviewNo ? `：${resp.data.reviewNo}` : ''}`
+          : '库存已更新');
         setEditing(false);
         onChanged();
       } else {
@@ -56,12 +60,14 @@ export default function QuantityCell({
     if (!record.stockId) {
       return;
     }
+    const normalizedReason = reason.trim();
     setSaving(true);
     try {
       const resp = await previewInventoryOverviewAdjust({
         stockId: record.stockId,
         adjustField: field,
         targetQty: nextValue,
+        reason: normalizedReason,
       });
       const preview = resp.data;
       if (resp.code !== 200 || !preview?.allowed) {
@@ -80,12 +86,22 @@ export default function QuantityCell({
               <Typography.Text type="secondary">
                 平台可售：{formatQuantity(preview.beforeAvailableQty)} → {formatQuantity(preview.afterAvailableQty)}
               </Typography.Text>
+              {preview.reviewRequired ? (
+                <>
+                  <Typography.Text type="secondary">
+                    申请退回：{formatQuantity(preview.requestedAdjustQty)}，可立即退回：{formatQuantity(preview.immediateReturnableQty)}
+                  </Typography.Text>
+                  <Typography.Text type="secondary">
+                    保护保留库存：{formatQuantity(preview.protectedRetainedQty)}
+                  </Typography.Text>
+                </>
+              ) : null}
             </Space>
           ),
-          onOk: () => doConfirm(true, preview),
+          onOk: () => doConfirm(true),
         });
       } else {
-        await doConfirm(false, preview);
+        await doConfirm(false);
       }
     } finally {
       setSaving(false);
@@ -116,6 +132,14 @@ export default function QuantityCell({
         value={nextValue}
         onChange={(val) => setNextValue(Number(val || 0))}
         style={{ width: 118 }}
+      />
+      <Input.TextArea
+        value={reason}
+        onChange={(event) => setReason(event.target.value)}
+        maxLength={500}
+        rows={2}
+        placeholder="调整原因（选填）"
+        style={{ width: 180 }}
       />
       <Space size={4}>
         <Button size="small" type="primary" loading={saving} onClick={submit}>

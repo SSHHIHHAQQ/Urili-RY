@@ -9,6 +9,7 @@ public class BuyerPortalProductSku
 {
     private Long skuId;
     private Long spuId;
+    private String systemSkuCode;
     private String color;
     private String size;
     private String lengthValue;
@@ -25,6 +26,7 @@ public class BuyerPortalProductSku
     private String currencyCode;
     private String skuStatus;
     private Integer sortOrder;
+    private Integer warehouseCount;
 
     public Long getSkuId()
     {
@@ -44,6 +46,16 @@ public class BuyerPortalProductSku
     public void setSpuId(Long spuId)
     {
         this.spuId = spuId;
+    }
+
+    public String getSystemSkuCode()
+    {
+        return systemSkuCode;
+    }
+
+    public void setSystemSkuCode(String systemSkuCode)
+    {
+        this.systemSkuCode = systemSkuCode;
     }
 
     public String getColor()
@@ -204,5 +216,15 @@ public class BuyerPortalProductSku
     public void setSortOrder(Integer sortOrder)
     {
         this.sortOrder = sortOrder;
+    }
+
+    public Integer getWarehouseCount()
+    {
+        return warehouseCount;
+    }
+
+    public void setWarehouseCount(Integer warehouseCount)
+    {
+        this.warehouseCount = warehouseCount;
     }
 }

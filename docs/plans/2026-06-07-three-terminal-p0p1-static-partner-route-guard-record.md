@@ -26,11 +26,11 @@
   - 缺少权限时渲染 403。
 - 更新 `react-ui/scripts/verify-three-terminal.mjs`，把新增 Jest 测试纳入三端总验证清单。
 - 更新 `react-ui/tests/portal-session-request.test.ts`，固定 `/seller`、`/buyer` 页面路径不能被误判为 seller/buyer 端内 API 请求。
-- 按用户最新要求更新 `AGENTS.md`：子 Agent 模型优先使用 GPT-5.3 Codex（工具模型 `gpt-5.3-codex-spark`）；不可用再回退 `gpt-5.4`，并记录原因、模型和数量。
+- 历史记录（已过期口径）：按用户最新要求更新 `AGENTS.md`：子 Agent 模型优先使用 GPT-5.3 Codex（工具模型 `gpt-5.3-codex-spark`）；不可用再回退 `gpt-5.4`，并记录原因、模型和数量。
 
 ## 子 Agent 使用情况
 
-本切片未新增子 Agent。后续如需继续并行检查，按 `AGENTS.md` 新规则执行：优先 GPT-5.3 Codex；若不可用，再使用 `gpt-5.4`，并在记录中说明不可用原因和实际使用情况。
+本切片未新增子 Agent。后续如需继续并行检查，按 `AGENTS.md` 新规则执行：优先 GPT-5.3 Codex；若不可用，再使用 `gpt-5.4`，并在记录中说明不可用原因和实际使用情况。（历史记录，已过期口径）
 
 ## 验证结果
 

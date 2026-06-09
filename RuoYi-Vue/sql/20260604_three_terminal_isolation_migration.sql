@@ -10,6 +10,23 @@
 set names utf8mb4;
 
 set @confirm_three_terminal_isolation_migration := coalesce(@confirm_three_terminal_isolation_migration, '');
+set @three_terminal_seller_account_normalize_expected_count :=
+    coalesce(@three_terminal_seller_account_normalize_expected_count, null);
+set @three_terminal_seller_account_normalize_expected_signature :=
+    coalesce(@three_terminal_seller_account_normalize_expected_signature, '');
+set @three_terminal_buyer_account_normalize_expected_count :=
+    coalesce(@three_terminal_buyer_account_normalize_expected_count, null);
+set @three_terminal_buyer_account_normalize_expected_signature :=
+    coalesce(@three_terminal_buyer_account_normalize_expected_signature, '');
+set @three_terminal_seller_user_id_drop_expected_count :=
+    coalesce(@three_terminal_seller_user_id_drop_expected_count, null);
+set @three_terminal_seller_user_id_drop_expected_signature :=
+    coalesce(@three_terminal_seller_user_id_drop_expected_signature, '');
+set @three_terminal_buyer_user_id_drop_expected_count :=
+    coalesce(@three_terminal_buyer_user_id_drop_expected_count, null);
+set @three_terminal_buyer_user_id_drop_expected_signature :=
+    coalesce(@three_terminal_buyer_user_id_drop_expected_signature, '');
+set session group_concat_max_len = 1048576;
 
 delimiter //
 
@@ -19,6 +36,30 @@ begin
   if coalesce(@confirm_three_terminal_isolation_migration, '')
       <> 'APPLY_THREE_TERMINAL_ISOLATION_MIGRATION' then
     signal sqlstate '45000' set message_text = 'set @confirm_three_terminal_isolation_migration = APPLY_THREE_TERMINAL_ISOLATION_MIGRATION before running this migration';
+  end if;
+  if @three_terminal_seller_account_normalize_expected_count is null then
+    signal sqlstate '45000' set message_text = 'set @three_terminal_seller_account_normalize_expected_count after previewing exact seller_account normalize rows';
+  end if;
+  if coalesce(@three_terminal_seller_account_normalize_expected_signature, '') not regexp '^[0-9a-fA-F]{64}$' then
+    signal sqlstate '45000' set message_text = 'set @three_terminal_seller_account_normalize_expected_signature after previewing exact seller_account normalize rows';
+  end if;
+  if @three_terminal_buyer_account_normalize_expected_count is null then
+    signal sqlstate '45000' set message_text = 'set @three_terminal_buyer_account_normalize_expected_count after previewing exact buyer_account normalize rows';
+  end if;
+  if coalesce(@three_terminal_buyer_account_normalize_expected_signature, '') not regexp '^[0-9a-fA-F]{64}$' then
+    signal sqlstate '45000' set message_text = 'set @three_terminal_buyer_account_normalize_expected_signature after previewing exact buyer_account normalize rows';
+  end if;
+  if @three_terminal_seller_user_id_drop_expected_count is null then
+    signal sqlstate '45000' set message_text = 'set @three_terminal_seller_user_id_drop_expected_count after previewing seller_account user_id column';
+  end if;
+  if coalesce(@three_terminal_seller_user_id_drop_expected_signature, '') not regexp '^[0-9a-fA-F]{64}$' then
+    signal sqlstate '45000' set message_text = 'set @three_terminal_seller_user_id_drop_expected_signature after previewing seller_account user_id column';
+  end if;
+  if @three_terminal_buyer_user_id_drop_expected_count is null then
+    signal sqlstate '45000' set message_text = 'set @three_terminal_buyer_user_id_drop_expected_count after previewing buyer_account user_id column';
+  end if;
+  if coalesce(@three_terminal_buyer_user_id_drop_expected_signature, '') not regexp '^[0-9a-fA-F]{64}$' then
+    signal sqlstate '45000' set message_text = 'set @three_terminal_buyer_user_id_drop_expected_signature after previewing buyer_account user_id column';
   end if;
 end//
 
@@ -361,17 +402,136 @@ begin
   end if;
 end//
 
+drop procedure if exists assert_seller_account_normalize_targets//
+create procedure assert_seller_account_normalize_targets()
+begin
+  declare v_count bigint default 0;
+  declare v_signature varchar(64) default '';
+
+  select count(1),
+         sha2(coalesce(group_concat(concat_ws('|',
+           seller_account_id,
+           seller_id,
+           coalesce(user_name, '<NULL>'),
+           coalesce(nick_name, '<NULL>'),
+           coalesce(email, '<NULL>'),
+           coalesce(phonenumber, '<NULL>'),
+           coalesce(status, '<NULL>'),
+           coalesce(lock_status, '<NULL>'),
+           coalesce(lock_reason, '<NULL>'),
+           coalesce(date_format(pwd_update_time, '%Y-%m-%d %H:%i:%s'), '<NULL>')
+         ) order by seller_account_id separator '\n'), ''), 256)
+    into v_count, v_signature
+  from seller_account
+  where coalesce(user_name, '') = ''
+     or coalesce(nick_name, '') = ''
+     or email is null
+     or phonenumber is null
+     or coalesce(status, '') = ''
+     or coalesce(lock_status, '') not in ('0', '1')
+     or lock_reason is null
+     or pwd_update_time is null;
+
+  if v_count <> @three_terminal_seller_account_normalize_expected_count then
+    signal sqlstate '45000' set message_text = 'seller_account normalize exact target count mismatch';
+  end if;
+  if lower(v_signature) <> lower(@three_terminal_seller_account_normalize_expected_signature) then
+    signal sqlstate '45000' set message_text = 'seller_account normalize exact target signature mismatch';
+  end if;
+end//
+
+drop procedure if exists assert_buyer_account_normalize_targets//
+create procedure assert_buyer_account_normalize_targets()
+begin
+  declare v_count bigint default 0;
+  declare v_signature varchar(64) default '';
+
+  select count(1),
+         sha2(coalesce(group_concat(concat_ws('|',
+           buyer_account_id,
+           buyer_id,
+           coalesce(user_name, '<NULL>'),
+           coalesce(nick_name, '<NULL>'),
+           coalesce(email, '<NULL>'),
+           coalesce(phonenumber, '<NULL>'),
+           coalesce(status, '<NULL>'),
+           coalesce(lock_status, '<NULL>'),
+           coalesce(lock_reason, '<NULL>'),
+           coalesce(date_format(pwd_update_time, '%Y-%m-%d %H:%i:%s'), '<NULL>')
+         ) order by buyer_account_id separator '\n'), ''), 256)
+    into v_count, v_signature
+  from buyer_account
+  where coalesce(user_name, '') = ''
+     or coalesce(nick_name, '') = ''
+     or email is null
+     or phonenumber is null
+     or coalesce(status, '') = ''
+     or coalesce(lock_status, '') not in ('0', '1')
+     or lock_reason is null
+     or pwd_update_time is null;
+
+  if v_count <> @three_terminal_buyer_account_normalize_expected_count then
+    signal sqlstate '45000' set message_text = 'buyer_account normalize exact target count mismatch';
+  end if;
+  if lower(v_signature) <> lower(@three_terminal_buyer_account_normalize_expected_signature) then
+    signal sqlstate '45000' set message_text = 'buyer_account normalize exact target signature mismatch';
+  end if;
+end//
+
+drop procedure if exists assert_terminal_account_user_id_drop_target//
+create procedure assert_terminal_account_user_id_drop_target(
+  in p_table varchar(64),
+  in p_expected_count bigint,
+  in p_expected_signature varchar(64),
+  in p_count_message varchar(128),
+  in p_signature_message varchar(128)
+)
+begin
+  declare v_count bigint default 0;
+  declare v_signature varchar(64) default '';
+
+  select count(1),
+         sha2(coalesce(group_concat(concat_ws('|',
+           table_name,
+           column_name,
+           column_type,
+           is_nullable,
+           coalesce(column_default, '<NULL>'),
+           coalesce(extra, '')
+         ) order by table_name, column_name separator '\n'), ''), 256)
+    into v_count, v_signature
+  from information_schema.columns
+  where table_schema = database()
+    and table_name = p_table
+    and column_name = 'user_id';
+
+  if v_count <> p_expected_count then
+    signal sqlstate '45000' set message_text = p_count_message;
+  end if;
+  if lower(v_signature) <> lower(p_expected_signature) then
+    signal sqlstate '45000' set message_text = p_signature_message;
+  end if;
+end//
+
 drop procedure if exists assert_terminal_menu_integrity_ready//
 create procedure assert_terminal_menu_integrity_ready()
 begin
   if exists (
     select 1
     from seller_menu
-    where coalesce(perms, '') = ''
-       or coalesce(perms, '') = '*'
-       or coalesce(perms, '') not like 'seller:%'
-       or coalesce(perms, '') like 'seller:admin:%'
-       or coalesce(perms, '') like 'buyer:%'
+    where (
+        menu_type in ('C', 'F')
+        and coalesce(trim(perms), '') = ''
+      )
+       or (
+        coalesce(trim(perms), '') <> ''
+        and (
+          coalesce(trim(perms), '') = '*'
+          or coalesce(trim(perms), '') not like 'seller:%'
+          or coalesce(trim(perms), '') like 'seller:admin:%'
+          or coalesce(trim(perms), '') like 'buyer:%'
+        )
+      )
   ) then
     signal sqlstate '45000' set message_text = 'seller_menu contains invalid terminal perms';
   end if;
@@ -388,9 +548,10 @@ begin
   if exists (
     select 1
     from (
-      select perms
+      select trim(perms) as perms_unique
       from seller_menu
-      group by perms
+      where coalesce(trim(perms), '') <> ''
+      group by trim(perms)
       having count(1) > 1
     ) duplicate_seller_menu_perms
   ) then
@@ -400,11 +561,19 @@ begin
   if exists (
     select 1
     from buyer_menu
-    where coalesce(perms, '') = ''
-       or coalesce(perms, '') = '*'
-       or coalesce(perms, '') not like 'buyer:%'
-       or coalesce(perms, '') like 'buyer:admin:%'
-       or coalesce(perms, '') like 'seller:%'
+    where (
+        menu_type in ('C', 'F')
+        and coalesce(trim(perms), '') = ''
+      )
+       or (
+        coalesce(trim(perms), '') <> ''
+        and (
+          coalesce(trim(perms), '') = '*'
+          or coalesce(trim(perms), '') not like 'buyer:%'
+          or coalesce(trim(perms), '') like 'buyer:admin:%'
+          or coalesce(trim(perms), '') like 'seller:%'
+        )
+      )
   ) then
     signal sqlstate '45000' set message_text = 'buyer_menu contains invalid terminal perms';
   end if;
@@ -421,14 +590,152 @@ begin
   if exists (
     select 1
     from (
-      select perms
+      select trim(perms) as perms_unique
       from buyer_menu
-      group by perms
+      where coalesce(trim(perms), '') <> ''
+      group by trim(perms)
       having count(1) > 1
     ) duplicate_buyer_menu_perms
   ) then
     signal sqlstate '45000' set message_text = 'buyer_menu perms must be unique before terminal role grants';
   end if;
+end//
+
+drop procedure if exists assert_three_terminal_required_column//
+create procedure assert_three_terminal_required_column(in p_table varchar(64), in p_column varchar(64), in p_message varchar(128))
+begin
+  if not exists (
+    select 1
+    from information_schema.columns
+    where table_schema = database()
+      and table_name = p_table
+      and column_name = p_column
+  ) then
+    signal sqlstate '45000' set message_text = p_message;
+  end if;
+end//
+
+drop procedure if exists assert_three_terminal_isolation_migration_completed//
+create procedure assert_three_terminal_isolation_migration_completed()
+begin
+  call assert_three_terminal_required_column('seller_account', 'seller_account_id', 'seller_account.seller_account_id final column is required');
+  call assert_three_terminal_required_column('seller_account', 'seller_id', 'seller_account.seller_id final column is required');
+  call assert_three_terminal_required_column('seller_account', 'dept_id', 'seller_account.dept_id final column is required');
+  call assert_three_terminal_required_column('seller_account', 'user_name', 'seller_account.user_name final column is required');
+  call assert_three_terminal_required_column('seller_account', 'password', 'seller_account.password final column is required');
+  call assert_three_terminal_required_column('seller_account', 'account_role', 'seller_account.account_role final column is required');
+  call assert_three_terminal_required_column('seller_account', 'status', 'seller_account.status final column is required');
+  call assert_three_terminal_required_column('seller_account', 'lock_status', 'seller_account.lock_status final column is required');
+  call assert_three_terminal_required_column('seller_account', 'last_login_time', 'seller_account.last_login_time final column is required');
+  call assert_three_terminal_required_column('seller_account', 'pwd_update_time', 'seller_account.pwd_update_time final column is required');
+  call assert_three_terminal_required_column('buyer_account', 'buyer_account_id', 'buyer_account.buyer_account_id final column is required');
+  call assert_three_terminal_required_column('buyer_account', 'buyer_id', 'buyer_account.buyer_id final column is required');
+  call assert_three_terminal_required_column('buyer_account', 'dept_id', 'buyer_account.dept_id final column is required');
+  call assert_three_terminal_required_column('buyer_account', 'user_name', 'buyer_account.user_name final column is required');
+  call assert_three_terminal_required_column('buyer_account', 'password', 'buyer_account.password final column is required');
+  call assert_three_terminal_required_column('buyer_account', 'account_role', 'buyer_account.account_role final column is required');
+  call assert_three_terminal_required_column('buyer_account', 'status', 'buyer_account.status final column is required');
+  call assert_three_terminal_required_column('buyer_account', 'lock_status', 'buyer_account.lock_status final column is required');
+  call assert_three_terminal_required_column('buyer_account', 'last_login_time', 'buyer_account.last_login_time final column is required');
+  call assert_three_terminal_required_column('buyer_account', 'pwd_update_time', 'buyer_account.pwd_update_time final column is required');
+
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = database()
+      and table_name = 'seller_account'
+      and column_name = 'user_id'
+  ) then
+    signal sqlstate '45000' set message_text = 'seller_account.user_id must be removed after isolation migration';
+  end if;
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = database()
+      and table_name = 'buyer_account'
+      and column_name = 'user_id'
+  ) then
+    signal sqlstate '45000' set message_text = 'buyer_account.user_id must be removed after isolation migration';
+  end if;
+
+  if exists (
+    select 1
+    from seller_menu
+    where seller_menu_id not between 100000 and 199999
+       or (parent_id <> 0 and parent_id not between 100000 and 199999)
+  ) then
+    signal sqlstate '45000' set message_text = 'seller_menu ids must stay in seller terminal range';
+  end if;
+  if exists (
+    select 1
+    from buyer_menu
+    where buyer_menu_id not between 200000 and 299999
+       or (parent_id <> 0 and parent_id not between 200000 and 299999)
+  ) then
+    signal sqlstate '45000' set message_text = 'buyer_menu ids must stay in buyer terminal range';
+  end if;
+
+  if exists (
+    select 1
+    from seller_role_menu rm
+    left join seller_role r on r.seller_role_id = rm.seller_role_id
+    left join seller_menu m on m.seller_menu_id = rm.seller_menu_id
+    where r.seller_role_id is null or m.seller_menu_id is null
+  ) then
+    signal sqlstate '45000' set message_text = 'seller_role_menu contains orphan role or menu ids';
+  end if;
+  if exists (
+    select 1
+    from buyer_role_menu rm
+    left join buyer_role r on r.buyer_role_id = rm.buyer_role_id
+    left join buyer_menu m on m.buyer_menu_id = rm.buyer_menu_id
+    where r.buyer_role_id is null or m.buyer_menu_id is null
+  ) then
+    signal sqlstate '45000' set message_text = 'buyer_role_menu contains orphan role or menu ids';
+  end if;
+
+  call assert_three_terminal_required_column('seller_login_log', 'seller_id', 'seller_login_log.seller_id final column is required');
+  call assert_three_terminal_required_column('seller_login_log', 'seller_account_id', 'seller_login_log.seller_account_id final column is required');
+  call assert_three_terminal_required_column('seller_login_log', 'direct_login', 'seller_login_log.direct_login final column is required');
+  call assert_three_terminal_required_column('seller_login_log', 'direct_login_ticket_id', 'seller_login_log.ticket final column is required');
+  call assert_three_terminal_required_column('seller_login_log', 'acting_admin_id', 'seller_login_log.admin_id final column is required');
+  call assert_three_terminal_required_column('seller_login_log', 'acting_admin_name', 'seller_login_log.admin_name final column is required');
+  call assert_three_terminal_required_column('seller_login_log', 'direct_login_reason', 'seller_login_log.reason final column is required');
+  call assert_three_terminal_required_column('buyer_login_log', 'buyer_id', 'buyer_login_log.buyer_id final column is required');
+  call assert_three_terminal_required_column('buyer_login_log', 'buyer_account_id', 'buyer_login_log.buyer_account_id final column is required');
+  call assert_three_terminal_required_column('buyer_login_log', 'direct_login', 'buyer_login_log.direct_login final column is required');
+  call assert_three_terminal_required_column('buyer_login_log', 'direct_login_ticket_id', 'buyer_login_log.ticket final column is required');
+  call assert_three_terminal_required_column('buyer_login_log', 'acting_admin_id', 'buyer_login_log.admin_id final column is required');
+  call assert_three_terminal_required_column('buyer_login_log', 'acting_admin_name', 'buyer_login_log.admin_name final column is required');
+  call assert_three_terminal_required_column('buyer_login_log', 'direct_login_reason', 'buyer_login_log.reason final column is required');
+  call assert_three_terminal_required_column('seller_oper_log', 'seller_id', 'seller_oper_log.seller_id final column is required');
+  call assert_three_terminal_required_column('seller_oper_log', 'seller_account_id', 'seller_oper_log.seller_account_id final column is required');
+  call assert_three_terminal_required_column('seller_oper_log', 'direct_login', 'seller_oper_log.direct_login final column is required');
+  call assert_three_terminal_required_column('seller_oper_log', 'direct_login_ticket_id', 'seller_oper_log.ticket final column is required');
+  call assert_three_terminal_required_column('seller_oper_log', 'acting_admin_id', 'seller_oper_log.admin_id final column is required');
+  call assert_three_terminal_required_column('seller_oper_log', 'acting_admin_name', 'seller_oper_log.admin_name final column is required');
+  call assert_three_terminal_required_column('seller_oper_log', 'direct_login_reason', 'seller_oper_log.reason final column is required');
+  call assert_three_terminal_required_column('buyer_oper_log', 'buyer_id', 'buyer_oper_log.buyer_id final column is required');
+  call assert_three_terminal_required_column('buyer_oper_log', 'buyer_account_id', 'buyer_oper_log.buyer_account_id final column is required');
+  call assert_three_terminal_required_column('buyer_oper_log', 'direct_login', 'buyer_oper_log.direct_login final column is required');
+  call assert_three_terminal_required_column('buyer_oper_log', 'direct_login_ticket_id', 'buyer_oper_log.ticket final column is required');
+  call assert_three_terminal_required_column('buyer_oper_log', 'acting_admin_id', 'buyer_oper_log.admin_id final column is required');
+  call assert_three_terminal_required_column('buyer_oper_log', 'acting_admin_name', 'buyer_oper_log.admin_name final column is required');
+  call assert_three_terminal_required_column('buyer_oper_log', 'direct_login_reason', 'buyer_oper_log.reason final column is required');
+  call assert_three_terminal_required_column('seller_session', 'seller_id', 'seller_session.seller_id final column is required');
+  call assert_three_terminal_required_column('seller_session', 'seller_account_id', 'seller_session.seller_account_id final column is required');
+  call assert_three_terminal_required_column('seller_session', 'direct_login', 'seller_session.direct_login final column is required');
+  call assert_three_terminal_required_column('seller_session', 'direct_login_ticket_id', 'seller_session.ticket final column is required');
+  call assert_three_terminal_required_column('seller_session', 'acting_admin_id', 'seller_session.admin_id final column is required');
+  call assert_three_terminal_required_column('seller_session', 'acting_admin_name', 'seller_session.admin_name final column is required');
+  call assert_three_terminal_required_column('seller_session', 'direct_login_reason', 'seller_session.reason final column is required');
+  call assert_three_terminal_required_column('buyer_session', 'buyer_id', 'buyer_session.buyer_id final column is required');
+  call assert_three_terminal_required_column('buyer_session', 'buyer_account_id', 'buyer_session.buyer_account_id final column is required');
+  call assert_three_terminal_required_column('buyer_session', 'direct_login', 'buyer_session.direct_login final column is required');
+  call assert_three_terminal_required_column('buyer_session', 'direct_login_ticket_id', 'buyer_session.ticket final column is required');
+  call assert_three_terminal_required_column('buyer_session', 'acting_admin_id', 'buyer_session.admin_id final column is required');
+  call assert_three_terminal_required_column('buyer_session', 'acting_admin_name', 'buyer_session.admin_name final column is required');
+  call assert_three_terminal_required_column('buyer_session', 'direct_login_reason', 'buyer_session.reason final column is required');
 end//
 
 delimiter ;
@@ -523,6 +830,8 @@ call assert_owner_generated_column('seller_account', 'owner_unique_seller_id', '
 call assert_owner_generated_column('buyer_account', 'owner_unique_buyer_id', 'buyer_id', 'buyer owner generated column definition is invalid');
 call assert_no_blank_terminal_passwords('seller_account', 'seller_account contains blank passwords; reset or backfill before isolation migration');
 call assert_no_blank_terminal_passwords('buyer_account', 'buyer_account contains blank passwords; reset or backfill before isolation migration');
+call assert_seller_account_normalize_targets();
+call assert_buyer_account_normalize_targets();
 
 update seller_account
 set user_name = coalesce(nullif(user_name, ''), concat('seller_', seller_account_id)),
@@ -532,7 +841,15 @@ set user_name = coalesce(nullif(user_name, ''), concat('seller_', seller_account
     status = coalesce(nullif(status, ''), '0'),
     lock_status = case when lock_status in ('0', '1') then lock_status else '0' end,
     lock_reason = coalesce(lock_reason, ''),
-    pwd_update_time = coalesce(pwd_update_time, sysdate());
+    pwd_update_time = coalesce(pwd_update_time, sysdate())
+where coalesce(user_name, '') = ''
+   or coalesce(nick_name, '') = ''
+   or email is null
+   or phonenumber is null
+   or coalesce(status, '') = ''
+   or coalesce(lock_status, '') not in ('0', '1')
+   or lock_reason is null
+   or pwd_update_time is null;
 
 update buyer_account
 set user_name = coalesce(nullif(user_name, ''), concat('buyer_', buyer_account_id)),
@@ -542,10 +859,32 @@ set user_name = coalesce(nullif(user_name, ''), concat('buyer_', buyer_account_i
     status = coalesce(nullif(status, ''), '0'),
     lock_status = case when lock_status in ('0', '1') then lock_status else '0' end,
     lock_reason = coalesce(lock_reason, ''),
-    pwd_update_time = coalesce(pwd_update_time, sysdate());
+    pwd_update_time = coalesce(pwd_update_time, sysdate())
+where coalesce(user_name, '') = ''
+   or coalesce(nick_name, '') = ''
+   or email is null
+   or phonenumber is null
+   or coalesce(status, '') = ''
+   or coalesce(lock_status, '') not in ('0', '1')
+   or lock_reason is null
+   or pwd_update_time is null;
 
 call assert_no_duplicate_terminal_user_name('seller_account', 'seller_account has duplicate user_name values before username unique index migration');
 call assert_no_duplicate_terminal_user_name('buyer_account', 'buyer_account has duplicate user_name values before username unique index migration');
+call assert_terminal_account_user_id_drop_target(
+  'seller_account',
+  @three_terminal_seller_user_id_drop_expected_count,
+  @three_terminal_seller_user_id_drop_expected_signature,
+  'seller_account user_id column drop exact target count mismatch',
+  'seller_account user_id column drop exact target signature mismatch'
+);
+call assert_terminal_account_user_id_drop_target(
+  'buyer_account',
+  @three_terminal_buyer_user_id_drop_expected_count,
+  @three_terminal_buyer_user_id_drop_expected_signature,
+  'buyer_account user_id column drop exact target count mismatch',
+  'buyer_account user_id column drop exact target signature mismatch'
+);
 
 call drop_index_if_exists('seller_account', 'uk_seller_account_user');
 call drop_index_if_exists('seller_account', 'uk_seller_account_seller_user');
@@ -670,6 +1009,7 @@ create table if not exists seller_menu (
   visible char(1) not null default '0',
   status char(1) not null default '0',
   perms varchar(100) default '',
+  perms_unique_key varchar(100) generated always as (case when trim(coalesce(perms, '')) = '' then null else trim(perms) end) stored,
   icon varchar(100) default '#',
   create_by varchar(64) default '',
   create_time datetime,
@@ -677,7 +1017,8 @@ create table if not exists seller_menu (
   update_time datetime,
   remark varchar(500) default '',
   primary key (seller_menu_id),
-  unique key uk_seller_menu_perms (perms),
+  unique key uk_seller_menu_perms (perms_unique_key),
+  key idx_seller_menu_perms_lookup (perms),
   key idx_seller_menu_parent (parent_id),
   key idx_seller_menu_status (status)
 ) engine=innodb auto_increment=100000 comment = '卖家端菜单权限表';
@@ -697,6 +1038,7 @@ create table if not exists buyer_menu (
   visible char(1) not null default '0',
   status char(1) not null default '0',
   perms varchar(100) default '',
+  perms_unique_key varchar(100) generated always as (case when trim(coalesce(perms, '')) = '' then null else trim(perms) end) stored,
   icon varchar(100) default '#',
   create_by varchar(64) default '',
   create_time datetime,
@@ -704,7 +1046,8 @@ create table if not exists buyer_menu (
   update_time datetime,
   remark varchar(500) default '',
   primary key (buyer_menu_id),
-  unique key uk_buyer_menu_perms (perms),
+  unique key uk_buyer_menu_perms (perms_unique_key),
+  key idx_buyer_menu_perms_lookup (perms),
   key idx_buyer_menu_parent (parent_id),
   key idx_buyer_menu_status (status)
 ) engine=innodb auto_increment=200000 comment = '买家端菜单权限表';
@@ -734,14 +1077,18 @@ create table if not exists buyer_role_menu (
 ) engine=innodb comment = '买家端角色菜单关联表';
 
 call assert_terminal_menu_integrity_ready();
+call add_column_if_missing('seller_menu', 'perms_unique_key',
+  'varchar(100) generated always as (case when trim(coalesce(perms, '''')) = '''' then null else trim(perms) end) stored');
+call add_column_if_missing('buyer_menu', 'perms_unique_key',
+  'varchar(100) generated always as (case when trim(coalesce(perms, '''')) = '''' then null else trim(perms) end) stored');
 call recreate_index_if_mismatch('seller_menu', 'uk_seller_menu_perms',
-  'perms', 0, 'unique key uk_seller_menu_perms (perms)');
+  'perms_unique_key', 0, 'unique key uk_seller_menu_perms (perms_unique_key)');
 call recreate_index_if_mismatch('buyer_menu', 'uk_buyer_menu_perms',
-  'perms', 0, 'unique key uk_buyer_menu_perms (perms)');
+  'perms_unique_key', 0, 'unique key uk_buyer_menu_perms (perms_unique_key)');
 call assert_index_definition('seller_menu', 'uk_seller_menu_perms',
-  'perms', 0, 'seller_menu perms unique index is invalid');
+  'perms_unique_key', 0, 'seller_menu perms unique index is invalid');
 call assert_index_definition('buyer_menu', 'uk_buyer_menu_perms',
-  'perms', 0, 'buyer_menu perms unique index is invalid');
+  'perms_unique_key', 0, 'buyer_menu perms unique index is invalid');
 
 create table if not exists seller_login_log (
   info_id bigint(20) not null auto_increment,
@@ -954,6 +1301,8 @@ call add_column_if_missing('buyer_session', 'acting_admin_id', 'bigint(20) defau
 call add_column_if_missing('buyer_session', 'acting_admin_name', 'varchar(64) default ''''');
 call add_column_if_missing('buyer_session', 'direct_login_reason', 'varchar(255) default ''''');
 
+call assert_three_terminal_isolation_migration_completed();
+
 -- Legacy sys_role seller/buyer cleanup is intentionally not part of the current
 -- three-terminal isolation migration. Seller/buyer terminal roles are managed by
 -- seller_role/buyer_role; any old mixed-account sys_role cleanup must run through
@@ -975,3 +1324,8 @@ drop procedure if exists assert_no_duplicate_terminal_user_name;
 drop procedure if exists modify_terminal_account_identity_columns_if_needed;
 drop procedure if exists assert_owner_generated_column;
 drop procedure if exists assert_no_blank_terminal_passwords;
+drop procedure if exists assert_seller_account_normalize_targets;
+drop procedure if exists assert_buyer_account_normalize_targets;
+drop procedure if exists assert_terminal_account_user_id_drop_target;
+drop procedure if exists assert_three_terminal_isolation_migration_completed;
+drop procedure if exists assert_three_terminal_required_column;

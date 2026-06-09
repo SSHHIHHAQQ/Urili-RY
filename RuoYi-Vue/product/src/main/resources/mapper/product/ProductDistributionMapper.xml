@@ -130,6 +130,24 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="warehouseCount"  column="warehouse_count"  />
         <result property="inventoryStatus" column="inventory_status" />
         <result property="stockUpdateTime" column="stock_update_time" />
+        <result property="sourceBindingId" column="source_binding_id" />
+        <result property="sourceScope" column="source_scope" />
+        <result property="sourceSkuGroupKey" column="source_sku_group_key" />
+        <result property="sourceDimensionGroupKey" column="source_dimension_group_key" />
+        <result property="masterSku" column="master_sku" />
+        <result property="masterProductNameSnapshot" column="master_product_name_snapshot" />
+        <result property="sourcePayloadHash" column="source_payload_hash" />
+        <result property="wmsPayloadHash" column="wms_payload_hash" />
+        <result property="measureLengthCm" column="measure_length_cm" />
+        <result property="measureWidthCm" column="measure_width_cm" />
+        <result property="measureHeightCm" column="measure_height_cm" />
+        <result property="measureWeightKg" column="measure_weight_kg" />
+        <result property="measureSource" column="measure_source" />
+        <result property="sourceWarehouseNames" column="source_warehouse_names" />
+        <result property="sourceWarehouseCount" column="source_warehouse_count" />
+        <result property="bindingStatus" column="binding_status" />
+        <result property="lockStatus" column="lock_status" />
+        <result property="lockedTime" column="locked_time" />
         <result property="createBy"        column="create_by"        />
         <result property="createTime"      column="create_time"      />
         <result property="updateBy"        column="update_by"        />
@@ -212,6 +230,30 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
               and b.binding_status = 'ACTIVE'
     </sql>
 
+    <sql id="spuInventorySummarySelect">
+               spu_inventory.platform_available_qty as available_stock,
+               spu_inventory.warehouse_count as warehouse_count,
+               spu_inventory.inventory_status as inventory_status,
+               spu_inventory.latest_stock_update_time as stock_update_time
+    </sql>
+
+    <sql id="spuInventorySummaryJoin">
+        left join inventory_overview_spu_read_model spu_inventory
+               on spu_inventory.spu_id = p.spu_id
+    </sql>
+
+    <sql id="skuInventorySummarySelect">
+               sku_inventory.platform_available_qty as available_stock,
+               sku_inventory.warehouse_count as warehouse_count,
+               sku_inventory.inventory_status as inventory_status,
+               sku_inventory.latest_stock_update_time as stock_update_time
+    </sql>
+
+    <sql id="skuInventorySummaryJoin">
+        left join inventory_overview_sku_read_model sku_inventory
+               on sku_inventory.sku_id = sk.sku_id
+    </sql>
+
     <sql id="spuAggregateSelect">
         select p.*,
                ifnull(s.sku_count, 0) as sku_count,
@@ -221,10 +263,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                s.sale_price_max,
                s.currency_summary,
                wh.warehouse_kind_summary,
-               null as available_stock,
-               null as warehouse_count,
-               null as inventory_status,
-               null as stock_update_time
+               <include refid="spuInventorySummarySelect"/>
         from product_spu p
         left join (
             select spu_id,
@@ -245,6 +284,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             from product_spu_warehouse
             group by spu_id
         ) wh on wh.spu_id = p.spu_id
+        <include refid="spuInventorySummaryJoin"/>
     </sql>
 
     <sql id="spuOnSaleAggregateSelect">
@@ -256,10 +296,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                s.sale_price_max,
                s.currency_summary,
                wh.warehouse_kind_summary,
-               null as available_stock,
-               null as warehouse_count,
-               null as inventory_status,
-               null as stock_update_time
+               <include refid="spuInventorySummarySelect"/>
         from product_spu p
         inner join (
             select spu_id,
@@ -279,6 +316,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             from product_spu_warehouse
             group by spu_id
         ) wh on wh.spu_id = p.spu_id
+        <include refid="spuInventorySummaryJoin"/>
     </sql>
 
     <select id="selectProductList" parameterType="ProductSpu" resultMap="ProductSpuResult">
@@ -349,10 +387,32 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
           and p.control_status = 'NORMAL'
         <if test="keyword != null and keyword != ''">
             and (
-                p.product_name like concat('%', #{keyword}, '%')
+                p.system_spu_code like concat('%', #{keyword}, '%')
+                or p.product_name like concat('%', #{keyword}, '%')
                 or p.product_name_en like concat('%', #{keyword}, '%')
                 or p.category_name like concat('%', #{keyword}, '%')
                 or p.selling_point like concat('%', #{keyword}, '%')
+                or exists (
+                    select 1 from product_sku sk
+                    where sk.spu_id = p.spu_id
+                      and sk.del_flag = '0'
+                      and sk.sku_status = 'ON_SALE'
+                      and sk.control_status = 'NORMAL'
+                      and sk.system_sku_code like concat('%', #{keyword}, '%')
+                )
+            )
+        </if>
+        <if test="systemSpuCode != null and systemSpuCode != ''">
+            and p.system_spu_code like concat('%', #{systemSpuCode}, '%')
+        </if>
+        <if test="systemSkuCode != null and systemSkuCode != ''">
+            and exists (
+                select 1 from product_sku sk
+                where sk.spu_id = p.spu_id
+                  and sk.del_flag = '0'
+                  and sk.sku_status = 'ON_SALE'
+                  and sk.control_status = 'NORMAL'
+                  and sk.system_sku_code like concat('%', #{systemSkuCode}, '%')
             )
         </if>
         <if test="productName != null and productName != ''">
@@ -370,6 +430,14 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <select id="selectProductById" resultMap="ProductSpuResult">
         <include refid="spuAggregateSelect"/>
         where p.spu_id = #{spuId}
+          and p.del_flag = '0'
+        limit 1
+    </select>
+
+    <select id="selectProductByIdAndSellerId" resultMap="ProductSpuResult">
+        <include refid="spuAggregateSelect"/>
+        where p.spu_id = #{spuId}
+          and p.seller_id = #{sellerId}
           and p.del_flag = '0'
         limit 1
     </select>
@@ -480,10 +548,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                p.spu_status,
                p.control_status as spu_control_status,
                wh.warehouse_kind_summary,
-               null as available_stock,
-               null as warehouse_count,
-               null as inventory_status,
-               null as stock_update_time,
+               <include refid="skuInventorySummarySelect"/>,
                <include refid="skuSourceBindingSelect"/>
         from product_sku sk
         inner join product_spu p on p.spu_id = sk.spu_id and p.del_flag = '0'
@@ -493,6 +558,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             from product_spu_warehouse
             group by spu_id
         ) wh on wh.spu_id = sk.spu_id
+        <include refid="skuInventorySummaryJoin"/>
         <include refid="skuSourceBindingJoin"/>
         where sk.del_flag = '0'
         <if test="keyword != null and keyword != ''">
@@ -557,10 +623,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                p.spu_status,
                p.control_status as spu_control_status,
                wh.warehouse_kind_summary,
-               null as available_stock,
-               null as warehouse_count,
-               null as inventory_status,
-               null as stock_update_time,
+               <include refid="skuInventorySummarySelect"/>,
                <include refid="skuSourceBindingSelect"/>
         from product_sku sk
         left join product_spu p on p.spu_id = sk.spu_id
@@ -570,8 +633,39 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             from product_spu_warehouse
             group by spu_id
         ) wh on wh.spu_id = sk.spu_id
+        <include refid="skuInventorySummaryJoin"/>
         <include refid="skuSourceBindingJoin"/>
         where sk.spu_id = #{spuId}
+          and sk.del_flag = '0'
+        order by sort_order asc, sku_id asc
+    </select>
+
+    <select id="selectSkuListBySpuIdAndSellerId" resultMap="ProductSkuResult">
+        select sk.*,
+               p.system_spu_code,
+               p.seller_spu_code,
+               p.seller_name,
+               p.category_id,
+               p.category_name,
+               p.product_name,
+               p.product_name_en,
+               p.spu_status,
+               p.control_status as spu_control_status,
+               wh.warehouse_kind_summary,
+               <include refid="skuInventorySummarySelect"/>,
+               <include refid="skuSourceBindingSelect"/>
+        from product_sku sk
+        left join product_spu p on p.spu_id = sk.spu_id
+        left join (
+            select spu_id,
+                   case when count(distinct warehouse_kind) = 1 then min(warehouse_kind) else 'MIXED' end as warehouse_kind_summary
+            from product_spu_warehouse
+            group by spu_id
+        ) wh on wh.spu_id = sk.spu_id
+        <include refid="skuInventorySummaryJoin"/>
+        <include refid="skuSourceBindingJoin"/>
+        where sk.spu_id = #{spuId}
+          and sk.seller_id = #{sellerId}
           and sk.del_flag = '0'
         order by sort_order asc, sku_id asc
     </select>
@@ -588,10 +682,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                p.spu_status,
                p.control_status as spu_control_status,
                wh.warehouse_kind_summary,
-               null as available_stock,
-               null as warehouse_count,
-               null as inventory_status,
-               null as stock_update_time,
+               <include refid="skuInventorySummarySelect"/>,
                <include refid="skuSourceBindingSelect"/>
         from product_sku sk
         left join product_spu p on p.spu_id = sk.spu_id
@@ -601,6 +692,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             from product_spu_warehouse
             group by spu_id
         ) wh on wh.spu_id = sk.spu_id
+        <include refid="skuInventorySummaryJoin"/>
         <include refid="skuSourceBindingJoin"/>
         where sk.spu_id = #{spuId}
           and sk.sku_status = 'ON_SALE'
@@ -621,10 +713,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                p.spu_status,
                p.control_status as spu_control_status,
                wh.warehouse_kind_summary,
-               null as available_stock,
-               null as warehouse_count,
-               null as inventory_status,
-               null as stock_update_time,
+               <include refid="skuInventorySummarySelect"/>,
                <include refid="skuSourceBindingSelect"/>
         from product_sku sk
         left join product_spu p on p.spu_id = sk.spu_id
@@ -634,6 +723,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             from product_spu_warehouse
             group by spu_id
         ) wh on wh.spu_id = sk.spu_id
+        <include refid="skuInventorySummaryJoin"/>
         <include refid="skuSourceBindingJoin"/>
         where sk.sku_id = #{skuId}
           and sk.del_flag = '0'
@@ -724,6 +814,16 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             update_by = #{updateBy},
             update_time = sysdate()
         where sku_id = #{skuId}
+          and del_flag = '0'
+    </update>
+
+    <update id="deleteSkuById">
+        update product_sku
+        set del_flag = '2',
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where sku_id = #{skuId}
+          and spu_id = #{spuId}
           and del_flag = '0'
     </update>
 
@@ -834,87 +934,22 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         where spu_id = #{spuId}
     </delete>
 
-    <select id="selectSourceBindingSnapshot" resultMap="ProductSkuSourceBindingResult">
-        select null as binding_id,
-               null as spu_id,
-               null as sku_id,
-               null as seller_id,
-               '' as system_sku_code,
-               d.repository_scope as source_scope,
-               d.source_sku_group_key,
-               d.source_dimension_group_key,
-               d.master_sku,
-               d.master_product_name as master_product_name_snapshot,
-               '' as system_sku_name_snapshot,
-               '' as seller_name_snapshot,
-               d.source_payload_hash,
-               coalesce(wd.wms_payload_hash, '') as wms_payload_hash,
-               case
-                   when d.wms_length is not null and d.wms_width is not null
-                        and d.wms_height is not null and d.wms_weight is not null
-                       then d.wms_length
-                   else d.product_length
-               end as measure_length_cm,
-               case
-                   when d.wms_length is not null and d.wms_width is not null
-                        and d.wms_height is not null and d.wms_weight is not null
-                       then d.wms_width
-                   else d.product_width
-               end as measure_width_cm,
-               case
-                   when d.wms_length is not null and d.wms_width is not null
-                        and d.wms_height is not null and d.wms_weight is not null
-                       then d.wms_height
-                   else d.product_height
-               end as measure_height_cm,
-               case
-                   when d.wms_length is not null and d.wms_width is not null
-                        and d.wms_height is not null and d.wms_weight is not null
-                       then d.wms_weight
-                   else d.product_weight
-               end as measure_weight_kg,
-               case
-                   when d.wms_length is not null and d.wms_width is not null
-                        and d.wms_height is not null and d.wms_weight is not null
-                       then 'WMS'
-                   else 'PRODUCT'
-               end as measure_source,
-               d.currency_code,
-               d.source_warehouse_names,
-               d.warehouse_count as source_warehouse_count,
-               'ACTIVE' as binding_status,
-               'UNLOCKED' as lock_status,
-               null as locked_time,
-               '' as locked_by,
-               '' as release_reason,
-               '' as replace_reason,
-               null as active_sku_key,
-               null as active_source_key,
-               '' as create_by,
-               null as create_time,
-               '' as update_by,
-               null as update_time,
-               '' as remark
-        from source_product_dimension_group d
-        left join (
-            select source_dimension_group_key,
-                   max(coalesce(wms_payload_hash, '')) as wms_payload_hash
-            from source_product_warehouse_detail
-            where repository_scope = 'OFFICIAL_MASTER'
-            group by source_dimension_group_key
-        ) wd on wd.source_dimension_group_key = d.source_dimension_group_key
-        where d.repository_scope = 'OFFICIAL_MASTER'
-          and d.status = 'ACTIVE'
-          and d.source_dimension_group_key = #{sourceDimensionGroupKey}
-        limit 1
-    </select>
-
     <select id="selectActiveSourceBindingBySkuId" resultMap="ProductSkuSourceBindingResult">
         select *
         from product_sku_source_binding
         where sku_id = #{skuId}
           and binding_status = 'ACTIVE'
         limit 1
+    </select>
+
+    <select id="selectActiveSourceBindingsBySkuIds" resultMap="ProductSkuSourceBindingResult">
+        select *
+        from product_sku_source_binding
+        where binding_status = 'ACTIVE'
+          and sku_id in
+          <foreach collection="skuIds" item="skuId" open="(" separator="," close=")">
+              #{skuId}
+          </foreach>
     </select>
 
     <select id="selectActiveSourceBindingBySourceSkuGroupKey" resultMap="ProductSkuSourceBindingResult">
@@ -925,47 +960,131 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         limit 1
     </select>
 
-    <select id="selectOfficialWarehousesBySourceDimensionGroup" resultMap="ProductSpuWarehouseResult">
+    <select id="selectActiveSourceBindingsBySourceSkuGroupKeys" resultMap="ProductSkuSourceBindingResult">
+        select *
+        from product_sku_source_binding
+        where binding_status = 'ACTIVE'
+          and source_sku_group_key in
+          <foreach collection="sourceSkuGroupKeys" item="sourceSkuGroupKey" open="(" separator="," close=")">
+              #{sourceSkuGroupKey}
+          </foreach>
+    </select>
+
+    <select id="selectInventorySkuIdsBySpuId" resultType="java.lang.Long">
+        select sku_id
+        from product_sku
+        where spu_id = #{spuId}
+          and del_flag = '0'
+        order by sku_id asc
+    </select>
+
+    <select id="selectInventorySkuSnapshotsBySpuId" resultType="com.ruoyi.inventory.domain.InventoryProductSkuSnapshot">
+        select sk.spu_id as spuId,
+               sk.sku_id as skuId,
+               sk.seller_id as sellerId,
+               p.seller_no as sellerNo,
+               p.seller_name as sellerName,
+               p.system_spu_code as systemSpuCode,
+               p.seller_spu_code as sellerSpuCode,
+               sk.system_sku_code as systemSkuCode,
+               sk.seller_sku_code as sellerSkuCode,
+               p.product_name as productName,
+               p.product_name_en as productNameEn,
+               p.main_image_url as mainImageUrl,
+               sk.sku_image_url as skuImageUrl,
+               sk.color,
+               sk.size,
+               sk.model
+        from product_sku sk
+        join product_spu p on p.spu_id = sk.spu_id and p.del_flag = '0'
+        where sk.spu_id = #{spuId}
+          and sk.del_flag = '0'
+        order by sk.sku_id asc
+    </select>
+
+    <select id="selectInventorySkuSnapshotsBySkuIds" resultType="com.ruoyi.inventory.domain.InventoryProductSkuSnapshot">
+        select sk.spu_id as spuId,
+               sk.sku_id as skuId,
+               sk.seller_id as sellerId,
+               p.seller_no as sellerNo,
+               p.seller_name as sellerName,
+               p.system_spu_code as systemSpuCode,
+               p.seller_spu_code as sellerSpuCode,
+               sk.system_sku_code as systemSkuCode,
+               sk.seller_sku_code as sellerSkuCode,
+               p.product_name as productName,
+               p.product_name_en as productNameEn,
+               p.main_image_url as mainImageUrl,
+               sk.sku_image_url as skuImageUrl,
+               sk.color,
+               sk.size,
+               sk.model
+        from product_sku sk
+        join product_spu p on p.spu_id = sk.spu_id and p.del_flag = '0'
+        where sk.del_flag = '0'
+          and sk.sku_id in
+          <foreach collection="skuIds" item="skuId" open="(" separator="," close=")">
+              #{skuId}
+          </foreach>
+        order by sk.sku_id asc
+    </select>
+
+    <select id="selectInventorySourceBindingSnapshotsBySpuId" resultType="com.ruoyi.inventory.domain.InventoryProductSourceBindingSnapshot">
+        select b.sku_id as skuId,
+               b.source_scope as sourceScope,
+               b.master_sku as masterSku,
+               b.master_product_name_snapshot as masterProductName
+        from product_sku sk
+        join product_spu p on p.spu_id = sk.spu_id and p.del_flag = '0'
+        join product_sku_source_binding b
+          on b.sku_id = sk.sku_id
+         and b.binding_status = 'ACTIVE'
+        where sk.spu_id = #{spuId}
+          and sk.del_flag = '0'
+        order by b.sku_id asc, b.source_scope asc, b.master_sku asc, b.master_product_name_snapshot asc
+    </select>
+
+    <select id="selectInventoryWarehouseSnapshotsBySpuId" resultType="com.ruoyi.inventory.domain.InventoryProductWarehouseSnapshot">
+        select pw.spu_id as spuId,
+               pw.warehouse_id as warehouseId,
+               pw.warehouse_kind as warehouseKind,
+               pw.warehouse_code as warehouseCode,
+               pw.warehouse_name as warehouseName
+        from product_spu_warehouse pw
+        join product_spu p on p.spu_id = pw.spu_id and p.del_flag = '0'
+        where pw.spu_id = #{spuId}
+        order by pw.warehouse_kind asc, pw.warehouse_id asc
+    </select>
+
+    <select id="selectInventorySourceSkuKeysBySpuId" resultType="com.ruoyi.inventory.domain.InventorySourceSkuKey">
         select distinct
-               null as id,
-               null as spu_id,
-               w.warehouse_id,
-               w.warehouse_code,
-               w.warehouse_name,
-               w.warehouse_kind,
-               w.settlement_currency,
-               null as seller_id,
-               '' as create_by,
-               null as create_time
-        from source_product_warehouse_detail wd
-        inner join upstream_system_warehouse_pairing p
-                on p.connection_code = wd.connection_code
-               and p.pairing_role = 'FULFILLMENT'
-               and p.status = 'ACTIVE'
-        inner join warehouse w
-                on w.warehouse_code = p.system_warehouse_code
-               and w.warehouse_kind = 'official'
-               and w.status = '0'
-        where wd.repository_scope = 'OFFICIAL_MASTER'
-          and wd.status = 'ACTIVE'
-          and wd.source_dimension_group_key = #{sourceDimensionGroupKey}
-        order by w.warehouse_id asc
+               b.source_scope as sourceScope,
+               b.master_sku as masterSku,
+               b.master_product_name_snapshot as masterProductName
+        from product_sku sk
+        join product_sku_source_binding b
+          on b.sku_id = sk.sku_id
+         and b.binding_status = 'ACTIVE'
+        where sk.spu_id = #{spuId}
+          and sk.del_flag = '0'
+        order by b.source_scope asc, b.master_sku asc, b.master_product_name_snapshot asc
     </select>
 
-    <select id="selectSourceConnectionCodesByDimensionGroup" resultType="string">
-        select distinct connection_code
-        from source_product_warehouse_detail
-        where repository_scope = 'OFFICIAL_MASTER'
-          and source_dimension_group_key = #{sourceDimensionGroupKey}
-        order by connection_code asc
-    </select>
-
-    <select id="selectUpstreamSkuPairingConnectionCodesBySystemSkuAndMasterSku" resultType="string">
-        select distinct connection_code
-        from upstream_system_sku_pairing
-        where system_sku = #{systemSku}
-          and master_sku = #{masterSku}
-        order by connection_code asc
+    <select id="selectInventorySpuIdsBySourceSkuKeys" resultType="java.lang.Long">
+        select distinct sk.spu_id
+        from product_sku sk
+        join product_sku_source_binding b
+          on b.sku_id = sk.sku_id
+         and b.binding_status = 'ACTIVE'
+        where sk.del_flag = '0'
+          and (
+              <foreach collection="sourceKeys" item="sourceKey" separator=" or ">
+                  (b.source_scope = #{sourceKey.sourceScope}
+                   and b.master_sku = #{sourceKey.masterSku}
+                   and coalesce(b.master_product_name_snapshot, '') = coalesce(#{sourceKey.masterProductName}, ''))
+              </foreach>
+          )
+        order by sk.spu_id asc
     </select>
 
     <insert id="insertSourceBinding" parameterType="ProductSkuSourceBinding" useGeneratedKeys="true" keyProperty="bindingId">
@@ -1057,41 +1176,4 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
           and lock_status &lt;&gt; 'LOCKED'
     </update>
 
-    <delete id="deleteUpstreamSkuPairingsBySystemSkuAndConnectionCodes">
-        delete from upstream_system_sku_pairing
-        where system_sku = #{systemSku}
-          and connection_code in
-          <foreach collection="connectionCodes" item="connectionCode" open="(" separator="," close=")">
-              #{connectionCode}
-          </foreach>
-    </delete>
-
-    <insert id="upsertUpstreamSkuPairingsForBinding" parameterType="ProductSkuSourceBinding">
-        insert into upstream_system_sku_pairing(
-            connection_code, master_sku, system_sku, system_sku_name, customer_name,
-            create_by, create_time, update_by, update_time, remark
-        )
-        select distinct
-               wd.connection_code,
-               wd.master_sku,
-               #{systemSkuCode},
-               #{systemSkuNameSnapshot},
-               #{sellerNameSnapshot},
-               #{updateBy},
-               sysdate(),
-               #{updateBy},
-               sysdate(),
-               '商城商品来源SKU绑定同步'
-        from source_product_warehouse_detail wd
-        where wd.repository_scope = 'OFFICIAL_MASTER'
-          and wd.status = 'ACTIVE'
-          and wd.source_dimension_group_key = #{sourceDimensionGroupKey}
-        on duplicate key update
-            system_sku = values(system_sku),
-            system_sku_name = values(system_sku_name),
-            customer_name = values(customer_name),
-            update_by = values(update_by),
-            update_time = sysdate(),
-            remark = values(remark)
-    </insert>
 </mapper>

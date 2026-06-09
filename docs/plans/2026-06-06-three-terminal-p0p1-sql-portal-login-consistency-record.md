@@ -4,7 +4,7 @@
 
 ## 子 Agent 使用情况
 
-- 用户最新指定：子 Agent 优先使用 GPT-5.3 Codex；不可用时使用 `gpt-5.4`。
+- 历史记录（已过期口径）：用户最新指定：子 Agent 优先使用 GPT-5.3 Codex；不可用时使用 `gpt-5.4`。
 - 本轮先尝试 GPT-5.3 Codex，平台返回用量/可用性限制后关闭失败 Agent。
 - 实际降级使用 6 个 `gpt-5.4` 子 Agent，切片覆盖 portal token/session/direct-login/log、seller 后端、buyer 后端、React 管理端模板、SQL/seed、验证脚本。
 - 6 个有效子 Agent 均已返回结论；本轮采纳 SQL guard、JS sidecar guard、Portal 登录会话一致性和登录审计链路 P1；其余 P2 记录但不阻塞。
@@ -27,7 +27,7 @@
 - `PortalLogAspect` 在匿名允许的登录/免密登录接口成功返回时，从 `AjaxResult.data` 中的 `PortalLoginResult.token` 回查同端 session，补齐账号、主体和 direct-login acting admin 审计。
 - `SellerServiceImpl`、`BuyerServiceImpl` 的普通登录和免密登录加事务边界与 Redis token 删除补偿；业务 `ServiceException` 不回滚，保留登录失败日志。
 - 新增 `PortalLoginSessionConsistencyContractTest` 和 `PortalTokenSupportTest` 覆盖登录 token/session 一致性与显式 token 回查能力。
-- `AGENTS.md` 增加子 Agent 模型优先级规则：优先 GPT-5.3 Codex，不可用再降级 `gpt-5.4`。
+- 历史记录（已过期口径）：`AGENTS.md` 增加子 Agent 模型优先级规则：优先 GPT-5.3 Codex，不可用再降级 `gpt-5.4`。
 
 ## 残留问题
 

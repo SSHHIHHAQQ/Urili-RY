@@ -60,6 +60,26 @@ public class ProductDistributionMapperContractTest
             "lockStatus",
             "lockedTime");
 
+    private static final List<String> SKU_SOURCE_BINDING_RESULT_PROPERTIES = Arrays.asList(
+            "sourceBindingId",
+            "sourceScope",
+            "sourceSkuGroupKey",
+            "sourceDimensionGroupKey",
+            "masterSku",
+            "masterProductNameSnapshot",
+            "sourcePayloadHash",
+            "wmsPayloadHash",
+            "measureLengthCm",
+            "measureWidthCm",
+            "measureHeightCm",
+            "measureWeightKg",
+            "measureSource",
+            "sourceWarehouseNames",
+            "sourceWarehouseCount",
+            "bindingStatus",
+            "lockStatus",
+            "lockedTime");
+
     private static final List<String> PRODUCT_OWNED_TABLES = Arrays.asList(
             "product_spu",
             "product_sku",
@@ -71,7 +91,7 @@ public class ProductDistributionMapperContractTest
     private static final Map<String, List<String>> ALLOWED_EXTERNAL_TABLES_BY_STATEMENT =
             createAllowedExternalTablesByStatement();
 
-    private static final List<String> INVENTORY_PLACEHOLDER_ALIASES = Arrays.asList(
+    private static final List<String> INVENTORY_SUMMARY_ALIASES = Arrays.asList(
             "available_stock",
             "warehouse_count",
             "inventory_status",
@@ -80,8 +100,6 @@ public class ProductDistributionMapperContractTest
     private static final List<String> FORBIDDEN_INVENTORY_FACT_SOURCE_TOKENS = Arrays.asList(
             "source_warehouse_stock_",
             "upstream_system_sku_inventory_snapshot");
-
-    private static final int EXPECTED_INVENTORY_PLACEHOLDER_COUNT_PER_ALIAS = 6;
 
     @Test
     public void spuResultMustNotMapSkuSourceBindingFields() throws IOException
@@ -123,6 +141,39 @@ public class ProductDistributionMapperContractTest
     }
 
     @Test
+    public void skuResultMustMapActiveSourceBindingFieldsForEditEcho() throws IOException
+    {
+        String source = readMapperSource();
+        String skuResult = extractResultMap(source, "ProductSkuResult");
+        String skuBindingSelect = extractSqlFragment(source, "skuSourceBindingSelect");
+        String skuBindingJoin = extractSqlFragment(source, "skuSourceBindingJoin");
+        List<String> violations = new ArrayList<>();
+
+        if (skuResult.isEmpty())
+        {
+            violations.add("ProductSkuResult must exist");
+        }
+        for (String property : SKU_SOURCE_BINDING_RESULT_PROPERTIES)
+        {
+            if (!skuResult.contains("property=\"" + property + "\""))
+            {
+                violations.add("ProductSkuResult must map active source binding property " + property);
+            }
+        }
+        requireContains(skuBindingSelect, "b.binding_id as source_binding_id", violations);
+        requireContains(skuBindingSelect, "b.source_dimension_group_key", violations);
+        requireContains(skuBindingSelect, "b.master_sku", violations);
+        requireContains(skuBindingJoin, "left join product_sku_source_binding b", violations);
+        requireContains(skuBindingJoin, "and b.binding_status = 'ACTIVE'", violations);
+
+        if (!violations.isEmpty())
+        {
+            fail("ProductSkuResult must rehydrate active source binding fields after save:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    @Test
     public void externalTableUsageMustStayWithinExplicitDebtAllowlist() throws IOException
     {
         Map<String, Set<String>> externalTablesByStatement = findExternalTablesByStatement(readMapperSource());
@@ -151,20 +202,17 @@ public class ProductDistributionMapperContractTest
     }
 
     @Test
-    public void inventorySummaryFieldsMustStayExplicitPlaceholdersUntilInventoryFactSourceIsDesigned()
+    public void inventorySummaryFieldsMustReadInventoryOverviewModelsOnly()
             throws IOException
     {
         String source = readMapperSource();
         List<String> violations = new ArrayList<>();
 
-        for (String alias : INVENTORY_PLACEHOLDER_ALIASES)
+        for (String alias : INVENTORY_SUMMARY_ALIASES)
         {
-            int count = countExplicitNullAlias(source, alias, violations);
-            if (count != EXPECTED_INVENTORY_PLACEHOLDER_COUNT_PER_ALIAS)
+            if (Pattern.compile("\\bnull\\s+as\\s+" + alias + "\\b", Pattern.CASE_INSENSITIVE).matcher(source).find())
             {
-                violations.add(alias + " must stay as " + EXPECTED_INVENTORY_PLACEHOLDER_COUNT_PER_ALIAS
-                        + " explicit null placeholders until inventory fact-source aggregation is designed; actual "
-                        + count);
+                violations.add(alias + " must not stay as a null placeholder after inventory overview read models exist");
             }
         }
 
@@ -173,50 +221,275 @@ public class ProductDistributionMapperContractTest
         {
             if (lowerSource.contains(token))
             {
-                violations.add("ProductDistributionMapper must not assemble inventory summary from " + token
-                        + " before inventory fact-source aggregation is designed");
+                violations.add("ProductDistributionMapper must not assemble inventory summary directly from " + token);
             }
+        }
+
+        String spuInventorySelect = extractSqlFragment(source, "spuInventorySummarySelect");
+        String spuInventoryJoin = extractSqlFragment(source, "spuInventorySummaryJoin");
+        String skuInventorySelect = extractSqlFragment(source, "skuInventorySummarySelect");
+        String skuInventoryJoin = extractSqlFragment(source, "skuInventorySummaryJoin");
+        String[] spuStatements = { "spuAggregateSelect", "spuOnSaleAggregateSelect" };
+        String[] skuStatements = {
+                "selectSkuPageList",
+                "selectSkuListBySpuId",
+                "selectSkuListBySpuIdAndSellerId",
+                "selectOnSaleSkuListBySpuId",
+                "selectSkuById"
+        };
+
+        requireContains(spuInventorySelect, "spu_inventory.platform_available_qty as available_stock", violations);
+        requireContains(spuInventorySelect, "spu_inventory.warehouse_count as warehouse_count", violations);
+        requireContains(spuInventorySelect, "spu_inventory.inventory_status as inventory_status", violations);
+        requireContains(spuInventorySelect, "spu_inventory.latest_stock_update_time as stock_update_time", violations);
+        requireContains(spuInventoryJoin, "left join inventory_overview_spu_read_model spu_inventory", violations);
+        requireContains(spuInventoryJoin, "on spu_inventory.spu_id = p.spu_id", violations);
+        requireContains(skuInventorySelect, "sku_inventory.platform_available_qty as available_stock", violations);
+        requireContains(skuInventorySelect, "sku_inventory.warehouse_count as warehouse_count", violations);
+        requireContains(skuInventorySelect, "sku_inventory.inventory_status as inventory_status", violations);
+        requireContains(skuInventorySelect, "sku_inventory.latest_stock_update_time as stock_update_time", violations);
+        requireContains(skuInventoryJoin, "left join inventory_overview_sku_read_model sku_inventory", violations);
+        requireContains(skuInventoryJoin, "on sku_inventory.sku_id = sk.sku_id", violations);
+
+        for (String statementId : spuStatements)
+        {
+            String statement = extractSqlFragment(source, statementId);
+            requireContains(statement, "<include refid=\"spuInventorySummarySelect\"/>", violations);
+            requireContains(statement, "<include refid=\"spuInventorySummaryJoin\"/>", violations);
+        }
+        for (String statementId : skuStatements)
+        {
+            String statement = extractStatement(source, statementId);
+            requireContains(statement, "<include refid=\"skuInventorySummarySelect\"/>", violations);
+            requireContains(statement, "<include refid=\"skuInventorySummaryJoin\"/>", violations);
         }
 
         if (!violations.isEmpty())
         {
-            fail("ProductDistributionMapper inventory summary fields are placeholders, not real inventory facts:\n"
+            fail("ProductDistributionMapper inventory summary fields must come from inventory overview read models:\n"
                     + String.join("\n", violations));
         }
     }
 
     @Test
-    public void upstreamSkuPairingProjectionDeleteMustKeepConnectionScope() throws IOException
+    public void inventoryLookupStatementsMustPreserveProductIdentitySemantics() throws IOException
     {
         String source = readMapperSource();
-        String connectionLookup = extractStatement(source, "selectSourceConnectionCodesByDimensionGroup");
-        String pairingFallbackLookup = extractStatement(source,
-                "selectUpstreamSkuPairingConnectionCodesBySystemSkuAndMasterSku");
-        String deleteStatement = extractStatement(source, "deleteUpstreamSkuPairingsBySystemSkuAndConnectionCodes");
+        String skuStatement = extractStatement(source, "selectInventorySkuIdsBySpuId");
+        String skuSnapshotBySpuStatement = extractStatement(source, "selectInventorySkuSnapshotsBySpuId");
+        String skuSnapshotBySkuIdsStatement = extractStatement(source, "selectInventorySkuSnapshotsBySkuIds");
+        String sourceBindingSnapshotStatement = extractStatement(source, "selectInventorySourceBindingSnapshotsBySpuId");
+        String warehouseSnapshotStatement = extractStatement(source, "selectInventoryWarehouseSnapshotsBySpuId");
+        String sourceKeyStatement = extractStatement(source, "selectInventorySourceSkuKeysBySpuId");
+        String spuStatement = extractStatement(source, "selectInventorySpuIdsBySourceSkuKeys");
         List<String> violations = new ArrayList<>();
 
-        if (source.contains("deleteUpstreamSkuPairingsBySystemSku\""))
-        {
-            violations.add("upstream SKU pairing projection delete must not use naked systemSku statement id");
-        }
-        requireContains(connectionLookup, "select distinct connection_code", violations);
-        requireContains(connectionLookup, "source_dimension_group_key = #{sourceDimensionGroupKey}", violations);
-        if (Pattern.compile("\\bstatus\\s*=\\s*'ACTIVE'", Pattern.CASE_INSENSITIVE).matcher(connectionLookup).find())
-        {
-            violations.add("connection lookup for projection cleanup must not filter inactive source rows");
-        }
-        requireContains(pairingFallbackLookup, "select distinct connection_code", violations);
-        requireContains(pairingFallbackLookup, "from upstream_system_sku_pairing", violations);
-        requireContains(pairingFallbackLookup, "system_sku = #{systemSku}", violations);
-        requireContains(pairingFallbackLookup, "master_sku = #{masterSku}", violations);
-        requireContains(deleteStatement, "delete from upstream_system_sku_pairing", violations);
-        requireContains(deleteStatement, "system_sku = #{systemSku}", violations);
-        requireContains(deleteStatement, "connection_code in", violations);
-        requireContains(deleteStatement, "collection=\"connectionCodes\"", violations);
+        requireContains(skuStatement, "from product_sku", violations);
+        requireContains(skuStatement, "where spu_id = #{spuId}", violations);
+        requireContains(skuStatement, "and del_flag = '0'", violations);
+        requireContains(skuStatement, "order by sku_id asc", violations);
+
+        requireContains(skuSnapshotBySpuStatement, "from product_sku sk", violations);
+        requireContains(skuSnapshotBySpuStatement, "join product_spu p", violations);
+        requireContains(skuSnapshotBySpuStatement, "p.seller_no as sellerNo", violations);
+        requireContains(skuSnapshotBySpuStatement, "p.seller_name as sellerName", violations);
+        requireContains(skuSnapshotBySpuStatement, "p.system_spu_code as systemSpuCode", violations);
+        requireContains(skuSnapshotBySpuStatement, "sk.system_sku_code as systemSkuCode", violations);
+        requireContains(skuSnapshotBySpuStatement, "where sk.spu_id = #{spuId}", violations);
+        requireContains(skuSnapshotBySpuStatement, "and sk.del_flag = '0'", violations);
+        requireNotContains(skuSnapshotBySpuStatement, "source_warehouse_stock_", violations);
+        requireNotContains(skuSnapshotBySpuStatement, "upstream_system_", violations);
+
+        requireContains(skuSnapshotBySkuIdsStatement, "from product_sku sk", violations);
+        requireContains(skuSnapshotBySkuIdsStatement, "sk.sku_id in", violations);
+        requireContains(skuSnapshotBySkuIdsStatement, "where sk.del_flag = '0'", violations);
+        requireNotContains(skuSnapshotBySkuIdsStatement, "source_warehouse_stock_", violations);
+        requireNotContains(skuSnapshotBySkuIdsStatement, "upstream_system_", violations);
+
+        requireContains(sourceBindingSnapshotStatement, "join product_sku_source_binding b", violations);
+        requireContains(sourceBindingSnapshotStatement, "and b.binding_status = 'ACTIVE'", violations);
+        requireContains(sourceBindingSnapshotStatement, "b.master_product_name_snapshot as masterProductName", violations);
+        requireNotContains(sourceBindingSnapshotStatement, "source_warehouse_stock_", violations);
+        requireNotContains(sourceBindingSnapshotStatement, "upstream_system_", violations);
+
+        requireContains(warehouseSnapshotStatement, "from product_spu_warehouse pw", violations);
+        requireContains(warehouseSnapshotStatement, "join product_spu p", violations);
+        requireContains(warehouseSnapshotStatement, "pw.warehouse_kind as warehouseKind", violations);
+        requireNotContains(warehouseSnapshotStatement, "source_warehouse_stock_", violations);
+        requireNotContains(warehouseSnapshotStatement, "upstream_system_", violations);
+
+        requireContains(sourceKeyStatement, "from product_sku sk", violations);
+        requireContains(sourceKeyStatement, "join product_sku_source_binding b", violations);
+        requireContains(sourceKeyStatement, "and b.binding_status = 'ACTIVE'", violations);
+        requireContains(sourceKeyStatement, "where sk.spu_id = #{spuId}", violations);
+        requireContains(sourceKeyStatement, "and sk.del_flag = '0'", violations);
+        requireContains(sourceKeyStatement, "b.source_scope as sourceScope", violations);
+        requireContains(sourceKeyStatement, "b.master_sku as masterSku", violations);
+        requireContains(sourceKeyStatement, "b.master_product_name_snapshot as masterProductName", violations);
+        requireNotContains(sourceKeyStatement, "source_warehouse_stock_", violations);
+        requireNotContains(sourceKeyStatement, "upstream_system_", violations);
+
+        requireContains(spuStatement, "from product_sku sk", violations);
+        requireContains(spuStatement, "join product_sku_source_binding b", violations);
+        requireContains(spuStatement, "and b.binding_status = 'ACTIVE'", violations);
+        requireContains(spuStatement, "where sk.del_flag = '0'", violations);
+        requireContains(spuStatement, "b.source_scope = #{sourceKey.sourceScope}", violations);
+        requireContains(spuStatement, "b.master_sku = #{sourceKey.masterSku}", violations);
+        requireContains(spuStatement,
+                "coalesce(b.master_product_name_snapshot, '') = coalesce(#{sourceKey.masterProductName}, '')",
+                violations);
+        requireNotContains(spuStatement, "source_warehouse_stock_", violations);
+        requireNotContains(spuStatement, "upstream_system_", violations);
 
         if (!violations.isEmpty())
         {
-            fail("ProductDistributionMapper must delete upstream SKU pairings by connection_code + system_sku:\n"
+            fail("inventory product lookup statements must keep product-owned identity semantics:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    @Test
+    public void sellerPortalSkuListMustDownPushSellerScope() throws IOException
+    {
+        String source = readMapperSource();
+        String statement = extractStatement(source, "selectSkuListBySpuIdAndSellerId");
+        List<String> violations = new ArrayList<>();
+
+        if (statement.isEmpty())
+        {
+            violations.add("selectSkuListBySpuIdAndSellerId must exist for seller portal SKU detail scope");
+        }
+        requireContains(statement, "where sk.spu_id = #{spuId}", violations);
+        requireContains(statement, "and sk.seller_id = #{sellerId}", violations);
+        requireContains(statement, "and sk.del_flag = '0'", violations);
+
+        if (!violations.isEmpty())
+        {
+            fail("seller portal SKU details must keep seller_id scoped at SQL level:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    @Test
+    public void sellerPortalProductListMustKeepSellerScopeFilter() throws IOException
+    {
+        String source = readMapperSource();
+        String statement = extractStatement(source, "selectProductList");
+        List<String> violations = new ArrayList<>();
+
+        if (statement.isEmpty())
+        {
+            violations.add("selectProductList must exist for seller portal product list scope");
+        }
+        requireContains(statement, "where p.del_flag = '0'", violations);
+        requireContains(statement, "<if test=\"sellerId != null\">", violations);
+        requireContains(statement, "and p.seller_id = #{sellerId}", violations);
+
+        if (!violations.isEmpty())
+        {
+            fail("seller portal product list must keep seller_id scoped at SQL level:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    @Test
+    public void sellerPortalProductDetailMustDownPushSellerScope() throws IOException
+    {
+        String source = readMapperSource();
+        String statement = extractStatement(source, "selectProductByIdAndSellerId");
+        List<String> violations = new ArrayList<>();
+
+        if (statement.isEmpty())
+        {
+            violations.add("selectProductByIdAndSellerId must exist for seller portal product detail scope");
+        }
+        requireContains(statement, "where p.spu_id = #{spuId}", violations);
+        requireContains(statement, "and p.seller_id = #{sellerId}", violations);
+        requireContains(statement, "and p.del_flag = '0'", violations);
+
+        if (!violations.isEmpty())
+        {
+            fail("seller portal product details must keep seller_id scoped at SQL level:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    @Test
+    public void categoryNameMustStayStableProductSnapshotWithoutLiveCategoryPathJoin() throws IOException
+    {
+        String mapperSource = readMapperSource();
+        String serviceSource = Files.readString(findBackendRoot().resolve(
+                "product/src/main/java/com/ruoyi/product/service/impl/ProductDistributionServiceImpl.java"),
+                StandardCharsets.UTF_8);
+        List<String> violations = new ArrayList<>();
+
+        requireContains(serviceSource, "product.setCategoryName(category.getCategoryName());", violations);
+        requireNotContains(serviceSource, "category.getFullPath()", violations);
+        requireNotContains(mapperSource, "categoryPath", violations);
+        requireNotContains(mapperSource, "category_path", violations);
+        requireNotContains(mapperSource, "categoryPathSelect", violations);
+        requireNotContains(mapperSource, "categoryPathJoin", violations);
+        requireNotContains(mapperSource, "product_category", violations);
+
+        if (!violations.isEmpty())
+        {
+            fail("product distribution categoryName must remain the product category leaf-name snapshot, "
+                    + "not a live category path projection:\n" + String.join("\n", violations));
+        }
+    }
+
+    @Test
+    public void upstreamSkuPairingProjectionMustBelongToIntegrationPort() throws IOException
+    {
+        String mapperSource = readMapperSource();
+        String serviceSource = Files.readString(findBackendRoot().resolve(
+                "product/src/main/java/com/ruoyi/product/service/impl/ProductDistributionServiceImpl.java"),
+                StandardCharsets.UTF_8);
+        String integrationServiceApi = Files.readString(findBackendRoot().resolve(
+                "integration/src/main/java/com/ruoyi/integration/service/ISourceSkuPairingProjectionService.java"),
+                StandardCharsets.UTF_8);
+        String integrationMapperSource = Files.readString(findBackendRoot().resolve(
+                "integration/src/main/resources/mapper/integration/UpstreamSystemMapper.xml"),
+                StandardCharsets.UTF_8);
+        List<String> violations = new ArrayList<>();
+
+        requireNotContains(mapperSource, "upstream_system_sku_pairing", violations);
+        requireNotContains(mapperSource, "upstream_system_warehouse_pairing", violations);
+        requireNotContains(mapperSource, "selectOfficialWarehousesBySourceDimensionGroup", violations);
+        requireNotContains(mapperSource, "source_product_dimension_group", violations);
+        requireNotContains(mapperSource, "source_product_warehouse_detail", violations);
+        requireNotContains(mapperSource, "deleteUpstreamSkuPairingsBySystemSkuAndConnectionCodes", violations);
+        requireNotContains(mapperSource, "upsertUpstreamSkuPairingsForBinding", violations);
+
+        requireContains(serviceSource, "ObjectProvider<ISourceSkuPairingProjectionService>", violations);
+        requireContains(serviceSource, "sourceSkuPairingProjectionService().deletePairingsBySystemSkuAndConnectionCodes",
+                violations);
+        requireContains(serviceSource, "sourceSkuPairingProjectionService().upsertPairingsForProjection(toProjection(binding))",
+                violations);
+        requireContains(serviceSource, "sourceSkuPairingProjectionService().selectOfficialWarehousesBySourceDimensionGroup",
+                violations);
+        requireContains(serviceSource, "sourceSkuPairingProjectionService().selectOfficialSourceBindingSnapshot",
+                violations);
+
+        requireContains(integrationServiceApi, "deletePairingsBySystemSkuAndConnectionCodes", violations);
+        requireContains(integrationServiceApi, "upsertPairingsForProjection", violations);
+        requireContains(integrationServiceApi, "selectOfficialWarehousesBySourceDimensionGroup", violations);
+        requireContains(integrationServiceApi, "selectOfficialSourceBindingSnapshot", violations);
+
+        requireContains(integrationMapperSource, "delete from upstream_system_sku_pairing", violations);
+        requireContains(integrationMapperSource, "connection_code in", violations);
+        requireContains(integrationMapperSource, "selectOfficialSourceBindingSnapshot", violations);
+        requireContains(integrationMapperSource, "from source_product_dimension_group d", violations);
+        requireContains(integrationMapperSource, "from source_product_warehouse_detail wd", violations);
+        requireContains(integrationMapperSource, "inner join upstream_system_warehouse_pairing p", violations);
+        requireContains(integrationMapperSource,
+                "p.pairing_role = case when c.settlement_type = 'self-operated-receivable'", violations);
+        requireNotContains(integrationMapperSource, "p.pairing_role = 'FULFILLMENT'", violations);
+        requireContains(integrationMapperSource, "inner join warehouse w", violations);
+
+        if (!violations.isEmpty())
+        {
+            fail("ProductDistributionMapper must access integration/warehouse storage through integration port:\n"
                     + String.join("\n", violations));
         }
     }
@@ -224,28 +497,33 @@ public class ProductDistributionMapperContractTest
     private static Map<String, List<String>> createAllowedExternalTablesByStatement()
     {
         Map<String, List<String>> allowlist = new LinkedHashMap<>();
-        allowlist.put("selectSourceBindingSnapshot", Arrays.asList(
-                "source_product_dimension_group",
-                "source_product_warehouse_detail"));
-        allowlist.put("selectOfficialWarehousesBySourceDimensionGroup", Arrays.asList(
-                "source_product_warehouse_detail",
-                "upstream_system_warehouse_pairing",
-                "warehouse"));
-        allowlist.put("selectSourceConnectionCodesByDimensionGroup", Arrays.asList(
-                "source_product_warehouse_detail"));
-        allowlist.put("selectUpstreamSkuPairingConnectionCodesBySystemSkuAndMasterSku", Arrays.asList(
-                "upstream_system_sku_pairing"));
-        allowlist.put("deleteUpstreamSkuPairingsBySystemSkuAndConnectionCodes", Arrays.asList(
-                "upstream_system_sku_pairing"));
-        allowlist.put("upsertUpstreamSkuPairingsForBinding", Arrays.asList(
-                "source_product_warehouse_detail",
-                "upstream_system_sku_pairing"));
+        allowlist.put("selectProductList", Arrays.asList(
+                "inventory_overview_spu_read_model"));
+        allowlist.put("selectOnSaleProductList", Arrays.asList(
+                "inventory_overview_spu_read_model"));
+        allowlist.put("selectProductById", Arrays.asList(
+                "inventory_overview_spu_read_model"));
+        allowlist.put("selectProductByIdAndSellerId", Arrays.asList(
+                "inventory_overview_spu_read_model"));
+        allowlist.put("selectOnSaleProductById", Arrays.asList(
+                "inventory_overview_spu_read_model"));
+        allowlist.put("selectSkuPageList", Arrays.asList(
+                "inventory_overview_sku_read_model"));
+        allowlist.put("selectSkuListBySpuId", Arrays.asList(
+                "inventory_overview_sku_read_model"));
+        allowlist.put("selectSkuListBySpuIdAndSellerId", Arrays.asList(
+                "inventory_overview_sku_read_model"));
+        allowlist.put("selectOnSaleSkuListBySpuId", Arrays.asList(
+                "inventory_overview_sku_read_model"));
+        allowlist.put("selectSkuById", Arrays.asList(
+                "inventory_overview_sku_read_model"));
         return allowlist;
     }
 
     private Map<String, Set<String>> findExternalTablesByStatement(String source)
     {
         Map<String, Set<String>> externalTablesByStatement = new LinkedHashMap<>();
+        Map<String, String> sqlFragmentsById = extractSqlFragmentsById(source);
         Pattern statementPattern = Pattern.compile(
                 "<(select|insert|update|delete)\\s+[^>]*id=\"([^\"]+)\"[^>]*>(.*?)</\\1>",
                 Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
@@ -255,7 +533,8 @@ public class ProductDistributionMapperContractTest
         {
             String statementType = statementMatcher.group(1).toLowerCase();
             String statementId = statementMatcher.group(2);
-            String statementBody = statementMatcher.group(3);
+            String statementBody = expandIncludes(statementMatcher.group(3), sqlFragmentsById,
+                    new LinkedHashSet<>());
             Set<String> externalTables = new LinkedHashSet<>();
             for (String table : findTables(statementType, statementBody))
             {
@@ -271,6 +550,47 @@ public class ProductDistributionMapperContractTest
         }
 
         return externalTablesByStatement;
+    }
+
+    private Map<String, String> extractSqlFragmentsById(String source)
+    {
+        Map<String, String> fragmentsById = new LinkedHashMap<>();
+        Pattern fragmentPattern = Pattern.compile(
+                "<sql\\s+[^>]*id=\"([^\"]+)\"[^>]*>(.*?)</sql>",
+                Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+        Matcher fragmentMatcher = fragmentPattern.matcher(source);
+        while (fragmentMatcher.find())
+        {
+            fragmentsById.put(fragmentMatcher.group(1), fragmentMatcher.group(2));
+        }
+        return fragmentsById;
+    }
+
+    private String expandIncludes(String source, Map<String, String> sqlFragmentsById, Set<String> includeStack)
+    {
+        Pattern includePattern = Pattern.compile("<include\\s+[^>]*refid=\"([^\"]+)\"[^>]*/?>",
+                Pattern.CASE_INSENSITIVE);
+        Matcher includeMatcher = includePattern.matcher(source);
+        StringBuffer expandedSource = new StringBuffer();
+        while (includeMatcher.find())
+        {
+            String refid = includeMatcher.group(1);
+            String fragment = sqlFragmentsById.get(refid);
+            if (fragment == null)
+            {
+                includeMatcher.appendReplacement(expandedSource, Matcher.quoteReplacement(includeMatcher.group()));
+                continue;
+            }
+            if (!includeStack.add(refid))
+            {
+                throw new IllegalStateException("recursive SQL include found: " + refid);
+            }
+            String expandedFragment = expandIncludes(fragment, sqlFragmentsById, includeStack);
+            includeStack.remove(refid);
+            includeMatcher.appendReplacement(expandedSource, Matcher.quoteReplacement(expandedFragment));
+        }
+        includeMatcher.appendTail(expandedSource);
+        return expandedSource.toString();
     }
 
     private Set<String> findTables(String statementType, String statementBody)
@@ -298,23 +618,17 @@ public class ProductDistributionMapperContractTest
         return tables;
     }
 
-    private int countExplicitNullAlias(String source, String alias, List<String> violations)
+    private String extractSqlFragment(String source, String id)
     {
-        Pattern aliasPattern = Pattern.compile("^\\s*([^\\r\\n,]+)\\s+as\\s+" + alias + "\\b",
-                Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
-        Matcher aliasMatcher = aliasPattern.matcher(source);
-        int count = 0;
-        while (aliasMatcher.find())
+        Pattern fragmentPattern = Pattern.compile(
+                "<sql\\s+[^>]*id=\"" + Pattern.quote(id) + "\"[^>]*>.*?</sql>",
+                Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+        Matcher matcher = fragmentPattern.matcher(source);
+        if (!matcher.find())
         {
-            count++;
-            String expression = aliasMatcher.group(1).trim();
-            if (!"null".equalsIgnoreCase(expression))
-            {
-                violations.add(alias + " must remain an explicit null placeholder, but found expression "
-                        + expression);
-            }
+            return "";
         }
-        return count;
+        return matcher.group();
     }
 
     private String extractStatement(String source, String id)
@@ -335,6 +649,14 @@ public class ProductDistributionMapperContractTest
         if (!source.contains(expected))
         {
             violations.add("missing required SQL fragment: " + expected);
+        }
+    }
+
+    private void requireNotContains(String source, String forbidden, List<String> violations)
+    {
+        if (source.contains(forbidden))
+        {
+            violations.add("forbidden SQL/source fragment found: " + forbidden);
         }
     }
 

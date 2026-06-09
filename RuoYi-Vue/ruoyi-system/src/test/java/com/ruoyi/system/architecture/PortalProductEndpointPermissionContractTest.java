@@ -46,6 +46,53 @@ public class PortalProductEndpointPermissionContractTest
         }
     }
 
+    @Test
+    public void sellerPortalEmbeddedSkusMustUseSellerScopedSkuQuery() throws IOException
+    {
+        Path backendRoot = findBackendRoot();
+        Path service = backendRoot.resolve(
+                "seller/src/main/java/com/ruoyi/seller/service/impl/SellerPortalProductServiceImpl.java");
+        String source = Files.readString(service, StandardCharsets.UTF_8);
+        List<String> violations = new ArrayList<>();
+
+        if (!source.contains("toPortalProduct(product, session.getSubjectId())"))
+        {
+            violations.add(relative(service)
+                    + " list/detail mapping must pass current sellerId into embedded SKU mapping");
+        }
+        if (!source.contains("productDistributionService.selectSkuList(product.getSpuId(), sellerId)"))
+        {
+            violations.add(relative(service)
+                    + " embedded SKU mapping must use selectSkuList(spuId, sellerId)");
+        }
+        if (!source.contains("productDistributionService.selectProductById(spuId, session.getSubjectId())"))
+        {
+            violations.add(relative(service)
+                    + " product detail ownership lookup must use selectProductById(spuId, sellerId)");
+        }
+        if (source.contains("result.setSkus(toPortalSkus(product.getSkus()))"))
+        {
+            violations.add(relative(service)
+                    + " must not expose ProductSpu#getSkus() directly on seller portal list/detail responses");
+        }
+        String compactSource = source.replaceAll("\\s+", "");
+        if (compactSource.contains("productDistributionService.selectProductById(spuId)"))
+        {
+            violations.add(relative(service)
+                    + " must not call single-argument selectProductById(spuId) from seller portal");
+        }
+        if (compactSource.contains("productDistributionService.selectSkuList(spuId)"))
+        {
+            violations.add(relative(service)
+                    + " must not call single-argument selectSkuList(spuId) from seller portal");
+        }
+
+        if (!violations.isEmpty())
+        {
+            fail("seller portal embedded skus must keep seller scope:\n" + String.join("\n", violations));
+        }
+    }
+
     private void assertProductSchemaController(Path backendRoot, String terminal, List<String> violations)
             throws IOException
     {

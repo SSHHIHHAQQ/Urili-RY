@@ -59,6 +59,8 @@ export default function SyncTabs({
 }: SyncTabsProps) {
   const selectedCode = selectedConnection.connectionCode;
   const canQueryUpstream = access.hasPerms('integration:upstream:query');
+  const canPairUpstream = access.hasPerms('integration:upstream:pair');
+  const canQueryOfficialWarehouses = access.hasPerms('warehouse:official:list');
   const canQueryInventory = access.hasPerms('integration:upstream:inventoryQuery');
   const canViewLogs = access.hasPerms('integration:upstream:log');
   const currentPairingRole =
@@ -124,7 +126,7 @@ export default function SyncTabs({
                 <Button
                   type="link"
                   size="small"
-                  hidden={!access.hasPerms('integration:upstream:pair')}
+                  hidden={!canPairUpstream}
                 >
                   解除
                 </Button>
@@ -135,7 +137,7 @@ export default function SyncTabs({
                 key="pair"
                 type="link"
                 size="small"
-                hidden={!access.hasPerms('integration:upstream:pair')}
+                hidden={!canPairUpstream || !canQueryOfficialWarehouses}
                 onClick={() =>
                   setPairingModal({
                     open: true,
@@ -168,27 +170,34 @@ export default function SyncTabs({
           {record.pairings.length === 0 ? (
             <Typography.Text type="secondary">未配对</Typography.Text>
           ) : (
-            record.pairings.map((pairing) => (
-              <Popconfirm
-                key={pairing.logisticsChannelPairingId}
-                title="确认解除物流渠道配对？"
-                onConfirm={async () => {
-                  const ok = resultOk(
-                    await deleteLogisticsChannelPairing(
-                      selectedCode,
-                      pairing.logisticsChannelPairingId,
-                    ),
-                    '已解除配对',
-                  );
-                  if (ok) logisticsActionRef.current?.reload();
-                }}
-              >
+            record.pairings.map((pairing) => {
+              const tag = (
                 <Tag color="blue">
                   {pairing.systemWarehouseCode || '-'} ·{' '}
                   {pairing.systemChannelCode} / {pairing.systemChannelName}
                 </Tag>
-              </Popconfirm>
-            ))
+              );
+              return canPairUpstream ? (
+                <Popconfirm
+                  key={pairing.logisticsChannelPairingId}
+                  title="确认解除物流渠道配对？"
+                  onConfirm={async () => {
+                    const ok = resultOk(
+                      await deleteLogisticsChannelPairing(
+                        selectedCode,
+                        pairing.logisticsChannelPairingId,
+                      ),
+                      '已解除配对',
+                    );
+                    if (ok) logisticsActionRef.current?.reload();
+                  }}
+                >
+                  {tag}
+                </Popconfirm>
+              ) : (
+                <span key={pairing.logisticsChannelPairingId}>{tag}</span>
+              );
+            })
           )}
         </Space>
       ),
@@ -202,7 +211,7 @@ export default function SyncTabs({
           key="pair"
           type="link"
           size="small"
-          hidden={!access.hasPerms('integration:upstream:pair')}
+          hidden={!canPairUpstream}
           onClick={() =>
             setPairingModal({ open: true, type: 'logistics', row: record })
           }
@@ -441,7 +450,12 @@ export default function SyncTabs({
                     return { data: [], total: 0, success: true };
                   }
                   const requestCode = selectedCode;
-                  const resp = await getRequestLogList(requestCode, params);
+                  const { current, pageSize, ...rest } = params;
+                  const resp = await getRequestLogList(requestCode, {
+                    ...rest,
+                    pageNum: current,
+                    pageSize,
+                  });
                   return {
                     data: resp.rows || [],
                     total: resp.total || 0,

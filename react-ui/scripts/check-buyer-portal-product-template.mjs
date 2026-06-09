@@ -18,6 +18,22 @@ const componentJsFile = path.join(
   'Home',
   'BuyerDistributionProductList.js',
 );
+const schemaPreviewFile = path.join(
+  root,
+  'src',
+  'pages',
+  'Portal',
+  'Home',
+  'BuyerProductSchemaPreview.tsx',
+);
+const schemaPreviewJsFile = path.join(
+  root,
+  'src',
+  'pages',
+  'Portal',
+  'Home',
+  'BuyerProductSchemaPreview.js',
+);
 const homeFile = path.join(root, 'src', 'pages', 'Portal', 'Home', 'index.tsx');
 const homeJsFile = path.join(root, 'src', 'pages', 'Portal', 'Home', 'index.js');
 const portalServiceFile = path.join(
@@ -42,14 +58,17 @@ const requiredServiceFunctions = [
   'getBuyerPortalDistributionProductSkus',
 ];
 
+const requiredSchemaServiceFunctions = [
+  'getBuyerPortalProductCategories',
+  'getBuyerPortalProductSchema',
+];
+
 const forbiddenBuyerFieldPatterns = [
   /\bsellerId\b/,
   /\bsellerNo\b/,
   /\bsellerName\b/,
   /\bsellerSpuCode\b/,
   /\bsellerSkuCode\b/,
-  /\bsystemSpuCode\b/,
-  /\bsystemSkuCode\b/,
   /\bsupplyPrice\w*\b/,
   /\bcreateBy\b/,
   /\bupdateBy\b/,
@@ -103,6 +122,13 @@ function assertNoPattern(source, relativePath, pattern, message) {
   }
 }
 
+function assertExactSource(source, relativePath, expected, message) {
+  const normalize = (value) => value.replace(/\r\n/g, '\n').trim();
+  if (normalize(source) !== normalize(expected)) {
+    violations.push(`${relativePath} ${message}`);
+  }
+}
+
 function assertNoBuyerForbiddenFields(source, relativePath) {
   for (const pattern of forbiddenBuyerFieldPatterns) {
     assertNoPattern(
@@ -116,6 +142,8 @@ function assertNoBuyerForbiddenFields(source, relativePath) {
 
 const componentSource = readRequired(componentFile);
 const componentJsSource = readRequired(componentJsFile);
+const schemaPreviewSource = readRequired(schemaPreviewFile);
+const schemaPreviewJsSource = readRequired(schemaPreviewJsFile);
 const homeSource = readRequired(homeFile);
 const homeJsSource = readRequired(homeJsFile);
 const portalServiceSource = readRequired(portalServiceFile);
@@ -158,6 +186,23 @@ function checkComponentSource(source, relativePath, requireTypes) {
   }
   if (requireTypes && !source.includes('ProColumns')) {
     violations.push(`${relativePath} must use standard ProTable template token ProColumns`);
+  }
+  if (requireTypes) {
+    if (!source.includes('canQuery?: boolean')) {
+      violations.push(`${relativePath} must accept canQuery prop for buyer detail permission gating`);
+    }
+    if (!source.includes('canQuery = false')) {
+      violations.push(`${relativePath} must default canQuery to fail-closed false`);
+    }
+    if (!source.includes('if (!canQuery || !record.spuId)')) {
+      violations.push(`${relativePath} must block detail requests when query permission is missing`);
+    }
+    if (!source.includes('...(canQuery')) {
+      violations.push(`${relativePath} must hide detail action unless buyer query permission is present`);
+    }
+    if (!source.includes('warehouseCount')) {
+      violations.push(`${relativePath} must render buyer portal product field warehouseCount`);
+    }
   }
   if (!source.includes('pageNum: currentPage')) {
     violations.push(`${relativePath} must map ProTable current to RuoYi pageNum`);
@@ -211,7 +256,54 @@ function checkComponentSource(source, relativePath, requireTypes) {
 }
 
 checkComponentSource(componentSource, toRelative(componentFile), true);
-checkComponentSource(componentJsSource, toRelative(componentJsFile), false);
+assertExactSource(
+  componentJsSource,
+  toRelative(componentJsFile),
+  "export { default } from './BuyerDistributionProductList.tsx';",
+  'must be a pure re-export to the guarded TSX buyer portal product list implementation',
+);
+
+function checkSchemaPreviewSource(source, relativePath) {
+  if (!source) {
+    return;
+  }
+  for (const fnName of requiredSchemaServiceFunctions) {
+    if (!source.includes(fnName)) {
+      violations.push(`${relativePath} must use ${fnName}`);
+    }
+  }
+  if (!source.includes("from '@/services/portal/session'")) {
+    violations.push(
+      `${relativePath} must import buyer schema APIs from portal session service`,
+    );
+  }
+  assertNoPattern(
+    source,
+    relativePath,
+    /getSellerPortalProduct(?:Categories|Schema)/,
+    'must not use seller portal schema APIs',
+  );
+  assertNoPattern(
+    source,
+    relativePath,
+    /\brequest\s*(?:<[^;]+?>)?\s*\(/,
+    'must not call request(...) directly',
+  );
+  assertNoPattern(
+    source,
+    relativePath,
+    /from\s+['"]@\/services\/product\//,
+    'must not import admin product services',
+  );
+}
+
+checkSchemaPreviewSource(schemaPreviewSource, toRelative(schemaPreviewFile));
+assertExactSource(
+  schemaPreviewJsSource,
+  toRelative(schemaPreviewJsFile),
+  "export { default } from './BuyerProductSchemaPreview.tsx';",
+  'must be a pure re-export to the guarded TSX buyer schema preview implementation',
+);
 
 function checkHomeSource(source, relativePath) {
   if (!source) {
@@ -226,6 +318,27 @@ function checkHomeSource(source, relativePath) {
     )
   ) {
     violations.push(`${relativePath} must import BuyerDistributionProductList`);
+  }
+  if (!source.includes("import BuyerProductSchemaPreview from './BuyerProductSchemaPreview';")) {
+    violations.push(`${relativePath} must import BuyerProductSchemaPreview`);
+  }
+  const schemaPreviewIndex = source.indexOf('<BuyerProductSchemaPreview');
+  if (schemaPreviewIndex < 0) {
+    violations.push(`${relativePath} must render BuyerProductSchemaPreview`);
+  } else {
+    const buyerBranchIndex = source.lastIndexOf(
+      "terminal === 'buyer'",
+      schemaPreviewIndex,
+    );
+    const sellerBranchIndex = source.lastIndexOf(
+      "terminal === 'seller'",
+      schemaPreviewIndex,
+    );
+    if (buyerBranchIndex < 0 || (sellerBranchIndex >= 0 && sellerBranchIndex > buyerBranchIndex)) {
+      violations.push(
+        `${relativePath} must render BuyerProductSchemaPreview only in buyer branch`,
+      );
+    }
   }
   const componentIndex = source.indexOf('<BuyerDistributionProductList');
   if (componentIndex < 0) {
@@ -244,6 +357,15 @@ function checkHomeSource(source, relativePath) {
         `${relativePath} must render BuyerDistributionProductList only in buyer branch`,
       );
     }
+  }
+  if (!source.includes('canQueryDistributionProducts')) {
+    violations.push(`${relativePath} must compute distribution query permission`);
+  }
+  if (!source.includes("portalPermission(terminal, 'product:distribution:query')")) {
+    violations.push(`${relativePath} must check product:distribution:query before wiring detail actions`);
+  }
+  if (!source.includes('<BuyerDistributionProductList canQuery={canQueryDistributionProducts} />')) {
+    violations.push(`${relativePath} must pass query permission into BuyerDistributionProductList`);
   }
 
   const sellerComponentIndex = source.indexOf(
@@ -319,7 +441,12 @@ function checkPortalServiceSource(source, relativePath) {
 }
 
 checkPortalServiceSource(portalServiceSource, toRelative(portalServiceFile));
-checkPortalServiceSource(portalServiceJsSource, toRelative(portalServiceJsFile));
+assertExactSource(
+  portalServiceJsSource,
+  toRelative(portalServiceJsFile),
+  "export * from './session.ts';",
+  'must be a pure re-export to the guarded TS portal session service implementation',
+);
 
 if (typeSource) {
   const relativePath = toRelative(typeFile);
@@ -343,6 +470,9 @@ if (typeSource) {
   if (!buyerTypeBlock) {
     violations.push(`${relativePath} must keep buyer product DTOs before PortalDirectLoginTicket`);
   } else {
+    if (!buyerTypeBlock.includes('warehouseCount?: number')) {
+      violations.push(`${relativePath} buyer product DTOs must include warehouseCount`);
+    }
     assertNoBuyerForbiddenFields(buyerTypeBlock, relativePath);
   }
 }

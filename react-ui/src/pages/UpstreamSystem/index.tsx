@@ -86,6 +86,8 @@ const formatSyncResult = (data?: API.Integration.SyncResult) => {
 
 export default function UpstreamSystemPage() {
   const access = useAccess();
+  const canListUpstreamConnections = access.hasPerms('integration:upstream:list');
+  const canQueryOfficialWarehouses = access.hasPerms('warehouse:official:list');
   const warehouseActionRef = useRef<ActionType>(null);
   const logisticsActionRef = useRef<ActionType>(null);
   const skuActionRef = useRef<ActionType>(null);
@@ -122,6 +124,11 @@ export default function UpstreamSystemPage() {
   const [warehouseOptionsLoading, setWarehouseOptionsLoading] = useState(false);
 
   const fetchConnections = useCallback(async (preferredCode?: string) => {
+    if (!canListUpstreamConnections) {
+      setConnections([]);
+      setSelectedConnection(undefined);
+      return [];
+    }
     setLoadingConnections(true);
     try {
       const resp = await getUpstreamConnectionList({
@@ -142,12 +149,17 @@ export default function UpstreamSystemPage() {
     } finally {
       setLoadingConnections(false);
     }
-  }, []);
+  }, [canListUpstreamConnections]);
 
   const loadWarehouseOptions = useCallback(
     async (connectionCode: string, pairingRole: string) => {
       if (!connectionCode) {
         setWarehouseOptions([]);
+        return;
+      }
+      if (!canQueryOfficialWarehouses) {
+        setWarehouseOptions([]);
+        message.warning('缺少系统仓库查询权限');
         return;
       }
       setWarehouseOptionsLoading(true);
@@ -187,7 +199,7 @@ export default function UpstreamSystemPage() {
         setWarehouseOptionsLoading(false);
       }
     },
-    [],
+    [canQueryOfficialWarehouses],
   );
 
   useEffect(() => {

@@ -61,6 +61,26 @@ export const warehouseKindText: Record<string, string> = {
   MIXED: '混合',
 };
 
+export const inventoryStatusText: Record<string, string> = {
+  IN_STOCK: '有货',
+  OUT_OF_STOCK: '缺货',
+  NO_WAREHOUSE: '仓库未配置',
+  SOURCE_UNBOUND: '来源SKU未绑定',
+  NO_SOURCE: '无来源库存',
+  SOURCE_ONLY_IN_TRANSIT: '仅来源在途',
+  DISABLED: '停用',
+};
+
+export const inventoryStatusColor: Record<string, string> = {
+  IN_STOCK: 'success',
+  OUT_OF_STOCK: 'default',
+  NO_WAREHOUSE: 'error',
+  SOURCE_UNBOUND: 'warning',
+  NO_SOURCE: 'warning',
+  SOURCE_ONLY_IN_TRANSIT: 'processing',
+  DISABLED: 'error',
+};
+
 export const skuSpecFields: { label: string; value: keyof API.ProductDistribution.Sku }[] = [
   { label: '颜色', value: 'color' },
   { label: '尺寸', value: 'size' },
@@ -171,7 +191,18 @@ export function formatPriceRange(min?: number, max?: number) {
 }
 
 export function resolveResourceUrl(url?: string) {
-  if (!url) return '';
-  if (/^https?:\/\//i.test(url)) return url;
-  return `/api${url.startsWith('/') ? url : `/${url}`}`;
+  const value = url?.trim();
+  if (!value) return '';
+  if (/^https?:\/\//i.test(value)) {
+    try {
+      const parsedUrl = new URL(value);
+      if (parsedUrl.pathname.startsWith('/profile/')) {
+        return `/api${parsedUrl.pathname}`;
+      }
+    } catch {
+      return value;
+    }
+    return value;
+  }
+  return `/api${value.startsWith('/') ? value : `/${value}`}`;
 }

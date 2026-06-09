@@ -4,7 +4,7 @@
 
 ## 子 Agent 使用情况
 
-- 按用户最新规则优先启动 6 个 `gpt-5.3-codex-spark` 子 Agent，本轮均成功运行。
+- 历史记录（已过期口径）：当时按用户规则优先启动 6 个 `gpt-5.3-codex-spark` 子 Agent，本轮均成功运行；现行规则为默认使用 `gpt-5.4`，除非用户在当前任务重新明确要求。
 - 6 个子 Agent 已全部关闭。
 - 只采纳能落到具体文件和合同的确定 P0/P1；未确认项不进入当前修复。
 
@@ -41,7 +41,7 @@
 
 - `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system "-Dtest=SellerAdminPermissionContractTest,BuyerAdminPermissionContractTest,SqlExecutionGuardContractTest" test`：通过，52 个测试。
 - `cd E:\Urili-Ruoyi\react-ui; node scripts\verify-three-terminal.mjs --check-manifest`：通过。
-- `cd E:\Urili-Ruoyi\react-ui; npm run test:unit -- --runTestsByPath tests/product-distribution-permission-guard.test.ts tests/upstream-system-permission-guard.test.ts --runInBand`：通过，2 个 suite / 4 个测试。
+- 历史记录（已过期命令口径）：当时执行 `cd E:\Urili-Ruoyi\react-ui; npm run test:unit -- --runTestsByPath tests/product-distribution-permission-guard.test.ts tests/upstream-system-permission-guard.test.ts --runInBand`，通过 2 个 suite / 4 个测试；当前定向 Jest 请使用 `cd E:\Urili-Ruoyi\react-ui; .\node_modules\.bin\jest.cmd --config jest.config.ts --runTestsByPath tests/product-distribution-permission-guard.test.ts tests/upstream-system-permission-guard.test.ts --runInBand`，或直接执行 `npm run verify:three-terminal`。
 - `cd E:\Urili-Ruoyi\react-ui; npm run verify:three-terminal`：通过；4 个 guard 通过，React typecheck 通过，8 个 Jest suite / 36 个测试通过，后端 reactor `test-compile` 通过，后端三端合同测试通过。
 
 ## 边界与残留

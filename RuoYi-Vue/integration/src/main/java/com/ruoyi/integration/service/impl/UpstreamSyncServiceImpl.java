@@ -10,8 +10,10 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import com.ruoyi.common.exception.ServiceException;
+import com.ruoyi.inventory.service.IInventoryOverviewService;
 import com.ruoyi.integration.domain.UpstreamInventorySyncState;
 import com.ruoyi.integration.domain.UpstreamSkuSyncItem;
 import com.ruoyi.integration.domain.UpstreamSystemConnection;
@@ -51,6 +53,9 @@ public class UpstreamSyncServiceImpl implements IUpstreamSyncService
 
     @Autowired
     private SourceWarehouseStockReadModelService sourceWarehouseStockReadModelService;
+
+    @Autowired
+    private ObjectProvider<IInventoryOverviewService> inventoryOverviewService;
 
     @Autowired
     private UpstreamLingxingClientFactory lingxingClientFactory;
@@ -310,8 +315,34 @@ public class UpstreamSyncServiceImpl implements IUpstreamSyncService
         }
         else if (UpstreamSystemConstants.SYNC_TYPE_INVENTORY.equals(syncType))
         {
+            List<Long> affectedSpuIds = selectSourceInventoryOverviewSpuIds(connectionCode);
             sourceWarehouseStockReadModelService.rebuildOfficialMasterByConnection(connectionCode);
+            refreshSourceInventoryOverview(connectionCode, affectedSpuIds);
         }
+    }
+
+    private void refreshSourceInventoryOverview(String connectionCode)
+    {
+        refreshSourceInventoryOverview(connectionCode, null);
+    }
+
+    private void refreshSourceInventoryOverview(String connectionCode, List<Long> affectedSpuIds)
+    {
+        IInventoryOverviewService overviewService = inventoryOverviewService.getIfAvailable();
+        if (overviewService != null)
+        {
+            overviewService.refreshSourceInventoryOverviewByConnection(connectionCode, affectedSpuIds);
+        }
+    }
+
+    private List<Long> selectSourceInventoryOverviewSpuIds(String connectionCode)
+    {
+        IInventoryOverviewService overviewService = inventoryOverviewService.getIfAvailable();
+        if (overviewService == null)
+        {
+            return new ArrayList<>();
+        }
+        return overviewService.selectSourceInventoryOverviewSpuIdsByConnection(connectionCode);
     }
 
     private UpstreamSystemConnection selectEnabledConnection(String connectionCode)

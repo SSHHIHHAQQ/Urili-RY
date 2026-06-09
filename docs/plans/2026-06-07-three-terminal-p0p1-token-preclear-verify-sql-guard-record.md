@@ -6,7 +6,7 @@
 
 ## 子 Agent 使用
 
-- 先按最新规则尝试 2 个 `gpt-5.3-codex-spark` 子 Agent。
+- 历史记录（已过期口径）：先按最新规则尝试 2 个 `gpt-5.3-codex-spark` 子 Agent。
 - 平台返回 GPT-5.3 Codex Spark 用量限制，提示需等到 `2026-06-08 01:14` 后再试；失败 Agent 已关闭。
 - 按 fallback 规则启动并关闭 6 个 `gpt-5.4` 只读子 Agent。
 - 追加检查时再次按规则尝试 2 个 `gpt-5.3-codex-spark` 子 Agent，仍因用量限制失败并关闭；随后启动 6 个 `gpt-5.4` 只读子 Agent，已全部关闭。
@@ -31,7 +31,7 @@
 - `seller_buyer_management_seed.sql` 将 `assert_terminal_menu_range_ready()` 前移到端内表创建完成后、字典/sys_menu/sys_config/role/menu 权限 DML 前。
 - `SqlExecutionGuardContractTest` 固定上述 SQL fail-closed 合同。
 - `AGENTS.md` 与 `docs/architecture/reuse-ledger.md` 已同步新增规则。
-- 追加修复 `persistPortalLogin(...)` terminal mismatch 串端副作用：响应端类型不等于当前页面端时，只清理当前页面端 token，不再清理响应声明的另一端 token。
+- 历史记录（已过期口径）：当时追加修复 `persistPortalLogin(...)` terminal mismatch 串端副作用，口径为响应端类型不等于当前页面端时只清理当前页面端 token。当前实现已由后续检查点覆盖：响应缺 token、跨端或无效时不清理任何已有端内 token。
 - `check-portal-token-isolation.mjs` 追加固定：
   - 普通登录页和直登页不得在成功前调用 `clearPortalLogin(...)`。
   - `persistPortalLogin(...)` 不得调用 `clearPortalLogin(result.terminal)` 清理另一端。

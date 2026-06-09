@@ -72,7 +72,7 @@ describe('terminal session token isolation', () => {
     expect(setItemSpy).not.toHaveBeenCalledWith('buyer_access_token', expect.anything());
   });
 
-  it('rejects a portal login response from another terminal and clears only the page terminal slot', () => {
+  it('rejects a portal login response from another terminal without clearing existing tokens', () => {
     expect(
       persistPortalLogin(
         {
@@ -85,7 +85,7 @@ describe('terminal session token isolation', () => {
     ).toBe(false);
 
     expect(setItemSpy).not.toHaveBeenCalledWith('buyer_access_token', 'seller-token');
-    expect(removeItemSpy).toHaveBeenCalledWith('buyer_access_token');
+    expect(removeItemSpy).not.toHaveBeenCalledWith('buyer_access_token');
     expect(removeItemSpy).not.toHaveBeenCalledWith('seller_access_token');
   });
 

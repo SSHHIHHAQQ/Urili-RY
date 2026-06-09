@@ -1,5 +1,6 @@
 package com.ruoyi.warehouse.controller;
 
+import java.util.Collections;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -126,6 +127,10 @@ public class AdminWarehouseController extends BaseController
     @GetMapping("/third-party/list")
     public TableDataInfo thirdPartyList(Warehouse query)
     {
+        if (!warehouseService.prepareThirdPartyWarehouseQuery(query))
+        {
+            return getDataTable(Collections.emptyList());
+        }
         startPage();
         List<Warehouse> list = warehouseService.selectThirdPartyWarehouseList(query);
         return getDataTable(list);

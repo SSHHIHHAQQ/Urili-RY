@@ -136,6 +136,41 @@ begin
   end if;
 end//
 
+drop procedure if exists assert_admin_partner_owner_reset_permission_cleanup_completed//
+create procedure assert_admin_partner_owner_reset_permission_cleanup_completed()
+begin
+  if exists (
+    select 1
+    from sys_role_menu
+    where menu_id in (2204, 2214)
+    limit 1
+  ) then
+    signal sqlstate '45000' set message_text = 'admin partner owner reset role-menu cleanup has remaining rows';
+  end if;
+
+  if exists (
+    select 1
+    from sys_menu m
+    where (m.menu_id = 2204
+          and coalesce(m.parent_id, -1) = 2011
+          and coalesce(m.menu_type, '') = 'F'
+          and coalesce(m.path, '') = '#'
+          and coalesce(m.component, '') = ''
+          and coalesce(m.route_name, '') = ''
+          and coalesce(m.perms, '') = 'seller:admin:resetPwd')
+       or (m.menu_id = 2214
+          and coalesce(m.parent_id, -1) = 2012
+          and coalesce(m.menu_type, '') = 'F'
+          and coalesce(m.path, '') = '#'
+          and coalesce(m.component, '') = ''
+          and coalesce(m.route_name, '') = ''
+          and coalesce(m.perms, '') = 'buyer:admin:resetPwd')
+    limit 1
+  ) then
+    signal sqlstate '45000' set message_text = 'admin partner owner reset menu cleanup has remaining rows';
+  end if;
+end//
+
 delimiter ;
 
 call assert_admin_partner_owner_reset_permission_cleanup_confirmed();
@@ -148,6 +183,8 @@ left join sys_role_menu rm on rm.menu_id = m.menu_id
 where m.menu_id in (2204, 2214)
 group by m.menu_id, m.parent_id, m.menu_type, m.path, m.component, m.route_name, m.perms
 order by m.menu_id;
+
+start transaction;
 
 delete rm
 from sys_role_menu rm
@@ -170,5 +207,10 @@ where (m.menu_id = 2204
       and coalesce(m.route_name, '') = ''
       and coalesce(m.perms, '') = 'buyer:admin:resetPwd');
 
+call assert_admin_partner_owner_reset_permission_cleanup_completed();
+
+commit;
+
 drop procedure if exists assert_admin_partner_owner_reset_permission_cleanup_confirmed;
 drop procedure if exists assert_admin_partner_owner_reset_permission_cleanup_targets;
+drop procedure if exists assert_admin_partner_owner_reset_permission_cleanup_completed;

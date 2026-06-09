@@ -4,13 +4,19 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.Test;
 import com.github.pagehelper.Page;
+import com.ruoyi.buyer.domain.BuyerAccount;
 import com.ruoyi.buyer.domain.BuyerPortalProduct;
 import com.ruoyi.buyer.domain.BuyerPortalProductSku;
+import com.ruoyi.buyer.mapper.BuyerMapper;
+import com.ruoyi.common.constant.HttpStatus;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.product.domain.ProductDistributionOperationLog;
 import com.ruoyi.product.domain.ProductSku;
@@ -94,6 +100,33 @@ public class BuyerPortalProductServiceImplTest
     }
 
     @Test
+    public void selectVisibleProductListRejectsBlankTokenBeforeQueryingProducts()
+    {
+        RecordingProductDistributionService productService = new RecordingProductDistributionService();
+        BuyerPortalProductServiceImpl service = service(productService);
+        PortalLoginSession session = buyerSession();
+        session.setTokenId(" ");
+
+        assertLoginException(() -> service.selectVisibleProductList(session, new ProductSpu()));
+
+        assertEquals(null, productService.onSaleProductListQuery);
+    }
+
+    @Test
+    public void selectVisibleProductListRejectsMissingAccountBindingBeforeQueryingProducts()
+    {
+        RecordingProductDistributionService productService = new RecordingProductDistributionService();
+        RecordingBuyerMapper buyerMapper = new RecordingBuyerMapper(false);
+        BuyerPortalProductServiceImpl service = service(productService, buyerMapper(buyerMapper));
+
+        assertLoginException(() -> service.selectVisibleProductList(buyerSession(), new ProductSpu()));
+
+        assertEquals(Long.valueOf(11L), buyerMapper.buyerId);
+        assertEquals(Long.valueOf(22L), buyerMapper.buyerAccountId);
+        assertEquals(null, productService.onSaleProductListQuery);
+    }
+
+    @Test
     public void selectVisibleProductByIdRejectsMissingOrInvisibleProduct()
     {
         RecordingProductDistributionService productService = new RecordingProductDistributionService();
@@ -144,6 +177,7 @@ public class BuyerPortalProductServiceImplTest
         product.setProductNameEn("Chair");
         product.setSupplyPriceMin(new BigDecimal("10.00"));
         product.setSalePriceMin(new BigDecimal("20.00"));
+        product.setWarehouseCount(2);
         product.setSkus(List.of(
             sku(2L, 1L, "ON_SALE", "20.00", "USD"),
             sku(3L, 1L, "OFF_SALE", "99.00", "USD")
@@ -155,19 +189,21 @@ public class BuyerPortalProductServiceImplTest
 
         assertEquals(Long.valueOf(1L), result.getSpuId());
         assertEquals("椅子", result.getProductName());
+        assertEquals("SPU-INTERNAL", result.getSystemSpuCode());
         assertEquals(new BigDecimal("20.00"), result.getSalePriceMin());
         assertEquals(new BigDecimal("20.00"), result.getSalePriceMax());
         assertEquals("USD", result.getCurrencySummary());
         assertEquals(Integer.valueOf(1), result.getSkuCount());
+        assertEquals(Integer.valueOf(2), result.getWarehouseCount());
         assertEquals(1, result.getSkus().size());
         assertEquals(new BigDecimal("20.00"), result.getSkus().get(0).getSalePrice());
+        assertEquals("SKU-INTERNAL", result.getSkus().get(0).getSystemSkuCode());
+        assertEquals(Integer.valueOf(2), result.getSkus().get(0).getWarehouseCount());
         assertFalse(hasGetter(BuyerPortalProduct.class, "getSellerId"));
         assertFalse(hasGetter(BuyerPortalProduct.class, "getSellerSpuCode"));
-        assertFalse(hasGetter(BuyerPortalProduct.class, "getSystemSpuCode"));
         assertFalse(hasGetter(BuyerPortalProduct.class, "getSupplyPriceMin"));
         assertFalse(hasGetter(BuyerPortalProductSku.class, "getSellerId"));
         assertFalse(hasGetter(BuyerPortalProductSku.class, "getSellerSkuCode"));
-        assertFalse(hasGetter(BuyerPortalProductSku.class, "getSystemSkuCode"));
         assertFalse(hasGetter(BuyerPortalProductSku.class, "getSupplyPrice"));
     }
 
@@ -201,9 +237,21 @@ public class BuyerPortalProductServiceImplTest
 
     private BuyerPortalProductServiceImpl service(IProductDistributionService productService)
     {
+        return service(productService, buyerMapper(new RecordingBuyerMapper(true)));
+    }
+
+    private BuyerPortalProductServiceImpl service(IProductDistributionService productService, BuyerMapper buyerMapper)
+    {
         BuyerPortalProductServiceImpl service = new BuyerPortalProductServiceImpl();
         setField(service, "productDistributionService", productService);
+        setField(service, "buyerMapper", buyerMapper);
         return service;
+    }
+
+    private BuyerMapper buyerMapper(RecordingBuyerMapper recording)
+    {
+        return (BuyerMapper) Proxy.newProxyInstance(BuyerMapper.class.getClassLoader(),
+            new Class<?>[] { BuyerMapper.class }, recording);
     }
 
     private PortalLoginSession buyerSession()
@@ -242,6 +290,7 @@ public class BuyerPortalProductServiceImplTest
         sku.setSalePrice(new BigDecimal(salePrice));
         sku.setSupplyPrice(new BigDecimal("10.00"));
         sku.setCurrencyCode(currencyCode);
+        sku.setWarehouseCount(2);
         return sku;
     }
 
@@ -281,6 +330,7 @@ public class BuyerPortalProductServiceImplTest
         catch (ServiceException e)
         {
             assertEquals("登录状态已失效", e.getMessage());
+            assertEquals(Integer.valueOf(HttpStatus.UNAUTHORIZED), e.getCode());
             return;
         }
         throw new AssertionError("Expected ServiceException");
@@ -337,6 +387,12 @@ public class BuyerPortalProductServiceImplTest
         }
 
         @Override
+        public ProductSpu selectProductById(Long spuId, Long sellerId)
+        {
+            return null;
+        }
+
+        @Override
         public ProductSpu selectOnSaleProductById(Long spuId)
         {
             onSaleProductByIdArg = spuId;
@@ -356,25 +412,37 @@ public class BuyerPortalProductServiceImplTest
         }
 
         @Override
-        public int updateSpuStatus(Long spuId, String status)
+        public ProductSpu prepareReviewedProductUpdate(ProductSpu product)
+        {
+            return product;
+        }
+
+        @Override
+        public int applyReviewedProductUpdate(ProductSpu product)
         {
             return 0;
         }
 
         @Override
-        public int updateSkuStatus(Long spuId, Long skuId, String status)
+        public int updateSpuStatus(Long spuId, String status, String reason)
         {
             return 0;
         }
 
         @Override
-        public int batchUpdateSpuStatus(List<Long> spuIds, String status, boolean syncSkuStatus)
+        public int updateSkuStatus(Long spuId, Long skuId, String status, String reason)
         {
             return 0;
         }
 
         @Override
-        public int batchUpdateSkuStatus(List<Long> skuIds, String status)
+        public int batchUpdateSpuStatus(List<Long> spuIds, String status, boolean syncSkuStatus, String reason)
+        {
+            return 0;
+        }
+
+        @Override
+        public int batchUpdateSkuStatus(List<Long> skuIds, String status, String reason)
         {
             return 0;
         }
@@ -416,10 +484,61 @@ public class BuyerPortalProductServiceImplTest
         }
 
         @Override
+        public List<ProductSku> selectSkuList(Long spuId, Long sellerId)
+        {
+            return new ArrayList<>();
+        }
+
+        @Override
         public List<ProductSku> selectOnSaleSkuList(Long spuId)
         {
             onSaleSkuListSpuId = spuId;
             return onSaleSkuListResult;
+        }
+    }
+
+    private static class RecordingBuyerMapper implements InvocationHandler
+    {
+        private final boolean accountExists;
+        private Long buyerId;
+        private Long buyerAccountId;
+
+        private RecordingBuyerMapper(boolean accountExists)
+        {
+            this.accountExists = accountExists;
+        }
+
+        @Override
+        public Object invoke(Object proxy, Method method, Object[] args)
+        {
+            if ("selectBuyerAccountByIdAndBuyerId".equals(method.getName()))
+            {
+                buyerId = (Long) args[0];
+                buyerAccountId = (Long) args[1];
+                return accountExists ? new BuyerAccount() : null;
+            }
+            if ("toString".equals(method.getName()))
+            {
+                return "RecordingBuyerMapper";
+            }
+            Class<?> returnType = method.getReturnType();
+            if (Integer.TYPE.equals(returnType))
+            {
+                return 0;
+            }
+            if (Long.TYPE.equals(returnType))
+            {
+                return 0L;
+            }
+            if (Boolean.TYPE.equals(returnType))
+            {
+                return false;
+            }
+            if (List.class.isAssignableFrom(returnType))
+            {
+                return new ArrayList<>();
+            }
+            return null;
         }
     }
 }

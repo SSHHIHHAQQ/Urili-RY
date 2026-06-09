@@ -1,0 +1,338 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.inventory.mapper.InventoryAdjustmentReviewMapper">
+
+    <resultMap type="InventoryAdjustmentReviewPolicy" id="InventoryAdjustmentReviewPolicyResult">
+        <id     property="policyId"               column="policy_id" />
+        <result property="policyName"             column="policy_name" />
+        <result property="policyStatus"           column="policy_status" />
+        <result property="reviewMode"             column="review_mode" />
+        <result property="directionScope"         column="direction_scope" />
+        <result property="fieldScope"             column="field_scope" />
+        <result property="salesWindowDays"        column="sales_window_days" />
+        <result property="salesAggregateMode"     column="sales_aggregate_mode" />
+        <result property="reserveDays"            column="reserve_days" />
+        <result property="cooldownHours"          column="cooldown_hours" />
+        <result property="minReturnQtyToReview"   column="min_return_qty_to_review" />
+        <result property="minReturnRatioToReview" column="min_return_ratio_to_review" />
+        <result property="autoEffectEnabled"      column="auto_effect_enabled" />
+        <result property="manualEffectAllowed"    column="manual_effect_allowed" />
+        <result property="remark"                 column="remark" />
+        <result property="createBy"               column="create_by" />
+        <result property="createTime"             column="create_time" />
+        <result property="updateBy"               column="update_by" />
+        <result property="updateTime"             column="update_time" />
+    </resultMap>
+
+    <resultMap type="InventoryAdjustmentReviewPolicyBinding" id="InventoryAdjustmentReviewPolicyBindingResult">
+        <id     property="bindingId"      column="binding_id" />
+        <result property="policyId"       column="policy_id" />
+        <result property="policyName"     column="policy_name" />
+        <result property="bindingType"    column="binding_type" />
+        <result property="bindingIdValue" column="binding_id_value" />
+        <result property="priority"       column="priority" />
+        <result property="status"         column="status" />
+        <result property="remark"         column="remark" />
+        <result property="createBy"       column="create_by" />
+        <result property="createTime"     column="create_time" />
+        <result property="updateBy"       column="update_by" />
+        <result property="updateTime"     column="update_time" />
+    </resultMap>
+
+    <resultMap type="InventoryAdjustmentReviewRequest" id="InventoryAdjustmentReviewRequestResult">
+        <id     property="reviewId"                              column="review_id" />
+        <result property="reviewNo"                              column="review_no" />
+        <result property="reviewStatus"                          column="review_status" />
+        <result property="policyId"                              column="policy_id" />
+        <result property="policySnapshotJson"                    column="policy_snapshot_json" />
+        <result property="stockId"                               column="stock_id" />
+        <result property="stockKey"                              column="stock_key" />
+        <result property="spuId"                                 column="spu_id" />
+        <result property="skuId"                                 column="sku_id" />
+        <result property="sellerId"                              column="seller_id" />
+        <result property="systemSkuCode"                         column="system_sku_code" />
+        <result property="productName"                           column="product_name" />
+        <result property="skuName"                               column="sku_name" />
+        <result property="warehouseKind"                         column="warehouse_kind" />
+        <result property="warehouseRefType"                      column="warehouse_ref_type" />
+        <result property="warehouseName"                         column="warehouse_name" />
+        <result property="adjustField"                           column="adjust_field" />
+        <result property="adjustDirection"                       column="adjust_direction" />
+        <result property="requestBeforePlatformTotalQty"         column="request_before_platform_total_qty" />
+        <result property="requestedAdjustQty"                    column="requested_adjust_qty" />
+        <result property="requestExpectedAfterPlatformTotalQty"  column="request_expected_after_platform_total_qty" />
+        <result property="platformReservedQtySnapshot"           column="platform_reserved_qty_snapshot" />
+        <result property="sales7dQty"                            column="sales_7d_qty" />
+        <result property="sales7dDailyAvg"                       column="sales_7d_daily_avg" />
+        <result property="sales30dQty"                           column="sales_30d_qty" />
+        <result property="sales30dDailyAvg"                      column="sales_30d_daily_avg" />
+        <result property="thresholdDailyAvg"                     column="threshold_daily_avg" />
+        <result property="thresholdReserveDays"                  column="threshold_reserve_days" />
+        <result property="protectedRetainedQty"                  column="protected_retained_qty" />
+        <result property="minRetainedQty"                        column="min_retained_qty" />
+        <result property="immediateReturnableQty"                column="immediate_returnable_qty" />
+        <result property="triggerReason"                         column="trigger_reason" />
+        <result property="submitTerminal"                        column="submit_terminal" />
+        <result property="submitUserId"                          column="submit_user_id" />
+        <result property="submitUserName"                        column="submit_user_name" />
+        <result property="submitReason"                          column="submit_reason" />
+        <result property="submitTime"                            column="submit_time" />
+        <result property="plannedEffectiveTime"                  column="planned_effective_time" />
+        <result property="effectiveTime"                         column="effective_time" />
+        <result property="effectiveOperatorId"                   column="effective_operator_id" />
+        <result property="effectiveOperatorName"                 column="effective_operator_name" />
+        <result property="effectiveBeforePlatformTotalQty"       column="effective_before_platform_total_qty" />
+        <result property="actualEffectQty"                       column="actual_effect_qty" />
+        <result property="unfulfilledQty"                        column="unfulfilled_qty" />
+        <result property="effectiveAfterPlatformTotalQty"        column="effective_after_platform_total_qty" />
+        <result property="reviewReason"                          column="review_reason" />
+        <result property="version"                               column="version" />
+        <result property="remark"                                column="remark" />
+        <result property="createBy"                              column="create_by" />
+        <result property="createTime"                            column="create_time" />
+        <result property="updateBy"                              column="update_by" />
+        <result property="updateTime"                            column="update_time" />
+    </resultMap>
+
+    <resultMap type="InventoryAdjustmentReviewOperationLog" id="InventoryAdjustmentReviewOperationLogResult">
+        <id     property="logId"           column="log_id" />
+        <result property="reviewId"        column="review_id" />
+        <result property="reviewNo"        column="review_no" />
+        <result property="operationType"   column="operation_type" />
+        <result property="beforeStatus"    column="before_status" />
+        <result property="afterStatus"     column="after_status" />
+        <result property="operationReason" column="operation_reason" />
+        <result property="operatorId"      column="operator_id" />
+        <result property="operatorName"    column="operator_name" />
+        <result property="operateTime"     column="operate_time" />
+        <result property="changeSummary"   column="change_summary" />
+        <result property="createTime"      column="create_time" />
+        <result property="remark"          column="remark" />
+    </resultMap>
+
+    <select id="selectReviewList" parameterType="InventoryAdjustmentReviewRequest" resultMap="InventoryAdjustmentReviewRequestResult">
+        select *
+        from inventory_adjustment_review_request
+        <where>
+            <if test="reviewStatus != null and reviewStatus != ''">and review_status = #{reviewStatus}</if>
+            <if test="reviewNo != null and reviewNo != ''">and review_no = #{reviewNo}</if>
+            <if test="sellerId != null">and seller_id = #{sellerId}</if>
+            <if test="skuId != null">and sku_id = #{skuId}</if>
+            <if test="stockId != null">and stock_id = #{stockId}</if>
+            <if test="adjustDirection != null and adjustDirection != ''">and adjust_direction = #{adjustDirection}</if>
+            <if test="keyword != null and keyword != ''">
+                and concat_ws(' ', review_no, system_sku_code, product_name, sku_name, warehouse_name)
+                    like concat('%', #{keyword}, '%')
+            </if>
+            <if test="submitTimeStart != null and submitTimeStart != ''">and submit_time &gt;= #{submitTimeStart}</if>
+            <if test="submitTimeEnd != null and submitTimeEnd != ''">and submit_time &lt;= #{submitTimeEnd}</if>
+            <if test="plannedEffectiveTimeStart != null and plannedEffectiveTimeStart != ''">
+                and planned_effective_time &gt;= #{plannedEffectiveTimeStart}
+            </if>
+            <if test="plannedEffectiveTimeEnd != null and plannedEffectiveTimeEnd != ''">
+                and planned_effective_time &lt;= #{plannedEffectiveTimeEnd}
+            </if>
+        </where>
+        order by submit_time desc, review_id desc
+    </select>
+
+    <select id="selectReviewById" resultMap="InventoryAdjustmentReviewRequestResult">
+        select *
+        from inventory_adjustment_review_request
+        where review_id = #{reviewId}
+    </select>
+
+    <insert id="insertReview" parameterType="InventoryAdjustmentReviewRequest" useGeneratedKeys="true" keyProperty="reviewId">
+        insert into inventory_adjustment_review_request(
+            review_no, review_status, policy_id, policy_snapshot_json, stock_id, stock_key, spu_id, sku_id,
+            seller_id, system_sku_code, product_name, sku_name, warehouse_kind, warehouse_ref_type, warehouse_name,
+            adjust_field, adjust_direction, request_before_platform_total_qty, requested_adjust_qty,
+            request_expected_after_platform_total_qty, platform_reserved_qty_snapshot, sales_7d_qty, sales_7d_daily_avg,
+            sales_30d_qty, sales_30d_daily_avg, threshold_daily_avg, threshold_reserve_days, protected_retained_qty,
+            min_retained_qty, immediate_returnable_qty, trigger_reason, submit_terminal, submit_user_id,
+            submit_user_name, submit_reason, submit_time, planned_effective_time, version, create_by, create_time,
+            remark
+        ) values (
+            #{reviewNo}, #{reviewStatus}, #{policyId}, coalesce(#{policySnapshotJson}, ''), #{stockId}, #{stockKey},
+            #{spuId}, #{skuId}, #{sellerId}, coalesce(#{systemSkuCode}, ''), coalesce(#{productName}, ''),
+            coalesce(#{skuName}, ''), #{warehouseKind}, #{warehouseRefType}, coalesce(#{warehouseName}, ''),
+            #{adjustField}, #{adjustDirection}, #{requestBeforePlatformTotalQty}, #{requestedAdjustQty},
+            #{requestExpectedAfterPlatformTotalQty}, #{platformReservedQtySnapshot}, #{sales7dQty},
+            #{sales7dDailyAvg}, #{sales30dQty}, #{sales30dDailyAvg}, #{thresholdDailyAvg}, #{thresholdReserveDays},
+            #{protectedRetainedQty}, #{minRetainedQty}, #{immediateReturnableQty}, #{triggerReason}, #{submitTerminal},
+            #{submitUserId}, #{submitUserName}, coalesce(#{submitReason}, ''), #{submitTime}, #{plannedEffectiveTime},
+            0, #{createBy}, sysdate(), coalesce(#{remark}, '')
+        )
+    </insert>
+
+    <update id="updateReviewStatus" parameterType="InventoryAdjustmentReviewRequest">
+        update inventory_adjustment_review_request
+        set review_status = #{reviewStatus},
+            effective_time = #{effectiveTime},
+            effective_operator_id = #{effectiveOperatorId},
+            effective_operator_name = #{effectiveOperatorName},
+            effective_before_platform_total_qty = #{effectiveBeforePlatformTotalQty},
+            actual_effect_qty = #{actualEffectQty},
+            unfulfilled_qty = #{unfulfilledQty},
+            effective_after_platform_total_qty = #{effectiveAfterPlatformTotalQty},
+            review_reason = coalesce(#{reviewReason}, ''),
+            version = version + 1,
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where review_id = #{reviewId}
+          and version = #{version}
+    </update>
+
+    <update id="updateReviewPlannedEffectiveTime" parameterType="InventoryAdjustmentReviewRequest">
+        update inventory_adjustment_review_request
+        set planned_effective_time = #{plannedEffectiveTime},
+            review_reason = coalesce(#{reviewReason}, ''),
+            version = version + 1,
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where review_id = #{reviewId}
+          and version = #{version}
+    </update>
+
+    <select id="selectReviewLogs" resultMap="InventoryAdjustmentReviewOperationLogResult">
+        select *
+        from inventory_adjustment_review_operation_log
+        where review_id = #{reviewId}
+        order by operate_time desc, log_id desc
+    </select>
+
+    <insert id="insertReviewLog" parameterType="InventoryAdjustmentReviewOperationLog">
+        insert into inventory_adjustment_review_operation_log(
+            review_id, review_no, operation_type, before_status, after_status, operation_reason,
+            operator_id, operator_name, operate_time, change_summary, create_time, remark
+        ) values (
+            #{reviewId}, #{reviewNo}, #{operationType}, coalesce(#{beforeStatus}, ''), coalesce(#{afterStatus}, ''),
+            coalesce(#{operationReason}, ''), #{operatorId}, #{operatorName}, #{operateTime},
+            coalesce(#{changeSummary}, ''), sysdate(), coalesce(#{remark}, '')
+        )
+    </insert>
+
+    <select id="selectDueWaitingReviews" resultMap="InventoryAdjustmentReviewRequestResult">
+        select r.*
+        from inventory_adjustment_review_request r
+        left join inventory_adjustment_review_policy p on p.policy_id = r.policy_id
+        where r.review_status = 'WAITING'
+          and r.planned_effective_time is not null
+          and r.planned_effective_time &lt;= #{now}
+          and coalesce(p.auto_effect_enabled, 'Y') = 'Y'
+        order by r.planned_effective_time asc, r.review_id asc
+        limit #{limit}
+    </select>
+
+    <select id="selectPolicyList" parameterType="InventoryAdjustmentReviewPolicy" resultMap="InventoryAdjustmentReviewPolicyResult">
+        select *
+        from inventory_adjustment_review_policy
+        <where>
+            <if test="policyName != null and policyName != ''">and policy_name like concat('%', #{policyName}, '%')</if>
+            <if test="policyStatus != null and policyStatus != ''">and policy_status = #{policyStatus}</if>
+            <if test="reviewMode != null and reviewMode != ''">and review_mode = #{reviewMode}</if>
+        </where>
+        order by policy_id asc
+    </select>
+
+    <select id="selectPolicyById" resultMap="InventoryAdjustmentReviewPolicyResult">
+        select *
+        from inventory_adjustment_review_policy
+        where policy_id = #{policyId}
+    </select>
+
+    <select id="selectMatchedPolicy" resultMap="InventoryAdjustmentReviewPolicyResult">
+        select p.*
+        from inventory_adjustment_review_policy p
+        join inventory_adjustment_review_policy_binding b on b.policy_id = p.policy_id
+        where p.policy_status = 'ENABLED'
+          and b.status = 'ENABLED'
+          and (
+              (b.binding_type = 'SELLER' and b.binding_id_value = #{sellerId})
+              or b.binding_type = 'GLOBAL'
+          )
+        order by case b.binding_type when 'SELLER' then 1 else 2 end,
+                 b.priority asc,
+                 b.binding_id asc
+        limit 1
+    </select>
+
+    <insert id="insertPolicy" parameterType="InventoryAdjustmentReviewPolicy" useGeneratedKeys="true" keyProperty="policyId">
+        insert into inventory_adjustment_review_policy(
+            policy_name, policy_status, review_mode, direction_scope, field_scope, sales_window_days,
+            sales_aggregate_mode, reserve_days, cooldown_hours, min_return_qty_to_review,
+            min_return_ratio_to_review, auto_effect_enabled, manual_effect_allowed, create_by, create_time, remark
+        ) values (
+            #{policyName}, #{policyStatus}, #{reviewMode}, #{directionScope}, #{fieldScope}, #{salesWindowDays},
+            #{salesAggregateMode}, #{reserveDays}, #{cooldownHours}, #{minReturnQtyToReview},
+            #{minReturnRatioToReview}, #{autoEffectEnabled}, #{manualEffectAllowed}, #{createBy}, sysdate(),
+            coalesce(#{remark}, '')
+        )
+    </insert>
+
+    <update id="updatePolicy" parameterType="InventoryAdjustmentReviewPolicy">
+        update inventory_adjustment_review_policy
+        set policy_name = #{policyName},
+            policy_status = #{policyStatus},
+            review_mode = #{reviewMode},
+            direction_scope = #{directionScope},
+            field_scope = #{fieldScope},
+            sales_window_days = #{salesWindowDays},
+            sales_aggregate_mode = #{salesAggregateMode},
+            reserve_days = #{reserveDays},
+            cooldown_hours = #{cooldownHours},
+            min_return_qty_to_review = #{minReturnQtyToReview},
+            min_return_ratio_to_review = #{minReturnRatioToReview},
+            auto_effect_enabled = #{autoEffectEnabled},
+            manual_effect_allowed = #{manualEffectAllowed},
+            update_by = #{updateBy},
+            update_time = sysdate(),
+            remark = coalesce(#{remark}, '')
+        where policy_id = #{policyId}
+    </update>
+
+    <select id="selectPolicyBindingList" parameterType="InventoryAdjustmentReviewPolicyBinding" resultMap="InventoryAdjustmentReviewPolicyBindingResult">
+        select b.*, p.policy_name
+        from inventory_adjustment_review_policy_binding b
+        left join inventory_adjustment_review_policy p on p.policy_id = b.policy_id
+        <where>
+            <if test="policyId != null">and b.policy_id = #{policyId}</if>
+            <if test="bindingType != null and bindingType != ''">and b.binding_type = #{bindingType}</if>
+            <if test="bindingIdValue != null">and b.binding_id_value = #{bindingIdValue}</if>
+            <if test="status != null and status != ''">and b.status = #{status}</if>
+        </where>
+        order by b.priority asc, b.binding_id asc
+    </select>
+
+    <insert id="insertPolicyBinding" parameterType="InventoryAdjustmentReviewPolicyBinding" useGeneratedKeys="true" keyProperty="bindingId">
+        insert into inventory_adjustment_review_policy_binding(
+            policy_id, binding_type, binding_id_value, priority, status, create_by, create_time, remark
+        ) values (
+            #{policyId}, #{bindingType}, #{bindingIdValue}, #{priority}, #{status}, #{createBy}, sysdate(),
+            coalesce(#{remark}, '')
+        )
+    </insert>
+
+    <update id="updatePolicyBinding" parameterType="InventoryAdjustmentReviewPolicyBinding">
+        update inventory_adjustment_review_policy_binding
+        set policy_id = #{policyId},
+            binding_type = #{bindingType},
+            binding_id_value = #{bindingIdValue},
+            priority = #{priority},
+            status = #{status},
+            update_by = #{updateBy},
+            update_time = sysdate(),
+            remark = coalesce(#{remark}, '')
+        where binding_id = #{bindingId}
+    </update>
+
+    <select id="sumSalesQty" resultType="java.lang.Long">
+        select coalesce(sum(sold_qty), 0)
+        from inventory_sku_sales_daily
+        where sku_id = #{skuId}
+          and stat_date &gt;= date_sub(curdate(), interval #{days} day)
+          and stat_date &lt; curdate()
+    </select>
+</mapper>

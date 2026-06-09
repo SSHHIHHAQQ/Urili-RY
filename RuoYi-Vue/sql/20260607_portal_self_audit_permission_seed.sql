@@ -41,7 +41,7 @@ begin
     from seller_menu
     where perms = p_perms
       and (
-        parent_id <> p_parent_id
+        coalesce(parent_id, -1) <> p_parent_id
         or coalesce(menu_type, '') <> coalesce(p_menu_type, '')
         or coalesce(path, '') <> coalesce(p_path, '')
         or coalesce(component, '') <> coalesce(p_component, '')
@@ -68,7 +68,7 @@ begin
     from buyer_menu
     where perms = p_perms
       and (
-        parent_id <> p_parent_id
+        coalesce(parent_id, -1) <> p_parent_id
         or coalesce(menu_type, '') <> coalesce(p_menu_type, '')
         or coalesce(path, '') <> coalesce(p_path, '')
         or coalesce(component, '') <> coalesce(p_component, '')
@@ -115,6 +115,39 @@ begin
     signal sqlstate '45000' set message_text = 'seller_menu auto_increment must be between 100000 and 199999 before terminal menu seed inserts';
   end if;
 
+  if exists (
+    select 1
+    from seller_menu
+    where coalesce(perms, '') = ''
+       or coalesce(perms, '') = '*'
+       or coalesce(perms, '') not like 'seller:%'
+       or coalesce(perms, '') like 'seller:admin:%'
+       or coalesce(perms, '') like 'buyer:%'
+  ) then
+    signal sqlstate '45000' set message_text = 'seller_menu contains invalid terminal perms';
+  end if;
+
+  if exists (
+    select 1
+    from seller_menu
+    where menu_type = 'C'
+      and coalesce(component, '') = ''
+  ) then
+    signal sqlstate '45000' set message_text = 'seller_menu page menus require component';
+  end if;
+
+  if exists (
+    select 1
+    from (
+      select perms
+      from seller_menu
+      group by perms
+      having count(1) > 1
+    ) duplicate_seller_menu_perms
+  ) then
+    signal sqlstate '45000' set message_text = 'seller_menu perms must be unique before terminal role grants';
+  end if;
+
   select count(1)
     into v_table_count
   from information_schema.tables
@@ -144,6 +177,176 @@ begin
       or coalesce(v_auto_increment, 0) >= 300000 then
     signal sqlstate '45000' set message_text = 'buyer_menu auto_increment must be between 200000 and 299999 before terminal menu seed inserts';
   end if;
+
+  if exists (
+    select 1
+    from buyer_menu
+    where coalesce(perms, '') = ''
+       or coalesce(perms, '') = '*'
+       or coalesce(perms, '') not like 'buyer:%'
+       or coalesce(perms, '') like 'buyer:admin:%'
+       or coalesce(perms, '') like 'seller:%'
+  ) then
+    signal sqlstate '45000' set message_text = 'buyer_menu contains invalid terminal perms';
+  end if;
+
+  if exists (
+    select 1
+    from buyer_menu
+    where menu_type = 'C'
+      and coalesce(component, '') = ''
+  ) then
+    signal sqlstate '45000' set message_text = 'buyer_menu page menus require component';
+  end if;
+
+  if exists (
+    select 1
+    from (
+      select perms
+      from buyer_menu
+      group by perms
+      having count(1) > 1
+    ) duplicate_buyer_menu_perms
+  ) then
+    signal sqlstate '45000' set message_text = 'buyer_menu perms must be unique before terminal role grants';
+  end if;
+end//
+
+drop procedure if exists assert_portal_self_audit_permission_seed_completed//
+create procedure assert_portal_self_audit_permission_seed_completed()
+begin
+  declare v_owner_role_count int default 0;
+  declare v_permission_count int default 0;
+
+  select count(1)
+    into v_permission_count
+  from seller_menu
+  where perms in (
+      'seller:account:loginLog:list',
+      'seller:account:operLog:list',
+      'seller:account:session:list'
+    )
+    and parent_id = 0
+    and menu_type = 'F'
+    and coalesce(path, '') = ''
+    and coalesce(component, '') = ''
+    and coalesce(route_name, '') = '';
+
+  if v_permission_count <> 3 then
+    signal sqlstate '45000' set message_text = 'seller self audit permissions were not created';
+  end if;
+
+  select count(1)
+    into v_permission_count
+  from buyer_menu
+  where perms in (
+      'buyer:account:loginLog:list',
+      'buyer:account:operLog:list',
+      'buyer:account:session:list'
+    )
+    and parent_id = 0
+    and menu_type = 'F'
+    and coalesce(path, '') = ''
+    and coalesce(component, '') = ''
+    and coalesce(route_name, '') = '';
+
+  if v_permission_count <> 3 then
+    signal sqlstate '45000' set message_text = 'buyer self audit permissions were not created';
+  end if;
+
+  if exists (
+    select 1
+    from seller_role r
+    join (
+      select 'seller:account:loginLog:list' as perms
+      union all select 'seller:account:operLog:list'
+      union all select 'seller:account:session:list'
+    ) expected
+    where r.del_flag = '0'
+      and r.status = '0'
+      and r.role_key = 'owner'
+      and not exists (
+        select 1
+        from seller_role_menu rm
+        join seller_menu m on m.seller_menu_id = rm.seller_menu_id
+        where rm.seller_role_id = r.seller_role_id
+          and m.perms = expected.perms
+      )
+  ) then
+    signal sqlstate '45000' set message_text = 'seller owner roles must have self audit permissions';
+  end if;
+
+  select count(1)
+    into v_owner_role_count
+  from seller_role r
+  where r.del_flag = '0'
+    and r.status = '0'
+    and r.role_key = 'owner';
+
+  select count(1)
+    into v_permission_count
+  from seller_role r
+  join seller_role_menu rm on rm.seller_role_id = r.seller_role_id
+  join seller_menu m on m.seller_menu_id = rm.seller_menu_id
+  where r.del_flag = '0'
+    and r.status = '0'
+    and r.role_key = 'owner'
+    and m.perms in (
+      'seller:account:loginLog:list',
+      'seller:account:operLog:list',
+      'seller:account:session:list'
+    );
+
+  if v_permission_count <> v_owner_role_count * 3 then
+    signal sqlstate '45000' set message_text = 'seller owner roles self audit permission exact grant count mismatch';
+  end if;
+
+  if exists (
+    select 1
+    from buyer_role r
+    join (
+      select 'buyer:account:loginLog:list' as perms
+      union all select 'buyer:account:operLog:list'
+      union all select 'buyer:account:session:list'
+    ) expected
+    where r.del_flag = '0'
+      and r.status = '0'
+      and r.role_key = 'owner'
+      and not exists (
+        select 1
+        from buyer_role_menu rm
+        join buyer_menu m on m.buyer_menu_id = rm.buyer_menu_id
+        where rm.buyer_role_id = r.buyer_role_id
+          and m.perms = expected.perms
+      )
+  ) then
+    signal sqlstate '45000' set message_text = 'buyer owner roles must have self audit permissions';
+  end if;
+
+  select count(1)
+    into v_owner_role_count
+  from buyer_role r
+  where r.del_flag = '0'
+    and r.status = '0'
+    and r.role_key = 'owner';
+
+  select count(1)
+    into v_permission_count
+  from buyer_role r
+  join buyer_role_menu rm on rm.buyer_role_id = r.buyer_role_id
+  join buyer_menu m on m.buyer_menu_id = rm.buyer_menu_id
+  where r.del_flag = '0'
+    and r.status = '0'
+    and r.role_key = 'owner'
+    and m.perms in (
+      'buyer:account:loginLog:list',
+      'buyer:account:operLog:list',
+      'buyer:account:session:list'
+    );
+
+  if v_permission_count <> v_owner_role_count * 3 then
+    signal sqlstate '45000' set message_text = 'buyer owner roles self audit permission exact grant count mismatch';
+  end if;
 end//
 
 delimiter ;
@@ -162,6 +365,8 @@ call assert_buyer_menu_permission_slot('buyer:account:operLog:list', 0, 'F', '',
     'buyer:account:operLog:list menu slot is occupied by another signature');
 call assert_buyer_menu_permission_slot('buyer:account:session:list', 0, 'F', '', null, '',
     'buyer:account:session:list menu slot is occupied by another signature');
+
+start transaction;
 
 insert into seller_menu
     (menu_name, parent_id, order_num, path, component, query, route_name,
@@ -241,6 +446,10 @@ where r.del_flag = '0'
         and rm.buyer_menu_id = m.buyer_menu_id
   );
 
+call assert_portal_self_audit_permission_seed_completed();
+commit;
+
 drop procedure if exists assert_seller_menu_permission_slot;
 drop procedure if exists assert_buyer_menu_permission_slot;
 drop procedure if exists assert_terminal_menu_range_ready;
+drop procedure if exists assert_portal_self_audit_permission_seed_completed;

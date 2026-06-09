@@ -30,6 +30,8 @@ public class PortalDirectLoginAuthContractTest
             requireContains(violations, fileName, source, "@PostMapping(\"/direct-login\")");
             requireContains(violations, fileName, source,
                     "directLogin(@RequestBody(required = false) Map<String, String> body)");
+            requireContains(violations, fileName, source,
+                    "isSaveRequestData = false,\n            isSaveResponseData = false, allowAnonymous = true");
             requireAbsent(violations, fileName, source, "@GetMapping(\"/direct-login\")");
             requireAbsent(violations, fileName, source, "@RequestParam(\"directLoginToken\")");
             requireAbsent(violations, fileName, source, "@RequestParam(value = \"directLoginToken\"");

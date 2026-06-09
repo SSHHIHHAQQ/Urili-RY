@@ -10,7 +10,7 @@
 
 ## 子 Agent 执行情况
 
-- 用户确认模型顺序：优先 GPT-5.3 Codex，对应工具模型 `gpt-5.3-codex-spark`；如果不可用再使用 `gpt-5.4`。
+- 历史记录（已过期口径）：用户确认模型顺序：优先 GPT-5.3 Codex，对应工具模型 `gpt-5.3-codex-spark`；如果不可用再使用 `gpt-5.4`。
 - 本目标同一时间段内 `gpt-5.3-codex-spark` 已返回用量限制，提示需等到 `2026-06-08 01:14` 后再试；本轮按 fallback 规则使用 6 个 `gpt-5.4` 只读子 Agent。
 - 6 个 fallback 子 Agent 已全部关闭，主 Agent 只采纳确定 P0/P1，P2/设计债记录为不阻塞。
 

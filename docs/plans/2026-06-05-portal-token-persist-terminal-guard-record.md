@@ -19,7 +19,7 @@
 
 - 更新 `react-ui/src/pages/Portal/terminal.ts`：
   - `persistPortalLogin(result, expectedTerminal)` 必须接收期望端类型。
-  - 如果响应缺少 token 或响应 `terminal` 与当前端不一致，只清理当前页面端 token 并返回 `false`，不清理响应声明的另一端 token。
+  - 历史记录（已过期口径）：如果响应缺少 token 或响应 `terminal` 与当前端不一致，当时口径是只清理当前页面端 token 并返回 `false`。当前实现已由后续检查点覆盖：响应缺 token、跨端或无效时只返回失败，不清理任何已有端内 token。
   - 只有校验通过时才写入当前端 `seller_*` 或 `buyer_*` token key。
 - 更新 `react-ui/src/pages/Portal/DirectLogin/index.tsx`：
   - 免密登录成功后统一调用 `persistPortalLogin(response.data, terminal)`。

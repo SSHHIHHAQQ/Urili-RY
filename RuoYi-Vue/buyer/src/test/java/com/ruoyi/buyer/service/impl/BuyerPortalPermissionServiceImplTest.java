@@ -200,6 +200,21 @@ public class BuyerPortalPermissionServiceImplTest
     }
 
     @Test
+    public void selectMenuByIdRejectsMenuOutsideBuyerTerminalRange()
+    {
+        Buyer buyer = buyer(11L);
+        BuyerAccount account = account(22L, 11L);
+        RecordingBuyerPortalPermissionMapper permissionMapper = new RecordingBuyerPortalPermissionMapper(1)
+                .withSelectedMenus(menu(199999L, "M", "", ""));
+        BuyerPortalPermissionServiceImpl service = service(buyerService(buyer), buyerMapper(account),
+                permissionMapper.proxy());
+
+        assertServiceException(() -> service.selectMenuById(199999L));
+
+        assertEquals(1, permissionMapper.selectMenuByIdCallCount);
+    }
+
+    @Test
     public void updateRoleRejectsMenuIdsOutsideBuyerTerminalBeforeMutatingRoleOrBindings()
     {
         Buyer buyer = buyer(11L);

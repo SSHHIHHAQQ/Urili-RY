@@ -69,7 +69,7 @@
 
 ## 子 Agent 使用记录
 
-- 本轮按规则先尝试 6 个 `gpt-5.3-codex-spark` 子 Agent，均因平台额度限制失败并关闭。
+- 历史记录（已过期口径）：本轮按当时规则先尝试 6 个 `gpt-5.3-codex-spark` 子 Agent，均因平台额度限制失败并关闭；现行规则为默认使用 `gpt-5.4`。
 - 降级使用 6 个 `gpt-5.4` 只读子 Agent，覆盖授权 SQL、仓库 seed、旧 DDL、测试入口、文档更新和 dirty worktree 风险。
 - 子 Agent 结论：`warehouse_management_seed.sql` 缺少菜单 slot/signature guard；`admin_partner_role_menu_grant` 当前已白名单化；旧裸 DDL 当前不是 P1。
 

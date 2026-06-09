@@ -1,5 +1,6 @@
 package com.ruoyi.seller.mapper;
 
+import java.util.Collection;
 import java.util.Date;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
@@ -9,6 +10,7 @@ import com.ruoyi.system.domain.PortalLoginLog;
 import com.ruoyi.system.domain.PortalLoginSession;
 import com.ruoyi.system.domain.PortalOperLog;
 import com.ruoyi.system.domain.PortalSessionProfile;
+import com.ruoyi.warehouse.domain.WarehouseSellerProfile;
 
 /**
  * 卖家Mapper接口
@@ -22,6 +24,16 @@ public interface SellerMapper
     public String selectMaxSellerNoByPrefix(String sellerNoPrefix);
 
     public Seller selectSellerByCode(String sellerCode);
+
+    public WarehouseSellerProfile selectWarehouseSellerProfileById(Long sellerId);
+
+    public List<WarehouseSellerProfile> selectWarehouseSellerProfilesByIds(@Param("sellerIds") Collection<Long> sellerIds);
+
+    public List<WarehouseSellerProfile> selectWarehouseSellerProfilesByKeyword(@Param("keyword") String keyword);
+
+    public List<WarehouseSellerProfile> selectNormalWarehouseSellerOptions(@Param("keyword") String keyword);
+
+    public int countNormalSellerById(@Param("sellerId") Long sellerId);
 
     public int insertSeller(Seller seller);
 

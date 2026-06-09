@@ -48,6 +48,71 @@ export function getCategoryDisplayPath(category: API.Product.Category) {
   return category.fullPath || category.categoryName || category.categoryCode || '-';
 }
 
+function normalizeCategoryId(value?: number | string | null) {
+  const categoryId = Number(value);
+  return Number.isFinite(categoryId) && categoryId > 0 ? categoryId : undefined;
+}
+
+function flattenCategories(categories: API.Product.Category[], result: API.Product.Category[] = []) {
+  categories.forEach((item) => {
+    result.push(item);
+    if (item.children?.length) {
+      flattenCategories(item.children, result);
+    }
+  });
+  return result;
+}
+
+export function findCategoryDisplayPath(
+  categories: API.Product.Category[],
+  categoryId?: number | string | null,
+  fallback?: string,
+) {
+  const targetId = normalizeCategoryId(categoryId);
+  const fallbackText = fallback?.trim();
+  if (!targetId) return fallbackText;
+
+  const categoryMap = new Map<number, API.Product.Category>();
+  flattenCategories(categories).forEach((item) => {
+    const itemId = normalizeCategoryId(item.categoryId);
+    if (itemId) {
+      categoryMap.set(itemId, item);
+    }
+  });
+
+  const target = categoryMap.get(targetId);
+  if (!target) return fallbackText;
+  if (target.fullPath?.trim()) return target.fullPath.trim();
+
+  const ancestorIds = (target.ancestors || '')
+    .split(',')
+    .map((item) => normalizeCategoryId(item.trim()))
+    .filter((item): item is number => !!item && item !== targetId);
+  const ancestorNames = ancestorIds
+    .map((item) => categoryMap.get(item)?.categoryName?.trim())
+    .filter((item): item is string => !!item);
+  if (ancestorNames.length) {
+    const names = [...ancestorNames, target.categoryName?.trim()].filter((item): item is string => !!item);
+    return names.length ? names.join(' / ') : fallbackText;
+  }
+
+  const names: string[] = [];
+  const visited = new Set<number>();
+  let current: API.Product.Category | undefined = target;
+  while (current) {
+    const currentId = normalizeCategoryId(current.categoryId);
+    if (currentId && visited.has(currentId)) break;
+    if (currentId) visited.add(currentId);
+    const name = current.categoryName?.trim();
+    if (name) names.unshift(name);
+    const parentId = normalizeCategoryId(current.parentId);
+    if (!parentId || !currentId || parentId === currentId) break;
+    current = categoryMap.get(parentId);
+  }
+
+  return names.length ? names.join(' / ') : fallbackText;
+}
+
 export function toCategoryOption(category: API.Product.Category): { label: string; value: number } {
   return {
     label: `${getCategoryDisplayPath(category)}${

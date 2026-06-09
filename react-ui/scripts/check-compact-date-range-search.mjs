@@ -13,7 +13,7 @@ const ignoredDirs = new Set([
 ]);
 const sourceExtensions = new Set(['.js', '.jsx', '.ts', '.tsx']);
 const compactDateRangeViolationPattern =
-  /(?:colSize\s*:\s*2[\s\S]{0,300}valueType\s*:\s*['"]dateRange['"]|valueType\s*:\s*['"]dateRange['"][\s\S]{0,300}colSize\s*:\s*2)/g;
+  /(?:colSize\s*:\s*2[\s\S]{0,300}valueType\s*:\s*['"]date(?:Time)?Range['"]|valueType\s*:\s*['"]date(?:Time)?Range['"][\s\S]{0,300}colSize\s*:\s*2)/g;
 
 function walkFiles(dir, files = []) {
   if (!fs.existsSync(dir)) {
@@ -55,8 +55,8 @@ if (violations.length > 0) {
     .map((item) => `- ${item.file}:${item.line}`)
     .join('\n');
   throw new Error(
-    `dateRange search fields must stay compact; remove colSize: 2 from these Ant Pro dateRange columns:\n${details}`,
+    `dateRange and dateTimeRange search fields must stay compact; remove colSize: 2 from these Ant Pro date range columns:\n${details}`,
   );
 }
 
-console.log('Compact dateRange search check passed.');
+console.log('Compact date range search check passed.');

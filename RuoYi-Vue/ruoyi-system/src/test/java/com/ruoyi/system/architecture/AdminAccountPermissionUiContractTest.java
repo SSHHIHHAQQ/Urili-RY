@@ -22,6 +22,7 @@ public class AdminAccountPermissionUiContractTest
         assertTerminalPageConfig(workspaceRoot, "Buyer", "buyer", violations);
         assertBalancePlaceholdersDoNotExposeFinanceSemantics(workspaceRoot, violations);
         assertNoSubjectLevelOwnerPasswordReset(workspaceRoot, violations);
+        assertTerminalServiceJsMirrors(workspaceRoot, violations);
         assertPartnerManagementPageGates(workspaceRoot, violations);
         assertPartnerAccountModalGates(workspaceRoot, violations);
         assertPartnerAuditModalGates(workspaceRoot, violations);
@@ -36,17 +37,10 @@ public class AdminAccountPermissionUiContractTest
     private void assertTerminalPageConfig(Path workspaceRoot, String pageName, String terminal, List<String> violations)
             throws IOException
     {
-        Path[] pages = new Path[] {
-                workspaceRoot.resolve("react-ui/src/pages/" + pageName + "/index.tsx"),
-                workspaceRoot.resolve("react-ui/src/pages/" + pageName + "/index.js")
-        };
-        for (Path page : pages)
+        Path page = workspaceRoot.resolve("react-ui/src/pages/" + pageName + "/index.tsx");
+        String source = readRequired(page, violations);
+        if (!source.isEmpty())
         {
-            String source = readRequired(page, violations);
-            if (source.isEmpty())
-            {
-                continue;
-            }
             assertContains(source, "accountPermissions: {", page, violations);
             assertContains(source, "list: '" + terminal + ":admin:account:list'", page, violations);
             assertContains(source, "add: '" + terminal + ":admin:account:add'", page, violations);
@@ -74,6 +68,24 @@ public class AdminAccountPermissionUiContractTest
             assertContains(source, "listDirectLoginTickets: getAdmin" + pageName + "DirectLoginTickets", page,
                     violations);
         }
+
+        Path jsPage = workspaceRoot.resolve("react-ui/src/pages/" + pageName + "/index.js");
+        String jsSource = readRequired(jsPage, violations);
+        if (!jsSource.isEmpty())
+        {
+            assertPureDefaultReExport(jsSource, "./index.tsx", jsPage, violations);
+        }
+    }
+
+    private void assertTerminalServiceJsMirrors(Path workspaceRoot, List<String> violations) throws IOException
+    {
+        Path sellerServiceJs = workspaceRoot.resolve("react-ui/src/services/seller/seller.js");
+        assertExactSource(readRequired(sellerServiceJs, violations), "export * from './seller.ts';", sellerServiceJs,
+                violations);
+
+        Path buyerServiceJs = workspaceRoot.resolve("react-ui/src/services/buyer/buyer.js");
+        assertExactSource(readRequired(buyerServiceJs, violations), "export * from './buyer.ts';", buyerServiceJs,
+                violations);
     }
 
     private void assertNoSubjectLevelOwnerPasswordReset(Path workspaceRoot, List<String> violations)
@@ -111,8 +123,7 @@ public class AdminAccountPermissionUiContractTest
     private void assertPartnerManagementPageGates(Path workspaceRoot, List<String> violations) throws IOException
     {
         Path[] pages = new Path[] {
-                workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerManagementPage.tsx"),
-                workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerManagementPage.js")
+                workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerManagementPage.tsx")
         };
         for (Path page : pages)
         {
@@ -137,14 +148,15 @@ public class AdminAccountPermissionUiContractTest
             assertContains(source, "|| access.hasPerms(`${permPrefix}:operLog:list`)", page, violations);
             assertContains(source, "|| access.hasPerms(`${permPrefix}:ticket:list`)", page, violations);
         }
+        Path jsPage = workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerManagementPage.js");
+        assertPureDefaultReExport(readRequired(jsPage, violations), "./PartnerManagementPage.tsx", jsPage, violations);
     }
 
     private void assertBalancePlaceholdersDoNotExposeFinanceSemantics(Path workspaceRoot, List<String> violations)
             throws IOException
     {
         Path[] partnerPages = new Path[] {
-                workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerManagementPage.tsx"),
-                workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerManagementPage.js")
+                workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerManagementPage.tsx")
         };
         for (Path page : partnerPages)
         {
@@ -165,9 +177,7 @@ public class AdminAccountPermissionUiContractTest
 
         Path[] terminalPages = new Path[] {
                 workspaceRoot.resolve("react-ui/src/pages/Seller/index.tsx"),
-                workspaceRoot.resolve("react-ui/src/pages/Seller/index.js"),
-                workspaceRoot.resolve("react-ui/src/pages/Buyer/index.tsx"),
-                workspaceRoot.resolve("react-ui/src/pages/Buyer/index.js")
+                workspaceRoot.resolve("react-ui/src/pages/Buyer/index.tsx")
         };
         for (Path page : terminalPages)
         {
@@ -218,8 +228,7 @@ public class AdminAccountPermissionUiContractTest
     private void assertPartnerAccountModalGates(Path workspaceRoot, List<String> violations) throws IOException
     {
         Path[] modals = new Path[] {
-                workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerAccountModal.tsx"),
-                workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerAccountModal.js")
+                workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerAccountModal.tsx")
         };
         for (Path modal : modals)
         {
@@ -270,13 +279,14 @@ public class AdminAccountPermissionUiContractTest
             assertContainsOneOf(source, new String[] { "account={auditAccount}", "account: auditAccount" }, modal,
                     violations);
         }
+        Path jsModal = workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerAccountModal.js");
+        assertPureDefaultReExport(readRequired(jsModal, violations), "./PartnerAccountModal.tsx", jsModal, violations);
     }
 
     private void assertPartnerAuditModalGates(Path workspaceRoot, List<String> violations) throws IOException
     {
         Path[] modals = new Path[] {
-                workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerAuditModal.tsx"),
-                workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerAuditModal.js")
+                workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerAuditModal.tsx")
         };
         for (Path modal : modals)
         {
@@ -310,6 +320,9 @@ public class AdminAccountPermissionUiContractTest
             assertNotContains(source, "renderDetailText(record.operParam)", modal, violations);
             assertNotContains(source, "renderDetailText(record.jsonResult)", modal, violations);
         }
+        Path jsModal = workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerAuditModal.js");
+        assertExactSource(readRequired(jsModal, violations),
+                "export { default, buildAuditParams } from './PartnerAuditModal.tsx';", jsModal, violations);
     }
 
     private String readRequired(Path path, List<String> violations) throws IOException
@@ -327,6 +340,21 @@ public class AdminAccountPermissionUiContractTest
         if (!source.contains(expected))
         {
             violations.add(path.getFileName() + " must contain " + expected);
+        }
+    }
+
+    private void assertPureDefaultReExport(String source, String target, Path path, List<String> violations)
+    {
+        String expected = "export { default } from '" + target + "';";
+        assertExactSource(source, expected, path, violations);
+    }
+
+    private void assertExactSource(String source, String expected, Path path, List<String> violations)
+    {
+        String normalized = source.replace("\r\n", "\n").trim();
+        if (!expected.equals(normalized))
+        {
+            violations.add(path.getFileName() + " must equal " + expected);
         }
     }
 

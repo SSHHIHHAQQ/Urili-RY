@@ -13,6 +13,15 @@ const backendTests = backendTestClasses.join(',');
 const frontendTestPaths = manifest.frontendTestPaths;
 const frontendGuardScripts = manifest.frontendGuardScripts;
 const backendReportModules = readBackendReactorModules();
+const frontendJestResultPath = path.join(uiRoot, 'node_modules', '.cache', 'three-terminal-jest-results.json');
+const frontendJestCommand = path.join(
+  uiRoot,
+  'node_modules',
+  '.bin',
+  process.platform === 'win32' ? 'jest.cmd' : 'jest',
+);
+const cliArgs = process.argv.slice(2);
+const frontendJestPassThroughArgs = readFrontendJestPassThroughArgs(cliArgs);
 const frontendDiscoveryIgnoredDirs = new Set([
   'node_modules',
   'dist',
@@ -21,10 +30,34 @@ const frontendDiscoveryIgnoredDirs = new Set([
   '.umi',
   '.umi-production',
 ]);
-const criticalBackendTestClassPattern = /(?:Terminal|ThreeTerminal|Portal|DirectLogin|Partner|SqlExecutionGuard|Admin.*(?:Permission|Route)|Permission.*Account|SysMenuServiceImpl|LogAspectSensitiveFieldFilter|TokenServiceTerminalIsolation)/;
+const criticalBackendTestClassPattern = /(?:Terminal|ThreeTerminal|Portal|DirectLogin|Partner|SqlExecutionGuard|Admin.*(?:Permission|Route)|Permission.*Account|SysMenuServiceImpl|LogAspectSensitiveFieldFilter|TokenServiceTerminalIsolation|Finance|Currency)/;
+const criticalBackendTestPathPattern = /^(?:ruoyi-system[\\/]src[\\/]test[\\/]java[\\/]com[\\/]ruoyi[\\/]system[\\/]architecture[\\/]|seller[\\/]src[\\/]test[\\/]java[\\/]|buyer[\\/]src[\\/]test[\\/]java[\\/]|product[\\/]src[\\/]test[\\/]java[\\/]|integration[\\/]src[\\/]test[\\/]java[\\/]|inventory[\\/]src[\\/]test[\\/]java[\\/]|warehouse[\\/]src[\\/]test[\\/]java[\\/]|finance[\\/]src[\\/]test[\\/]java[\\/])/;
 const criticalBackendExplicitTestClasses = new Set(manifest.criticalBackendExplicitTestClasses);
 const frontendDiscoveryRoots = [uiRoot];
-const criticalFrontendTestPathPattern = /(?:terminal|portal|partner|remote-menu|direct-login|unauthorized|redirect|three-terminal|product-distribution-permission|upstream-system-permission)/i;
+const criticalFrontendTestPathPattern = /(?:terminal|portal|partner|remote-menu|getrouters|authority|auth-sidecar|direct-login|unauthorized|redirect|three-terminal|namespace|menu-id|menu-range|account-scope|permission-contract|system-user-service|product-distribution-permission|product-center|source-product|upstream-system-permission|inventory-overview|inventory-adjustment-review|source-warehouse|warehouse|finance|currency)/i;
+
+function readFrontendJestPassThroughArgs(args) {
+  const allowedJestArgs = new Set(['--coverage', '-u', '--updateSnapshot']);
+  const passThroughArgs = [];
+  const unsupported = [];
+  for (const arg of args) {
+    if (arg === '--check-manifest') {
+      continue;
+    }
+    if (allowedJestArgs.has(arg)) {
+      passThroughArgs.push(arg);
+    } else {
+      unsupported.push(arg);
+    }
+  }
+  if (unsupported.length > 0) {
+    throw new Error(
+      `unsupported verify-three-terminal arguments: ${unsupported.join(', ')}. `
+        + 'Use the three-terminal gate; only --coverage, -u, and --updateSnapshot can be forwarded to Jest.',
+    );
+  }
+  return passThroughArgs;
+}
 
 function readThreeTerminalManifest() {
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
@@ -134,6 +167,65 @@ function assertFrontendGuardScriptsMatch(guardScripts) {
       `frontend guard scripts are not included in three-terminal manifest: ${unlisted.sort().join(', ')}`,
     );
   }
+
+  assertFrontendGuardScriptTargetsExist(guardScripts);
+}
+
+function assertPublicTestScriptsUseThreeTerminalVerifier() {
+  const packageJson = JSON.parse(fs.readFileSync(path.join(uiRoot, 'package.json'), 'utf8'));
+  const scripts = packageJson.scripts ?? {};
+  const requiredScripts = {
+    test: 'node scripts/verify-three-terminal.mjs',
+    'test:coverage': 'node scripts/verify-three-terminal.mjs --coverage',
+    'test:update': 'node scripts/verify-three-terminal.mjs -u',
+    'test:unit': 'node scripts/verify-three-terminal.mjs',
+    jest: 'node scripts/verify-three-terminal.mjs',
+  };
+  const missing = Object.keys(requiredScripts).filter((scriptName) => typeof scripts[scriptName] !== 'string');
+  if (missing.length > 0) {
+    throw new Error(`public test scripts are missing from package.json: ${missing.join(', ')}`);
+  }
+  if (scripts['verify:three-terminal'] !== 'node scripts/verify-three-terminal.mjs') {
+    throw new Error('verify:three-terminal must point to node scripts/verify-three-terminal.mjs');
+  }
+
+  const mismatched = Object.entries(requiredScripts)
+    .filter(([scriptName, expectedCommand]) => scripts[scriptName] !== expectedCommand)
+    .map(([scriptName, expectedCommand]) => `${scriptName}: expected "${expectedCommand}", actual "${scripts[scriptName]}"`);
+  if (mismatched.length > 0) {
+    throw new Error(
+      `public test scripts must call verify-three-terminal directly so CLI args are preserved:\n${mismatched.join('\n')}`,
+    );
+  }
+}
+
+function assertFrontendGuardScriptTargetsExist(guardScripts) {
+  const missing = [];
+  for (const script of guardScripts) {
+    const target = parseNodeScriptTarget(script.expectedCommand);
+    if (!target) {
+      missing.push(`${script.name}: command must be "node scripts/*.mjs"`);
+      continue;
+    }
+    if (!fs.existsSync(path.join(uiRoot, target))) {
+      missing.push(`${script.name}: ${target}`);
+    }
+  }
+  if (missing.length > 0) {
+    throw new Error(`frontend guard script targets are missing or invalid:\n${missing.join('\n')}`);
+  }
+}
+
+function parseNodeScriptTarget(command) {
+  const parts = command.trim().split(/\s+/);
+  if (parts.length !== 2 || parts[0] !== 'node') {
+    return null;
+  }
+  const scriptPath = normalizeFrontendTestPath(parts[1]);
+  if (!scriptPath.startsWith('scripts/') || !scriptPath.endsWith('.mjs')) {
+    return null;
+  }
+  return scriptPath;
 }
 
 function readBackendReactorModules() {
@@ -169,18 +261,13 @@ function getBackendTestSourceRoots() {
     .filter((root) => fs.existsSync(root));
 }
 
-function getBackendTestModules() {
-  return backendReportModules.filter((moduleName) => {
-    return fs.existsSync(path.join(backendRoot, moduleName, 'src', 'test', 'java'));
-  });
-}
-
-function isCriticalBackendTestClass(testClass) {
+function isCriticalBackendTestClass(testClass, files = []) {
   return criticalBackendTestClassPattern.test(testClass)
-    || criticalBackendExplicitTestClasses.has(testClass);
+    || criticalBackendExplicitTestClasses.has(testClass)
+    || files.some((file) => criticalBackendTestPathPattern.test(file.replaceAll(path.sep, '/')));
 }
 
-function assertBackendTestSourcesExist() {
+function collectBackendTestSources() {
   const sourceRoots = getBackendTestSourceRoots();
   const testSourceFiles = sourceRoots
     .flatMap((root) => walkFiles(root))
@@ -194,15 +281,49 @@ function assertBackendTestSourcesExist() {
     testSources.set(testClass, existing);
   }
 
+  return testSources;
+}
+
+function getBackendTestModules() {
+  const testSources = collectBackendTestSources();
+  const missing = [];
+  const selectedModules = new Set();
+
+  for (const testClass of backendTestClasses) {
+    const files = testSources.get(testClass);
+    if (!files) {
+      missing.push(testClass);
+      continue;
+    }
+    for (const file of files) {
+      const moduleName = file.split(/[\\/]/)[0];
+      selectedModules.add(moduleName);
+    }
+  }
+
+  if (missing.length > 0) {
+    throw new Error(`backend test classes are missing: ${missing.join(', ')}`);
+  }
+
+  const modules = backendReportModules.filter((moduleName) => selectedModules.has(moduleName));
+  if (modules.length === 0) {
+    throw new Error('backend manifest did not select any test modules');
+  }
+  return modules;
+}
+
+function assertBackendTestSourcesExist() {
+  const testSources = collectBackendTestSources();
+
   const missing = backendTestClasses.filter((testClass) => !testSources.has(testClass));
   if (missing.length > 0) {
     throw new Error(`backend test classes are missing: ${missing.join(', ')}`);
   }
 
   const configuredTests = new Set(backendTestClasses);
-  const unlisted = [...testSources.keys()].filter((testClass) => {
-    return isCriticalBackendTestClass(testClass) && !configuredTests.has(testClass);
-  });
+  const unlisted = [...testSources.entries()].filter(([testClass, files]) => {
+    return isCriticalBackendTestClass(testClass, files) && !configuredTests.has(testClass);
+  }).map(([testClass]) => testClass);
   if (unlisted.length > 0) {
     throw new Error(
       `critical backend test classes are not included in three-terminal manifest: ${unlisted.sort().join(', ')}`,
@@ -229,7 +350,9 @@ function assertFrontendTestSourcesIncluded() {
   const testFiles = frontendDiscoveryRoots.flatMap((root) => walkFiles(root, [], frontendDiscoveryIgnoredDirs))
     .filter((file) => /\.(test|spec)\.[cm]?[jt]sx?$/.test(path.basename(file)))
     .map((file) => path.normalize(path.relative(uiRoot, file)));
-  const unlisted = testFiles.filter((file) => {
+  assertGeneratedFrontendTestMirrors(testFiles);
+  const sourceTestFiles = testFiles.filter((file) => !isGeneratedFrontendTestMirror(file));
+  const unlisted = sourceTestFiles.filter((file) => {
     return criticalFrontendTestPathPattern.test(file.replaceAll(path.sep, '/'))
       && !configuredTests.has(file);
   });
@@ -239,6 +362,112 @@ function assertFrontendTestSourcesIncluded() {
       `critical frontend test files are not included in three-terminal manifest: ${unlisted.sort().join(', ')}`,
     );
   }
+}
+
+function isGeneratedFrontendTestMirror(file) {
+  return resolveGeneratedFrontendTestMirrorSource(file) !== null;
+}
+
+function resolveGeneratedFrontendTestMirrorSource(file) {
+  if (!file.endsWith('.js')) {
+    return null;
+  }
+  const sourceBase = file.slice(0, -'.js'.length);
+  for (const extension of ['.ts', '.tsx']) {
+    const sourceFile = `${sourceBase}${extension}`;
+    if (fs.existsSync(path.join(uiRoot, sourceFile))) {
+      return sourceFile;
+    }
+  }
+  return null;
+}
+
+function assertGeneratedFrontendTestMirrors(testFiles) {
+  const violations = [];
+  for (const file of testFiles) {
+    const sourceFile = resolveGeneratedFrontendTestMirrorSource(file);
+    if (!sourceFile) {
+      continue;
+    }
+    const expected = `export * from './${path.basename(sourceFile)}';\n`;
+    const actual = fs.readFileSync(path.join(uiRoot, file), 'utf8').replace(/\r\n/g, '\n');
+    if (actual !== expected) {
+      violations.push(`${file} must be a pure re-export of ${sourceFile}`);
+    }
+  }
+  if (violations.length > 0) {
+    throw new Error(`generated frontend test mirrors must be pure re-exports:\n${violations.sort().join('\n')}`);
+  }
+}
+
+function prepareFrontendJestResultFile() {
+  assertFrontendTestSourcesIncluded();
+  if (!fs.existsSync(frontendJestCommand)) {
+    throw new Error(`frontend Jest binary is missing: ${path.relative(uiRoot, frontendJestCommand)}`);
+  }
+  fs.mkdirSync(path.dirname(frontendJestResultPath), { recursive: true });
+  fs.rmSync(frontendJestResultPath, { force: true });
+}
+
+function assertFrontendJestResults() {
+  if (!fs.existsSync(frontendJestResultPath)) {
+    throw new Error(`frontend Jest did not produce result JSON: ${path.relative(uiRoot, frontendJestResultPath)}`);
+  }
+  const report = JSON.parse(fs.readFileSync(frontendJestResultPath, 'utf8'));
+  const violations = [];
+  const expected = new Set(frontendTestPaths.map(normalizeFrontendTestPath));
+  const results = Array.isArray(report.testResults) ? report.testResults : [];
+  const actual = new Map();
+
+  for (const result of results) {
+    if (!result || typeof result.name !== 'string') {
+      continue;
+    }
+    actual.set(normalizeFrontendTestPath(path.relative(uiRoot, result.name)), result);
+  }
+
+  for (const testPath of expected) {
+    const result = actual.get(testPath);
+    if (!result) {
+      violations.push(`${testPath} did not appear in frontend Jest results`);
+      continue;
+    }
+    const assertions = Array.isArray(result.assertionResults) ? result.assertionResults : [];
+    const passingAssertions = assertions.filter((assertion) => assertion.status === 'passed').length;
+    const pendingAssertions = assertions.filter((assertion) => assertion.status === 'pending').length;
+    const todoAssertions = assertions.filter((assertion) => assertion.status === 'todo').length;
+
+    if (result.status !== 'passed') {
+      violations.push(`${testPath} reported status ${result.status ?? 'unknown'}`);
+    }
+    if (passingAssertions <= 0) {
+      violations.push(`${testPath} did not execute any passing tests`);
+    }
+    if (pendingAssertions > 0) {
+      violations.push(`${testPath} skipped ${pendingAssertions} tests`);
+    }
+    if (todoAssertions > 0) {
+      violations.push(`${testPath} has ${todoAssertions} todo tests`);
+    }
+  }
+
+  if (Number(report.numTotalTests) <= 0 || Number(report.numPassedTests) <= 0) {
+    violations.push('frontend Jest reported no executed passing tests');
+  }
+  if (Number(report.numPendingTests) > 0) {
+    violations.push(`frontend Jest reported ${report.numPendingTests} skipped tests`);
+  }
+  if (Number(report.numTodoTests) > 0) {
+    violations.push(`frontend Jest reported ${report.numTodoTests} todo tests`);
+  }
+
+  if (violations.length > 0) {
+    throw new Error(`frontend Jest results must execute all listed tests without skip/todo:\n${violations.join('\n')}`);
+  }
+}
+
+function normalizeFrontendTestPath(file) {
+  return path.normalize(file).replaceAll(path.sep, '/');
 }
 
 function clearBackendTestReports() {
@@ -307,6 +536,7 @@ function readXmlNumberAttribute(source, name, reportFile) {
 }
 
 function runManifestCheck() {
+  assertPublicTestScriptsUseThreeTerminalVerifier();
   assertFrontendTestSourcesIncluded();
   assertBackendTestSourcesExist();
   console.log('three-terminal manifest check passed.');
@@ -316,6 +546,8 @@ if (process.argv.includes('--check-manifest')) {
   runManifestCheck();
   process.exit(0);
 }
+
+assertPublicTestScriptsUseThreeTerminalVerifier();
 
 const steps = [
   ...frontendGuardScripts.map((scriptName) => ({
@@ -333,15 +565,19 @@ const steps = [
   {
     label: 'portal session unit tests',
     cwd: uiRoot,
-    before: assertFrontendTestSourcesIncluded,
-    command: 'npm',
+    before: prepareFrontendJestResultFile,
+    after: assertFrontendJestResults,
+    command: frontendJestCommand,
     args: [
-      'run',
-      'test:unit',
-      '--',
+      '--config',
+      'jest.config.ts',
       '--runTestsByPath',
       ...frontendTestPaths,
+      ...frontendJestPassThroughArgs,
       '--runInBand',
+      '--json',
+      '--outputFile',
+      normalizeFrontendTestPath(frontendJestResultPath),
     ],
   },
   {

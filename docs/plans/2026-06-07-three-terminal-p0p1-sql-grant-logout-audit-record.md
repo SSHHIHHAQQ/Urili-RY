@@ -8,7 +8,7 @@
 - 未读取或写入 Redis。
 - 未启动或重启后端。
 - 未修改 source-product / integration 旁支脏改。
-- 存量 6 个子 Agent 已全部关闭；后续新增子 Agent 按 AGENTS 规则优先使用 GPT-5.3 Codex，不可用时再降级 `gpt-5.4`。
+- 历史记录（已过期口径）：存量 6 个子 Agent 已全部关闭；后续新增子 Agent 按 AGENTS 规则优先使用 GPT-5.3 Codex，不可用时再降级 `gpt-5.4`。
 
 ## 新增问题
 

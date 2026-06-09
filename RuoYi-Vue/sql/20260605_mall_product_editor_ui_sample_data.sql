@@ -3,8 +3,17 @@
 -- Confirm active datasource before executing.
 
 set names utf8mb4;
+set session group_concat_max_len = greatest(@@session.group_concat_max_len, 1048576);
 
 set @confirm_mall_product_editor_ui_sample_data := coalesce(@confirm_mall_product_editor_ui_sample_data, '');
+set @mall_product_editor_title_backfill_expected_count :=
+    coalesce(@mall_product_editor_title_backfill_expected_count, '');
+set @mall_product_editor_title_backfill_expected_signature :=
+    coalesce(@mall_product_editor_title_backfill_expected_signature, '');
+set @mall_product_editor_demo_existing_expected_count :=
+    coalesce(@mall_product_editor_demo_existing_expected_count, '');
+set @mall_product_editor_demo_existing_expected_signature :=
+    coalesce(@mall_product_editor_demo_existing_expected_signature, '');
 
 delimiter //
 
@@ -14,6 +23,18 @@ begin
   if coalesce(@confirm_mall_product_editor_ui_sample_data, '')
       <> 'APPLY_MALL_PRODUCT_EDITOR_UI_SAMPLE_DATA' then
     signal sqlstate '45000' set message_text = 'set @confirm_mall_product_editor_ui_sample_data = APPLY_MALL_PRODUCT_EDITOR_UI_SAMPLE_DATA before running this migration';
+  end if;
+  if coalesce(@mall_product_editor_title_backfill_expected_count, '') not regexp '^[0-9]+$' then
+    signal sqlstate '45000' set message_text = 'set @mall_product_editor_title_backfill_expected_count after previewing exact product_spu title backfill rows';
+  end if;
+  if coalesce(@mall_product_editor_title_backfill_expected_signature, '') not regexp '^[0-9a-fA-F]{64}$' then
+    signal sqlstate '45000' set message_text = 'set @mall_product_editor_title_backfill_expected_signature after previewing exact product_spu title backfill rows';
+  end if;
+  if coalesce(@mall_product_editor_demo_existing_expected_count, '') not regexp '^[0-9]+$' then
+    signal sqlstate '45000' set message_text = 'set @mall_product_editor_demo_existing_expected_count after previewing existing SPUDEMO20260605/SKUDEMO20260605 rows';
+  end if;
+  if coalesce(@mall_product_editor_demo_existing_expected_signature, '') not regexp '^[0-9a-fA-F]{64}$' then
+    signal sqlstate '45000' set message_text = 'set @mall_product_editor_demo_existing_expected_signature after previewing existing SPUDEMO20260605/SKUDEMO20260605 rows';
   end if;
 end//
 
@@ -34,6 +55,24 @@ begin
   end if;
 end//
 
+drop procedure if exists assert_mall_product_editor_count_signature//
+create procedure assert_mall_product_editor_count_signature(
+  in p_actual_count bigint,
+  in p_actual_signature varchar(64),
+  in p_expected_count varchar(64),
+  in p_expected_signature varchar(64),
+  in p_count_message varchar(255),
+  in p_signature_message varchar(255)
+)
+begin
+  if p_actual_count <> cast(p_expected_count as unsigned) then
+    signal sqlstate '45000' set message_text = p_count_message;
+  end if;
+  if lower(p_actual_signature) <> lower(p_expected_signature) then
+    signal sqlstate '45000' set message_text = p_signature_message;
+  end if;
+end//
+
 delimiter ;
 
 call assert_mall_product_editor_ui_sample_data_confirmed();
@@ -43,6 +82,54 @@ call add_column_if_missing('product_spu', 'product_name_en',
   'varchar(255) not null default '''' comment ''商品英文标题'' after product_name');
 call add_column_if_missing('product_spu', 'detail_content',
   'text comment ''商品详情文本'' after main_image_url');
+
+select count(1),
+       sha2(coalesce(group_concat(
+         concat_ws(':', spu_id, coalesce(system_spu_code, ''), coalesce(product_name, ''), coalesce(product_name_en, ''))
+         order by spu_id separator '|'
+       ), ''), 256)
+  into @mall_product_editor_title_backfill_actual_count,
+       @mall_product_editor_title_backfill_actual_signature
+from product_spu
+where product_name_en = '';
+
+call assert_mall_product_editor_count_signature(
+  @mall_product_editor_title_backfill_actual_count,
+  @mall_product_editor_title_backfill_actual_signature,
+  @mall_product_editor_title_backfill_expected_count,
+  @mall_product_editor_title_backfill_expected_signature,
+  'mall product editor title backfill exact target count mismatch',
+  'mall product editor title backfill exact target signature mismatch'
+);
+
+select count(1),
+       sha2(coalesce(group_concat(row_signature order by row_key separator '|'), ''), 256)
+  into @mall_product_editor_demo_existing_actual_count,
+       @mall_product_editor_demo_existing_actual_signature
+from (
+    select concat('SPU:', system_spu_code) row_key,
+           concat_ws(':', 'SPU', spu_id, coalesce(system_spu_code, ''), coalesce(product_name, ''),
+             coalesce(product_name_en, ''), coalesce(spu_status, '')) row_signature
+    from product_spu
+    where system_spu_code like 'SPUDEMO20260605%'
+    union all
+    select concat('SKU:', system_sku_code) row_key,
+           concat_ws(':', 'SKU', sku_id, spu_id, coalesce(system_sku_code, ''), coalesce(sku_status, ''),
+             coalesce(sale_price, ''), coalesce(currency_code, '')) row_signature
+    from product_sku
+    where system_sku_code like 'SKUDEMO20260605%'
+) demo_rows;
+
+call assert_mall_product_editor_count_signature(
+  @mall_product_editor_demo_existing_actual_count,
+  @mall_product_editor_demo_existing_actual_signature,
+  @mall_product_editor_demo_existing_expected_count,
+  @mall_product_editor_demo_existing_expected_signature,
+  'mall product editor demo data exact target count mismatch',
+  'mall product editor demo data exact target signature mismatch'
+);
+
+start transaction;
 
 update product_spu
 set product_name_en = product_name
@@ -222,4 +309,7 @@ from product_sku s
 where s.system_sku_code like 'SKUDEMO20260605%'
   and not exists (select 1 from product_image i where i.owner_type='SKU' and i.owner_id=s.sku_id and i.image_role='SKU_MAIN');
 
+commit;
+
 drop procedure if exists add_column_if_missing;
+drop procedure if exists assert_mall_product_editor_count_signature;

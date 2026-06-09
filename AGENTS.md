@@ -176,12 +176,13 @@ cd E:\Urili-Ruoyi
 - 卖家端、买家端消费免密票据时，如果票据 `terminal` 与当前端不匹配，不得把外端票据的 `ticketId`、`actingAdmin*`、`reason`、目标主体或目标账号写入当前端登录日志、操作日志或会话；应按当前端普通失败记录或直接拒绝。
 - `seller_oper_log` / `buyer_oper_log` 的免密代入审计必须落结构化字段，至少包含 `direct_login`、`direct_login_ticket_id`、`acting_admin_id`、`acting_admin_name`、`direct_login_reason`；`oper_param` 文本前缀只能作为兼容信息，不能作为唯一审计来源。
 - 卖家端、买家端自助日志接口不得直接返回 `PortalLoginLog` / `PortalOperLog` 内部审计模型；必须映射为 `PortalOwnLoginLogProfile` / `PortalOwnOperLogProfile` 等端内可见 DTO，不返回 `subjectId`、`accountId`、`directLoginTicketId`、`actingAdminId`、`actingAdminName`、`directLoginReason`、`operParam`、`jsonResult`、`tokenId` 或 Redis key。管理端审计接口继续返回完整结构化审计字段。
-- 卖家端、买家端普通登录页和 `/direct-login` 消费页不得在新 portal token 成功持久化前清理当前端已有 token；免密失败、超时或未收到 token 时只反馈失败，不误踢已有端内会话。跨端或无效响应仍由 `persistPortalLogin(...)` fail-closed，但只能清理当前页面端 token，不得清理响应声明的另一端 token；该规则必须同时由 `terminal-session-token.test.ts` 和 `check-portal-token-isolation.mjs` 固定。
+- 卖家端、买家端普通登录页和 `/direct-login` 消费页不得在新 portal token 成功持久化前清理当前端已有 token；免密失败、超时、未收到 token、跨端响应或无效响应都只允许 fail-closed 返回失败，不得清理任何已有端内会话 token，也不得清理响应声明的另一端 token；该规则必须同时由 `terminal-session-token.test.ts` 和 `check-portal-token-isolation.mjs` 固定。
 - 卖家端、买家端端内菜单写入必须 fail-closed：页面菜单 `C` 和按钮菜单 `F` 的 `perms` 必填，必须使用当前端前缀 `seller:` / `buyer:`，禁止 `*` 通配和 `seller:admin:` / `buyer:admin:` 管理端命名空间；页面菜单 `C` 的 `component` 必填，并且必须使用当前端页面根路径，不得为空回退到共享占位页。
 - 当前 `seller_menu` / `buyer_menu` 是端级共享菜单模板，不是单个卖家/买家的主体私有菜单；端内角色绑定菜单时，后端必须先全量校验提交的 `menuIds` 均存在于当前端对应菜单表，任何不存在或跨端菜单 ID 都必须在写 `seller_role_menu` / `buyer_role_menu` 前 fail-closed。
 - `seller_menu` / `buyer_menu` 的数字 ID 空间必须保持不重叠：seller 端菜单使用 `100000-199999`，buyer 端菜单使用 `200000-299999`。fresh seed 和三端隔离迁移必须分别从 `auto_increment=100000` / `auto_increment=200000` 开始；已运行库重排必须使用 guarded 迁移脚本并同步更新 role-menu 与 `parent_id`，不得手写无 guard 的主键重排 SQL。
 - React 远程菜单路由 guard 必须对空 `authority` 拒绝访问，不能把空权限当作允许；涉及三端 token、代理、菜单和权限的 `.ts/.tsx` 与 `.js` 镜像必须纳入 guard 脚本，尤其是 `access.js`、`proxy.js` 这类运行入口镜像。
 - `verify-three-terminal` 必须从 manifest 读取关键测试和 guard，前端关键测试发现范围必须覆盖 `react-ui` 仓库级测试文件，后端执行模块必须从 `RuoYi-Vue/pom.xml` reactor 动态派生存在 `src/test/java` 的模块；不得把 Maven `-pl` 模块清单长期硬编码成少数模块。新增或改造管理端业务模块时，必须补对应 admin route/permission/service/frontend 契约测试并登记到 `react-ui/tests/three-terminal.manifest.json`，不能只依赖 reactor compile 覆盖。
+- 运行 seller/buyer/product 等跨模块后端窄测试时，必须使用 reactor 方式带 `-am`，例如 `mvn -pl seller,buyer,product -am "-Dtest=..." "-Dsurefire.failIfNoSpecifiedTests=false" test`；不要只跑 `mvn -pl seller ...` 或 `mvn -pl buyer ...` 后就认定通过，因为本机 `.m2` 可能残留旧的 `product` / `inventory` / `integration` 产物，导致 `NoSuchMethodError` 或依赖签名漂移。
 - 三端隔离迁移不得把端账号空密码静默规范成 `''`；存量 `seller_account` / `buyer_account` 只要存在 null 或空白密码，迁移必须 fail-closed，要求先走 legacy backfill、人工重置或明确修复。`seller_account.password` / `buyer_account.password` 列必须是 `varchar(100) not null` 且无默认空串；seed、增量迁移和远端修正都不得使用 `default ''` 给遗漏密码的写入兜底。综合 seed 的端内菜单 ID 区间 guard 必须在端内角色、菜单、权限和端地址写入前执行。
 
 ## 文件大小与拆分判断规则
@@ -240,7 +241,7 @@ cd E:\Urili-Ruoyi
 
 总原则：非平凡任务优先谨慎和可验证，不盲目追求速度。简单任务可以快速处理；复杂任务必须先读上下文、明确成功标准、分步验证。
 
-- 需要使用子 Agent 时，默认使用 `gpt-5.4`；如果平台返回不可用、额度限制或上下文失败，再回退到平台当前可用的下一优先级 Codex 模型。子 Agent 完成、失败或不再需要后必须关闭，并在 Markdown 检查点记录实际模型、数量和结论处理。
+- 需要使用子 Agent 时，默认使用 `gpt-5.4`；除非用户在当前任务中重新明确要求，否则不要再把 GPT-5.3 Codex 作为首选。子 Agent 完成、失败或不再需要后必须关闭，并在 Markdown 检查点记录实际模型、数量和结论处理。
 - 当用户明确进入快速推进模式时，只修 P0/P1：编译、guard、接口、权限、串端、service/字段缺失。浏览器、截图、DOM 检测和 UI 细调默认跳过；P2 记录到 Markdown，不阻塞当前推进。已确认的同构管理端 UI 必须先做一套标准模板，代码级通过后再机械复制另一端，只替换配置、文案、路由、权限标识、字段和 service。
 
 ### 规则 1：先想清楚，再写代码
@@ -335,8 +336,8 @@ cd E:\Urili-Ruoyi
 
 ### 子 Agent 使用规则
 
-- 需要并行检查或大型任务拆分时，子 Agent 模型默认使用 `gpt-5.4`；如果不可用，再回退到平台当前可用的下一优先级 Codex 模型。
-- 回退模型时，必须在阶段记录或最终回复中写明不可用原因、实际使用的模型和子 Agent 数量。
+- 需要并行检查或大型任务拆分时，子 Agent 模型默认使用 `gpt-5.4`；除非用户在当前任务中重新明确要求，否则不要再把 GPT-5.3 Codex 作为首选。
+- 如果用户明确要求其他模型但平台不可用、额度限制或上下文失败，必须在阶段记录或最终回复中写明不可用原因、实际使用的模型和子 Agent 数量。
 - 子 Agent 的读写范围必须由主 Agent 明确；用完必须关闭，主 Agent 负责合并结论、复核冲突和执行最终验证。
 
 ## 代码审查交付清单
@@ -348,6 +349,11 @@ cd E:\Urili-Ruoyi
 - 残留问题
 - 验证命令
 - 未验证原因
+- 数据源确认结果，包括 MySQL/Redis 连接来源、目标环境和是否触达远端
+- 远端 DB/Redis 影响记录；如未执行 DDL/DML/缓存写入，也必须明确说明未触达
+- 表设计、高影响 SQL、确认 token、回滚方式和用户确认状态；未涉及时说明不涉及
+- 三端隔离判断结果，包括账号、权限、菜单、日志、会话、token/Redis key 是否串端
+- 子 Agent 使用记录，包括实际模型、必要时的模型不可用或回退原因、数量、关闭状态和采纳结论
 - 权限检查结果
 - 字典/选项复用检查结果
 - 复用台账检查结果

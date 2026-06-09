@@ -12,7 +12,7 @@
 
 ## 子 Agent 执行情况
 
-- 用户最新指定：子 Agent 优先使用 GPT-5.3 Codex；不可用时使用 `gpt-5.4`。
+- 历史记录（已过期口径）：用户最新指定：子 Agent 优先使用 GPT-5.3 Codex；不可用时使用 `gpt-5.4`。
 - 本轮延续上一批子 Agent 结论：GPT-5.3 Codex 因平台用量或可用性限制不可用后，实际降级使用 6 个 `gpt-5.4` 子 Agent 做只读审计。
 - 本轮采纳并修复的 P0/P1：端内登录日志缺少免密结构化审计字段、免密失败路径缺少 acting admin/ticket/reason 结构化落库、前端登录日志类型漂移、SQL guard 未覆盖新增补丁。
 - 本轮所有有效子 Agent 已关闭；一个未完成初始化的子 Agent 也已关闭。
@@ -124,5 +124,5 @@ P2 记录，不阻塞本轮：
 
 ## AGENTS 影响
 
-- `AGENTS.md` 已有子 Agent 模型优先级规则：优先 GPT-5.3 Codex，不可用再降级 `gpt-5.4`，并要求关闭子 Agent 和写入 Markdown 检查点。
+- 历史记录（已过期口径）：`AGENTS.md` 已有子 Agent 模型优先级规则：优先 GPT-5.3 Codex，不可用再降级 `gpt-5.4`，并要求关闭子 Agent 和写入 Markdown 检查点。
 - 本轮不需要新增 AGENTS 规则；具体实现模板已写入复用台账。

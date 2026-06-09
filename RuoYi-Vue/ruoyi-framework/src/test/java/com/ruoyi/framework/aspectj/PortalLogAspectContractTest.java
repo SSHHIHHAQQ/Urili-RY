@@ -64,6 +64,19 @@ public class PortalLogAspectContractTest
         {
             violations.add("PortalLogAspect must keep the direct-login oper_param compatibility prefix");
         }
+        if (!source.contains("filterRequestParamMap(paramsMap, excludeParamNames)"))
+        {
+            violations.add("PortalLogAspect must filter portal request param maps before serializing oper_param");
+        }
+        for (String expected : List.of("subjectId", "accountId", "sellerId", "buyerId", "sellerAccountId",
+                "buyerAccountId", "directLoginTicketId", "actingAdminId", "actingAdminName",
+                "directLoginReason", "terminal", "tokenId", "operParam", "jsonResult"))
+        {
+            if (!source.contains("\"" + expected + "\""))
+            {
+                violations.add("PortalLogAspect must exclude portal scope/audit field: " + expected);
+            }
+        }
 
         if (!violations.isEmpty())
         {

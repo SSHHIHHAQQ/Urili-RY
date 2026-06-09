@@ -8,7 +8,7 @@
 - 未读取或写入 Redis。
 - 未启动或重启后端。
 - 未修改 source-product / integration 旁支脏改。
-- 本轮使用 6 个子 Agent 并行只读排查：优先尝试 GPT-5.3 Codex，平台提示额度限制后已关闭失败 Agent，并按用户要求降级 `gpt-5.4`；有效 `gpt-5.4` 子 Agent 已全部关闭。
+- 历史记录（已过期口径）：本轮使用 6 个子 Agent 并行只读排查：优先尝试 GPT-5.3 Codex，平台提示额度限制后已关闭失败 Agent，并按用户要求降级 `gpt-5.4`；有效 `gpt-5.4` 子 Agent 已全部关闭。
 
 ## 新增问题
 

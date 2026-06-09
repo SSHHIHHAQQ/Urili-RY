@@ -3,7 +3,7 @@
 -- 1. Ensure current active sellers have a default owner role.
 -- 2. Bind current OWNER seller accounts to the default owner role.
 -- 3. Add seller:product:schema:query as a hidden button permission.
--- 4. Grant the permission to current active seller roles.
+-- 4. Grant the permission to current active seller Owner roles.
 
 set names utf8mb4;
 set @confirm_seller_product_schema_permission_seed := coalesce(@confirm_seller_product_schema_permission_seed, '');
@@ -42,7 +42,7 @@ begin
     from seller_menu
     where perms = p_perms
       and (
-        parent_id <> p_parent_id
+        coalesce(parent_id, -1) <> p_parent_id
         or coalesce(menu_type, '') <> coalesce(p_menu_type, '')
         or coalesce(path, '') <> coalesce(p_path, '')
         or coalesce(component, '') <> coalesce(p_component, '')
@@ -88,11 +88,114 @@ begin
       or coalesce(v_auto_increment, 0) >= 200000 then
     signal sqlstate '45000' set message_text = 'seller_menu auto_increment must be between 100000 and 199999 before terminal menu seed inserts';
   end if;
+
+  if exists (
+    select 1
+    from seller_menu
+    where coalesce(perms, '') = ''
+       or coalesce(perms, '') = '*'
+       or coalesce(perms, '') not like 'seller:%'
+       or coalesce(perms, '') like 'seller:admin:%'
+       or coalesce(perms, '') like 'buyer:%'
+  ) then
+    signal sqlstate '45000' set message_text = 'seller_menu contains invalid terminal perms';
+  end if;
+
+  if exists (
+    select 1
+    from seller_menu
+    where menu_type = 'C'
+      and coalesce(component, '') = ''
+  ) then
+    signal sqlstate '45000' set message_text = 'seller_menu page menus require component';
+  end if;
+
+  if exists (
+    select 1
+    from (
+      select perms
+      from seller_menu
+      group by perms
+      having count(1) > 1
+    ) duplicate_seller_menu_perms
+  ) then
+    signal sqlstate '45000' set message_text = 'seller_menu perms must be unique before terminal role grants';
+  end if;
+end//
+
+drop procedure if exists assert_seller_product_schema_permission_seed_completed//
+create procedure assert_seller_product_schema_permission_seed_completed()
+begin
+  if exists (
+    select 1
+    from seller s
+    where s.status = '0'
+      and not exists (
+        select 1
+        from seller_role r
+        where r.seller_id = s.seller_id
+          and r.role_key = 'owner'
+          and r.status = '0'
+          and r.del_flag = '0'
+      )
+  ) then
+    signal sqlstate '45000' set message_text = 'active sellers must have default owner roles';
+  end if;
+
+  if exists (
+    select 1
+    from seller_account a
+    where a.account_role = 'OWNER'
+      and not exists (
+        select 1
+        from seller_account_role ar
+        join seller_role r on r.seller_role_id = ar.seller_role_id
+        where ar.seller_account_id = a.seller_account_id
+          and r.seller_id = a.seller_id
+          and r.role_key = 'owner'
+          and r.status = '0'
+          and r.del_flag = '0'
+      )
+  ) then
+    signal sqlstate '45000' set message_text = 'seller owner accounts must bind default owner role';
+  end if;
+
+  if not exists (
+    select 1
+    from seller_menu
+    where perms = 'seller:product:schema:query'
+      and parent_id = 0
+      and menu_type = 'F'
+      and coalesce(path, '') = ''
+      and coalesce(component, '') = ''
+      and coalesce(route_name, '') = ''
+  ) then
+    signal sqlstate '45000' set message_text = 'seller product schema permission was not created';
+  end if;
+
+  if exists (
+    select 1
+    from seller_role r
+    where r.del_flag = '0'
+      and r.status = '0'
+      and r.role_key = 'owner'
+      and not exists (
+        select 1
+        from seller_role_menu rm
+        join seller_menu m on m.seller_menu_id = rm.seller_menu_id
+        where rm.seller_role_id = r.seller_role_id
+          and m.perms = 'seller:product:schema:query'
+      )
+  ) then
+    signal sqlstate '45000' set message_text = 'seller owner roles must have product schema permission';
+  end if;
 end//
 
 delimiter ;
 
 call assert_terminal_menu_range_ready();
+
+start transaction;
 
 insert into seller_role
     (seller_id, role_name, role_key, role_sort, status, del_flag,
@@ -106,6 +209,7 @@ where s.status = '0'
       from seller_role r
       where r.seller_id = s.seller_id
         and r.role_key = 'owner'
+        and r.status = '0'
         and r.del_flag = '0'
   );
 
@@ -114,6 +218,7 @@ select a.seller_account_id, r.seller_role_id
 from seller_account a
 join seller_role r on r.seller_id = a.seller_id
                   and r.role_key = 'owner'
+                  and r.status = '0'
                   and r.del_flag = '0'
 where a.account_role = 'OWNER'
   and not exists (
@@ -149,6 +254,7 @@ join seller_menu m on m.perms = 'seller:product:schema:query'
                   and coalesce(m.route_name, '') = ''
 where r.del_flag = '0'
   and r.status = '0'
+  and r.role_key = 'owner'
   and not exists (
       select 1
       from seller_role_menu rm
@@ -156,5 +262,9 @@ where r.del_flag = '0'
         and rm.seller_menu_id = m.seller_menu_id
   );
 
+call assert_seller_product_schema_permission_seed_completed();
+commit;
+
 drop procedure if exists assert_seller_menu_permission_slot;
 drop procedure if exists assert_terminal_menu_range_ready;
+drop procedure if exists assert_seller_product_schema_permission_seed_completed;

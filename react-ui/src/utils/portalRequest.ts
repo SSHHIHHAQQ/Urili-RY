@@ -43,3 +43,8 @@ export function getPortalTerminalFromApiUrl(
   }
   return undefined;
 }
+
+export function isPortalDirectLoginApiUrl(url?: string) {
+  const pathname = getRequestPathname(url);
+  return PORTAL_API_PREFIXES.some((item) => pathname === `${item.prefix}/direct-login`);
+}

@@ -9,6 +9,7 @@ import java.util.List;
 public class BuyerPortalProduct
 {
     private Long spuId;
+    private String systemSpuCode;
     private Long categoryId;
     private String categoryCode;
     private String categoryName;
@@ -22,6 +23,7 @@ public class BuyerPortalProduct
     private BigDecimal salePriceMin;
     private BigDecimal salePriceMax;
     private String currencySummary;
+    private Integer warehouseCount;
     private List<BuyerPortalProductSku> skus;
 
     public Long getSpuId()
@@ -32,6 +34,16 @@ public class BuyerPortalProduct
     public void setSpuId(Long spuId)
     {
         this.spuId = spuId;
+    }
+
+    public String getSystemSpuCode()
+    {
+        return systemSpuCode;
+    }
+
+    public void setSystemSpuCode(String systemSpuCode)
+    {
+        this.systemSpuCode = systemSpuCode;
     }
 
     public Long getCategoryId()
@@ -162,6 +174,16 @@ public class BuyerPortalProduct
     public void setCurrencySummary(String currencySummary)
     {
         this.currencySummary = currencySummary;
+    }
+
+    public Integer getWarehouseCount()
+    {
+        return warehouseCount;
+    }
+
+    public void setWarehouseCount(Integer warehouseCount)
+    {
+        this.warehouseCount = warehouseCount;
     }
 
     public List<BuyerPortalProductSku> getSkus()

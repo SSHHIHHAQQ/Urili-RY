@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.ruoyi.common.constant.Constants;
+import com.ruoyi.common.constant.HttpStatus;
 import com.ruoyi.common.constant.UserConstants;
 import com.ruoyi.common.core.domain.model.LoginBody;
 import com.ruoyi.common.exception.ServiceException;
@@ -517,9 +518,18 @@ public class SellerServiceImpl implements ISellerService
         if (session == null || !"seller".equals(session.getTerminal()) || session.getSubjectId() == null
                 || session.getAccountId() == null || StringUtils.isBlank(session.getTokenId()))
         {
-            throw new ServiceException("登录状态已失效");
+            throw portalSessionExpired();
         }
-        selectSellerAccountById(session.getSubjectId(), session.getAccountId());
+        SellerAccount account = sellerMapper.selectSellerAccountByIdAndSellerId(session.getSubjectId(), session.getAccountId());
+        if (account == null)
+        {
+            throw portalSessionExpired();
+        }
+    }
+
+    private ServiceException portalSessionExpired()
+    {
+        return new ServiceException("登录状态已失效", HttpStatus.UNAUTHORIZED);
     }
 
     private PortalLoginLog buildSellerOwnLoginLogQuery(PortalLoginSession session, PortalLoginLog log)
@@ -778,9 +788,9 @@ public class SellerServiceImpl implements ISellerService
 
         Seller seller = sellerMapper.selectSellerById(session.getSubjectId());
         SellerAccount account = sellerMapper.selectSellerAccountByIdAndSellerId(session.getSubjectId(), session.getAccountId());
-        if (account == null)
+        if (seller == null || account == null)
         {
-            throw new ServiceException("卖家账号不存在");
+            throw portalSessionExpired();
         }
         if (!PartnerSupport.STATUS_NORMAL.equals(seller.getStatus()))
         {

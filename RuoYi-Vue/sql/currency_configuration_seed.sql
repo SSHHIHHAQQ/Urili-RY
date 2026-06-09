@@ -64,6 +64,64 @@ begin
   end if;
 end//
 
+drop procedure if exists assert_currency_configuration_seed_completed//
+create procedure assert_currency_configuration_seed_completed()
+begin
+  declare v_dict_type_count int default 0;
+  declare v_dict_data_count int default 0;
+  declare v_currency_count int default 0;
+  declare v_menu_count int default 0;
+
+  select count(1)
+    into v_dict_type_count
+  from sys_dict_type
+  where status = '0'
+    and dict_type = 'currency_code';
+
+  if v_dict_type_count <> 1 then
+    signal sqlstate '45000' set message_text = 'currency configuration seed did not complete currency_code dict type';
+  end if;
+
+  select count(1)
+    into v_dict_data_count
+  from sys_dict_data
+  where status = '0'
+    and dict_type = 'currency_code'
+    and dict_value in ('USD', 'CNY', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'HKD', 'MXN', 'BRL');
+
+  if v_dict_data_count <> 10 then
+    signal sqlstate '45000' set message_text = 'currency configuration seed did not complete currency_code dict data';
+  end if;
+
+  select count(1)
+    into v_currency_count
+  from finance_currency
+  where status = '0'
+    and currency_code in ('USD', 'CNY', 'EUR');
+
+  if v_currency_count <> 3 then
+    signal sqlstate '45000' set message_text = 'currency configuration seed did not complete finance_currency seed data';
+  end if;
+
+  select count(1)
+    into v_menu_count
+  from sys_menu
+  where (menu_id = 2442 and parent_id = 2050 and menu_type = 'C' and path = 'currency'
+         and component = 'Finance/Currency/index' and route_name = 'FinanceCurrency'
+         and perms = 'finance:currency:list')
+     or (menu_id = 2460 and parent_id = 2442 and menu_type = 'F' and perms = 'finance:currency:query')
+     or (menu_id = 2461 and parent_id = 2442 and menu_type = 'F' and perms = 'finance:currency:add')
+     or (menu_id = 2462 and parent_id = 2442 and menu_type = 'F' and perms = 'finance:currency:edit')
+     or (menu_id = 2463 and parent_id = 2442 and menu_type = 'F' and perms = 'finance:currency:remove')
+     or (menu_id = 2464 and parent_id = 2442 and menu_type = 'F' and perms = 'finance:currency:syncConfig')
+     or (menu_id = 2465 and parent_id = 2442 and menu_type = 'F' and perms = 'finance:currency:sync')
+     or (menu_id = 2466 and parent_id = 2442 and menu_type = 'F' and perms = 'finance:currency:log');
+
+  if v_menu_count <> 8 then
+    signal sqlstate '45000' set message_text = 'currency configuration seed did not complete expected sys_menu state';
+  end if;
+end//
+
 delimiter ;
 
 create table if not exists finance_currency (
@@ -165,6 +223,34 @@ create table if not exists finance_currency_sync_log (
   key idx_currency_sync_log_status (status, request_time)
 ) engine=innodb auto_increment=1 comment = '财务币种汇率同步日志表';
 
+create temporary table if not exists tmp_currency_configuration_sys_menu_guard (
+  menu_id    bigint       not null,
+  parent_id  bigint       not null,
+  menu_type  char(1)      not null,
+  path       varchar(200) not null default '',
+  component  varchar(255) not null default '',
+  route_name varchar(50)  not null default '',
+  perms      varchar(100) not null default '',
+  key idx_currency_configuration_sys_menu_guard_id (menu_id)
+) engine=memory;
+
+truncate table tmp_currency_configuration_sys_menu_guard;
+
+insert into tmp_currency_configuration_sys_menu_guard(menu_id, parent_id, menu_type, path, component, route_name, perms) values
+    (2442, 2050, 'C', 'currency', 'Finance/Currency/index', 'FinanceCurrency', 'finance:currency:list'),
+    (2442, 2050, 'C', 'currency', 'Common/PlannedPage/index', 'CurrencyConfig', 'basic:currency:list'),
+    (2460, 2442, 'F', '#', '', '', 'finance:currency:query'),
+    (2461, 2442, 'F', '#', '', '', 'finance:currency:add'),
+    (2462, 2442, 'F', '#', '', '', 'finance:currency:edit'),
+    (2463, 2442, 'F', '#', '', '', 'finance:currency:remove'),
+    (2464, 2442, 'F', '#', '', '', 'finance:currency:syncConfig'),
+    (2465, 2442, 'F', '#', '', '', 'finance:currency:sync'),
+    (2466, 2442, 'F', '#', '', '', 'finance:currency:log');
+
+call assert_currency_configuration_sys_menu_guard();
+
+start transaction;
+
 insert into sys_dict_type
     (dict_name, dict_type, status, create_by, create_time, update_by, update_time, remark)
 select '币种', 'currency_code', '0', 'admin', sysdate(), '', null, '平台币种全集，业务可用币种以 finance_currency 为准'
@@ -203,32 +289,6 @@ from (
 where not exists (
     select 1 from finance_currency c where c.currency_code = seed.currency_code
 );
-
-create temporary table if not exists tmp_currency_configuration_sys_menu_guard (
-  menu_id    bigint       not null,
-  parent_id  bigint       not null,
-  menu_type  char(1)      not null,
-  path       varchar(200) not null default '',
-  component  varchar(255) not null default '',
-  route_name varchar(50)  not null default '',
-  perms      varchar(100) not null default '',
-  key idx_currency_configuration_sys_menu_guard_id (menu_id)
-) engine=memory;
-
-truncate table tmp_currency_configuration_sys_menu_guard;
-
-insert into tmp_currency_configuration_sys_menu_guard(menu_id, parent_id, menu_type, path, component, route_name, perms) values
-    (2442, 2050, 'C', 'currency', 'Finance/Currency/index', 'FinanceCurrency', 'finance:currency:list'),
-    (2442, 2050, 'C', 'currency', 'Common/PlannedPage/index', 'CurrencyConfig', 'basic:currency:list'),
-    (2460, 2442, 'F', '#', '', '', 'finance:currency:query'),
-    (2461, 2442, 'F', '#', '', '', 'finance:currency:add'),
-    (2462, 2442, 'F', '#', '', '', 'finance:currency:edit'),
-    (2463, 2442, 'F', '#', '', '', 'finance:currency:remove'),
-    (2464, 2442, 'F', '#', '', '', 'finance:currency:syncConfig'),
-    (2465, 2442, 'F', '#', '', '', 'finance:currency:sync'),
-    (2466, 2442, 'F', '#', '', '', 'finance:currency:log');
-
-call assert_currency_configuration_sys_menu_guard();
 
 insert into sys_menu
     (menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
@@ -278,5 +338,10 @@ on duplicate key update
     update_time = sysdate(),
     remark = values(remark);
 
+call assert_currency_configuration_seed_completed();
+
+commit;
+
 drop temporary table if exists tmp_currency_configuration_sys_menu_guard;
+drop procedure if exists assert_currency_configuration_seed_completed;
 drop procedure if exists assert_currency_configuration_sys_menu_guard;

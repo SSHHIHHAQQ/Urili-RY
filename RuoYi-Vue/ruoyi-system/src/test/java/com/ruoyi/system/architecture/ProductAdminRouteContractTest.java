@@ -77,6 +77,27 @@ public class ProductAdminRouteContractTest
                         "product:distribution:log"
                 },
                 violations);
+        assertAdminController(backendRoot,
+                "product/src/main/java/com/ruoyi/product/controller/AdminProductCenterController.java",
+                "AdminProductCenterController",
+                "@RequestMapping(\"/product/admin/product-center\")",
+                new String[] {
+                        "product:center:list",
+                        "product:center:query"
+                },
+                violations);
+        assertAdminController(backendRoot,
+                "product/src/main/java/com/ruoyi/product/controller/AdminProductReviewController.java",
+                "AdminProductReviewController",
+                "@RequestMapping(\"/product/admin/reviews\")",
+                new String[] {
+                        "review:productDistribution:list",
+                        "review:productDistribution:query",
+                        "review:productDistribution:approve",
+                        "review:productDistribution:reject",
+                        "review:productDistribution:log"
+                },
+                violations);
 
         String productServiceTs = Files.readString(repoRoot.resolve(
                 "react-ui/src/services/product/product.ts"), StandardCharsets.UTF_8);
@@ -86,21 +107,47 @@ public class ProductAdminRouteContractTest
                 "react-ui/src/services/product/distributionProduct.ts"), StandardCharsets.UTF_8);
         String distributionServiceJs = Files.readString(repoRoot.resolve(
                 "react-ui/src/services/product/distributionProduct.js"), StandardCharsets.UTF_8);
+        String productCenterServiceTs = Files.readString(repoRoot.resolve(
+                "react-ui/src/services/product/productCenter.ts"), StandardCharsets.UTF_8);
+        String productCenterServiceJs = Files.readString(repoRoot.resolve(
+                "react-ui/src/services/product/productCenter.js"), StandardCharsets.UTF_8);
+        String reviewServiceTs = Files.readString(repoRoot.resolve(
+                "react-ui/src/services/product/productReview.ts"), StandardCharsets.UTF_8);
+        String reviewServiceJs = Files.readString(repoRoot.resolve(
+                "react-ui/src/services/product/productReview.js"), StandardCharsets.UTF_8);
         String categoryPage = Files.readString(repoRoot.resolve(
                 "react-ui/src/pages/Product/Category/index.tsx"), StandardCharsets.UTF_8);
         String attributeLibrary = Files.readString(repoRoot.resolve(
                 "react-ui/src/pages/Product/Attribute/components/AttributeLibrary.tsx"), StandardCharsets.UTF_8);
         String distributionPage = Files.readString(repoRoot.resolve(
                 "react-ui/src/pages/Product/Distribution/index.tsx"), StandardCharsets.UTF_8);
+        String productCenterPage = Files.readString(repoRoot.resolve(
+                "react-ui/src/pages/Product/ProductCenter/index.tsx"), StandardCharsets.UTF_8);
+        String reviewPage = Files.readString(repoRoot.resolve(
+                "react-ui/src/pages/Product/Review/index.tsx"), StandardCharsets.UTF_8);
 
         assertContains(productServiceTs, "const baseUrl = '/api/product/admin';",
                 "product TS service must call the admin route", violations);
-        assertContains(productServiceJs, "const baseUrl = '/api/product/admin';",
-                "product JS service mirror must call the admin route", violations);
+        assertEqualsTrimmed("export * from './product.ts';", productServiceJs,
+                "product JS service mirror must delegate to TS service", violations);
         assertContains(distributionServiceTs, "const baseUrl = '/api/product/admin/distribution-products';",
                 "distribution product TS service must call the admin route", violations);
-        assertContains(distributionServiceJs, "const baseUrl = '/api/product/admin/distribution-products';",
-                "distribution product JS service mirror must call the admin route", violations);
+        assertEqualsTrimmed("export * from './distributionProduct.ts';", distributionServiceJs,
+                "distribution product JS service mirror must delegate to TS service", violations);
+        assertContains(distributionServiceTs, "submitDistributionProductReview",
+                "distribution product TS service must expose submit review action", violations);
+        assertContains(productCenterServiceTs, "const baseUrl = '/api/product/admin/product-center';",
+                "product center TS service must call the admin route", violations);
+        assertEqualsTrimmed("export * from './productCenter.ts';", productCenterServiceJs,
+                "product center JS service mirror must delegate to TS service", violations);
+        assertContains(productCenterPage, "access.hasPerms('product:center:list')",
+                "product center page must derive list permission", violations);
+        assertContains(productCenterPage, "access.hasPerms('product:center:query')",
+                "product center page must derive query permission", violations);
+        assertContains(reviewServiceTs, "const baseUrl = '/api/product/admin/reviews';",
+                "product review TS service must call the admin route", violations);
+        assertEqualsTrimmed("export * from './productReview.ts';", reviewServiceJs,
+                "product review JS service mirror must delegate to TS service", violations);
         assertContains(categoryPage, "access.hasPerms('product:category:add')",
                 "product category page must gate add action", violations);
         assertContains(categoryPage, "access.hasPerms('product:category:remove')",
@@ -121,6 +168,18 @@ public class ProductAdminRouteContractTest
                 "product distribution detail action must fail closed without query permission", violations);
         assertContains(distributionPage, "hidden={!canViewDistributionDetail}",
                 "product distribution detail buttons must be hidden without query permission", violations);
+        assertContains(distributionPage, "submitDistributionProductReview",
+                "product distribution page must submit draft products to review", violations);
+        assertContains(reviewPage, "const canListProductReview = access.hasPerms('review:productDistribution:list')",
+                "product review page must derive list permission", violations);
+        assertContains(reviewPage, "const canQueryProductReview = access.hasPerms('review:productDistribution:query')",
+                "product review page must derive query permission", violations);
+        assertContains(reviewPage, "const canApproveProductReview = access.hasPerms('review:productDistribution:approve')",
+                "product review page must derive approve permission", violations);
+        assertContains(reviewPage, "const canRejectProductReview = access.hasPerms('review:productDistribution:reject')",
+                "product review page must derive reject permission", violations);
+        assertContains(reviewPage, "const canViewProductReviewLog = access.hasPerms('review:productDistribution:log')",
+                "product review page must derive log permission", violations);
 
         if (!violations.isEmpty())
         {
@@ -162,6 +221,14 @@ public class ProductAdminRouteContractTest
         if (source.contains(forbidden))
         {
             violations.add(message + ": found " + forbidden);
+        }
+    }
+
+    private void assertEqualsTrimmed(String expected, String actual, String message, List<String> violations)
+    {
+        if (!expected.equals(actual.trim()))
+        {
+            violations.add(message + ": expected " + expected + " but found " + actual.trim());
         }
     }
 

@@ -6,8 +6,21 @@
 -- No business table, API, button permission, or real page is created here.
 
 set names utf8mb4;
+set session group_concat_max_len = greatest(@@session.group_concat_max_len, 1048576);
 
 set @confirm_overseas_channel_carrier_menu_restructure := coalesce(@confirm_overseas_channel_carrier_menu_restructure, '');
+set @overseas_channel_legacy_role_menu_expected_delete_count :=
+    coalesce(@overseas_channel_legacy_role_menu_expected_delete_count, '');
+set @overseas_channel_legacy_menu_expected_delete_count :=
+    coalesce(@overseas_channel_legacy_menu_expected_delete_count, '');
+set @overseas_channel_restructure_menu_expected_target_count :=
+    coalesce(@overseas_channel_restructure_menu_expected_target_count, '');
+set @overseas_channel_legacy_role_menu_expected_signature :=
+    coalesce(@overseas_channel_legacy_role_menu_expected_signature, '');
+set @overseas_channel_legacy_menu_expected_signature :=
+    coalesce(@overseas_channel_legacy_menu_expected_signature, '');
+set @overseas_channel_restructure_menu_expected_target_signature :=
+    coalesce(@overseas_channel_restructure_menu_expected_target_signature, '');
 
 delimiter //
 
@@ -17,6 +30,30 @@ begin
   if coalesce(@confirm_overseas_channel_carrier_menu_restructure, '')
       <> 'APPLY_OVERSEAS_CHANNEL_CARRIER_MENU_RESTRUCTURE' then
     signal sqlstate '45000' set message_text = 'set @confirm_overseas_channel_carrier_menu_restructure = APPLY_OVERSEAS_CHANNEL_CARRIER_MENU_RESTRUCTURE before running this migration';
+  end if;
+
+  if coalesce(@overseas_channel_legacy_role_menu_expected_delete_count, '') not regexp '^[0-9]+$' then
+    signal sqlstate '45000' set message_text = 'set @overseas_channel_legacy_role_menu_expected_delete_count after previewing exact sys_role_menu rows';
+  end if;
+
+  if coalesce(@overseas_channel_legacy_menu_expected_delete_count, '') not regexp '^[0-9]+$' then
+    signal sqlstate '45000' set message_text = 'set @overseas_channel_legacy_menu_expected_delete_count after previewing exact sys_menu rows';
+  end if;
+
+  if coalesce(@overseas_channel_restructure_menu_expected_target_count, '') not regexp '^[0-9]+$' then
+    signal sqlstate '45000' set message_text = 'set @overseas_channel_restructure_menu_expected_target_count after previewing exact sys_menu restructure rows';
+  end if;
+
+  if coalesce(@overseas_channel_legacy_role_menu_expected_signature, '') not regexp '^[0-9a-fA-F]{64}$' then
+    signal sqlstate '45000' set message_text = 'set @overseas_channel_legacy_role_menu_expected_signature after previewing exact sys_role_menu rows';
+  end if;
+
+  if coalesce(@overseas_channel_legacy_menu_expected_signature, '') not regexp '^[0-9a-fA-F]{64}$' then
+    signal sqlstate '45000' set message_text = 'set @overseas_channel_legacy_menu_expected_signature after previewing exact sys_menu rows';
+  end if;
+
+  if coalesce(@overseas_channel_restructure_menu_expected_target_signature, '') not regexp '^[0-9a-fA-F]{64}$' then
+    signal sqlstate '45000' set message_text = 'set @overseas_channel_restructure_menu_expected_target_signature after previewing exact sys_menu restructure rows';
   end if;
 end//
 
@@ -100,6 +137,160 @@ begin
   end if;
 end//
 
+drop procedure if exists assert_legacy_channel_cleanup_targets//
+create procedure assert_legacy_channel_cleanup_targets()
+begin
+  declare v_role_menu_count int default 0;
+  declare v_menu_count int default 0;
+  declare v_role_menu_signature varchar(64) default '';
+  declare v_menu_signature varchar(64) default '';
+
+  select count(1),
+         sha2(coalesce(group_concat(
+           concat_ws(':', rm.role_id, rm.menu_id)
+           order by rm.role_id, rm.menu_id separator '|'
+         ), ''), 256)
+    into v_role_menu_count, v_role_menu_signature
+  from sys_role_menu rm
+  where rm.menu_id = 2040;
+
+  if v_role_menu_count <> cast(@overseas_channel_legacy_role_menu_expected_delete_count as unsigned) then
+    signal sqlstate '45000' set message_text = 'overseas channel legacy role-menu cleanup expected count does not match target rows';
+  end if;
+
+  if lower(v_role_menu_signature) <> lower(@overseas_channel_legacy_role_menu_expected_signature) then
+    signal sqlstate '45000' set message_text = 'overseas channel legacy role-menu exact target signature mismatch';
+  end if;
+
+  select count(1),
+         sha2(coalesce(group_concat(
+           concat_ws(':',
+             m.menu_id,
+             coalesce(m.parent_id, ''),
+             coalesce(m.menu_name, ''),
+             coalesce(m.path, ''),
+             coalesce(m.component, ''),
+             coalesce(m.route_name, ''),
+             coalesce(m.perms, ''),
+             coalesce(m.menu_type, '')
+           )
+           order by m.menu_id separator '|'
+         ), ''), 256)
+    into v_menu_count, v_menu_signature
+  from sys_menu m
+  where m.menu_id = 2040;
+
+  if v_menu_count <> cast(@overseas_channel_legacy_menu_expected_delete_count as unsigned) then
+    signal sqlstate '45000' set message_text = 'overseas channel legacy menu cleanup expected count does not match target rows';
+  end if;
+
+  if lower(v_menu_signature) <> lower(@overseas_channel_legacy_menu_expected_signature) then
+    signal sqlstate '45000' set message_text = 'overseas channel legacy menu exact target signature mismatch';
+  end if;
+end//
+
+drop procedure if exists assert_overseas_channel_restructure_targets//
+create procedure assert_overseas_channel_restructure_targets()
+begin
+  declare v_menu_count int default 0;
+  declare v_menu_signature varchar(64) default '';
+
+  select count(1),
+         sha2(coalesce(group_concat(
+           concat_ws(':',
+             m.menu_id,
+             coalesce(m.parent_id, ''),
+             coalesce(m.menu_name, ''),
+             coalesce(m.order_num, ''),
+             coalesce(m.path, ''),
+             coalesce(m.component, ''),
+             coalesce(m.route_name, ''),
+             coalesce(m.perms, ''),
+             coalesce(m.menu_type, '')
+           )
+           order by m.menu_id separator '|'
+         ), ''), 256)
+    into v_menu_count, v_menu_signature
+  from sys_menu m
+  where m.menu_id in (2031, 2041, 2042, 2054);
+
+  if v_menu_count <> cast(@overseas_channel_restructure_menu_expected_target_count as unsigned) then
+    signal sqlstate '45000' set message_text = 'overseas channel restructure menu expected count does not match target rows';
+  end if;
+
+  if lower(v_menu_signature) <> lower(@overseas_channel_restructure_menu_expected_target_signature) then
+    signal sqlstate '45000' set message_text = 'overseas channel restructure menu exact target signature mismatch';
+  end if;
+end//
+
+drop procedure if exists assert_overseas_channel_restructure_completed//
+create procedure assert_overseas_channel_restructure_completed()
+begin
+  if exists (select 1 from sys_role_menu where menu_id = 2040) then
+    signal sqlstate '45000' set message_text = 'legacy channel root role-menu rows still exist after cleanup';
+  end if;
+
+  if exists (select 1 from sys_menu where menu_id = 2040) then
+    signal sqlstate '45000' set message_text = 'legacy channel root menu still exists after cleanup';
+  end if;
+
+  if exists (select 1 from sys_menu where parent_id = 2040) then
+    signal sqlstate '45000' set message_text = 'legacy channel root still owns child menus after cleanup';
+  end if;
+
+  if not exists (
+    select 1 from sys_menu
+    where menu_id = 2054
+      and parent_id = 2030
+      and order_num = 4
+      and path = 'logistics-carrier'
+      and component = 'Common/PlannedPage/index'
+      and route_name = 'LogisticsCarrier'
+      and perms = 'logistics:carrier:list'
+      and menu_type = 'C'
+  ) then
+    signal sqlstate '45000' set message_text = 'logistics carrier menu 2054 was not created with expected signature';
+  end if;
+
+  if not exists (
+    select 1 from sys_menu
+    where menu_id = 2041
+      and parent_id = 2030
+      and order_num = 5
+      and path = 'channel-system'
+      and component = 'Channel/System/index'
+      and route_name = 'ChannelSystem'
+      and perms = 'channel:system:list'
+      and menu_type = 'C'
+  ) then
+    signal sqlstate '45000' set message_text = 'system channel menu 2041 was not restructured with expected signature';
+  end if;
+
+  if not exists (
+    select 1 from sys_menu
+    where menu_id = 2042
+      and parent_id = 2030
+      and order_num = 6
+      and path = 'channel-customer'
+      and component = 'Channel/Customer/index'
+      and route_name = 'ChannelCustomer'
+      and perms = 'channel:customer:list'
+      and menu_type = 'C'
+  ) then
+    signal sqlstate '45000' set message_text = 'customer channel menu 2042 was not restructured with expected signature';
+  end if;
+
+  if not exists (
+    select 1 from sys_menu
+    where menu_id = 2031
+      and parent_id = 2030
+      and order_num = 7
+      and menu_type = 'C'
+  ) then
+    signal sqlstate '45000' set message_text = 'upstream system menu 2031 was not reordered with expected signature';
+  end if;
+end//
+
 delimiter ;
 
 call assert_overseas_channel_carrier_menu_confirmed();
@@ -127,6 +318,9 @@ insert into tmp_overseas_channel_menu_guard(menu_id, parent_id, menu_type, path,
 
 call assert_overseas_channel_parent_ready();
 call assert_overseas_channel_menu_guard();
+call assert_overseas_channel_restructure_targets();
+
+start transaction;
 
 insert into sys_menu
     (menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
@@ -171,14 +365,41 @@ where menu_id = 2031
   and menu_type = 'C';
 
 call assert_legacy_channel_root_empty();
+call assert_legacy_channel_cleanup_targets();
 
-delete from sys_role_menu
-where menu_id = 2040;
+select rm.role_id, rm.menu_id
+from sys_role_menu rm
+where rm.menu_id = 2040
+order by rm.role_id, rm.menu_id;
 
-delete from sys_menu
-where menu_id = 2040;
+select m.menu_id, m.parent_id, m.menu_name, m.path, m.component, m.route_name, m.perms, m.menu_type
+from sys_menu m
+where m.menu_id = 2040
+order by m.menu_id;
+
+delete rm
+from sys_role_menu rm
+where rm.menu_id = 2040;
+
+delete m
+from sys_menu m
+where m.menu_id = 2040
+  and m.parent_id = 0
+  and m.menu_name = '渠道管理'
+  and coalesce(m.path, '') in ('urili-channel', 'channel')
+  and coalesce(m.component, '') = ''
+  and coalesce(m.route_name, '') in ('', 'Channel')
+  and coalesce(m.perms, '') = ''
+  and coalesce(m.menu_type, '') = 'M';
+
+call assert_overseas_channel_restructure_completed();
+
+commit;
 
 drop temporary table if exists tmp_overseas_channel_menu_guard;
 drop procedure if exists assert_overseas_channel_parent_ready;
 drop procedure if exists assert_overseas_channel_menu_guard;
 drop procedure if exists assert_legacy_channel_root_empty;
+drop procedure if exists assert_legacy_channel_cleanup_targets;
+drop procedure if exists assert_overseas_channel_restructure_targets;
+drop procedure if exists assert_overseas_channel_restructure_completed;

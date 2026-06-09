@@ -38,9 +38,40 @@ public class TerminalRoleMenuMapperIsolationContractTest
             int maxMenuId, List<String> violations) throws IOException
     {
         String xml = Files.readString(mapper, StandardCharsets.UTF_8);
+        String menuVoStatement = extractStatement(xml, "sql", "select" + capitalize(terminal) + "MenuVo");
+        String selectByIdStatement = extractStatement(xml, "select", "select" + capitalize(terminal) + "MenuById");
+        String hasChildStatement = extractStatement(xml, "select", "hasChildByMenuId");
+        String checkExistRoleStatement = extractStatement(xml, "select", "checkMenuExistRole");
         String countStatement = extractStatement(xml, "select", "count" + capitalize(terminal) + "MenusByIds");
         String batchStatement = extractStatement(xml, "insert", "batch" + capitalize(terminal) + "RoleMenu");
         String fileName = mapper.getFileName().toString();
+
+        requireContains(fileName, "select" + capitalize(terminal) + "MenuVo", menuVoStatement,
+                "from " + terminal + "_menu m", violations);
+        requireContains(fileName, "select" + capitalize(terminal) + "MenuVo", menuVoStatement,
+                "left join " + terminal + "_menu p", violations);
+        requireAbsent(fileName, "select" + capitalize(terminal) + "MenuVo", menuVoStatement,
+                "sys_menu", violations);
+        requireAbsent(fileName, "select" + capitalize(terminal) + "MenuVo", menuVoStatement,
+                otherTerminal + "_menu", violations);
+
+        requireContains(fileName, "select" + capitalize(terminal) + "MenuById", selectByIdStatement,
+                "where m." + terminal + "_menu_id = #{menuid}", violations);
+        requireAbsent(fileName, "select" + capitalize(terminal) + "MenuById", selectByIdStatement,
+                "sys_menu", violations);
+        requireAbsent(fileName, "select" + capitalize(terminal) + "MenuById", selectByIdStatement,
+                otherTerminal + "_menu", violations);
+
+        requireContains(fileName, "hasChildByMenuId", hasChildStatement,
+                "from " + terminal + "_menu where parent_id = #{menuid}", violations);
+        requireAbsent(fileName, "hasChildByMenuId", hasChildStatement, "sys_menu", violations);
+        requireAbsent(fileName, "hasChildByMenuId", hasChildStatement, otherTerminal + "_menu", violations);
+
+        requireContains(fileName, "checkMenuExistRole", checkExistRoleStatement,
+                "from " + terminal + "_role_menu where " + terminal + "_menu_id = #{menuid}", violations);
+        requireAbsent(fileName, "checkMenuExistRole", checkExistRoleStatement, "sys_menu", violations);
+        requireAbsent(fileName, "checkMenuExistRole", checkExistRoleStatement, otherTerminal + "_menu", violations);
+        requireAbsent(fileName, "checkMenuExistRole", checkExistRoleStatement, otherTerminal + "_role", violations);
 
         requireContains(fileName, "count" + capitalize(terminal) + "MenusByIds", countStatement,
                 "from " + terminal + "_menu", violations);
@@ -63,6 +94,10 @@ public class TerminalRoleMenuMapperIsolationContractTest
                 "inner join " + terminal + "_menu", violations);
         requireContains(fileName, "batch" + capitalize(terminal) + "RoleMenu", batchStatement,
                 "m.status = '0'", violations);
+        requireContains(fileName, "batch" + capitalize(terminal) + "RoleMenu", batchStatement,
+                "m." + terminal + "_menu_id &gt;= " + minMenuId, violations);
+        requireContains(fileName, "batch" + capitalize(terminal) + "RoleMenu", batchStatement,
+                "m." + terminal + "_menu_id &lt; " + maxMenuId, violations);
         requireAbsent(fileName, "batch" + capitalize(terminal) + "RoleMenu", batchStatement,
                 "sys_menu", violations);
         requireAbsent(fileName, "batch" + capitalize(terminal) + "RoleMenu", batchStatement,

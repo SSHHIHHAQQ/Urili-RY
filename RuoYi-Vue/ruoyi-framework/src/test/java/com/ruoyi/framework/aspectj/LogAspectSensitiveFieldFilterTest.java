@@ -44,6 +44,17 @@ public class LogAspectSensitiveFieldFilterTest
         }
     }
 
+    @Test
+    public void portalLogFilterExcludesScopeAndAuditFields()
+    {
+        for (String sensitiveField : Arrays.asList("subjectId", "accountId", "sellerId", "buyerId",
+                "sellerAccountId", "buyerAccountId", "directLoginTicketId", "actingAdminId",
+                "actingAdminName", "directLoginReason", "terminal", "tokenId", "operParam", "jsonResult"))
+        {
+            assertTrue(Arrays.asList(PortalLogAspect.EXCLUDE_PROPERTIES).contains(sensitiveField));
+        }
+    }
+
     private void assertSensitiveFieldsRemoved(String json)
     {
         assertFalse(json.contains("secret-value"));

@@ -8,10 +8,14 @@ import java.util.Set;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import com.github.pagehelper.Page;
+import com.ruoyi.buyer.domain.BuyerAccount;
 import com.ruoyi.buyer.domain.BuyerPortalProduct;
 import com.ruoyi.buyer.domain.BuyerPortalProductSku;
+import com.ruoyi.buyer.mapper.BuyerMapper;
 import com.ruoyi.buyer.service.IBuyerPortalProductService;
+import com.ruoyi.common.constant.HttpStatus;
 import com.ruoyi.common.exception.ServiceException;
+import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.product.domain.ProductSku;
 import com.ruoyi.product.domain.ProductSpu;
 import com.ruoyi.product.service.IProductDistributionService;
@@ -28,6 +32,9 @@ public class BuyerPortalProductServiceImpl implements IBuyerPortalProductService
 
     @Autowired
     private IProductDistributionService productDistributionService;
+
+    @Autowired
+    private BuyerMapper buyerMapper;
 
     @Override
     public List<BuyerPortalProduct> selectVisibleProductList(PortalLoginSession session, ProductSpu query)
@@ -108,9 +115,15 @@ public class BuyerPortalProductServiceImpl implements IBuyerPortalProductService
     private void assertBuyerSession(PortalLoginSession session)
     {
         if (session == null || session.getSubjectId() == null || session.getAccountId() == null
-            || !TERMINAL_BUYER.equals(session.getTerminal()))
+            || StringUtils.isBlank(session.getTokenId()) || !TERMINAL_BUYER.equals(session.getTerminal()))
         {
-            throw new ServiceException("登录状态已失效");
+            throw new ServiceException("登录状态已失效", HttpStatus.UNAUTHORIZED);
+        }
+        BuyerAccount account = buyerMapper.selectBuyerAccountByIdAndBuyerId(session.getSubjectId(),
+            session.getAccountId());
+        if (account == null)
+        {
+            throw new ServiceException("登录状态已失效", HttpStatus.UNAUTHORIZED);
         }
     }
 
@@ -119,6 +132,7 @@ public class BuyerPortalProductServiceImpl implements IBuyerPortalProductService
         List<ProductSku> visibleSkus = visibleSkus(product.getSkus());
         BuyerPortalProduct result = new BuyerPortalProduct();
         result.setSpuId(product.getSpuId());
+        result.setSystemSpuCode(product.getSystemSpuCode());
         result.setCategoryId(product.getCategoryId());
         result.setCategoryCode(product.getCategoryCode());
         result.setCategoryName(product.getCategoryName());
@@ -132,6 +146,7 @@ public class BuyerPortalProductServiceImpl implements IBuyerPortalProductService
         result.setSalePriceMin(minSalePrice(visibleSkus));
         result.setSalePriceMax(maxSalePrice(visibleSkus));
         result.setCurrencySummary(currencySummary(visibleSkus));
+        result.setWarehouseCount(product.getWarehouseCount());
         result.setSkus(toPortalSkus(visibleSkus));
         return result;
     }
@@ -221,6 +236,7 @@ public class BuyerPortalProductServiceImpl implements IBuyerPortalProductService
         BuyerPortalProductSku result = new BuyerPortalProductSku();
         result.setSkuId(sku.getSkuId());
         result.setSpuId(sku.getSpuId());
+        result.setSystemSkuCode(sku.getSystemSkuCode());
         result.setColor(sku.getColor());
         result.setSize(sku.getSize());
         result.setLengthValue(sku.getLengthValue());
@@ -237,6 +253,7 @@ public class BuyerPortalProductServiceImpl implements IBuyerPortalProductService
         result.setCurrencyCode(sku.getCurrencyCode());
         result.setSkuStatus(sku.getSkuStatus());
         result.setSortOrder(sku.getSortOrder());
+        result.setWarehouseCount(sku.getWarehouseCount());
         return result;
     }
 }

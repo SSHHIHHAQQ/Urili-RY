@@ -383,7 +383,8 @@ export default function AttributeLibrary({ access }: AttributeLibraryProps) {
         scroll={getProTableScroll(1450)}
         search={getPersistedProTableSearch({ labelWidth: 90 }, 'product-attribute')}
         request={async (params) => {
-          const resp = await getAttributeList(params);
+          const { current, pageSize, ...rest } = params;
+          const resp = await getAttributeList({ ...rest, pageNum: current, pageSize });
           return {
             data: resp.rows || [],
             total: resp.total || 0,

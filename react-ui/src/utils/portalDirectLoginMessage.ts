@@ -1,6 +1,7 @@
 export const PORTAL_DIRECT_LOGIN_READY_MESSAGE = 'URILI_PORTAL_DIRECT_LOGIN_READY';
 export const PORTAL_DIRECT_LOGIN_TOKEN_MESSAGE = 'URILI_PORTAL_DIRECT_LOGIN_TOKEN';
 export const PORTAL_DIRECT_LOGIN_RESULT_MESSAGE = 'URILI_PORTAL_DIRECT_LOGIN_RESULT';
+export const PORTAL_DIRECT_LOGIN_OPENER_ORIGIN_PARAM = 'openerOrigin';
 
 export type PortalDirectLoginReadyMessage = {
   type: typeof PORTAL_DIRECT_LOGIN_READY_MESSAGE;
@@ -33,6 +34,38 @@ function resolveTargetOrigin(loginUrl: string) {
   } catch {
     return window.location.origin;
   }
+}
+
+function normalizeHttpOrigin(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.origin : null;
+  } catch {
+    return null;
+  }
+}
+
+export function buildPortalDirectLoginWindowUrl(loginUrl: string) {
+  try {
+    const url = new URL(loginUrl, window.location.href);
+    url.searchParams.set(PORTAL_DIRECT_LOGIN_OPENER_ORIGIN_PARAM, window.location.origin);
+    return url.toString();
+  } catch {
+    return loginUrl;
+  }
+}
+
+export function resolvePortalDirectLoginOpenerOrigin(search = window.location.search) {
+  const explicitOrigin = normalizeHttpOrigin(
+    new URLSearchParams(search).get(PORTAL_DIRECT_LOGIN_OPENER_ORIGIN_PARAM),
+  );
+  if (explicitOrigin) {
+    return explicitOrigin;
+  }
+  return normalizeHttpOrigin(document.referrer) || window.location.origin;
 }
 
 function isReadyMessage(data: unknown, terminal: API.Partner.PortalTerminal) {
@@ -70,12 +103,13 @@ export function openPortalDirectLoginWindow(
     return false;
   }
 
-  const popup = window.open(result.loginUrl, '_blank');
+  const loginUrl = buildPortalDirectLoginWindowUrl(result.loginUrl);
+  const popup = window.open(loginUrl, '_blank');
   if (!popup) {
     return false;
   }
 
-  const targetOrigin = resolveTargetOrigin(result.loginUrl);
+  const targetOrigin = resolveTargetOrigin(loginUrl);
   const payload: PortalDirectLoginTokenMessage = {
     type: PORTAL_DIRECT_LOGIN_TOKEN_MESSAGE,
     terminal,

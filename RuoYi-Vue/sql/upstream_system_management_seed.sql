@@ -74,6 +74,63 @@ begin
   end if;
 end//
 
+drop procedure if exists assert_upstream_system_management_seed_completed//
+create procedure assert_upstream_system_management_seed_completed()
+begin
+  declare v_dict_type_count int default 0;
+  declare v_dict_data_count int default 0;
+
+  select count(1)
+    into v_dict_type_count
+  from sys_dict_type
+  where status = '0'
+    and dict_type in (
+      'upstream_system_kind',
+      'upstream_connection_status',
+      'upstream_sync_item_status',
+      'upstream_settlement_type',
+      'upstream_pairing_role'
+    );
+
+  if v_dict_type_count <> 5 then
+    signal sqlstate '45000' set message_text = 'upstream system management seed did not complete expected dict types';
+  end if;
+
+  select count(1)
+    into v_dict_data_count
+  from sys_dict_data
+  where status = '0'
+    and (
+      (dict_type = 'upstream_system_kind' and dict_value = 'lingxing-wms')
+      or (dict_type = 'upstream_connection_status' and dict_value in ('ENABLED', 'DISABLED'))
+      or (dict_type = 'upstream_sync_item_status' and dict_value in ('ACTIVE', 'MISSING'))
+      or (dict_type = 'upstream_settlement_type' and dict_value in ('upstream-payable', 'self-operated-receivable'))
+      or (dict_type = 'upstream_pairing_role' and dict_value in ('FULFILLMENT', 'QUOTE'))
+    );
+
+  if v_dict_data_count <> 9 then
+    signal sqlstate '45000' set message_text = 'upstream system management seed did not complete expected dict data';
+  end if;
+
+  if exists (
+    select 1
+    from tmp_upstream_system_management_sys_menu_guard seed
+    where not exists (
+      select 1
+      from sys_menu m
+      where m.menu_id = seed.menu_id
+        and coalesce(m.parent_id, -1) = seed.parent_id
+        and coalesce(m.menu_type, '') = seed.menu_type
+        and coalesce(m.path, '') = coalesce(seed.path, '')
+        and coalesce(m.component, '') = coalesce(seed.component, '')
+        and coalesce(m.route_name, '') = coalesce(seed.route_name, '')
+        and coalesce(m.perms, '') = coalesce(seed.perms, '')
+    )
+  ) then
+    signal sqlstate '45000' set message_text = 'upstream system management seed did not complete expected sys_menu state';
+  end if;
+end//
+
 delimiter ;
 
 call assert_upstream_system_management_seed_confirmed();
@@ -304,6 +361,36 @@ create table if not exists upstream_system_sku_pairing_audit_event (
   key idx_upstream_sku_audit_sku (connection_code, master_sku, system_sku)
 ) engine=innodb comment='SKU配对审计事件表';
 
+create temporary table if not exists tmp_upstream_system_management_sys_menu_guard (
+  menu_id    bigint       not null,
+  parent_id  bigint       not null,
+  menu_type  char(1)      not null,
+  path       varchar(200) not null default '',
+  component  varchar(255) not null default '',
+  route_name varchar(50)  not null default '',
+  perms      varchar(100) not null default '',
+  key idx_upstream_system_management_sys_menu_guard_id (menu_id)
+) engine=memory;
+
+truncate table tmp_upstream_system_management_sys_menu_guard;
+
+insert into tmp_upstream_system_management_sys_menu_guard(menu_id, parent_id, menu_type, path, component, route_name, perms) values
+    (2031, 2030, 'C', 'upstream-system', 'UpstreamSystem/index', 'UpstreamSystem', 'integration:upstream:list'),
+    (2300, 2031, 'F', '#', '', '', 'integration:upstream:query'),
+    (2301, 2031, 'F', '#', '', '', 'integration:upstream:add'),
+    (2302, 2031, 'F', '#', '', '', 'integration:upstream:edit'),
+    (2303, 2031, 'F', '#', '', '', 'integration:upstream:credential'),
+    (2304, 2031, 'F', '#', '', '', 'integration:upstream:sync'),
+    (2305, 2031, 'F', '#', '', '', 'integration:upstream:pair'),
+    (2306, 2031, 'F', '#', '', '', 'integration:upstream:log'),
+    (2307, 2031, 'F', '#', '', '', 'integration:upstream:dimensionSync'),
+    (2308, 2031, 'F', '#', '', '', 'integration:upstream:inventoryQuery'),
+    (2309, 2031, 'F', '#', '', '', 'integration:upstream:inventorySync');
+
+call assert_upstream_system_management_sys_menu_guard();
+
+start transaction;
+
 insert into sys_dict_type
     (dict_name, dict_type, status, create_by, create_time, update_by, update_time, remark)
 select '上游系统类型', 'upstream_system_kind', '0', 'admin', sysdate(), '', null, '上游系统类型'
@@ -370,34 +457,6 @@ from (
 ) seed
 where not exists (select 1 from sys_dict_data d where d.dict_type = 'upstream_pairing_role' and d.dict_value = seed.dict_value);
 
-create temporary table if not exists tmp_upstream_system_management_sys_menu_guard (
-  menu_id    bigint       not null,
-  parent_id  bigint       not null,
-  menu_type  char(1)      not null,
-  path       varchar(200) not null default '',
-  component  varchar(255) not null default '',
-  route_name varchar(50)  not null default '',
-  perms      varchar(100) not null default '',
-  key idx_upstream_system_management_sys_menu_guard_id (menu_id)
-) engine=memory;
-
-truncate table tmp_upstream_system_management_sys_menu_guard;
-
-insert into tmp_upstream_system_management_sys_menu_guard(menu_id, parent_id, menu_type, path, component, route_name, perms) values
-    (2031, 2030, 'C', 'upstream-system', 'UpstreamSystem/index', 'UpstreamSystem', 'integration:upstream:list'),
-    (2300, 2031, 'F', '#', '', '', 'integration:upstream:query'),
-    (2301, 2031, 'F', '#', '', '', 'integration:upstream:add'),
-    (2302, 2031, 'F', '#', '', '', 'integration:upstream:edit'),
-    (2303, 2031, 'F', '#', '', '', 'integration:upstream:credential'),
-    (2304, 2031, 'F', '#', '', '', 'integration:upstream:sync'),
-    (2305, 2031, 'F', '#', '', '', 'integration:upstream:pair'),
-    (2306, 2031, 'F', '#', '', '', 'integration:upstream:log'),
-    (2307, 2031, 'F', '#', '', '', 'integration:upstream:dimensionSync'),
-    (2308, 2031, 'F', '#', '', '', 'integration:upstream:inventoryQuery'),
-    (2309, 2031, 'F', '#', '', '', 'integration:upstream:inventorySync');
-
-call assert_upstream_system_management_sys_menu_guard();
-
 insert into sys_menu
     (menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
      is_frame, is_cache, menu_type, visible, status, perms, icon, create_by,
@@ -455,7 +514,12 @@ on duplicate key update
     update_time = sysdate(),
     remark = values(remark);
 
+call assert_upstream_system_management_seed_completed();
+
+commit;
+
 drop temporary table if exists tmp_upstream_system_management_sys_menu_guard;
+drop procedure if exists assert_upstream_system_management_seed_completed;
 drop procedure if exists assert_upstream_system_management_sys_menu_guard;
 
 -- Inventory schema and scheduled jobs are maintained by follow-up migrations.

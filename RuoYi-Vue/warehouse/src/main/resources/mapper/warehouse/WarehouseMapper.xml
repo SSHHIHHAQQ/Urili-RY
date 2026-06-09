@@ -78,27 +78,19 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                w.address_line1, w.address_line2, w.contact_name, w.contact_phone,
                w.contact_email, w.company_name, w.settlement_currency, w.status,
                w.create_by, w.create_time, w.update_by, w.update_time, w.remark,
-               tp.seller_id, s.seller_no, s.seller_code, s.seller_name, s.seller_short_name,
-               p.warehouse_pairing_id, p.connection_code, p.upstream_warehouse_code,
-               p.upstream_warehouse_name, p.pairing_role, p.status as pairing_status,
-               uc.master_warehouse_name,
-               qp.warehouse_pairing_id as quote_warehouse_pairing_id,
-               qp.connection_code as quote_connection_code,
-               qp.upstream_warehouse_code as quote_upstream_warehouse_code,
-               qp.upstream_warehouse_name as quote_upstream_warehouse_name,
-               qp.status as quote_pairing_status,
-               quc.master_warehouse_name as quote_master_warehouse_name
+               tp.seller_id,
+               null as seller_no, null as seller_code, null as seller_name, null as seller_short_name,
+               null as warehouse_pairing_id, null as connection_code, null as upstream_warehouse_code,
+               null as upstream_warehouse_name, null as pairing_role, null as pairing_status,
+               null as master_warehouse_name,
+               null as quote_warehouse_pairing_id,
+               null as quote_connection_code,
+               null as quote_upstream_warehouse_code,
+               null as quote_upstream_warehouse_name,
+               null as quote_pairing_status,
+               null as quote_master_warehouse_name
         from warehouse w
         left join third_party_warehouse tp on tp.warehouse_id = w.warehouse_id
-        left join seller s on s.seller_id = tp.seller_id
-        left join upstream_system_warehouse_pairing p
-               on p.system_warehouse_code = w.warehouse_code
-              and p.pairing_role = 'FULFILLMENT'
-        left join upstream_system_connection uc on uc.connection_code = p.connection_code
-        left join upstream_system_warehouse_pairing qp
-               on qp.system_warehouse_code = w.warehouse_code
-              and qp.pairing_role = 'QUOTE'
-        left join upstream_system_connection quc on quc.connection_code = qp.connection_code
     </sql>
 
     <select id="selectWarehouseList" parameterType="Warehouse" resultMap="WarehouseResult">
@@ -131,13 +123,11 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="sellerId != null">
                 and tp.seller_id = #{sellerId}
             </if>
-            <if test="sellerKeyword != null and sellerKeyword != ''">
-                and (
-                    s.seller_no like concat('%', #{sellerKeyword}, '%')
-                    or s.seller_code like concat('%', #{sellerKeyword}, '%')
-                    or s.seller_name like concat('%', #{sellerKeyword}, '%')
-                    or s.seller_short_name like concat('%', #{sellerKeyword}, '%')
-                )
+            <if test="sellerIds != null and sellerIds.size > 0">
+                and tp.seller_id in
+                <foreach collection="sellerIds" item="sellerIdItem" open="(" separator="," close=")">
+                    #{sellerIdItem}
+                </foreach>
             </if>
         </where>
         order by w.create_time desc, w.warehouse_id desc
@@ -266,30 +256,4 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         limit 100
     </select>
 
-    <select id="selectNormalSellerOptions" resultMap="WarehouseOptionResult">
-        select concat(seller_code, ' - ', seller_short_name) as label,
-               seller_id as value,
-               seller_code as code,
-               seller_name as name,
-               concat(seller_no, ' ', seller_code, ' ', seller_name, ' ', seller_short_name) as search_text
-        from seller
-        where status = '0'
-        <if test="keyword != null and keyword != ''">
-            and (
-                seller_no like concat('%', #{keyword}, '%')
-                or seller_code like concat('%', #{keyword}, '%')
-                or seller_name like concat('%', #{keyword}, '%')
-                or seller_short_name like concat('%', #{keyword}, '%')
-            )
-        </if>
-        order by seller_code asc, seller_id asc
-        limit 100
-    </select>
-
-    <select id="countNormalSellerById" resultType="int">
-        select count(1)
-        from seller
-        where seller_id = #{sellerId}
-          and status = '0'
-    </select>
 </mapper>

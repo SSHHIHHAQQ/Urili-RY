@@ -26,7 +26,8 @@ public class PortalPasswordChangeContractTest
                 "buyer/src/main/java/com/ruoyi/buyer/controller/BuyerPortalController.java"),
                 "buyer", "updateBuyerOwnPassword", violations);
         assertPortalPasswordService(repoRoot.resolve("react-ui/src/services/portal/session.ts"), violations);
-        assertPortalPasswordService(repoRoot.resolve("react-ui/src/services/portal/session.js"), violations);
+        assertExactSource(repoRoot.resolve("react-ui/src/services/portal/session.js"),
+                "export * from './session.ts';", violations);
 
         if (!violations.isEmpty())
         {
@@ -155,6 +156,15 @@ public class PortalPasswordChangeContractTest
         if (source.contains(forbidden))
         {
             violations.add(path.getFileName() + " must not contain " + forbidden);
+        }
+    }
+
+    private void assertExactSource(Path path, String expected, List<String> violations) throws IOException
+    {
+        String source = Files.readString(path, StandardCharsets.UTF_8).replace("\r\n", "\n").trim();
+        if (!source.equals(expected))
+        {
+            violations.add(path.getFileName() + " must be a pure re-export to the guarded TS portal session service");
         }
     }
 

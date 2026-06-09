@@ -1,5 +1,7 @@
 # 2026-06-06 管理端卖家管理菜单权限只读检查
 
+> 历史记录（已过期口径）：本文记录的是 2026-06-06 的只读权限审计快照；文中的 `resetOwnerPassword`、`resetPassword/resetDefaultPassword` 和默认密码重置入口描述已被后续三端隔离口径覆盖。当前不保留主体级 `resetOwnerPassword` 控制入口；端账号“重置密码”必须人工输入 5-20 位临时密码并调用 `resetPwd`，不得恢复默认密码重置入口。
+
 ## 检查范围
 
 - 工作区：`E:\Urili-Ruoyi`
@@ -39,7 +41,7 @@
 | 卖家新增 | `seller:admin:add` | 综合 seed | `AdminSellerController.add` | 新增按钮 |
 | 卖家修改 | `seller:admin:edit` | 综合 seed | `AdminSellerController.edit` | 编辑按钮 |
 | 卖家启停 | `seller:admin:changeStatus` | 综合 seed | `AdminSellerController.changeStatus` | 状态开关 |
-| 重置主账号密码 | `seller:admin:resetPwd` | 综合 seed | `AdminSellerController.resetOwnerPassword` | 更多/重置密码 |
+| 重置主账号密码 | `seller:admin:resetPwd` | 综合 seed | 历史记录（已过期口径）：`AdminSellerController.resetOwnerPassword` | 历史入口，当前不得恢复 |
 | 卖家免密登录 | `seller:admin:directLogin` | 综合 seed | `AdminSellerController.directLogin*` | 更多/登录卖家端 |
 | 强制踢出 | `seller:admin:forceLogout` | 综合 seed、强退增量 | `AdminSellerController.sessions/logout*` | 会话/强制踢出 |
 | 卖家端菜单管理 | `seller:admin:menu:list/query/add/edit/remove` | 综合 seed、端权限增量 | `AdminSellerMenuController` | 菜单弹窗 |
@@ -52,7 +54,7 @@
 | 卖家账号新增 | `seller:admin:account:add` | 综合 seed、账号增量 | `AdminSellerController.addAccount` | 账号弹窗新增 |
 | 卖家账号修改 | `seller:admin:account:edit` | 综合 seed、账号增量 | `AdminSellerController.editAccount` | 账号行编辑 |
 | 卖家账号锁定/解锁 | `seller:admin:account:lock` | 综合 seed、账号增量、锁定增量 | `AdminSellerController.lockAccount/unlockAccount` | 账号更多菜单 |
-| 卖家账号重置密码 | `seller:admin:account:resetPwd` | 综合 seed、账号增量 | `AdminSellerController.resetPassword/resetDefaultPassword` | 账号更多菜单 |
+| 卖家账号重置密码 | `seller:admin:account:resetPwd` | 综合 seed、账号增量 | 历史记录（已过期口径）：`AdminSellerController.resetPassword/resetDefaultPassword` | 当前只保留人工临时密码 `resetPwd` |
 | 卖家账号角色查询 | `seller:admin:account:role:query` | 综合 seed、账号增量 | `AdminSellerController.accountRoles` | 分配角色前置 |
 | 卖家账号角色分配 | `seller:admin:account:role:edit` | 综合 seed、账号增量 | `AdminSellerController.assignAccountRoles` | 分配角色提交 |
 

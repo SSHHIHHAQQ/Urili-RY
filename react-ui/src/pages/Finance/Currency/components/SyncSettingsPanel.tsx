@@ -268,7 +268,8 @@ export default function SyncSettingsPanel({
               'finance-currency-sync-log',
             )}
             request={async (params) => {
-              const resp = await getSyncLogList(params);
+              const { current, pageSize, ...rest } = params;
+              const resp = await getSyncLogList({ ...rest, pageNum: current, pageSize });
               return {
                 data: resp.rows || [],
                 success: resp.code === 200,

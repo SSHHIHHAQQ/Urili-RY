@@ -12,6 +12,7 @@ public class ProductBatchStatusUpdateRequest
     private List<Long> skuIds;
     private String status;
     private Boolean syncSkuStatus;
+    private String reason;
 
     public String getOwnerType() { return ownerType; }
     public void setOwnerType(String ownerType) { this.ownerType = ownerType; }
@@ -23,4 +24,6 @@ public class ProductBatchStatusUpdateRequest
     public void setStatus(String status) { this.status = status; }
     public Boolean getSyncSkuStatus() { return syncSkuStatus; }
     public void setSyncSkuStatus(Boolean syncSkuStatus) { this.syncSkuStatus = syncSkuStatus; }
+    public String getReason() { return reason; }
+    public void setReason(String reason) { this.reason = reason; }
 }

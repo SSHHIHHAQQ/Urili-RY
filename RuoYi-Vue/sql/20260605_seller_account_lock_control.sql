@@ -2,8 +2,13 @@
 -- Scope: seller_account only. Buyer account lock control is intentionally not copied in this slice.
 
 set names utf8mb4;
+set session group_concat_max_len = greatest(@@session.group_concat_max_len, 1048576);
 
 set @confirm_seller_account_lock_control := coalesce(@confirm_seller_account_lock_control, '');
+set @seller_account_lock_normalize_expected_count :=
+    coalesce(@seller_account_lock_normalize_expected_count, '');
+set @seller_account_lock_normalize_expected_signature :=
+    coalesce(@seller_account_lock_normalize_expected_signature, '');
 
 delimiter //
 
@@ -13,6 +18,13 @@ begin
   if coalesce(@confirm_seller_account_lock_control, '')
       <> 'APPLY_SELLER_ACCOUNT_LOCK_CONTROL' then
     signal sqlstate '45000' set message_text = 'set @confirm_seller_account_lock_control = APPLY_SELLER_ACCOUNT_LOCK_CONTROL before running this migration';
+  end if;
+
+  if coalesce(@seller_account_lock_normalize_expected_count, '') not regexp '^[0-9]+$' then
+    signal sqlstate '45000' set message_text = 'set @seller_account_lock_normalize_expected_count after previewing exact seller_account lock normalize rows';
+  end if;
+  if coalesce(@seller_account_lock_normalize_expected_signature, '') not regexp '^[0-9a-fA-F]{64}$' then
+    signal sqlstate '45000' set message_text = 'set @seller_account_lock_normalize_expected_signature after previewing exact seller_account lock normalize rows';
   end if;
 end//
 
@@ -74,7 +86,7 @@ begin
     from sys_menu
     where menu_id = p_menu_id
       and (
-        parent_id <> p_parent_id
+        coalesce(parent_id, -1) <> p_parent_id
         or coalesce(menu_type, '') <> coalesce(p_menu_type, '')
         or coalesce(path, '') <> coalesce(p_path, '')
         or coalesce(component, '') <> coalesce(p_component, '')
@@ -109,7 +121,128 @@ begin
   end if;
 end//
 
+drop procedure if exists assert_partner_seller_parent_menu_ready//
+create procedure assert_partner_seller_parent_menu_ready()
+begin
+  declare v_count int default 0;
+
+  select count(1)
+    into v_count
+  from sys_menu
+  where (menu_id = 2010
+         and menu_name = '主体管理'
+         and parent_id = 0
+         and menu_type = 'M'
+         and coalesce(path, '') = 'partner'
+         and coalesce(component, '') = ''
+         and coalesce(route_name, '') = 'PartnerManagement'
+         and coalesce(perms, '') = '')
+     or (menu_id = 2011
+         and menu_name = '卖家管理'
+         and parent_id = 2010
+         and menu_type = 'C'
+         and coalesce(path, '') = 'seller'
+         and coalesce(component, '') = 'Seller/index'
+         and coalesce(route_name, '') = 'Seller'
+         and coalesce(perms, '') = 'seller:admin:list');
+
+  if v_count <> 2 then
+    signal sqlstate '45000' set message_text = 'partner seller parent menu signature does not match expected';
+  end if;
+end//
+
+drop procedure if exists assert_seller_account_lock_normalize_targets//
+create procedure assert_seller_account_lock_normalize_targets()
+begin
+  declare v_count int default 0;
+  declare v_signature varchar(64) default '';
+
+  select count(1),
+         sha2(coalesce(group_concat(
+           concat_ws(':',
+             seller_account_id,
+             seller_id,
+             coalesce(user_name, ''),
+             coalesce(lock_status, ''),
+             coalesce(lock_reason, '')
+           )
+           order by seller_account_id separator '|'
+         ), ''), 256)
+    into v_count, v_signature
+  from seller_account
+  where lock_status is null
+     or lock_status = ''
+     or lock_status not in ('0', '1')
+     or lock_reason is null;
+
+  if v_count <> cast(@seller_account_lock_normalize_expected_count as unsigned) then
+    signal sqlstate '45000' set message_text = 'seller_account lock normalize exact target count mismatch';
+  end if;
+  if lower(v_signature) <> lower(@seller_account_lock_normalize_expected_signature) then
+    signal sqlstate '45000' set message_text = 'seller_account lock normalize exact target signature mismatch';
+  end if;
+end//
+
+drop procedure if exists assert_seller_account_lock_columns_ready//
+create procedure assert_seller_account_lock_columns_ready()
+begin
+  declare v_count int default 0;
+
+  select count(1)
+    into v_count
+  from information_schema.columns
+  where table_schema = database()
+    and table_name = 'seller_account'
+    and column_name = 'lock_status'
+    and column_type = 'char(1)'
+    and is_nullable = 'NO'
+    and column_default = '0';
+
+  if v_count <> 1 then
+    signal sqlstate '45000' set message_text = 'seller_account.lock_status definition does not match expected';
+  end if;
+
+  select count(1)
+    into v_count
+  from information_schema.columns
+  where table_schema = database()
+    and table_name = 'seller_account'
+    and column_name = 'lock_reason'
+    and column_type = 'varchar(500)'
+    and is_nullable = 'NO'
+    and column_default = '';
+
+  if v_count <> 1 then
+    signal sqlstate '45000' set message_text = 'seller_account.lock_reason definition does not match expected';
+  end if;
+end//
+
+drop procedure if exists assert_seller_account_lock_index_ready//
+create procedure assert_seller_account_lock_index_ready()
+begin
+  declare v_count int default 0;
+
+  select count(1)
+    into v_count
+  from information_schema.statistics
+  where table_schema = database()
+    and table_name = 'seller_account'
+    and index_name = 'idx_seller_account_seller_lock'
+    and (
+      (seq_in_index = 1 and column_name = 'seller_id')
+      or (seq_in_index = 2 and column_name = 'lock_status')
+    );
+
+  if v_count <> 2 then
+    signal sqlstate '45000' set message_text = 'seller_account lock index definition does not match expected';
+  end if;
+end//
+
 delimiter ;
+
+call assert_partner_seller_parent_menu_ready();
+call assert_sys_menu_slot(2322, 2011, 'F', '#', '', '', 'seller:admin:account:lock', 'sys_menu 2322 is occupied by another menu');
+call assert_sys_menu_signature_available(2322, '#', '', '', 'seller:admin:account:lock', 'seller account lock menu signature is already used by another menu');
 
 call add_column_if_missing(
   'seller_account',
@@ -122,6 +255,9 @@ call add_column_if_missing(
   'lock_reason',
   'varchar(500) not null default '''' comment ''锁定原因'' after lock_status'
 );
+
+call assert_seller_account_lock_columns_ready();
+call assert_seller_account_lock_normalize_targets();
 
 update seller_account
 set lock_status = case when lock_status in ('0', '1') then lock_status else '0' end,
@@ -136,6 +272,7 @@ call add_index_if_missing(
   'idx_seller_account_seller_lock',
   'key idx_seller_account_seller_lock (seller_id, lock_status)'
 );
+call assert_seller_account_lock_index_ready();
 
 insert into sys_dict_type
     (dict_name, dict_type, status, create_by, create_time, update_by, update_time, remark)
@@ -159,9 +296,6 @@ where not exists (
     where d.dict_type = 'seller_account_lock_status'
       and d.dict_value = seed.dict_value
 );
-
-call assert_sys_menu_slot(2322, 2011, 'F', '#', '', '', 'seller:admin:account:lock', 'sys_menu 2322 is occupied by another menu');
-call assert_sys_menu_signature_available(2322, '#', '', '', 'seller:admin:account:lock', 'seller account lock menu signature is already used by another menu');
 
 insert into sys_menu
     (menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
@@ -192,5 +326,9 @@ on duplicate key update
 
 drop procedure if exists add_column_if_missing;
 drop procedure if exists add_index_if_missing;
+drop procedure if exists assert_partner_seller_parent_menu_ready;
+drop procedure if exists assert_seller_account_lock_columns_ready;
+drop procedure if exists assert_seller_account_lock_index_ready;
+drop procedure if exists assert_seller_account_lock_normalize_targets;
 drop procedure if exists assert_sys_menu_slot;
 drop procedure if exists assert_sys_menu_signature_available;

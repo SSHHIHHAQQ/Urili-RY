@@ -22,6 +22,12 @@ export async function getDistributionProduct(spuId: number) {
   });
 }
 
+export async function getDistributionLatestRejectedSubmission(spuId: number) {
+  return request<API.ProductDistribution.InfoResult>(`${baseUrl}/${spuId}/latest-rejected-submission`, {
+    method: 'GET',
+  });
+}
+
 export async function addDistributionProduct(data: API.ProductDistribution.Spu) {
   return request<API.Result>(baseUrl, {
     method: 'POST',
@@ -42,10 +48,17 @@ export async function updateDistributionProduct(
 export async function updateDistributionProductStatus(
   spuId: number,
   status: string,
+  reason?: string,
 ) {
   return request<API.Result>(`${baseUrl}/${spuId}/status`, {
     method: 'PUT',
-    data: { status },
+    data: { status, reason },
+  });
+}
+
+export async function submitDistributionProductReview(spuId: number) {
+  return request<API.Result>(`${baseUrl}/${spuId}/submit-review`, {
+    method: 'POST',
   });
 }
 
@@ -53,10 +66,11 @@ export async function updateDistributionSkuStatus(
   spuId: number,
   skuId: number,
   status: string,
+  reason?: string,
 ) {
   return request<API.Result>(`${baseUrl}/${spuId}/skus/${skuId}/status`, {
     method: 'PUT',
-    data: { status },
+    data: { status, reason },
   });
 }
 
@@ -71,6 +85,7 @@ export async function batchUpdateDistributionStatus(
   ownerType: 'SPU' | 'SKU',
   ids: number[],
   status: string,
+  reason?: string,
   syncSkuStatus?: boolean,
 ) {
   return request<API.Result>(`${baseUrl}/status/batch`, {
@@ -78,6 +93,7 @@ export async function batchUpdateDistributionStatus(
     data: {
       ownerType,
       status,
+      reason,
       ...(ownerType === 'SPU' && syncSkuStatus !== undefined ? { syncSkuStatus } : {}),
       ...(ownerType === 'SPU' ? { spuIds: ids } : { skuIds: ids }),
     },

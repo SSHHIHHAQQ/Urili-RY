@@ -19,6 +19,12 @@ public class TerminalRouteOwnershipTest
     private static final Pattern TERMINAL_MAPPING = Pattern.compile(
             "@(?:RequestMapping|GetMapping|PostMapping|PutMapping|DeleteMapping|PatchMapping)\\s*\\(\\s*(?:(?:value|path)\\s*=\\s*)?\\{?\\s*\"/(?:seller|buyer)(?:/|\")",
             Pattern.DOTALL);
+    private static final Pattern CONTROLLER_CLASS_MAPPING = Pattern.compile(
+            "@RequestMapping\\s*\\(\\s*(?:(?:value|path)\\s*=\\s*)?\\{?\\s*\"(/[^\"]*)\"",
+            Pattern.DOTALL);
+    private static final Pattern METHOD_MAPPING = Pattern.compile(
+            "@(?:GetMapping|PostMapping|PutMapping|DeleteMapping|PatchMapping)\\s*\\(\\s*(?:(?:value|path)\\s*=\\s*)?\\{?\\s*\"(/[^\"]*)\"",
+            Pattern.DOTALL);
     private static final Pattern CLASS_LEVEL_ANONYMOUS = Pattern.compile("@Anonymous\\s*(?:\\R\\s*)*public\\s+class");
     private static final Pattern HANDLER_MAPPING = Pattern.compile("@(?:GetMapping|PostMapping|PutMapping|DeleteMapping|PatchMapping)\\b");
     private static final Pattern PUBLIC_METHOD = Pattern.compile("public\\s+[^\\(]+\\s+(\\w+)\\s*\\(");
@@ -30,21 +36,36 @@ public class TerminalRouteOwnershipTest
                     + "|\\bLoginUser\\b|\\bSysUser\\b");
 
     @Test
-    public void productModuleMustNotExposeSellerOrBuyerPortalRoutes() throws IOException
+    public void nonTerminalModulesMustNotExposeSellerOrBuyerPortalRoutes() throws IOException
     {
         Path backendRoot = findBackendRoot();
-        Path productSourceRoot = backendRoot.resolve("product/src/main/java");
         List<String> violations = new ArrayList<>();
 
-        try (Stream<Path> paths = Files.walk(productSourceRoot))
+        try (Stream<Path> modules = Files.list(backendRoot))
         {
-            paths.filter(path -> path.toString().endsWith(".java"))
-                    .forEach(path -> collectTerminalRouteViolation(backendRoot, path, violations));
+            for (Path module : modules.filter(Files::isDirectory).sorted().toList())
+            {
+                String moduleName = module.getFileName().toString();
+                if ("seller".equals(moduleName) || "buyer".equals(moduleName))
+                {
+                    continue;
+                }
+                Path sourceRoot = module.resolve("src/main/java");
+                if (!Files.isDirectory(sourceRoot))
+                {
+                    continue;
+                }
+                try (Stream<Path> paths = Files.walk(sourceRoot))
+                {
+                    paths.filter(path -> path.toString().endsWith(".java"))
+                            .forEach(path -> collectTerminalRouteViolation(backendRoot, path, violations));
+                }
+            }
         }
 
         if (!violations.isEmpty())
         {
-            fail("seller/buyer portal routes must live in seller/buyer modules, not product:\n"
+            fail("seller/buyer portal routes must live in seller/buyer modules, not non-terminal modules:\n"
                     + String.join("\n", violations));
         }
     }
@@ -219,16 +240,66 @@ public class TerminalRouteOwnershipTest
         try
         {
             String source = Files.readString(path, StandardCharsets.UTF_8);
-            Matcher matcher = TERMINAL_MAPPING.matcher(source);
-            if (matcher.find())
+            for (String route : collectMappedRoutes(source))
             {
-                violations.add(backendRoot.relativize(path).toString() + " -> " + matcher.group());
+                if (isTerminalPortalRoute(route))
+                {
+                    violations.add(backendRoot.relativize(path).toString() + " -> " + route);
+                }
             }
         }
         catch (IOException e)
         {
             throw new IllegalStateException("Unable to read " + path, e);
         }
+    }
+
+    private List<String> collectMappedRoutes(String source)
+    {
+        List<String> routes = new ArrayList<>();
+        List<String> classPrefixes = new ArrayList<>();
+        Matcher classMatcher = CONTROLLER_CLASS_MAPPING.matcher(source);
+        if (classMatcher.find())
+        {
+            classPrefixes.add(classMatcher.group(1));
+            routes.add(normalizeRoute(classMatcher.group(1), ""));
+        }
+        if (classPrefixes.isEmpty())
+        {
+            classPrefixes.add("");
+        }
+
+        Matcher methodMatcher = METHOD_MAPPING.matcher(source);
+        while (methodMatcher.find())
+        {
+            String methodPath = methodMatcher.group(1);
+            for (String classPrefix : classPrefixes)
+            {
+                routes.add(normalizeRoute(classPrefix, methodPath));
+            }
+        }
+        if (methodMatcher.reset().find())
+        {
+            return routes;
+        }
+
+        Matcher terminalMatcher = TERMINAL_MAPPING.matcher(source);
+        while (terminalMatcher.find())
+        {
+            routes.add(terminalMatcher.group());
+        }
+        return routes;
+    }
+
+    private String normalizeRoute(String classPrefix, String methodPath)
+    {
+        String combined = (classPrefix == null ? "" : classPrefix) + "/" + (methodPath == null ? "" : methodPath);
+        return combined.replaceAll("/{2,}", "/");
+    }
+
+    private boolean isTerminalPortalRoute(String route)
+    {
+        return route.matches("^/(seller|buyer)(/.*)?$");
     }
 
     private List<HandlerMethod> extractHandlerMethods(String source)

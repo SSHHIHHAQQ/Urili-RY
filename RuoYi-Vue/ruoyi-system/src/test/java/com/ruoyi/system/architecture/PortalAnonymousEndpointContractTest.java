@@ -20,6 +20,11 @@ public class PortalAnonymousEndpointContractTest
 
     private static final Pattern PUBLIC_METHOD = Pattern.compile("public\\s+[^\\(]+\\s+(\\w+)\\s*\\(");
 
+    private static final Pattern ADMIN_LOGIN_CONTEXT_REFERENCE = Pattern.compile(
+            "\\bSecurityUtils\\s*\\.\\s*(?:getLoginUser|getUserId|getUsername)\\s*\\("
+                    + "|(?<![\\.\\w])(?:getLoginUser|getUserId|getUsername)\\s*\\("
+                    + "|\\bLoginUser\\b|\\bSysUser\\b");
+
     private static final List<String> FORBIDDEN_SCOPE_PARAM_NAMES = Arrays.asList(
             "sellerId",
             "buyerId",
@@ -65,6 +70,14 @@ public class PortalAnonymousEndpointContractTest
                 if (authController)
                 {
                     assertAuthEndpointContract(path, terminal, handler, violations);
+                    continue;
+                }
+                if (isPortalController(path, terminal))
+                {
+                    assertPortalEndpointDeclaration(path, terminal, handler, violations);
+                    assertAnonymousEndpointContract(path, terminal, handler, violations);
+                    assertSelfAuditEndpointPermission(path, terminal, handler, violations);
+                    continue;
                 }
                 if (handler.annotations.contains("@Anonymous"))
                 {
@@ -77,6 +90,12 @@ public class PortalAnonymousEndpointContractTest
         {
             throw new AssertionError(e);
         }
+    }
+
+    private boolean isPortalController(Path path, String terminal)
+    {
+        String fileName = path.getFileName().toString();
+        return fileName.startsWith(capitalize(terminal) + "Portal") && fileName.endsWith("Controller.java");
     }
 
     private void assertAuthEndpointContract(Path path, String terminal, HandlerMethod handler, List<String> violations)
@@ -102,6 +121,26 @@ public class PortalAnonymousEndpointContractTest
         {
             violations.add(prefix + " must not save login response token in portal audit logs");
         }
+        assertHandlerDoesNotUseClientIdentityScope(path, handler, "auth endpoint", violations);
+        assertHandlerDoesNotUseAdminLoginContext(path, handler, "auth endpoint", violations);
+    }
+
+    private void assertPortalEndpointDeclaration(Path path, String terminal, HandlerMethod handler,
+            List<String> violations)
+    {
+        String prefix = relative(path) + "#" + handler.name;
+        if (!handler.annotations.contains("@Anonymous"))
+        {
+            violations.add(prefix + " portal endpoint must be @Anonymous for portal token filter boundary");
+        }
+        if (!terminalAnnotation("PortalPreAuthorize", terminal).matcher(handler.annotations).find())
+        {
+            violations.add(prefix + " portal endpoint must declare @PortalPreAuthorize terminal " + terminal);
+        }
+        if (!terminalAnnotation("PortalLog", terminal).matcher(handler.annotations).find())
+        {
+            violations.add(prefix + " portal endpoint must declare @PortalLog terminal " + terminal);
+        }
     }
 
     private void assertAnonymousEndpointContract(Path path, String terminal, HandlerMethod handler,
@@ -126,6 +165,33 @@ public class PortalAnonymousEndpointContractTest
             {
                 violations.add(prefix + " portal endpoint must not accept client identity scope parameter " + paramName);
             }
+        }
+        assertHandlerDoesNotUseAdminLoginContext(path, handler, "portal endpoint", violations);
+    }
+
+    private void assertHandlerDoesNotUseClientIdentityScope(Path path, HandlerMethod handler, String endpointType,
+            List<String> violations)
+    {
+        String source = handler.declaration + "\n" + handler.body;
+        for (String paramName : FORBIDDEN_SCOPE_PARAM_NAMES)
+        {
+            if (containsWord(source, paramName))
+            {
+                violations.add(relative(path) + "#" + handler.name + " " + endpointType
+                        + " must not accept or read client identity scope field " + paramName);
+            }
+        }
+    }
+
+    private void assertHandlerDoesNotUseAdminLoginContext(Path path, HandlerMethod handler, String endpointType,
+            List<String> violations)
+    {
+        Matcher matcher = ADMIN_LOGIN_CONTEXT_REFERENCE.matcher(handler.body);
+        if (matcher.find())
+        {
+            violations.add(relative(path) + "#" + handler.name + " " + endpointType
+                    + " must not use RuoYi admin login context `" + matcher.group()
+                    + "`; derive terminal identity from the portal auth/session flow");
         }
     }
 

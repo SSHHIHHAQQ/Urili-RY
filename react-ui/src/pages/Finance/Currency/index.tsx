@@ -321,7 +321,8 @@ export default function FinanceCurrencyPage() {
       scroll={getProTableScroll(1500)}
       search={getPersistedProTableSearch({ labelWidth: 110 }, 'finance-currency')}
       request={async (params) => {
-        const resp = await getCurrencyList(params);
+        const { current, pageSize, ...rest } = params;
+        const resp = await getCurrencyList({ ...rest, pageNum: current, pageSize });
         return {
           data: resp.rows || [],
           success: resp.code === 200,
@@ -462,9 +463,10 @@ export default function FinanceCurrencyPage() {
             search={false}
             scroll={getProTableScroll(1000)}
             request={async (params) => {
+              const { current, pageSize, ...rest } = params;
               const resp = await getRateHistoryList(
                 historyCurrency.currencyCode,
-                params,
+                { ...rest, pageNum: current, pageSize },
               );
               return {
                 data: resp.rows || [],

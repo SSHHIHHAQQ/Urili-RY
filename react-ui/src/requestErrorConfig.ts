@@ -5,7 +5,7 @@ import { clearSessionToken, clearTerminalSessionToken } from '@/access';
 import { PageEnum } from '@/enums/pagesEnums';
 import { message, notification } from '@/utils/feedback';
 import { getPortalLoginPath, isPortalRoute } from '@/utils/portalPaths';
-import { getPortalTerminalFromApiUrl } from '@/utils/portalRequest';
+import { getPortalTerminalFromApiUrl, isPortalDirectLoginApiUrl } from '@/utils/portalRequest';
 
 function redirectToLogin(includePortal = false) {
   const { pathname, search, hash } = history.location;
@@ -33,6 +33,9 @@ function isUnauthorizedCode(code: unknown) {
 function handleUnauthorized(requestUrl?: string) {
   const portalTerminal = getPortalTerminalFromApiUrl(requestUrl);
   if (portalTerminal) {
+    if (isPortalDirectLoginApiUrl(requestUrl)) {
+      return;
+    }
     clearTerminalSessionToken(portalTerminal);
     redirectToPortalLogin(portalTerminal);
     return;
@@ -107,7 +110,7 @@ export const errorConfig: RequestConfig = {
               });
               break;
             case ErrorShowType.REDIRECT:
-              handleUnauthorized(requestUrl);
+              message.error(errorMessage);
               break;
             default:
               message.error(errorMessage);

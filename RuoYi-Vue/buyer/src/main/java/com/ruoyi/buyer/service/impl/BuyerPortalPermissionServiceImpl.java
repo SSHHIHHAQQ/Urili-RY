@@ -59,6 +59,7 @@ public class BuyerPortalPermissionServiceImpl implements IBuyerPortalPermissionS
         {
             throw new ServiceException("买家端菜单不存在");
         }
+        PortalPermissionSupport.assertTerminalMenuId(menu.getMenuId(), "buyer");
         return menu;
     }
 

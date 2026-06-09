@@ -21,7 +21,7 @@ export async function getCaptchaImg(params?: Record<string, any>, options?: Reco
   });
 }
 
-/** 登录接口 POST /api/login/account */
+/** 登录接口 POST /api/login */
 export async function login(body: API.LoginParams, options?: Record<string, any>) {
   return request<API.LoginResult>('/api/login', {
     method: 'POST',
@@ -34,14 +34,9 @@ export async function login(body: API.LoginParams, options?: Record<string, any>
   });
 }
 
-/** 退出登录接口 POST /api/login/outLogin */
+/** 退出登录接口 DELETE /api/logout */
 export async function logout() {
   return request<Record<string, any>>('/api/logout', {
     method: 'delete',
   });
-}
-
-// 获取手机验证码
-export async function getMobileCaptcha(mobile: string) {
-  return request(`/api/login/captcha?mobile=${mobile}`);
 }

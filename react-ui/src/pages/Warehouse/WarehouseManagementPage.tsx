@@ -76,12 +76,14 @@ const serviceMap: Record<WarehouseKind, WarehouseServiceSet> = {
 
 const permissionMap = {
   official: {
+    list: 'warehouse:official:list',
     add: 'warehouse:official:add',
     edit: 'warehouse:official:edit',
     status: 'warehouse:official:status',
     sync: 'warehouse:official:sync',
   },
   third_party: {
+    list: 'warehouse:thirdParty:list',
     add: 'warehouse:thirdParty:add',
     edit: 'warehouse:thirdParty:edit',
     status: 'warehouse:thirdParty:status',
@@ -123,8 +125,12 @@ export default function WarehouseManagementPage({ kind }: WarehouseManagementPag
   const services = serviceMap[kind];
   const permissions = permissionMap[kind];
   const searchFieldCount = isOfficial ? 7 : 8;
+  const canList = access.hasPerms(permissions.list);
 
   useEffect(() => {
+    if (!canList) {
+      return;
+    }
     getDictSelectOption('country_region').then(setCountryOptions);
     getWarehouseCurrencyOptions().then((resp) => {
       if (resp.code === 200) {
@@ -138,7 +144,7 @@ export default function WarehouseManagementPage({ kind }: WarehouseManagementPag
         }
       });
     }
-  }, [isOfficial]);
+  }, [canList, isOfficial]);
 
   const openCreate = () => {
     setCurrentWarehouse(undefined);
@@ -208,7 +214,7 @@ export default function WarehouseManagementPage({ kind }: WarehouseManagementPag
   };
 
   const submitSync = async (values: API.Warehouse.OfficialSyncRequest) => {
-    const ok = resultOk(await syncOfficialWarehouse(values), '官方仓库已同步并绑定履约仓');
+    const ok = resultOk(await syncOfficialWarehouse(values), '官方仓库已同步并自动配对');
     if (ok) {
       setSyncOpen(false);
       actionRef.current?.reload();
@@ -458,6 +464,13 @@ export default function WarehouseManagementPage({ kind }: WarehouseManagementPag
         pagination={getProTablePagination(20)}
         scroll={getProTableScroll(isOfficial ? 1760 : 1640)}
         request={async (params) => {
+          if (!canList) {
+            return {
+              data: [],
+              success: true,
+              total: 0,
+            };
+          }
           const resp = await services.list(cleanParams(params));
           return {
             data: resp.rows || [],

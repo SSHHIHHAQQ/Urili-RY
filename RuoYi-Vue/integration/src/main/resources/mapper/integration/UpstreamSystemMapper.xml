@@ -174,6 +174,33 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="customerName"         column="customer_name"         />
     </resultMap>
 
+    <resultMap type="SourceOfficialWarehouseOption" id="SourceOfficialWarehouseOptionResult">
+        <id     property="warehouseId"          column="warehouse_id"          />
+        <result property="sourceDimensionGroupKey" column="source_dimension_group_key" />
+        <result property="warehouseCode"        column="warehouse_code"        />
+        <result property="warehouseName"        column="warehouse_name"        />
+        <result property="warehouseKind"        column="warehouse_kind"        />
+        <result property="settlementCurrency"   column="settlement_currency"   />
+    </resultMap>
+
+    <resultMap type="SourceProductBindingSnapshot" id="SourceProductBindingSnapshotResult">
+        <result property="sourceScope"           column="source_scope"          />
+        <result property="sourceSkuGroupKey"     column="source_sku_group_key"  />
+        <result property="sourceDimensionGroupKey" column="source_dimension_group_key" />
+        <result property="masterSku"             column="master_sku"            />
+        <result property="masterProductNameSnapshot" column="master_product_name_snapshot" />
+        <result property="sourcePayloadHash"     column="source_payload_hash"   />
+        <result property="wmsPayloadHash"        column="wms_payload_hash"      />
+        <result property="measureLengthCm"       column="measure_length_cm"     />
+        <result property="measureWidthCm"        column="measure_width_cm"      />
+        <result property="measureHeightCm"       column="measure_height_cm"     />
+        <result property="measureWeightKg"       column="measure_weight_kg"     />
+        <result property="measureSource"         column="measure_source"        />
+        <result property="currencyCode"          column="currency_code"         />
+        <result property="sourceWarehouseNames"  column="source_warehouse_names" />
+        <result property="sourceWarehouseCount"  column="source_warehouse_count" />
+    </resultMap>
+
     <resultMap type="UpstreamWarehousePairing" id="WarehousePairingResult">
         <id     property="warehousePairingId"   column="warehouse_pairing_id"   />
         <result property="connectionCode"       column="connection_code"        />
@@ -188,6 +215,20 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="updateBy"            column="update_by"              />
         <result property="updateTime"          column="update_time"            />
         <result property="remark"              column="remark"                 />
+    </resultMap>
+
+    <resultMap type="com.ruoyi.integration.domain.UpstreamWarehousePairingSnapshot" id="WarehousePairingSnapshotResult">
+        <id     property="warehousePairingId"   column="warehouse_pairing_id"   />
+        <result property="connectionCode"       column="connection_code"        />
+        <result property="systemWarehouseCode"  column="system_warehouse_code"  />
+        <result property="systemWarehouseName"  column="system_warehouse_name"  />
+        <result property="upstreamWarehouseCode" column="upstream_warehouse_code" />
+        <result property="upstreamWarehouseName" column="upstream_warehouse_name" />
+        <result property="pairingRole"          column="pairing_role"           />
+        <result property="status"               column="status"                 />
+        <result property="systemKind"           column="system_kind"            />
+        <result property="masterWarehouseName"  column="master_warehouse_name"  />
+        <result property="settlementType"       column="settlement_type"        />
     </resultMap>
 
     <resultMap type="UpstreamLogisticsChannelPairing" id="LogisticsChannelPairingResult">
@@ -343,6 +384,12 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="lastSeenTime" column="last_seen_time" />
         <result property="latestUpdateTime" column="latest_update_time" />
         <result property="rebuildTime" column="rebuild_time" />
+    </resultMap>
+
+    <resultMap type="com.ruoyi.inventory.domain.InventorySourceSkuKey" id="InventorySourceSkuKeyResult">
+        <result property="sourceScope" column="source_scope" />
+        <result property="masterSku" column="master_sku" />
+        <result property="masterProductName" column="master_product_name" />
     </resultMap>
 
     <resultMap type="IntegrationOption" id="IntegrationOptionResult">
@@ -697,6 +744,29 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         from upstream_system_warehouse_pairing
         where connection_code = #{connectionCode}
         order by create_time desc, warehouse_pairing_id desc
+    </select>
+
+    <select id="selectActiveWarehousePairingSnapshotsBySystemWarehouseCodes" resultMap="WarehousePairingSnapshotResult">
+        select p.warehouse_pairing_id,
+               p.connection_code,
+               p.system_warehouse_code,
+               p.system_warehouse_name,
+               p.upstream_warehouse_code,
+               p.upstream_warehouse_name,
+               p.pairing_role,
+               p.status,
+               c.system_kind,
+               c.master_warehouse_name,
+               c.settlement_type
+        from upstream_system_warehouse_pairing p
+        left join upstream_system_connection c on c.connection_code = p.connection_code
+        where p.status = 'ACTIVE'
+          and nullif(p.system_warehouse_code, '') is not null
+          and p.system_warehouse_code in
+          <foreach collection="systemWarehouseCodes" item="code" open="(" separator="," close=")">
+              #{code}
+          </foreach>
+        order by p.system_warehouse_code asc, p.pairing_role asc, p.warehouse_pairing_id desc
     </select>
 
     <insert id="insertWarehousePairing" parameterType="UpstreamWarehousePairing" useGeneratedKeys="true" keyProperty="warehousePairingId">
@@ -2343,6 +2413,232 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         order by label asc
     </select>
 
+    <select id="selectOfficialWarehousesBySourceDimensionGroup" resultMap="SourceOfficialWarehouseOptionResult">
+        select distinct
+               wd.source_dimension_group_key,
+               w.warehouse_id,
+               w.warehouse_code,
+               w.warehouse_name,
+               w.warehouse_kind,
+               w.settlement_currency
+        from source_product_warehouse_detail wd
+        inner join upstream_system_connection c
+                on c.connection_code = wd.connection_code
+        inner join upstream_system_warehouse_pairing p
+                on p.connection_code = wd.connection_code
+               and p.pairing_role = case when c.settlement_type = 'self-operated-receivable'
+                                          then 'QUOTE'
+                                          else 'FULFILLMENT'
+                                     end
+               and p.status = 'ACTIVE'
+        inner join warehouse w
+                on w.warehouse_code = p.system_warehouse_code
+               and w.warehouse_kind = 'official'
+               and w.status = '0'
+        where wd.repository_scope = 'OFFICIAL_MASTER'
+          and wd.status = 'ACTIVE'
+          and wd.source_dimension_group_key = #{sourceDimensionGroupKey}
+        order by w.warehouse_id asc
+    </select>
+
+    <select id="selectOfficialWarehousesBySourceDimensionGroups" resultMap="SourceOfficialWarehouseOptionResult">
+        select distinct
+               wd.source_dimension_group_key,
+               w.warehouse_id,
+               w.warehouse_code,
+               w.warehouse_name,
+               w.warehouse_kind,
+               w.settlement_currency
+        from source_product_warehouse_detail wd
+        inner join upstream_system_connection c
+                on c.connection_code = wd.connection_code
+        inner join upstream_system_warehouse_pairing p
+                on p.connection_code = wd.connection_code
+               and p.pairing_role = case when c.settlement_type = 'self-operated-receivable'
+                                          then 'QUOTE'
+                                          else 'FULFILLMENT'
+                                     end
+               and p.status = 'ACTIVE'
+        inner join warehouse w
+                on w.warehouse_code = p.system_warehouse_code
+               and w.warehouse_kind = 'official'
+               and w.status = '0'
+        where wd.repository_scope = 'OFFICIAL_MASTER'
+          and wd.status = 'ACTIVE'
+          and wd.source_dimension_group_key in
+          <foreach collection="sourceDimensionGroupKeys" item="sourceDimensionGroupKey" open="(" separator="," close=")">
+              #{sourceDimensionGroupKey}
+          </foreach>
+        order by wd.source_dimension_group_key asc, w.warehouse_id asc
+    </select>
+
+    <select id="selectOfficialSourceBindingSnapshot" resultMap="SourceProductBindingSnapshotResult">
+        select d.repository_scope as source_scope,
+               d.source_sku_group_key,
+               d.source_dimension_group_key,
+               d.master_sku,
+               d.master_product_name as master_product_name_snapshot,
+               d.source_payload_hash,
+               coalesce(wd.wms_payload_hash, '') as wms_payload_hash,
+               case
+                   when d.wms_length is not null and d.wms_width is not null
+                        and d.wms_height is not null and d.wms_weight is not null
+                       then d.wms_length
+                   else d.product_length
+               end as measure_length_cm,
+               case
+                   when d.wms_length is not null and d.wms_width is not null
+                        and d.wms_height is not null and d.wms_weight is not null
+                       then d.wms_width
+                   else d.product_width
+               end as measure_width_cm,
+               case
+                   when d.wms_length is not null and d.wms_width is not null
+                        and d.wms_height is not null and d.wms_weight is not null
+                       then d.wms_height
+                   else d.product_height
+               end as measure_height_cm,
+               case
+                   when d.wms_length is not null and d.wms_width is not null
+                        and d.wms_height is not null and d.wms_weight is not null
+                       then d.wms_weight
+                   else d.product_weight
+               end as measure_weight_kg,
+               case
+                   when d.wms_length is not null and d.wms_width is not null
+                        and d.wms_height is not null and d.wms_weight is not null
+                       then 'WMS'
+                   else 'PRODUCT'
+               end as measure_source,
+               d.currency_code,
+               d.source_warehouse_names,
+               d.warehouse_count as source_warehouse_count
+        from source_product_dimension_group d
+        left join (
+            select source_dimension_group_key,
+                   max(coalesce(wms_payload_hash, '')) as wms_payload_hash
+            from source_product_warehouse_detail
+            where repository_scope = 'OFFICIAL_MASTER'
+            group by source_dimension_group_key
+        ) wd on wd.source_dimension_group_key = d.source_dimension_group_key
+        where d.repository_scope = 'OFFICIAL_MASTER'
+          and d.status = 'ACTIVE'
+          and d.source_dimension_group_key = #{sourceDimensionGroupKey}
+        limit 1
+    </select>
+
+    <select id="selectOfficialSourceBindingSnapshots" resultMap="SourceProductBindingSnapshotResult">
+        select d.repository_scope as source_scope,
+               d.source_sku_group_key,
+               d.source_dimension_group_key,
+               d.master_sku,
+               d.master_product_name as master_product_name_snapshot,
+               d.source_payload_hash,
+               coalesce(wd.wms_payload_hash, '') as wms_payload_hash,
+               case
+                   when d.wms_length is not null and d.wms_width is not null
+                        and d.wms_height is not null and d.wms_weight is not null
+                       then d.wms_length
+                   else d.product_length
+               end as measure_length_cm,
+               case
+                   when d.wms_length is not null and d.wms_width is not null
+                        and d.wms_height is not null and d.wms_weight is not null
+                       then d.wms_width
+                   else d.product_width
+               end as measure_width_cm,
+               case
+                   when d.wms_length is not null and d.wms_width is not null
+                        and d.wms_height is not null and d.wms_weight is not null
+                       then d.wms_height
+                   else d.product_height
+               end as measure_height_cm,
+               case
+                   when d.wms_length is not null and d.wms_width is not null
+                        and d.wms_height is not null and d.wms_weight is not null
+                       then d.wms_weight
+                   else d.product_weight
+               end as measure_weight_kg,
+               case
+                   when d.wms_length is not null and d.wms_width is not null
+                        and d.wms_height is not null and d.wms_weight is not null
+                       then 'WMS'
+                   else 'PRODUCT'
+               end as measure_source,
+               d.currency_code,
+               d.source_warehouse_names,
+               d.warehouse_count as source_warehouse_count
+        from source_product_dimension_group d
+        left join (
+            select source_dimension_group_key,
+                   max(coalesce(wms_payload_hash, '')) as wms_payload_hash
+            from source_product_warehouse_detail
+            where repository_scope = 'OFFICIAL_MASTER'
+            group by source_dimension_group_key
+        ) wd on wd.source_dimension_group_key = d.source_dimension_group_key
+        where d.repository_scope = 'OFFICIAL_MASTER'
+          and d.status = 'ACTIVE'
+          and d.source_dimension_group_key in
+          <foreach collection="sourceDimensionGroupKeys" item="sourceDimensionGroupKey" open="(" separator="," close=")">
+              #{sourceDimensionGroupKey}
+          </foreach>
+        order by d.source_dimension_group_key asc
+    </select>
+
+    <select id="selectSourceConnectionCodesByDimensionGroup" resultType="string">
+        select distinct connection_code
+        from source_product_warehouse_detail
+        where repository_scope = 'OFFICIAL_MASTER'
+          and source_dimension_group_key = #{sourceDimensionGroupKey}
+        order by connection_code asc
+    </select>
+
+    <select id="selectUpstreamSkuPairingConnectionCodesBySystemSkuAndMasterSku" resultType="string">
+        select distinct connection_code
+        from upstream_system_sku_pairing
+        where system_sku = #{systemSku}
+          and master_sku = #{masterSku}
+        order by connection_code asc
+    </select>
+
+    <delete id="deleteUpstreamSkuPairingsBySystemSkuAndConnectionCodes">
+        delete from upstream_system_sku_pairing
+        where system_sku = #{systemSku}
+          and connection_code in
+          <foreach collection="connectionCodes" item="connectionCode" open="(" separator="," close=")">
+              #{connectionCode}
+          </foreach>
+    </delete>
+
+    <insert id="upsertUpstreamSkuPairingsForProjection" parameterType="SourceSkuPairingProjection">
+        insert into upstream_system_sku_pairing(
+            connection_code, master_sku, system_sku, system_sku_name, customer_name,
+            create_by, create_time, update_by, update_time, remark
+        )
+        select distinct
+               wd.connection_code,
+               wd.master_sku,
+               #{systemSkuCode},
+               #{systemSkuName},
+               #{sellerName},
+               #{updateBy},
+               sysdate(),
+               #{updateBy},
+               sysdate(),
+               '商城商品来源SKU绑定同步'
+        from source_product_warehouse_detail wd
+        where wd.repository_scope = 'OFFICIAL_MASTER'
+          and wd.status = 'ACTIVE'
+          and wd.source_dimension_group_key = #{sourceDimensionGroupKey}
+        on duplicate key update
+            system_sku = values(system_sku),
+            system_sku_name = values(system_sku_name),
+            customer_name = values(customer_name),
+            update_by = values(update_by),
+            update_time = sysdate(),
+            remark = values(remark)
+    </insert>
+
     <delete id="deleteAllSourceWarehouseStockFilterMetrics">
         delete from source_warehouse_stock_filter_metric
         where repository_scope = 'OFFICIAL_MASTER'
@@ -2732,6 +3028,56 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             rebuild_time = values(rebuild_time)
     </insert>
 
+    <select id="selectAffectedOfficialMasterSourceSkuKeysByConnection" resultMap="InventorySourceSkuKeyResult">
+        select distinct affected.source_scope,
+                        affected.master_sku,
+                        affected.master_product_name
+        from (
+            select 'OFFICIAL_MASTER' as source_scope,
+                   s.master_sku,
+                   coalesce(s.master_product_name, '') as master_product_name
+            from upstream_system_sku_inventory_snapshot s
+            where s.connection_code = #{connectionCode}
+              and nullif(s.master_sku, '') is not null
+            union
+            select g.repository_scope as source_scope,
+                   g.master_sku,
+                   coalesce(g.master_product_name, '') as master_product_name
+            from source_warehouse_stock_group g
+            where g.repository_scope = 'OFFICIAL_MASTER'
+              and g.source_stock_group_key in (
+                  <include refid="SourceWarehouseStockAffectedGroupKeys" />
+              )
+              and nullif(g.master_sku, '') is not null
+        ) affected
+        order by affected.master_sku asc, affected.master_product_name asc
+    </select>
+
+    <select id="selectOfficialMasterSourceStocksBySourceSkuKeys" resultType="com.ruoyi.inventory.domain.InventoryOfficialSourceStock">
+        select d.repository_scope as sourceScope,
+               d.master_sku as masterSku,
+               d.master_product_name as masterProductName,
+               d.master_warehouse_name as masterWarehouseName,
+               sum(coalesce(d.total_quantity, 0)) as sourceTotalQty,
+               sum(coalesce(d.available_quantity, 0)) as sourceAvailableQty,
+               sum(coalesce(d.in_transit_quantity, 0)) as sourceInTransitQty,
+               max(d.update_time) as sourceSnapshotTime
+        from source_warehouse_stock_detail d
+        where d.repository_scope = 'OFFICIAL_MASTER'
+          and d.inventory_scope = 'COMPREHENSIVE'
+          and d.inventory_attribute = '0'
+          and nullif(d.master_warehouse_name, '') is not null
+          and (
+              <foreach collection="sourceKeys" item="sourceKey" separator=" or ">
+                  (d.repository_scope = #{sourceKey.sourceScope}
+                   and d.master_sku = #{sourceKey.masterSku}
+                   and coalesce(d.master_product_name, '') = coalesce(#{sourceKey.masterProductName}, ''))
+              </foreach>
+          )
+        group by d.repository_scope, d.master_sku, d.master_product_name, d.master_warehouse_name
+        order by d.repository_scope asc, d.master_sku asc, d.master_product_name asc, d.master_warehouse_name asc
+    </select>
+
     <insert id="upsertSourceWarehouseStock" parameterType="SourceWarehouseStockItem">
         insert into upstream_system_sku_inventory_snapshot(
             connection_code, upstream_warehouse_code, upstream_warehouse_name, master_sku, master_product_name,
@@ -2776,6 +3122,36 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             update_time = sysdate()
         where connection_code = #{connectionCode}
           and sync_batch_id &lt;&gt; #{syncBatchId}
+    </update>
+
+    <update id="refreshInventorySnapshotWarehousePairingByConnection">
+        update upstream_system_sku_inventory_snapshot s
+        left join upstream_system_connection c
+               on c.connection_code = s.connection_code
+        left join upstream_system_warehouse_pairing p
+               on p.connection_code = s.connection_code
+              and p.upstream_warehouse_code = s.upstream_warehouse_code
+              and p.pairing_role = case when c.settlement_type = 'self-operated-receivable'
+                                         then 'QUOTE'
+                                         else 'FULFILLMENT'
+                                    end
+              and p.status = 'ACTIVE'
+        set s.system_warehouse_code = coalesce(p.system_warehouse_code, ''),
+            s.system_warehouse_name = coalesce(p.system_warehouse_name, ''),
+            s.update_time = sysdate()
+        where s.connection_code = #{connectionCode}
+    </update>
+
+    <update id="refreshInventorySnapshotSkuPairingByConnection">
+        update upstream_system_sku_inventory_snapshot s
+        left join upstream_system_sku_pairing p
+               on p.connection_code = s.connection_code
+              and p.master_sku = s.master_sku
+        set s.system_sku = coalesce(p.system_sku, ''),
+            s.system_sku_name = coalesce(p.system_sku_name, ''),
+            s.customer_name = coalesce(p.customer_name, ''),
+            s.update_time = sysdate()
+        where s.connection_code = #{connectionCode}
     </update>
 
     <select id="selectSourceWarehouseStockList" parameterType="SourceWarehouseStockQuery" resultMap="SourceWarehouseStockResult">

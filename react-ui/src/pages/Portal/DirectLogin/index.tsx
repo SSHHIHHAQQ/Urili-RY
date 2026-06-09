@@ -5,6 +5,7 @@ import {
   PORTAL_DIRECT_LOGIN_READY_MESSAGE,
   PORTAL_DIRECT_LOGIN_RESULT_MESSAGE,
   PORTAL_DIRECT_LOGIN_TOKEN_MESSAGE,
+  resolvePortalDirectLoginOpenerOrigin,
   type PortalDirectLoginResultMessage,
   type PortalDirectLoginTokenMessage,
 } from '@/utils/portalDirectLoginMessage';
@@ -43,14 +44,6 @@ function isDirectLoginTokenMessage(
   );
 }
 
-function resolveOpenerOrigin() {
-  try {
-    return document.referrer ? new URL(document.referrer).origin : window.location.origin;
-  } catch {
-    return window.location.origin;
-  }
-}
-
 const DirectLoginPage: React.FC = () => {
   const location = useLocation();
   const terminal = useMemo(() => getPortalTerminal(location.pathname), [location.pathname]);
@@ -67,7 +60,7 @@ const DirectLoginPage: React.FC = () => {
       };
     }
 
-    const openerOrigin = resolveOpenerOrigin();
+    const openerOrigin = resolvePortalDirectLoginOpenerOrigin(location.search);
     const postConsumeResult = (status: PortalDirectLoginResultMessage['status'], ticketId?: number, message?: string) => {
       const payload: PortalDirectLoginResultMessage = {
         type: PORTAL_DIRECT_LOGIN_RESULT_MESSAGE,
@@ -128,7 +121,7 @@ const DirectLoginPage: React.FC = () => {
       window.removeEventListener('message', handleTokenMessage);
       window.clearTimeout(timeoutTimer);
     };
-  }, [terminal]);
+  }, [location.search, terminal]);
 
   if (state.status === 'loading') {
     return (

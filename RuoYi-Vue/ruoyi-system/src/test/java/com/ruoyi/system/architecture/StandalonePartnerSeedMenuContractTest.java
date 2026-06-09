@@ -210,6 +210,17 @@ public class StandalonePartnerSeedMenuContractTest
             }
 
             int updateIndex = lower.indexOf("on duplicate key update", valuesIndex);
+            if (updateIndex >= 0 && updateIndex < valuesIndex)
+            {
+                searchFrom = statementEnd >= 0 ? statementEnd + 1 : updateIndex + 1;
+                continue;
+            }
+            int selectIndex = lower.indexOf("select", insertIndex);
+            if (selectIndex >= 0 && selectIndex < valuesIndex && (statementEnd < 0 || selectIndex < statementEnd))
+            {
+                searchFrom = statementEnd >= 0 ? statementEnd + 1 : selectIndex + 1;
+                continue;
+            }
             int blockEnd = updateIndex >= 0 && (statementEnd < 0 || updateIndex < statementEnd)
                     ? updateIndex
                     : statementEnd;

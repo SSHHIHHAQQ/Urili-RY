@@ -6,7 +6,21 @@
 -- 4. Move menu 2420 from placeholder to the real Inventory/Overview page.
 
 set names utf8mb4;
+set session group_concat_max_len = greatest(@@session.group_concat_max_len, 1048576);
+
 set @confirm_inventory_overview_platform_stock := coalesce(@confirm_inventory_overview_platform_stock, '');
+set @inventory_overview_platform_stock_dict_seed_expected_count :=
+    coalesce(@inventory_overview_platform_stock_dict_seed_expected_count, '');
+set @inventory_overview_platform_stock_dict_seed_expected_signature :=
+    coalesce(@inventory_overview_platform_stock_dict_seed_expected_signature, '');
+set @inventory_overview_platform_stock_menu_seed_expected_count :=
+    coalesce(@inventory_overview_platform_stock_menu_seed_expected_count, '');
+set @inventory_overview_platform_stock_menu_seed_expected_signature :=
+    coalesce(@inventory_overview_platform_stock_menu_seed_expected_signature, '');
+set @inventory_overview_platform_stock_row_expected_count :=
+    coalesce(@inventory_overview_platform_stock_row_expected_count, '');
+set @inventory_overview_platform_stock_row_expected_signature :=
+    coalesce(@inventory_overview_platform_stock_row_expected_signature, '');
 
 delimiter //
 
@@ -16,6 +30,24 @@ begin
   if coalesce(@confirm_inventory_overview_platform_stock, '')
       <> 'APPLY_INVENTORY_OVERVIEW_PLATFORM_STOCK' then
     signal sqlstate '45000' set message_text = 'set @confirm_inventory_overview_platform_stock = APPLY_INVENTORY_OVERVIEW_PLATFORM_STOCK before running this migration';
+  end if;
+  if coalesce(@inventory_overview_platform_stock_dict_seed_expected_count, '') not regexp '^[0-9]+$' then
+    signal sqlstate '45000' set message_text = 'set @inventory_overview_platform_stock_dict_seed_expected_count after previewing inventory overview dict seed rows';
+  end if;
+  if coalesce(@inventory_overview_platform_stock_dict_seed_expected_signature, '') not regexp '^[0-9a-fA-F]{64}$' then
+    signal sqlstate '45000' set message_text = 'set @inventory_overview_platform_stock_dict_seed_expected_signature after previewing inventory overview dict seed rows';
+  end if;
+  if coalesce(@inventory_overview_platform_stock_menu_seed_expected_count, '') not regexp '^[0-9]+$' then
+    signal sqlstate '45000' set message_text = 'set @inventory_overview_platform_stock_menu_seed_expected_count after previewing inventory overview menu seed rows';
+  end if;
+  if coalesce(@inventory_overview_platform_stock_menu_seed_expected_signature, '') not regexp '^[0-9a-fA-F]{64}$' then
+    signal sqlstate '45000' set message_text = 'set @inventory_overview_platform_stock_menu_seed_expected_signature after previewing inventory overview menu seed rows';
+  end if;
+  if coalesce(@inventory_overview_platform_stock_row_expected_count, '') not regexp '^[0-9]+$' then
+    signal sqlstate '45000' set message_text = 'set @inventory_overview_platform_stock_row_expected_count after previewing exact inventory overview platform stock rows';
+  end if;
+  if coalesce(@inventory_overview_platform_stock_row_expected_signature, '') not regexp '^[0-9a-fA-F]{64}$' then
+    signal sqlstate '45000' set message_text = 'set @inventory_overview_platform_stock_row_expected_signature after previewing exact inventory overview platform stock rows';
   end if;
 end//
 
@@ -93,6 +125,183 @@ begin
   end if;
 end//
 
+drop procedure if exists inventory_overview_platform_stock_assert_count_signature//
+create procedure inventory_overview_platform_stock_assert_count_signature(
+  in p_actual_count bigint,
+  in p_actual_signature varchar(64),
+  in p_expected_count varchar(64),
+  in p_expected_signature varchar(64),
+  in p_count_message varchar(255),
+  in p_signature_message varchar(255)
+)
+begin
+  if p_actual_count <> cast(p_expected_count as unsigned) then
+    signal sqlstate '45000' set message_text = p_count_message;
+  end if;
+  if lower(p_actual_signature) <> lower(p_expected_signature) then
+    signal sqlstate '45000' set message_text = p_signature_message;
+  end if;
+end//
+
+drop procedure if exists assert_inventory_overview_platform_stock_seed_completed//
+create procedure assert_inventory_overview_platform_stock_seed_completed()
+begin
+  declare v_count bigint default 0;
+  declare v_signature varchar(64) default '';
+
+  if (
+    select count(1)
+    from sys_menu m
+    join tmp_inventory_overview_platform_stock_menu_expected seed on seed.menu_id = m.menu_id
+    where coalesce(m.menu_name, '') = seed.menu_name
+      and coalesce(m.parent_id, -1) = seed.parent_id
+      and coalesce(m.order_num, -1) = seed.order_num
+      and coalesce(m.menu_type, '') = seed.menu_type
+      and coalesce(m.visible, '') = seed.visible
+      and coalesce(m.status, '') = seed.status
+      and coalesce(m.path, '') = seed.path
+      and coalesce(m.component, '') = seed.component
+      and coalesce(m.route_name, '') = seed.route_name
+      and coalesce(m.perms, '') = seed.perms
+      and coalesce(m.icon, '') = seed.icon
+      and coalesce(m.remark, '') = seed.remark
+  ) <> (select count(1) from tmp_inventory_overview_platform_stock_menu_expected) then
+    signal sqlstate '45000' set message_text = 'inventory overview platform stock sys_menu final signature mismatch';
+  end if;
+
+  if exists (
+    select 1
+    from inventory_sku_warehouse_stock st
+    where st.warehouse_ref_type in ('OFFICIAL_MASTER', 'UNMATCHED_OFFICIAL', 'THIRD_PARTY_WAREHOUSE')
+      and not exists (
+        select 1
+        from tmp_inventory_overview_platform_stock_write_targets expected
+        where expected.target_group = 'STOCK_ROW'
+          and expected.target_key = st.stock_key
+      )
+  ) then
+    signal sqlstate '45000' set message_text = 'inventory_sku_warehouse_stock final state mismatch';
+  end if;
+
+  select count(1),
+         sha2(coalesce(group_concat(concat_ws(':', actual.target_key, actual.target_signature) order by actual.target_key separator '|'), ''), 256)
+    into v_count, v_signature
+  from (
+      select st.stock_key as target_key,
+             case
+               when st.warehouse_ref_type = 'OFFICIAL_MASTER' then
+                 sha2(concat_ws(':',
+                   'OFFICIAL_MASTER',
+                   st.spu_id,
+                   st.sku_id,
+                   st.seller_id,
+                   coalesce(st.system_sku_code, ''),
+                   coalesce(st.source_master_warehouse_name, ''),
+                   coalesce(st.source_total_qty, 0),
+                   coalesce(st.source_available_qty, 0),
+                   coalesce(st.source_in_transit_qty, 0),
+                   coalesce(date_format(st.source_snapshot_time, '%Y-%m-%d %H:%i:%s'), '')
+                 ), 256)
+               when st.warehouse_ref_type = 'UNMATCHED_OFFICIAL' then
+                 sha2(concat_ws(':',
+                   'UNMATCHED_OFFICIAL',
+                   st.spu_id,
+                   st.sku_id,
+                   st.seller_id,
+                   coalesce(st.system_sku_code, '')
+                 ), 256)
+               when st.warehouse_ref_type = 'THIRD_PARTY_WAREHOUSE' then
+                 sha2(concat_ws(':',
+                   'THIRD_PARTY_WAREHOUSE',
+                   st.spu_id,
+                   st.sku_id,
+                   st.seller_id,
+                   coalesce(st.system_sku_code, ''),
+                   st.warehouse_id,
+                   coalesce(st.warehouse_code, ''),
+                   coalesce(st.warehouse_name, '')
+                 ), 256)
+             end as target_signature
+      from inventory_sku_warehouse_stock st
+      where st.warehouse_ref_type in ('OFFICIAL_MASTER', 'UNMATCHED_OFFICIAL', 'THIRD_PARTY_WAREHOUSE')
+  ) actual
+  join tmp_inventory_overview_platform_stock_write_targets expected
+    on expected.target_group = 'STOCK_ROW'
+   and expected.target_key = actual.target_key;
+
+  call inventory_overview_platform_stock_assert_count_signature(
+    v_count,
+    v_signature,
+    @inventory_overview_platform_stock_row_expected_count,
+    @inventory_overview_platform_stock_row_expected_signature,
+    'inventory_sku_warehouse_stock final state mismatch',
+    'inventory_sku_warehouse_stock final state mismatch'
+  );
+
+  if exists (
+    select 1
+    from inventory_overview_sku_read_model srm
+    where not exists (
+        select 1
+        from product_sku sk
+        where sk.sku_id = srm.sku_id
+          and sk.del_flag = '0'
+      )
+      or not exists (
+        select 1
+        from inventory_sku_warehouse_stock st
+        where st.sku_id = srm.sku_id
+      )
+  ) then
+    signal sqlstate '45000' set message_text = 'inventory_overview_sku_read_model final state mismatch';
+  end if;
+
+  if (
+    select count(distinct sk.sku_id)
+    from product_sku sk
+    join inventory_sku_warehouse_stock st on st.sku_id = sk.sku_id
+    where sk.del_flag = '0'
+  ) <> (
+    select count(1)
+    from inventory_overview_sku_read_model srm
+    join product_sku sk on sk.sku_id = srm.sku_id and sk.del_flag = '0'
+    where exists (
+      select 1
+      from inventory_sku_warehouse_stock st
+      where st.sku_id = srm.sku_id
+    )
+  ) then
+    signal sqlstate '45000' set message_text = 'inventory_overview_sku_read_model final state mismatch';
+  end if;
+
+  if exists (
+    select 1
+    from inventory_overview_spu_read_model srm
+    where not exists (
+      select 1
+      from product_spu p
+      where p.spu_id = srm.spu_id
+        and p.del_flag = '0'
+    )
+  ) then
+    signal sqlstate '45000' set message_text = 'inventory_overview_spu_read_model final state mismatch';
+  end if;
+
+  if (
+    select count(distinct p.spu_id)
+    from product_spu p
+    join product_sku sk on sk.spu_id = p.spu_id and sk.del_flag = '0'
+    join inventory_overview_sku_read_model sku_rm on sku_rm.sku_id = sk.sku_id
+    where p.del_flag = '0'
+  ) <> (
+    select count(1)
+    from inventory_overview_spu_read_model srm
+    join product_spu p on p.spu_id = srm.spu_id and p.del_flag = '0'
+  ) then
+    signal sqlstate '45000' set message_text = 'inventory_overview_spu_read_model final state mismatch';
+  end if;
+end//
+
 delimiter ;
 
 call assert_inventory_overview_platform_stock_confirmed();
@@ -131,8 +340,26 @@ create temporary table if not exists tmp_inventory_overview_sys_menu_guard_ids (
   primary key (menu_id)
 ) engine=memory;
 
+create temporary table if not exists tmp_inventory_overview_platform_stock_menu_expected (
+  menu_id    bigint       not null,
+  menu_name  varchar(50)  not null,
+  parent_id  bigint       not null,
+  order_num  int          not null,
+  menu_type  char(1)      not null,
+  visible    char(1)      not null,
+  status     char(1)      not null,
+  path       varchar(200) not null default '',
+  component  varchar(255) not null default '',
+  route_name varchar(50)  not null default '',
+  perms      varchar(100) not null default '',
+  icon       varchar(100) not null default '',
+  remark     varchar(500) not null default '',
+  key idx_inventory_overview_platform_stock_menu_expected_id (menu_id)
+) engine=memory;
+
 truncate table tmp_inventory_overview_sys_menu_guard;
 truncate table tmp_inventory_overview_sys_menu_guard_ids;
+truncate table tmp_inventory_overview_platform_stock_menu_expected;
 
 insert into tmp_inventory_overview_sys_menu_guard(menu_id, parent_id, menu_type, path, component, route_name, perms) values
     (2420, 2080, 'C', 'overview', 'Inventory/Overview/index', 'InventoryOverview', 'inventory:overview:list'),
@@ -142,11 +369,186 @@ insert into tmp_inventory_overview_sys_menu_guard(menu_id, parent_id, menu_type,
     (242003, 2420, 'F', '#', '', '', 'inventory:overview:ledger'),
     (242004, 2420, 'F', '#', '', '', 'inventory:overview:export');
 
+insert into tmp_inventory_overview_platform_stock_menu_expected
+    (menu_id, menu_name, parent_id, order_num, menu_type, visible, status,
+     path, component, route_name, perms, icon, remark)
+values
+    (2420, '库存总览', 2080, 5, 'C', '0', '0', 'overview', 'Inventory/Overview/index', 'InventoryOverview', 'inventory:overview:list', 'DashboardOutlined', '库存总览展示商城SKU平台可售库存、来源库存参考和库存调整入口'),
+    (242001, '库存总览查询', 2420, 1, 'F', '0', '0', '#', '', '', 'inventory:overview:query', '#', '库存总览明细查询按钮'),
+    (242002, '库存调整', 2420, 2, 'F', '0', '0', '#', '', '', 'inventory:overview:adjust', '#', '库存总览平台库存调整按钮'),
+    (242003, '库存流水', 2420, 3, 'F', '0', '0', '#', '', '', 'inventory:overview:ledger', '#', '库存总览库存流水按钮'),
+    (242004, '库存导出', 2420, 4, 'F', '0', '0', '#', '', '', 'inventory:overview:export', '#', '库存总览导出按钮');
+
 insert ignore into tmp_inventory_overview_sys_menu_guard_ids(menu_id)
 select distinct menu_id
 from tmp_inventory_overview_sys_menu_guard;
 
 call assert_inventory_overview_sys_menu_guard();
+
+create temporary table if not exists tmp_inventory_overview_platform_stock_write_targets (
+  target_group varchar(64) not null,
+  target_key varchar(255) not null,
+  target_signature varchar(64) not null,
+  key idx_inventory_overview_platform_stock_write_targets (target_group, target_key)
+) engine=memory;
+
+truncate table tmp_inventory_overview_platform_stock_write_targets;
+
+insert into tmp_inventory_overview_platform_stock_write_targets(target_group, target_key, target_signature) values
+  ('DICT_SEED', 'TYPE:inventory_status', sha2('TYPE:inventory_status:库存状态', 256)),
+  ('DICT_SEED', 'DATA:inventory_status:IN_STOCK', sha2('DATA:inventory_status:IN_STOCK:有货:success', 256)),
+  ('DICT_SEED', 'DATA:inventory_status:OUT_OF_STOCK', sha2('DATA:inventory_status:OUT_OF_STOCK:缺货:default', 256)),
+  ('DICT_SEED', 'DATA:inventory_status:NO_SOURCE', sha2('DATA:inventory_status:NO_SOURCE:无来源库存:warning', 256)),
+  ('DICT_SEED', 'DATA:inventory_status:SOURCE_ONLY_IN_TRANSIT', sha2('DATA:inventory_status:SOURCE_ONLY_IN_TRANSIT:仅来源在途:processing', 256)),
+  ('DICT_SEED', 'DATA:inventory_status:DISABLED', sha2('DATA:inventory_status:DISABLED:停用:error', 256)),
+  ('DICT_SEED', 'TYPE:inventory_operation_type', sha2('TYPE:inventory_operation_type:库存操作类型', 256)),
+  ('DICT_SEED', 'DATA:inventory_operation_type:MANUAL_INCREASE', sha2('DATA:inventory_operation_type:MANUAL_INCREASE:手工增加库存', 256)),
+  ('DICT_SEED', 'DATA:inventory_operation_type:MANUAL_DECREASE', sha2('DATA:inventory_operation_type:MANUAL_DECREASE:手工减少库存', 256)),
+  ('DICT_SEED', 'DATA:inventory_operation_type:ORDER_RESERVE', sha2('DATA:inventory_operation_type:ORDER_RESERVE:订单锁定', 256)),
+  ('DICT_SEED', 'DATA:inventory_operation_type:ORDER_RELEASE', sha2('DATA:inventory_operation_type:ORDER_RELEASE:订单释放', 256)),
+  ('DICT_SEED', 'DATA:inventory_operation_type:OUTBOUND_DEDUCT', sha2('DATA:inventory_operation_type:OUTBOUND_DEDUCT:出库扣减', 256)),
+  ('DICT_SEED', 'DATA:inventory_operation_type:SOURCE_DEDUCTION_PENDING', sha2('DATA:inventory_operation_type:SOURCE_DEDUCTION_PENDING:来源校准扣减', 256)),
+  ('DICT_SEED', 'DATA:inventory_operation_type:IN_TRANSIT_CONFIG', sha2('DATA:inventory_operation_type:IN_TRANSIT_CONFIG:在途配置', 256)),
+  ('DICT_SEED', 'DATA:inventory_operation_type:IN_TRANSIT_RELEASE', sha2('DATA:inventory_operation_type:IN_TRANSIT_RELEASE:在途释放', 256));
+
+insert into tmp_inventory_overview_platform_stock_write_targets(target_group, target_key, target_signature)
+select 'MENU_SEED',
+       concat_ws(':', 'MENU', menu_id, parent_id, menu_type, path, component, route_name, perms),
+       sha2(concat_ws(':', menu_id, parent_id, menu_type, path, component, route_name, perms), 256)
+from tmp_inventory_overview_sys_menu_guard;
+
+insert into tmp_inventory_overview_platform_stock_write_targets(target_group, target_key, target_signature)
+select 'STOCK_ROW',
+       concat('INV:', sha2(concat_ws('|', 'SKU', sk.sku_id, 'OFFICIAL_MASTER', src.master_warehouse_name), 256)),
+       sha2(concat_ws(':',
+         'OFFICIAL_MASTER',
+         sk.spu_id,
+         sk.sku_id,
+         sk.seller_id,
+         coalesce(sk.system_sku_code, ''),
+         coalesce(src.master_warehouse_name, ''),
+         coalesce(src.source_total_qty, 0),
+         coalesce(src.source_available_qty, 0),
+         coalesce(src.source_in_transit_qty, 0),
+         coalesce(date_format(src.source_snapshot_time, '%Y-%m-%d %H:%i:%s'), '')
+       ), 256)
+from product_sku sk
+join product_sku_source_binding b
+  on b.sku_id = sk.sku_id
+ and b.binding_status = 'ACTIVE'
+join (
+    select d.source_stock_group_key,
+           d.master_warehouse_name,
+           sum(coalesce(d.total_quantity, 0)) source_total_qty,
+           sum(coalesce(d.available_quantity, 0)) source_available_qty,
+           sum(coalesce(d.in_transit_quantity, 0)) source_in_transit_qty,
+           max(d.update_time) source_snapshot_time
+    from source_warehouse_stock_detail d
+    where d.repository_scope = 'OFFICIAL_MASTER'
+      and d.inventory_scope = 'COMPREHENSIVE'
+      and d.inventory_attribute = '0'
+      and nullif(d.master_warehouse_name, '') is not null
+    group by d.source_stock_group_key, d.master_warehouse_name
+) src on src.source_stock_group_key = b.source_sku_group_key
+where sk.del_flag = '0';
+
+insert into tmp_inventory_overview_platform_stock_write_targets(target_group, target_key, target_signature)
+select 'STOCK_ROW',
+       concat('INV:', sha2(concat_ws('|', 'SKU', sk.sku_id, 'UNMATCHED_OFFICIAL'), 256)),
+       sha2(concat_ws(':', 'UNMATCHED_OFFICIAL', sk.spu_id, sk.sku_id, sk.seller_id, coalesce(sk.system_sku_code, '')), 256)
+from product_sku sk
+where sk.del_flag = '0'
+  and (
+    exists (
+      select 1 from product_spu_warehouse pw
+      where pw.spu_id = sk.spu_id
+        and pw.warehouse_kind = 'official'
+    )
+    or exists (
+      select 1 from product_sku_source_binding b
+      where b.sku_id = sk.sku_id
+        and b.binding_status = 'ACTIVE'
+    )
+  )
+  and not exists (
+    select 1
+    from product_sku_source_binding b
+    join source_warehouse_stock_detail d
+      on d.source_stock_group_key = b.source_sku_group_key
+     and d.repository_scope = 'OFFICIAL_MASTER'
+     and d.inventory_scope = 'COMPREHENSIVE'
+     and d.inventory_attribute = '0'
+     and nullif(d.master_warehouse_name, '') is not null
+    where b.sku_id = sk.sku_id
+      and b.binding_status = 'ACTIVE'
+  );
+
+insert into tmp_inventory_overview_platform_stock_write_targets(target_group, target_key, target_signature)
+select 'STOCK_ROW',
+       concat('INV:', sha2(concat_ws('|', 'SKU', sk.sku_id, 'THIRD_PARTY_WAREHOUSE', pw.warehouse_id), 256)),
+       sha2(concat_ws(':',
+         'THIRD_PARTY_WAREHOUSE',
+         sk.spu_id,
+         sk.sku_id,
+         sk.seller_id,
+         coalesce(sk.system_sku_code, ''),
+         pw.warehouse_id,
+         coalesce(pw.warehouse_code, ''),
+         coalesce(pw.warehouse_name, '')
+       ), 256)
+from product_sku sk
+join product_spu_warehouse pw
+  on pw.spu_id = sk.spu_id
+ and pw.warehouse_kind = 'third_party'
+where sk.del_flag = '0';
+
+select count(1),
+       sha2(coalesce(group_concat(concat_ws(':', target_key, target_signature) order by target_key separator '|'), ''), 256)
+  into @inventory_overview_platform_stock_dict_seed_actual_count,
+       @inventory_overview_platform_stock_dict_seed_actual_signature
+from tmp_inventory_overview_platform_stock_write_targets
+where target_group = 'DICT_SEED';
+
+call inventory_overview_platform_stock_assert_count_signature(
+  @inventory_overview_platform_stock_dict_seed_actual_count,
+  @inventory_overview_platform_stock_dict_seed_actual_signature,
+  @inventory_overview_platform_stock_dict_seed_expected_count,
+  @inventory_overview_platform_stock_dict_seed_expected_signature,
+  'inventory overview platform stock dict seed exact target count mismatch',
+  'inventory overview platform stock dict seed exact target signature mismatch'
+);
+
+select count(1),
+       sha2(coalesce(group_concat(concat_ws(':', target_key, target_signature) order by target_key separator '|'), ''), 256)
+  into @inventory_overview_platform_stock_menu_seed_actual_count,
+       @inventory_overview_platform_stock_menu_seed_actual_signature
+from tmp_inventory_overview_platform_stock_write_targets
+where target_group = 'MENU_SEED';
+
+call inventory_overview_platform_stock_assert_count_signature(
+  @inventory_overview_platform_stock_menu_seed_actual_count,
+  @inventory_overview_platform_stock_menu_seed_actual_signature,
+  @inventory_overview_platform_stock_menu_seed_expected_count,
+  @inventory_overview_platform_stock_menu_seed_expected_signature,
+  'inventory overview platform stock menu seed exact target count mismatch',
+  'inventory overview platform stock menu seed exact target signature mismatch'
+);
+
+select count(1),
+       sha2(coalesce(group_concat(concat_ws(':', target_key, target_signature) order by target_key separator '|'), ''), 256)
+  into @inventory_overview_platform_stock_row_actual_count,
+       @inventory_overview_platform_stock_row_actual_signature
+from tmp_inventory_overview_platform_stock_write_targets
+where target_group = 'STOCK_ROW';
+
+call inventory_overview_platform_stock_assert_count_signature(
+  @inventory_overview_platform_stock_row_actual_count,
+  @inventory_overview_platform_stock_row_actual_signature,
+  @inventory_overview_platform_stock_row_expected_count,
+  @inventory_overview_platform_stock_row_expected_signature,
+  'inventory overview platform stock rows exact target count mismatch',
+  'inventory overview platform stock rows exact target signature mismatch'
+);
 
 drop procedure if exists assert_inventory_overview_platform_stock_confirmed;
 drop procedure if exists assert_table_exists;
@@ -375,6 +777,8 @@ create table if not exists inventory_overview_spu_read_model (
   key idx_inventory_overview_spu_list (latest_stock_update_time, spu_id)
 ) engine=innodb default charset=utf8mb4 comment='库存总览SPU读模型';
 
+start transaction;
+
 insert into sys_dict_type(dict_name, dict_type, status, create_by, create_time, remark)
 select '库存状态', 'inventory_status', '0', 'admin', sysdate(), '库存总览库存状态'
 where not exists (select 1 from sys_dict_type where dict_type = 'inventory_status');
@@ -414,9 +818,17 @@ where not exists (
 
 update sys_menu
 set menu_name = '库存总览',
+    parent_id = 2080,
+    order_num = 5,
     path = 'overview',
     component = 'Inventory/Overview/index',
+    query = '',
     route_name = 'InventoryOverview',
+    is_frame = 1,
+    is_cache = 0,
+    menu_type = 'C',
+    visible = '0',
+    status = '0',
     perms = 'inventory:overview:list',
     icon = 'DashboardOutlined',
     remark = '库存总览展示商城SKU平台可售库存、来源库存参考和库存调整入口',
@@ -447,7 +859,24 @@ from (
     union all select 242003, '库存流水', 3, 'inventory:overview:ledger', '库存总览库存流水按钮'
     union all select 242004, '库存导出', 4, 'inventory:overview:export', '库存总览导出按钮'
 ) seed
-where not exists (select 1 from sys_menu m where m.menu_id = seed.menu_id);
+on duplicate key update
+    menu_name = values(menu_name),
+    parent_id = values(parent_id),
+    order_num = values(order_num),
+    path = values(path),
+    component = values(component),
+    query = values(query),
+    route_name = values(route_name),
+    is_frame = values(is_frame),
+    is_cache = values(is_cache),
+    menu_type = values(menu_type),
+    visible = values(visible),
+    status = values(status),
+    perms = values(perms),
+    icon = values(icon),
+    update_by = 'admin',
+    update_time = sysdate(),
+    remark = values(remark);
 
 insert into inventory_sku_warehouse_stock(
     stock_key, spu_id, sku_id, seller_id, system_sku_code, warehouse_kind, warehouse_ref_type,
@@ -739,6 +1168,14 @@ on duplicate key update
     search_text = values(search_text),
     rebuild_time = sysdate();
 
+call assert_inventory_overview_platform_stock_seed_completed();
+
+commit;
+
+drop temporary table if exists tmp_inventory_overview_platform_stock_write_targets;
+drop temporary table if exists tmp_inventory_overview_platform_stock_menu_expected;
 drop temporary table if exists tmp_inventory_overview_sys_menu_guard;
 drop temporary table if exists tmp_inventory_overview_sys_menu_guard_ids;
+drop procedure if exists assert_inventory_overview_platform_stock_seed_completed;
 drop procedure if exists assert_inventory_overview_sys_menu_guard;
+drop procedure if exists inventory_overview_platform_stock_assert_count_signature;

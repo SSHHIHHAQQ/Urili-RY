@@ -17,6 +17,7 @@ import java.util.Map;
 import org.junit.Test;
 import com.github.pagehelper.Page;
 import com.ruoyi.common.constant.Constants;
+import com.ruoyi.common.constant.HttpStatus;
 import com.ruoyi.common.core.domain.entity.SysDictData;
 import com.ruoyi.common.core.domain.entity.SysUser;
 import com.ruoyi.common.core.domain.model.LoginBody;
@@ -702,6 +703,30 @@ public class BuyerServiceImplTest
         }
         catch (ServiceException e)
         {
+            assertEquals("登录状态已失效", e.getMessage());
+            assertEquals(Integer.valueOf(HttpStatus.UNAUTHORIZED), e.getCode());
+            assertEquals(null, mapper.sessionProfileBuyerId);
+            assertEquals(null, mapper.sessionProfileAccountId);
+            return;
+        }
+        throw new AssertionError("Expected ServiceException");
+    }
+
+    @Test
+    public void selectBuyerOwnSessionListRejectsMissingSessionAccountAsUnauthorized()
+    {
+        Buyer buyer = buyer(11L, "BAA010001", PartnerSupport.STATUS_NORMAL);
+        RecordingBuyerMapper mapper = recordingMapper(buyer);
+        BuyerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport());
+
+        try
+        {
+            service.selectBuyerOwnSessionList(session(11L, 22L));
+        }
+        catch (ServiceException e)
+        {
+            assertEquals("登录状态已失效", e.getMessage());
+            assertEquals(Integer.valueOf(HttpStatus.UNAUTHORIZED), e.getCode());
             assertEquals(null, mapper.sessionProfileBuyerId);
             assertEquals(null, mapper.sessionProfileAccountId);
             return;
@@ -1480,6 +1505,8 @@ public class BuyerServiceImplTest
         }
         catch (ServiceException e)
         {
+            assertEquals("登录状态已失效", e.getMessage());
+            assertEquals(Integer.valueOf(HttpStatus.UNAUTHORIZED), e.getCode());
             assertEquals(null, mapper.resetPasswordAccountId);
             return;
         }

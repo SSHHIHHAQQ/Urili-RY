@@ -2,8 +2,37 @@
 -- Scope: 以商城 SKU 作为库存总览基础行，来源/仓库关系只影响库存状态和可售计算。
 
 set names utf8mb4;
+set session group_concat_max_len = greatest(@@session.group_concat_max_len, 1048576);
 
 set @confirm_inventory_overview_sku_baseline_refresh := coalesce(@confirm_inventory_overview_sku_baseline_refresh, '');
+set @inventory_overview_no_source_dict_expected_count :=
+    coalesce(@inventory_overview_no_source_dict_expected_count, '');
+set @inventory_overview_no_source_dict_expected_signature :=
+    coalesce(@inventory_overview_no_source_dict_expected_signature, '');
+set @inventory_overview_official_master_expected_count :=
+    coalesce(@inventory_overview_official_master_expected_count, '');
+set @inventory_overview_official_master_expected_signature :=
+    coalesce(@inventory_overview_official_master_expected_signature, '');
+set @inventory_overview_source_unbound_expected_count :=
+    coalesce(@inventory_overview_source_unbound_expected_count, '');
+set @inventory_overview_source_unbound_expected_signature :=
+    coalesce(@inventory_overview_source_unbound_expected_signature, '');
+set @inventory_overview_unmatched_official_expected_count :=
+    coalesce(@inventory_overview_unmatched_official_expected_count, '');
+set @inventory_overview_unmatched_official_expected_signature :=
+    coalesce(@inventory_overview_unmatched_official_expected_signature, '');
+set @inventory_overview_third_party_expected_count :=
+    coalesce(@inventory_overview_third_party_expected_count, '');
+set @inventory_overview_third_party_expected_signature :=
+    coalesce(@inventory_overview_third_party_expected_signature, '');
+set @inventory_overview_no_warehouse_expected_count :=
+    coalesce(@inventory_overview_no_warehouse_expected_count, '');
+set @inventory_overview_no_warehouse_expected_signature :=
+    coalesce(@inventory_overview_no_warehouse_expected_signature, '');
+set @inventory_overview_obsolete_stock_expected_count :=
+    coalesce(@inventory_overview_obsolete_stock_expected_count, '');
+set @inventory_overview_obsolete_stock_expected_signature :=
+    coalesce(@inventory_overview_obsolete_stock_expected_signature, '');
 
 delimiter //
 
@@ -13,6 +42,49 @@ begin
   if coalesce(@confirm_inventory_overview_sku_baseline_refresh, '')
       <> 'APPLY_INVENTORY_OVERVIEW_SKU_BASELINE_REFRESH' then
     signal sqlstate '45000' set message_text = 'set @confirm_inventory_overview_sku_baseline_refresh = APPLY_INVENTORY_OVERVIEW_SKU_BASELINE_REFRESH before running this migration';
+  end if;
+
+  if coalesce(@inventory_overview_no_source_dict_expected_count, '') not regexp '^[0-9]+$' then
+    signal sqlstate '45000' set message_text = 'set @inventory_overview_no_source_dict_expected_count after previewing inventory_status NO_SOURCE dict row';
+  end if;
+  if coalesce(@inventory_overview_no_source_dict_expected_signature, '') not regexp '^[0-9a-fA-F]{64}$' then
+    signal sqlstate '45000' set message_text = 'set @inventory_overview_no_source_dict_expected_signature after previewing inventory_status NO_SOURCE dict row';
+  end if;
+  if coalesce(@inventory_overview_official_master_expected_count, '') not regexp '^[0-9]+$' then
+    signal sqlstate '45000' set message_text = 'set @inventory_overview_official_master_expected_count after previewing exact inventory overview OFFICIAL_MASTER rows';
+  end if;
+  if coalesce(@inventory_overview_official_master_expected_signature, '') not regexp '^[0-9a-fA-F]{64}$' then
+    signal sqlstate '45000' set message_text = 'set @inventory_overview_official_master_expected_signature after previewing exact inventory overview OFFICIAL_MASTER rows';
+  end if;
+  if coalesce(@inventory_overview_source_unbound_expected_count, '') not regexp '^[0-9]+$' then
+    signal sqlstate '45000' set message_text = 'set @inventory_overview_source_unbound_expected_count after previewing exact inventory overview SOURCE_UNBOUND rows';
+  end if;
+  if coalesce(@inventory_overview_source_unbound_expected_signature, '') not regexp '^[0-9a-fA-F]{64}$' then
+    signal sqlstate '45000' set message_text = 'set @inventory_overview_source_unbound_expected_signature after previewing exact inventory overview SOURCE_UNBOUND rows';
+  end if;
+  if coalesce(@inventory_overview_unmatched_official_expected_count, '') not regexp '^[0-9]+$' then
+    signal sqlstate '45000' set message_text = 'set @inventory_overview_unmatched_official_expected_count after previewing exact inventory overview UNMATCHED_OFFICIAL rows';
+  end if;
+  if coalesce(@inventory_overview_unmatched_official_expected_signature, '') not regexp '^[0-9a-fA-F]{64}$' then
+    signal sqlstate '45000' set message_text = 'set @inventory_overview_unmatched_official_expected_signature after previewing exact inventory overview UNMATCHED_OFFICIAL rows';
+  end if;
+  if coalesce(@inventory_overview_third_party_expected_count, '') not regexp '^[0-9]+$' then
+    signal sqlstate '45000' set message_text = 'set @inventory_overview_third_party_expected_count after previewing exact inventory overview THIRD_PARTY rows';
+  end if;
+  if coalesce(@inventory_overview_third_party_expected_signature, '') not regexp '^[0-9a-fA-F]{64}$' then
+    signal sqlstate '45000' set message_text = 'set @inventory_overview_third_party_expected_signature after previewing exact inventory overview THIRD_PARTY rows';
+  end if;
+  if coalesce(@inventory_overview_no_warehouse_expected_count, '') not regexp '^[0-9]+$' then
+    signal sqlstate '45000' set message_text = 'set @inventory_overview_no_warehouse_expected_count after previewing exact inventory overview NO_WAREHOUSE rows';
+  end if;
+  if coalesce(@inventory_overview_no_warehouse_expected_signature, '') not regexp '^[0-9a-fA-F]{64}$' then
+    signal sqlstate '45000' set message_text = 'set @inventory_overview_no_warehouse_expected_signature after previewing exact inventory overview NO_WAREHOUSE rows';
+  end if;
+  if coalesce(@inventory_overview_obsolete_stock_expected_count, '') not regexp '^[0-9]+$' then
+    signal sqlstate '45000' set message_text = 'set @inventory_overview_obsolete_stock_expected_count after previewing exact obsolete inventory sku warehouse stock rows';
+  end if;
+  if coalesce(@inventory_overview_obsolete_stock_expected_signature, '') not regexp '^[0-9a-fA-F]{64}$' then
+    signal sqlstate '45000' set message_text = 'set @inventory_overview_obsolete_stock_expected_signature after previewing exact obsolete inventory sku warehouse stock rows';
   end if;
 end//
 
@@ -29,6 +101,406 @@ begin
   end if;
 end//
 
+drop procedure if exists assert_inventory_overview_no_source_dict_target//
+create procedure assert_inventory_overview_no_source_dict_target()
+begin
+  declare v_count int default 0;
+  declare v_signature varchar(64) default '';
+
+  select count(1),
+         sha2(coalesce(group_concat(
+           concat_ws(':',
+             dict_code,
+             coalesce(dict_sort, ''),
+             coalesce(dict_label, ''),
+             coalesce(dict_value, ''),
+             coalesce(dict_type, ''),
+             coalesce(list_class, ''),
+             coalesce(status, '')
+           )
+           order by dict_code separator '|'
+         ), ''), 256)
+    into v_count, v_signature
+  from sys_dict_data
+  where dict_type = 'inventory_status'
+    and dict_value = 'NO_SOURCE';
+
+  if v_count <> 1 then
+    signal sqlstate '45000' set message_text = 'inventory_status NO_SOURCE dict row must exist exactly once before sku baseline refresh';
+  end if;
+  if v_count <> cast(@inventory_overview_no_source_dict_expected_count as unsigned) then
+    signal sqlstate '45000' set message_text = 'inventory_status NO_SOURCE dict exact target count mismatch';
+  end if;
+  if lower(v_signature) <> lower(@inventory_overview_no_source_dict_expected_signature) then
+    signal sqlstate '45000' set message_text = 'inventory_status NO_SOURCE dict exact target signature mismatch';
+  end if;
+end//
+
+drop procedure if exists inventory_overview_assert_count_signature//
+create procedure inventory_overview_assert_count_signature(
+  in p_actual_count bigint,
+  in p_actual_signature varchar(64),
+  in p_expected_count varchar(64),
+  in p_expected_signature varchar(64),
+  in p_count_message varchar(255),
+  in p_signature_message varchar(255)
+)
+begin
+  if p_actual_count <> cast(p_expected_count as unsigned) then
+    signal sqlstate '45000' set message_text = p_count_message;
+  end if;
+  if lower(p_actual_signature) <> lower(p_expected_signature) then
+    signal sqlstate '45000' set message_text = p_signature_message;
+  end if;
+end//
+
+drop procedure if exists assert_inventory_overview_official_master_targets//
+create procedure assert_inventory_overview_official_master_targets()
+begin
+  declare v_count bigint default 0;
+  declare v_signature varchar(64) default '';
+
+  select count(1),
+         sha2(coalesce(group_concat(
+           concat_ws(':',
+             concat('INV:', sha2(concat_ws('|', 'SKU', sk.sku_id, 'OFFICIAL_MASTER', src.master_warehouse_name), 256)),
+             sk.spu_id,
+             sk.sku_id,
+             sk.seller_id,
+             coalesce(sk.system_sku_code, ''),
+             coalesce(src.master_warehouse_name, ''),
+             coalesce(src.source_total_qty, 0),
+             coalesce(src.source_available_qty, 0),
+             coalesce(src.source_in_transit_qty, 0),
+             coalesce(date_format(src.source_snapshot_time, '%Y-%m-%d %H:%i:%s'), '')
+           )
+           order by sk.sku_id, src.master_warehouse_name separator '|'
+         ), ''), 256)
+    into v_count, v_signature
+  from product_sku sk
+  join product_spu p on p.spu_id = sk.spu_id and p.del_flag = '0'
+  join product_sku_source_binding b
+    on b.sku_id = sk.sku_id
+   and b.binding_status = 'ACTIVE'
+  join (
+      select d.source_stock_group_key,
+             d.master_warehouse_name,
+             sum(coalesce(d.total_quantity, 0)) source_total_qty,
+             sum(coalesce(d.available_quantity, 0)) source_available_qty,
+             sum(coalesce(d.in_transit_quantity, 0)) source_in_transit_qty,
+             max(d.update_time) source_snapshot_time
+      from source_warehouse_stock_detail d
+      where d.repository_scope = 'OFFICIAL_MASTER'
+        and d.inventory_scope = 'COMPREHENSIVE'
+        and d.inventory_attribute = '0'
+        and nullif(d.master_warehouse_name, '') is not null
+      group by d.source_stock_group_key, d.master_warehouse_name
+  ) src on src.source_stock_group_key = b.source_sku_group_key
+  where sk.del_flag = '0';
+
+  call inventory_overview_assert_count_signature(
+    v_count,
+    v_signature,
+    @inventory_overview_official_master_expected_count,
+    @inventory_overview_official_master_expected_signature,
+    'inventory overview OFFICIAL_MASTER exact target count mismatch',
+    'inventory overview OFFICIAL_MASTER exact target signature mismatch'
+  );
+end//
+
+drop procedure if exists assert_inventory_overview_source_unbound_targets//
+create procedure assert_inventory_overview_source_unbound_targets()
+begin
+  declare v_count bigint default 0;
+  declare v_signature varchar(64) default '';
+
+  select count(1),
+         sha2(coalesce(group_concat(
+           concat_ws(':',
+             concat('INV:', sha2(concat_ws('|', 'SKU', sk.sku_id, 'SOURCE_UNBOUND'), 256)),
+             sk.spu_id,
+             sk.sku_id,
+             sk.seller_id,
+             coalesce(sk.system_sku_code, '')
+           )
+           order by sk.sku_id separator '|'
+         ), ''), 256)
+    into v_count, v_signature
+  from product_sku sk
+  join product_spu p on p.spu_id = sk.spu_id and p.del_flag = '0'
+  where sk.del_flag = '0'
+    and exists (
+      select 1
+      from product_spu_warehouse pw
+      where pw.spu_id = sk.spu_id
+        and pw.warehouse_kind = 'official'
+    )
+    and not exists (
+      select 1
+      from product_sku_source_binding b
+      where b.sku_id = sk.sku_id
+        and b.binding_status = 'ACTIVE'
+    );
+
+  call inventory_overview_assert_count_signature(
+    v_count,
+    v_signature,
+    @inventory_overview_source_unbound_expected_count,
+    @inventory_overview_source_unbound_expected_signature,
+    'inventory overview SOURCE_UNBOUND exact target count mismatch',
+    'inventory overview SOURCE_UNBOUND exact target signature mismatch'
+  );
+end//
+
+drop procedure if exists assert_inventory_overview_unmatched_official_targets//
+create procedure assert_inventory_overview_unmatched_official_targets()
+begin
+  declare v_count bigint default 0;
+  declare v_signature varchar(64) default '';
+
+  select count(1),
+         sha2(coalesce(group_concat(
+           concat_ws(':',
+             concat('INV:', sha2(concat_ws('|', 'SKU', sk.sku_id, 'UNMATCHED_OFFICIAL'), 256)),
+             sk.spu_id,
+             sk.sku_id,
+             sk.seller_id,
+             coalesce(sk.system_sku_code, '')
+           )
+           order by sk.sku_id separator '|'
+         ), ''), 256)
+    into v_count, v_signature
+  from product_sku sk
+  join product_spu p on p.spu_id = sk.spu_id and p.del_flag = '0'
+  where sk.del_flag = '0'
+    and exists (
+      select 1
+      from product_sku_source_binding b
+      where b.sku_id = sk.sku_id
+        and b.binding_status = 'ACTIVE'
+    )
+    and not exists (
+      select 1
+      from product_sku_source_binding b
+      join source_warehouse_stock_detail d
+        on d.source_stock_group_key = b.source_sku_group_key
+       and d.repository_scope = 'OFFICIAL_MASTER'
+       and d.inventory_scope = 'COMPREHENSIVE'
+       and d.inventory_attribute = '0'
+       and nullif(d.master_warehouse_name, '') is not null
+      where b.sku_id = sk.sku_id
+        and b.binding_status = 'ACTIVE'
+    );
+
+  call inventory_overview_assert_count_signature(
+    v_count,
+    v_signature,
+    @inventory_overview_unmatched_official_expected_count,
+    @inventory_overview_unmatched_official_expected_signature,
+    'inventory overview UNMATCHED_OFFICIAL exact target count mismatch',
+    'inventory overview UNMATCHED_OFFICIAL exact target signature mismatch'
+  );
+end//
+
+drop procedure if exists assert_inventory_overview_third_party_targets//
+create procedure assert_inventory_overview_third_party_targets()
+begin
+  declare v_count bigint default 0;
+  declare v_signature varchar(64) default '';
+
+  select count(1),
+         sha2(coalesce(group_concat(
+           concat_ws(':',
+             concat('INV:', sha2(concat_ws('|', 'SKU', sk.sku_id, 'THIRD_PARTY_WAREHOUSE', pw.warehouse_id), 256)),
+             sk.spu_id,
+             sk.sku_id,
+             sk.seller_id,
+             coalesce(sk.system_sku_code, ''),
+             pw.warehouse_id,
+             coalesce(pw.warehouse_code, ''),
+             coalesce(pw.warehouse_name, '')
+           )
+           order by sk.sku_id, pw.warehouse_id separator '|'
+         ), ''), 256)
+    into v_count, v_signature
+  from product_sku sk
+  join product_spu p on p.spu_id = sk.spu_id and p.del_flag = '0'
+  join product_spu_warehouse pw
+    on pw.spu_id = sk.spu_id
+   and pw.warehouse_kind = 'third_party'
+  where sk.del_flag = '0';
+
+  call inventory_overview_assert_count_signature(
+    v_count,
+    v_signature,
+    @inventory_overview_third_party_expected_count,
+    @inventory_overview_third_party_expected_signature,
+    'inventory overview THIRD_PARTY exact target count mismatch',
+    'inventory overview THIRD_PARTY exact target signature mismatch'
+  );
+end//
+
+drop procedure if exists assert_inventory_overview_no_warehouse_targets//
+create procedure assert_inventory_overview_no_warehouse_targets()
+begin
+  declare v_count bigint default 0;
+  declare v_signature varchar(64) default '';
+
+  select count(1),
+         sha2(coalesce(group_concat(
+           concat_ws(':',
+             concat('INV:', sha2(concat_ws('|', 'SKU', sk.sku_id, 'NO_WAREHOUSE'), 256)),
+             sk.spu_id,
+             sk.sku_id,
+             sk.seller_id,
+             coalesce(sk.system_sku_code, '')
+           )
+           order by sk.sku_id separator '|'
+         ), ''), 256)
+    into v_count, v_signature
+  from product_sku sk
+  join product_spu p on p.spu_id = sk.spu_id and p.del_flag = '0'
+  where sk.del_flag = '0'
+    and not exists (
+      select 1
+      from product_spu_warehouse pw
+      where pw.spu_id = sk.spu_id
+    )
+    and not exists (
+      select 1
+      from product_sku_source_binding b
+      where b.sku_id = sk.sku_id
+        and b.binding_status = 'ACTIVE'
+    );
+
+  call inventory_overview_assert_count_signature(
+    v_count,
+    v_signature,
+    @inventory_overview_no_warehouse_expected_count,
+    @inventory_overview_no_warehouse_expected_signature,
+    'inventory overview NO_WAREHOUSE exact target count mismatch',
+    'inventory overview NO_WAREHOUSE exact target signature mismatch'
+  );
+end//
+
+drop procedure if exists assert_inventory_overview_obsolete_stock_targets//
+create procedure assert_inventory_overview_obsolete_stock_targets()
+begin
+  declare v_count bigint default 0;
+  declare v_signature varchar(64) default '';
+
+  select count(1),
+         sha2(coalesce(group_concat(
+           concat_ws(':',
+             st.stock_id,
+             coalesce(st.stock_key, ''),
+             coalesce(st.spu_id, ''),
+             coalesce(st.sku_id, ''),
+             coalesce(st.seller_id, ''),
+             coalesce(st.system_sku_code, ''),
+             coalesce(st.warehouse_kind, ''),
+             coalesce(st.warehouse_ref_type, ''),
+             coalesce(st.warehouse_id, ''),
+             coalesce(st.warehouse_code, ''),
+             coalesce(st.warehouse_name, '')
+           )
+           order by st.stock_id separator '|'
+         ), ''), 256)
+    into v_count, v_signature
+  from inventory_sku_warehouse_stock st
+  where not exists (
+      select 1
+      from (
+          select concat('INV:', sha2(concat_ws('|', 'SKU', sk.sku_id, 'OFFICIAL_MASTER', src.master_warehouse_name), 256)) as stock_key
+          from product_sku sk
+          join product_sku_source_binding b
+            on b.sku_id = sk.sku_id
+           and b.binding_status = 'ACTIVE'
+          join (
+              select d.source_stock_group_key,
+                     d.master_warehouse_name
+              from source_warehouse_stock_detail d
+              where d.repository_scope = 'OFFICIAL_MASTER'
+                and d.inventory_scope = 'COMPREHENSIVE'
+                and d.inventory_attribute = '0'
+                and nullif(d.master_warehouse_name, '') is not null
+              group by d.source_stock_group_key, d.master_warehouse_name
+          ) src on src.source_stock_group_key = b.source_sku_group_key
+          where sk.del_flag = '0'
+          union all
+          select concat('INV:', sha2(concat_ws('|', 'SKU', sk.sku_id, 'SOURCE_UNBOUND'), 256)) as stock_key
+          from product_sku sk
+          where sk.del_flag = '0'
+            and exists (
+              select 1
+              from product_spu_warehouse pw
+              where pw.spu_id = sk.spu_id
+                and pw.warehouse_kind = 'official'
+            )
+            and not exists (
+              select 1
+              from product_sku_source_binding b
+              where b.sku_id = sk.sku_id
+                and b.binding_status = 'ACTIVE'
+            )
+          union all
+          select concat('INV:', sha2(concat_ws('|', 'SKU', sk.sku_id, 'UNMATCHED_OFFICIAL'), 256)) as stock_key
+          from product_sku sk
+          where sk.del_flag = '0'
+            and exists (
+              select 1
+              from product_sku_source_binding b
+              where b.sku_id = sk.sku_id
+                and b.binding_status = 'ACTIVE'
+            )
+            and not exists (
+              select 1
+              from product_sku_source_binding b
+              join source_warehouse_stock_detail d
+                on d.source_stock_group_key = b.source_sku_group_key
+               and d.repository_scope = 'OFFICIAL_MASTER'
+               and d.inventory_scope = 'COMPREHENSIVE'
+               and d.inventory_attribute = '0'
+               and nullif(d.master_warehouse_name, '') is not null
+              where b.sku_id = sk.sku_id
+                and b.binding_status = 'ACTIVE'
+            )
+          union all
+          select concat('INV:', sha2(concat_ws('|', 'SKU', sk.sku_id, 'THIRD_PARTY_WAREHOUSE', pw.warehouse_id), 256)) as stock_key
+          from product_sku sk
+          join product_spu_warehouse pw
+            on pw.spu_id = sk.spu_id
+           and pw.warehouse_kind = 'third_party'
+          where sk.del_flag = '0'
+          union all
+          select concat('INV:', sha2(concat_ws('|', 'SKU', sk.sku_id, 'NO_WAREHOUSE'), 256)) as stock_key
+          from product_sku sk
+          where sk.del_flag = '0'
+            and not exists (
+              select 1
+              from product_spu_warehouse pw
+              where pw.spu_id = sk.spu_id
+            )
+            and not exists (
+              select 1
+              from product_sku_source_binding b
+              where b.sku_id = sk.sku_id
+                and b.binding_status = 'ACTIVE'
+            )
+      ) current_stock_keys
+      where current_stock_keys.stock_key = st.stock_key
+  );
+
+  call inventory_overview_assert_count_signature(
+    v_count,
+    v_signature,
+    @inventory_overview_obsolete_stock_expected_count,
+    @inventory_overview_obsolete_stock_expected_signature,
+    'inventory overview obsolete stock exact target count mismatch',
+    'inventory overview obsolete stock exact target signature mismatch'
+  );
+end//
+
 delimiter ;
 
 call assert_inventory_overview_sku_baseline_refresh_confirmed();
@@ -40,9 +512,16 @@ call assert_inventory_overview_table_exists('source_warehouse_stock_detail', 'so
 call assert_inventory_overview_table_exists('inventory_sku_warehouse_stock', 'inventory_sku_warehouse_stock is required before inventory overview sku baseline refresh');
 call assert_inventory_overview_table_exists('inventory_overview_sku_read_model', 'inventory_overview_sku_read_model is required before inventory overview sku baseline refresh');
 call assert_inventory_overview_table_exists('inventory_overview_spu_read_model', 'inventory_overview_spu_read_model is required before inventory overview sku baseline refresh');
+call assert_inventory_overview_table_exists('sys_dict_data', 'sys_dict_data is required before inventory overview sku baseline refresh');
+call assert_inventory_overview_no_source_dict_target();
+call assert_inventory_overview_official_master_targets();
+call assert_inventory_overview_source_unbound_targets();
+call assert_inventory_overview_unmatched_official_targets();
+call assert_inventory_overview_third_party_targets();
+call assert_inventory_overview_no_warehouse_targets();
+call assert_inventory_overview_obsolete_stock_targets();
 
-drop procedure if exists assert_inventory_overview_sku_baseline_refresh_confirmed;
-drop procedure if exists assert_inventory_overview_table_exists;
+start transaction;
 
 update sys_dict_data
 set dict_label = '无来源库存',
@@ -60,6 +539,91 @@ from (
 ) seed
 where not exists (
     select 1 from sys_dict_data d where d.dict_type = 'inventory_status' and d.dict_value = seed.dict_value
+);
+
+delete st
+from inventory_sku_warehouse_stock st
+where not exists (
+    select 1
+    from (
+        select concat('INV:', sha2(concat_ws('|', 'SKU', sk.sku_id, 'OFFICIAL_MASTER', src.master_warehouse_name), 256)) as stock_key
+        from product_sku sk
+        join product_sku_source_binding b
+          on b.sku_id = sk.sku_id
+         and b.binding_status = 'ACTIVE'
+        join (
+            select d.source_stock_group_key,
+                   d.master_warehouse_name
+            from source_warehouse_stock_detail d
+            where d.repository_scope = 'OFFICIAL_MASTER'
+              and d.inventory_scope = 'COMPREHENSIVE'
+              and d.inventory_attribute = '0'
+              and nullif(d.master_warehouse_name, '') is not null
+            group by d.source_stock_group_key, d.master_warehouse_name
+        ) src on src.source_stock_group_key = b.source_sku_group_key
+        where sk.del_flag = '0'
+        union all
+        select concat('INV:', sha2(concat_ws('|', 'SKU', sk.sku_id, 'SOURCE_UNBOUND'), 256)) as stock_key
+        from product_sku sk
+        where sk.del_flag = '0'
+          and exists (
+            select 1
+            from product_spu_warehouse pw
+            where pw.spu_id = sk.spu_id
+              and pw.warehouse_kind = 'official'
+          )
+          and not exists (
+            select 1
+            from product_sku_source_binding b
+            where b.sku_id = sk.sku_id
+              and b.binding_status = 'ACTIVE'
+          )
+        union all
+        select concat('INV:', sha2(concat_ws('|', 'SKU', sk.sku_id, 'UNMATCHED_OFFICIAL'), 256)) as stock_key
+        from product_sku sk
+        where sk.del_flag = '0'
+          and exists (
+            select 1
+            from product_sku_source_binding b
+            where b.sku_id = sk.sku_id
+              and b.binding_status = 'ACTIVE'
+          )
+          and not exists (
+            select 1
+            from product_sku_source_binding b
+            join source_warehouse_stock_detail d
+              on d.source_stock_group_key = b.source_sku_group_key
+             and d.repository_scope = 'OFFICIAL_MASTER'
+             and d.inventory_scope = 'COMPREHENSIVE'
+             and d.inventory_attribute = '0'
+             and nullif(d.master_warehouse_name, '') is not null
+            where b.sku_id = sk.sku_id
+              and b.binding_status = 'ACTIVE'
+          )
+        union all
+        select concat('INV:', sha2(concat_ws('|', 'SKU', sk.sku_id, 'THIRD_PARTY_WAREHOUSE', pw.warehouse_id), 256)) as stock_key
+        from product_sku sk
+        join product_spu_warehouse pw
+          on pw.spu_id = sk.spu_id
+         and pw.warehouse_kind = 'third_party'
+        where sk.del_flag = '0'
+        union all
+        select concat('INV:', sha2(concat_ws('|', 'SKU', sk.sku_id, 'NO_WAREHOUSE'), 256)) as stock_key
+        from product_sku sk
+        where sk.del_flag = '0'
+          and not exists (
+            select 1
+            from product_spu_warehouse pw
+            where pw.spu_id = sk.spu_id
+          )
+          and not exists (
+            select 1
+            from product_sku_source_binding b
+            where b.sku_id = sk.sku_id
+              and b.binding_status = 'ACTIVE'
+          )
+    ) current_stock_keys
+    where current_stock_keys.stock_key = st.stock_key
 );
 
 insert into inventory_sku_warehouse_stock(
@@ -346,8 +910,6 @@ on duplicate key update
     update_by = 'admin',
     update_time = sysdate();
 
-start transaction;
-
 delete from inventory_overview_sku_read_model;
 delete from inventory_overview_spu_read_model;
 
@@ -442,3 +1004,14 @@ group by p.spu_id, p.seller_id, p.system_spu_code, p.product_name, p.main_image_
          p.seller_spu_code, p.product_name_en, p.seller_name;
 
 commit;
+
+drop procedure if exists assert_inventory_overview_sku_baseline_refresh_confirmed;
+drop procedure if exists assert_inventory_overview_table_exists;
+drop procedure if exists assert_inventory_overview_no_source_dict_target;
+drop procedure if exists inventory_overview_assert_count_signature;
+drop procedure if exists assert_inventory_overview_official_master_targets;
+drop procedure if exists assert_inventory_overview_source_unbound_targets;
+drop procedure if exists assert_inventory_overview_unmatched_official_targets;
+drop procedure if exists assert_inventory_overview_third_party_targets;
+drop procedure if exists assert_inventory_overview_no_warehouse_targets;
+drop procedure if exists assert_inventory_overview_obsolete_stock_targets;

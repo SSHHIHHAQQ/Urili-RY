@@ -112,6 +112,24 @@ public class TerminalSqlIsolationContractTest
                 "@confirm_terminal_menu_id_range_isolation");
         requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
                 "APPLY_TERMINAL_MENU_ID_RANGE_ISOLATION");
+        for (String expected : Arrays.asList(
+                "@terminal_menu_range_seller_menu_expected_count",
+                "@terminal_menu_range_seller_menu_expected_signature",
+                "@terminal_menu_range_seller_role_menu_expected_count",
+                "@terminal_menu_range_seller_role_menu_expected_signature",
+                "@terminal_menu_range_buyer_menu_expected_count",
+                "@terminal_menu_range_buyer_menu_expected_signature",
+                "@terminal_menu_range_buyer_role_menu_expected_count",
+                "@terminal_menu_range_buyer_role_menu_expected_signature",
+                "create procedure assert_terminal_menu_id_range_expected_targets",
+                "call assert_terminal_menu_id_range_expected_targets();",
+                "seller_menu low-ID exact target signature mismatch",
+                "seller_role_menu low-ID exact target signature mismatch",
+                "buyer_menu low-ID exact target signature mismatch",
+                "buyer_role_menu low-ID exact target signature mismatch"))
+        {
+            requireContains(violations, rangeMigration.getFileName().toString(), rangeSql, expected);
+        }
         requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
                 "seller_menu contains IDs outside seller range 100000-199999");
         requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
@@ -130,18 +148,22 @@ public class TerminalSqlIsolationContractTest
                 "update buyer_menu\nset parent_id = parent_id + 200000");
         requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
                 "update buyer_menu\nset buyer_menu_id = buyer_menu_id + 200000");
-        requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
-                "create procedure reset_terminal_menu_auto_increment");
-        requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
-                "call reset_terminal_menu_auto_increment('seller_menu', 'seller_menu_id', 100000)");
-        requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
-                "call reset_terminal_menu_auto_increment('buyer_menu', 'buyer_menu_id', 200000)");
-        requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
-                "select greatest(', p_floor, ', coalesce(max(', p_id_column, '), 0) + 1)");
+        if (rangeSql.contains("reset_terminal_menu_auto_increment")
+                || rangeSql.toLowerCase().contains("auto_increment ="))
+        {
+            violations.add(rangeMigration.getFileName()
+                    + " must not mix auto_increment reset DDL into the ID-range migration transaction");
+        }
         requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
                 "create procedure assert_terminal_menu_ids_are_in_final_ranges");
         requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
+                "create procedure assert_no_terminal_menu_parent_orphans");
+        requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
                 "create procedure assert_terminal_role_menu_ids_are_in_final_ranges");
+        requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
+                "seller_menu has orphan parent_id values");
+        requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
+                "buyer_menu has orphan parent_id values");
         requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
                 "seller_menu final IDs must be inside seller range 100000-199999");
         requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
@@ -151,11 +173,40 @@ public class TerminalSqlIsolationContractTest
         requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
                 "buyer_role_menu final menu IDs must be inside buyer range 200000-299999");
         requireContains(violations, rangeMigration.getFileName().toString(), rangeSql,
-                "call assert_no_terminal_menu_orphans();\ncall assert_terminal_menu_ids_are_in_final_ranges();\ncall assert_terminal_role_menu_ids_are_in_final_ranges();\n\ncommit;");
+                "call assert_no_terminal_menu_orphans();\ncall assert_no_terminal_menu_parent_orphans();\ncall assert_terminal_menu_ids_are_in_final_ranges();\ncall assert_terminal_role_menu_ids_are_in_final_ranges();\n\ncommit;");
         requireOccursBefore(violations, rangeMigration.getFileName().toString(), rangeSql,
-                "call reset_terminal_menu_auto_increment('seller_menu', 'seller_menu_id', 100000)", "commit;");
-        requireOccursBefore(violations, rangeMigration.getFileName().toString(), rangeSql,
-                "call reset_terminal_menu_auto_increment('buyer_menu', 'buyer_menu_id', 200000)", "commit;");
+                "call assert_terminal_menu_id_range_expected_targets();", "start transaction;");
+
+        Path autoIncrementReset = backendRoot.resolve("sql/20260608_terminal_menu_auto_increment_reset.sql");
+        String autoIncrementSql = readText(autoIncrementReset);
+        for (String expected : Arrays.asList(
+                "@confirm_terminal_menu_auto_increment_reset",
+                "APPLY_TERMINAL_MENU_AUTO_INCREMENT_RESET",
+                "create procedure assert_terminal_menu_auto_increment_reset_confirmed",
+                "create procedure assert_terminal_menu_ids_are_in_final_ranges",
+                "create procedure assert_terminal_role_menu_ids_are_in_final_ranges",
+                "create procedure reset_terminal_menu_auto_increment",
+                "call assert_terminal_menu_auto_increment_reset_confirmed();",
+                "call assert_no_terminal_menu_orphans();",
+                "call assert_no_terminal_menu_parent_orphans();",
+                "call assert_terminal_menu_ids_are_in_final_ranges();",
+                "call assert_terminal_role_menu_ids_are_in_final_ranges();",
+                "in p_ceiling_exclusive bigint",
+                "if @next_terminal_menu_auto_increment >= p_ceiling_exclusive then",
+                "auto_increment would exceed reserved terminal menu ID range",
+                "call reset_terminal_menu_auto_increment('seller_menu', 'seller_menu_id', 100000, 200000);",
+                "call reset_terminal_menu_auto_increment('buyer_menu', 'buyer_menu_id', 200000, 300000);",
+                "select greatest(', p_floor, ', coalesce(max(', p_id_column, '), 0) + 1)",
+                "alter table `', p_table, '` auto_increment = "))
+        {
+            requireContains(violations, autoIncrementReset.getFileName().toString(), autoIncrementSql, expected);
+        }
+        requireOccursBefore(violations, autoIncrementReset.getFileName().toString(), autoIncrementSql,
+                "call assert_terminal_role_menu_ids_are_in_final_ranges();",
+                "call reset_terminal_menu_auto_increment('seller_menu', 'seller_menu_id', 100000, 200000);");
+        requireOccursBefore(violations, autoIncrementReset.getFileName().toString(), autoIncrementSql,
+                "call reset_terminal_menu_auto_increment('buyer_menu', 'buyer_menu_id', 200000, 300000);",
+                "drop procedure if exists assert_terminal_menu_auto_increment_reset_confirmed;");
 
         if (!violations.isEmpty())
         {

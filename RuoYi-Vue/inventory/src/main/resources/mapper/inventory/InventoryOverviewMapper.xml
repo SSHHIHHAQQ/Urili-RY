@@ -9,6 +9,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="spuId"                    column="spu_id" />
         <result property="skuId"                    column="sku_id" />
         <result property="sellerId"                 column="seller_id" />
+        <result property="sellerNo"                 column="seller_no" />
+        <result property="sellerName"               column="seller_name" />
         <result property="systemSpuCode"            column="system_spu_code" />
         <result property="systemSkuCode"            column="system_sku_code" />
         <result property="productName"              column="product_name" />
@@ -26,6 +28,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="sourceAvailableQty"       column="source_available_qty" />
         <result property="sourceInTransitQty"       column="source_in_transit_qty" />
         <result property="inventoryStatus"          column="inventory_status" />
+        <result property="syncModeSummary"          column="sync_mode_summary" />
+        <result property="syncPolicyScopeSummary"   column="sync_policy_scope_summary" />
         <result property="latestSourceSnapshotTime" column="latest_source_snapshot_time" />
         <result property="latestStockUpdateTime"    column="latest_stock_update_time" />
     </resultMap>
@@ -36,7 +40,12 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="spuId"                      column="spu_id" />
         <result property="skuId"                      column="sku_id" />
         <result property="sellerId"                   column="seller_id" />
+        <result property="sellerNo"                   column="seller_no" />
+        <result property="sellerName"                 column="seller_name" />
         <result property="systemSkuCode"              column="system_sku_code" />
+        <result property="productName"                column="product_name" />
+        <result property="skuName"                    column="sku_name" />
+        <result property="skuImageUrl"                column="sku_image_url" />
         <result property="warehouseKind"              column="warehouse_kind" />
         <result property="warehouseRefType"           column="warehouse_ref_type" />
         <result property="warehouseId"                column="warehouse_id" />
@@ -55,6 +64,12 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="pendingSourceDeductionQty"  column="pending_source_deduction_qty" />
         <result property="platformAvailableQty"       column="platform_available_qty" />
         <result property="effectiveStatus"            column="effective_status" />
+        <result property="syncMode"                   column="sync_mode" />
+        <result property="syncPolicyId"               column="sync_policy_id" />
+        <result property="syncPolicyScope"            column="sync_policy_scope" />
+        <result property="syncPolicyKey"              column="sync_policy_key" />
+        <result property="syncStatus"                 column="sync_status" />
+        <result property="lastAutoSyncTime"           column="last_auto_sync_time" />
         <result property="version"                    column="version" />
         <result property="calcTime"                   column="calc_time" />
         <result property="createBy"                   column="create_by" />
@@ -64,6 +79,26 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="remark"                     column="remark" />
     </resultMap>
 
+    <resultMap type="InventoryOverviewWarehouseOption" id="InventoryOverviewWarehouseOptionResult">
+        <result property="label"            column="label" />
+        <result property="value"            column="value" />
+        <result property="warehouseKind"    column="warehouse_kind" />
+        <result property="warehouseRefType" column="warehouse_ref_type" />
+        <result property="warehouseId"      column="warehouse_id" />
+        <result property="warehouseCode"    column="warehouse_code" />
+        <result property="warehouseName"    column="warehouse_name" />
+        <result property="searchText"       column="search_text" />
+    </resultMap>
+
+    <resultMap type="InventoryOverviewSellerOption" id="InventoryOverviewSellerOptionResult">
+        <result property="label"      column="label" />
+        <result property="value"      column="value" />
+        <result property="sellerId"   column="seller_id" />
+        <result property="sellerNo"   column="seller_no" />
+        <result property="sellerName" column="seller_name" />
+        <result property="searchText" column="search_text" />
+    </resultMap>
+
     <resultMap type="InventoryStockLedger" id="InventoryStockLedgerResult">
         <id     property="ledgerId"                 column="ledger_id" />
         <result property="stockId"                  column="stock_id" />
@@ -71,6 +106,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="spuId"                    column="spu_id" />
         <result property="skuId"                    column="sku_id" />
         <result property="sellerId"                 column="seller_id" />
+        <result property="syncPolicyId"             column="sync_policy_id" />
+        <result property="syncPolicyScope"          column="sync_policy_scope" />
+        <result property="syncPolicyKey"            column="sync_policy_key" />
         <result property="warehouseKind"            column="warehouse_kind" />
         <result property="warehouseRefType"         column="warehouse_ref_type" />
         <result property="warehouseName"            column="warehouse_name" />
@@ -97,14 +135,76 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="remark"                   column="remark" />
     </resultMap>
 
-    <sql id="overviewItemWhere">
+    <sql id="overviewCommonWhere">
+        <if test="spuId != null">and spu_id = #{spuId}</if>
+        <if test="sellerId != null">and seller_id = #{sellerId}</if>
+        <if test="inventoryStatus != null and inventoryStatus != ''">and inventory_status = #{inventoryStatus}</if>
+        <if test="syncModeSummary != null and syncModeSummary != ''">and sync_mode_summary = #{syncModeSummary}</if>
+        <if test="pairingStatus == 'PAIRED'">
+            and inventory_status not in ('NO_WAREHOUSE', 'SOURCE_UNBOUND')
+        </if>
+        <if test="pairingStatus == 'UNASSIGNED'">
+            and inventory_status in ('NO_WAREHOUSE', 'SOURCE_UNBOUND')
+        </if>
+        <if test="warehouseKindSummary != null and warehouseKindSummary != ''">and warehouse_kind_summary = #{warehouseKindSummary}</if>
+        <if test="keyword != null and keyword != ''">
+            and search_text like concat('%', #{keyword}, '%')
+        </if>
+    </sql>
+
+    <sql id="overviewMetricWhere">
+        <if test="platformTotalQtyMin != null">and platform_total_qty &gt;= #{platformTotalQtyMin}</if>
+        <if test="platformTotalQtyMax != null">and platform_total_qty &lt;= #{platformTotalQtyMax}</if>
+        <if test="platformAvailableQtyMin != null">and platform_available_qty &gt;= #{platformAvailableQtyMin}</if>
+        <if test="platformAvailableQtyMax != null">and platform_available_qty &lt;= #{platformAvailableQtyMax}</if>
+        <if test="platformReservedQtyMin != null">and platform_reserved_qty &gt;= #{platformReservedQtyMin}</if>
+        <if test="platformReservedQtyMax != null">and platform_reserved_qty &lt;= #{platformReservedQtyMax}</if>
+        <if test="platformInTransitQtyMin != null">and platform_in_transit_qty &gt;= #{platformInTransitQtyMin}</if>
+        <if test="platformInTransitQtyMax != null">and platform_in_transit_qty &lt;= #{platformInTransitQtyMax}</if>
+        <if test="sourceAvailableQtyMin != null">and source_available_qty &gt;= #{sourceAvailableQtyMin}</if>
+        <if test="sourceAvailableQtyMax != null">and source_available_qty &lt;= #{sourceAvailableQtyMax}</if>
+        <if test="sourceInTransitQtyMin != null">and source_in_transit_qty &gt;= #{sourceInTransitQtyMin}</if>
+        <if test="sourceInTransitQtyMax != null">and source_in_transit_qty &lt;= #{sourceInTransitQtyMax}</if>
+        <if test="latestSourceSnapshotTimeStart != null and latestSourceSnapshotTimeStart != ''">
+            and latest_source_snapshot_time &gt;= #{latestSourceSnapshotTimeStart}
+        </if>
+        <if test="latestSourceSnapshotTimeEnd != null and latestSourceSnapshotTimeEnd != ''">
+            and latest_source_snapshot_time &lt;= #{latestSourceSnapshotTimeEnd}
+        </if>
+        <if test="latestStockUpdateTimeStart != null and latestStockUpdateTimeStart != ''">
+            and latest_stock_update_time &gt;= #{latestStockUpdateTimeStart}
+        </if>
+        <if test="latestStockUpdateTimeEnd != null and latestStockUpdateTimeEnd != ''">
+            and latest_stock_update_time &lt;= #{latestStockUpdateTimeEnd}
+        </if>
+    </sql>
+
+    <sql id="spuOverviewItemWhere">
         <where>
-            <if test="spuId != null">and spu_id = #{spuId}</if>
-            <if test="sellerId != null">and seller_id = #{sellerId}</if>
-            <if test="inventoryStatus != null and inventoryStatus != ''">and inventory_status = #{inventoryStatus}</if>
-            <if test="warehouseKindSummary != null and warehouseKindSummary != ''">and warehouse_kind_summary = #{warehouseKindSummary}</if>
-            <if test="keyword != null and keyword != ''">
-                and search_text like concat('%', #{keyword}, '%')
+            <include refid="overviewCommonWhere" />
+            <include refid="overviewMetricWhere" />
+            <if test="warehouseKey != null and warehouseKey != ''">
+                and exists (
+                    select 1
+                    from inventory_sku_warehouse_stock st
+                    where st.spu_id = inventory_overview_spu_read_model.spu_id
+                      and concat_ws('|', st.warehouse_kind, st.warehouse_ref_type, coalesce(st.warehouse_id, ''), coalesce(st.warehouse_name, '')) = #{warehouseKey}
+                )
+            </if>
+        </where>
+    </sql>
+
+    <sql id="skuOverviewItemWhere">
+        <where>
+            <include refid="overviewCommonWhere" />
+            <include refid="overviewMetricWhere" />
+            <if test="warehouseKey != null and warehouseKey != ''">
+                and exists (
+                    select 1
+                    from inventory_sku_warehouse_stock st
+                    where st.sku_id = inventory_overview_sku_read_model.sku_id
+                      and concat_ws('|', st.warehouse_kind, st.warehouse_ref_type, coalesce(st.warehouse_id, ''), coalesce(st.warehouse_name, '')) = #{warehouseKey}
+                )
             </if>
         </where>
     </sql>
@@ -114,6 +214,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                spu_id,
                null as sku_id,
                seller_id,
+               seller_no,
+               seller_name,
                system_spu_code,
                null as system_sku_code,
                product_name,
@@ -131,10 +233,12 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                source_available_qty,
                source_in_transit_qty,
                inventory_status,
+               sync_mode_summary,
+               sync_policy_scope_summary,
                latest_source_snapshot_time,
                latest_stock_update_time
         from inventory_overview_spu_read_model
-        <include refid="overviewItemWhere" />
+        <include refid="spuOverviewItemWhere" />
         order by latest_stock_update_time desc, spu_id desc
     </select>
 
@@ -143,6 +247,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                spu_id,
                sku_id,
                seller_id,
+               seller_no,
+               seller_name,
                null as system_spu_code,
                system_sku_code,
                product_name,
@@ -160,26 +266,195 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                source_available_qty,
                source_in_transit_qty,
                inventory_status,
+               sync_mode_summary,
+               sync_policy_scope_summary,
                latest_source_snapshot_time,
                latest_stock_update_time
         from inventory_overview_sku_read_model
-        <include refid="overviewItemWhere" />
+        <include refid="skuOverviewItemWhere" />
         order by latest_stock_update_time desc, sku_id desc
     </select>
 
-    <select id="selectWarehouseStockListBySkuId" resultMap="InventorySkuWarehouseStockResult">
-        select *
-        from inventory_sku_warehouse_stock
-        where sku_id = #{skuId}
-        order by case warehouse_kind when 'official' then 1 else 2 end,
+    <sql id="warehouseStockWhere">
+        <where>
+            <if test="spuId != null">and sws.spu_id = #{spuId}</if>
+            <if test="skuId != null">and sws.sku_id = #{skuId}</if>
+            <if test="stockId != null">and sws.stock_id = #{stockId}</if>
+            <if test="sellerId != null">and sws.seller_id = #{sellerId}</if>
+            <if test="warehouseKind != null and warehouseKind != ''">and sws.warehouse_kind = #{warehouseKind}</if>
+            <if test="syncMode != null and syncMode != ''">and sws.sync_mode = #{syncMode}</if>
+            <if test="warehouseKey != null and warehouseKey != ''">
+                and concat_ws('|', sws.warehouse_kind, sws.warehouse_ref_type, coalesce(sws.warehouse_id, ''), coalesce(sws.warehouse_name, '')) = #{warehouseKey}
+            </if>
+            <if test="effectiveStatus != null and effectiveStatus != ''">and sws.effective_status = #{effectiveStatus}</if>
+            <if test="pairingStatus == 'PAIRED'">
+                and sws.effective_status not in ('NO_WAREHOUSE', 'SOURCE_UNBOUND')
+            </if>
+            <if test="pairingStatus == 'UNASSIGNED'">
+                and sws.effective_status in ('NO_WAREHOUSE', 'SOURCE_UNBOUND')
+            </if>
+            <if test="keyword != null and keyword != ''">
+                and concat_ws(' ', sws.system_sku_code, sws.warehouse_name, sws.warehouse_code, srm.search_text, srm.seller_name, srm.seller_no)
+                    like concat('%', #{keyword}, '%')
+            </if>
+            <if test="platformTotalQtyMin != null">and sws.platform_total_qty &gt;= #{platformTotalQtyMin}</if>
+            <if test="platformTotalQtyMax != null">and sws.platform_total_qty &lt;= #{platformTotalQtyMax}</if>
+            <if test="platformAvailableQtyMin != null">and sws.platform_available_qty &gt;= #{platformAvailableQtyMin}</if>
+            <if test="platformAvailableQtyMax != null">and sws.platform_available_qty &lt;= #{platformAvailableQtyMax}</if>
+            <if test="platformReservedQtyMin != null">and sws.platform_reserved_qty &gt;= #{platformReservedQtyMin}</if>
+            <if test="platformReservedQtyMax != null">and sws.platform_reserved_qty &lt;= #{platformReservedQtyMax}</if>
+            <if test="platformInTransitQtyMin != null">and sws.platform_in_transit_qty &gt;= #{platformInTransitQtyMin}</if>
+            <if test="platformInTransitQtyMax != null">and sws.platform_in_transit_qty &lt;= #{platformInTransitQtyMax}</if>
+            <if test="sourceAvailableQtyMin != null">and sws.source_available_qty &gt;= #{sourceAvailableQtyMin}</if>
+            <if test="sourceAvailableQtyMax != null">and sws.source_available_qty &lt;= #{sourceAvailableQtyMax}</if>
+            <if test="sourceInTransitQtyMin != null">and sws.source_in_transit_qty &gt;= #{sourceInTransitQtyMin}</if>
+            <if test="sourceInTransitQtyMax != null">and sws.source_in_transit_qty &lt;= #{sourceInTransitQtyMax}</if>
+            <if test="latestSourceSnapshotTimeStart != null and latestSourceSnapshotTimeStart != ''">
+                and sws.source_snapshot_time &gt;= #{latestSourceSnapshotTimeStart}
+            </if>
+            <if test="latestSourceSnapshotTimeEnd != null and latestSourceSnapshotTimeEnd != ''">
+                and sws.source_snapshot_time &lt;= #{latestSourceSnapshotTimeEnd}
+            </if>
+            <if test="latestStockUpdateTimeStart != null and latestStockUpdateTimeStart != ''">
+                and sws.update_time &gt;= #{latestStockUpdateTimeStart}
+            </if>
+            <if test="latestStockUpdateTimeEnd != null and latestStockUpdateTimeEnd != ''">
+                and sws.update_time &lt;= #{latestStockUpdateTimeEnd}
+            </if>
+        </where>
+    </sql>
+
+    <select id="selectWarehouseStockList" parameterType="InventorySkuWarehouseStock" resultMap="InventorySkuWarehouseStockResult">
+        select sws.*,
+               srm.seller_no,
+               srm.seller_name,
+               srm.product_name,
+               srm.sku_name,
+               srm.sku_image_url
+        from inventory_sku_warehouse_stock sws
+        left join inventory_overview_sku_read_model srm on srm.sku_id = sws.sku_id
+        <include refid="warehouseStockWhere" />
+        order by sws.update_time desc,
+                 sws.sku_id desc,
+                 case sws.warehouse_kind when 'official' then 1 else 2 end,
+                 sws.warehouse_name asc,
+                 sws.stock_id asc
+    </select>
+
+    <select id="selectWarehouseOptions" resultMap="InventoryOverviewWarehouseOptionResult">
+        select value,
+               label,
+               warehouse_kind,
+               warehouse_ref_type,
+               warehouse_id,
+               warehouse_code,
+               warehouse_name,
+               search_text
+        from (
+            select distinct
+                   concat_ws('|', sws.warehouse_kind, sws.warehouse_ref_type, coalesce(sws.warehouse_id, ''), coalesce(sws.warehouse_name, '')) as value,
+                   case
+                     when sws.warehouse_kind = 'third_party' and nullif(sws.warehouse_code, '') is not null then concat(sws.warehouse_name, ' / ', sws.warehouse_code)
+                     else sws.warehouse_name
+                   end as label,
+                   sws.warehouse_kind,
+                   sws.warehouse_ref_type,
+                   sws.warehouse_id,
+                   sws.warehouse_code,
+                   sws.warehouse_name,
+                   concat_ws(' ', sws.warehouse_name, sws.warehouse_code, sws.source_master_warehouse_name, sws.warehouse_kind) as search_text,
+                   case sws.warehouse_kind when 'official' then 1 when 'third_party' then 2 else 3 end as sort_order
+            from inventory_sku_warehouse_stock sws
+            where nullif(sws.warehouse_name, '') is not null
+        ) option_rows
+        order by sort_order asc,
                  warehouse_name asc,
-                 stock_id asc
+                 warehouse_code asc
+    </select>
+
+    <select id="selectOfficialWarehouseOptions" resultMap="InventoryOverviewWarehouseOptionResult">
+        select concat_ws('|', w.warehouse_kind, 'OFFICIAL_MASTER', '', w.warehouse_name) as value,
+               case
+                 when nullif(w.warehouse_code, '') is not null then concat(w.warehouse_name, ' / ', w.warehouse_code)
+                 else w.warehouse_name
+               end as label,
+               w.warehouse_kind,
+               'OFFICIAL_MASTER' as warehouse_ref_type,
+               w.warehouse_id,
+               w.warehouse_code,
+               w.warehouse_name,
+               concat_ws(' ', w.warehouse_name, w.warehouse_code, w.country_code, w.state_province, w.city) as search_text
+        from warehouse w
+        where w.warehouse_kind = 'official'
+          and w.status = '0'
+        order by w.warehouse_name asc, w.warehouse_code asc, w.warehouse_id asc
+    </select>
+
+    <select id="selectSellerOptions" resultMap="InventoryOverviewSellerOptionResult">
+        select value,
+               label,
+               seller_id,
+               seller_no,
+               seller_name,
+               search_text
+        from (
+            select distinct
+                   s.seller_id as value,
+                   s.seller_id,
+                   coalesce(s.seller_no, '') as seller_no,
+                   coalesce(s.seller_name, '') as seller_name,
+                   case
+                     when nullif(s.seller_no, '') is not null then concat(coalesce(nullif(s.seller_short_name, ''), nullif(s.seller_name, ''), concat('卖家', s.seller_id)), ' / ', s.seller_no)
+                     else coalesce(nullif(s.seller_short_name, ''), nullif(s.seller_name, ''), concat('卖家', s.seller_id))
+                   end as label,
+                   concat_ws(' ', s.seller_id, s.seller_no, s.seller_code, s.seller_name, s.seller_short_name) as search_text
+            from seller s
+            where s.status = '0'
+        ) option_rows
+        order by seller_name asc, seller_no asc, seller_id asc
+    </select>
+
+    <select id="selectWarehouseStockListBySkuId" resultMap="InventorySkuWarehouseStockResult">
+        select sws.*,
+               srm.seller_no,
+               srm.seller_name,
+               srm.product_name,
+               srm.sku_name,
+               srm.sku_image_url
+        from inventory_sku_warehouse_stock sws
+        left join inventory_overview_sku_read_model srm on srm.sku_id = sws.sku_id
+        where sws.sku_id = #{skuId}
+        order by case sws.warehouse_kind when 'official' then 1 else 2 end,
+                 sws.warehouse_name asc,
+                 sws.stock_id asc
+    </select>
+
+    <select id="selectWarehouseStockListBySpuId" resultMap="InventorySkuWarehouseStockResult">
+        select sws.*,
+               srm.seller_no,
+               srm.seller_name,
+               srm.product_name,
+               srm.sku_name,
+               srm.sku_image_url
+        from inventory_sku_warehouse_stock sws
+        left join inventory_overview_sku_read_model srm on srm.sku_id = sws.sku_id
+        where sws.spu_id = #{spuId}
+        order by sws.sku_id desc,
+                 case sws.warehouse_kind when 'official' then 1 else 2 end,
+                 sws.warehouse_name asc,
+                 sws.stock_id asc
     </select>
 
     <select id="selectWarehouseStockById" resultMap="InventorySkuWarehouseStockResult">
-        select *
-        from inventory_sku_warehouse_stock
-        where stock_id = #{stockId}
+        select sws.*,
+               srm.seller_no,
+               srm.seller_name,
+               srm.product_name,
+               srm.sku_name,
+               srm.sku_image_url
+        from inventory_sku_warehouse_stock sws
+        left join inventory_overview_sku_read_model srm on srm.sku_id = sws.sku_id
+        where sws.stock_id = #{stockId}
     </select>
 
     <update id="updateWarehouseStock" parameterType="InventorySkuWarehouseStock">
@@ -191,22 +466,31 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             pending_source_deduction_qty = #{pendingSourceDeductionQty},
             platform_available_qty = #{platformAvailableQty},
             effective_status = #{effectiveStatus},
+            sync_mode = #{syncMode},
+            sync_policy_id = #{syncPolicyId},
+            sync_policy_scope = #{syncPolicyScope},
+            sync_policy_key = #{syncPolicyKey},
+            sync_status = #{syncStatus},
+            last_auto_sync_time = #{lastAutoSyncTime},
             calc_time = #{calcTime},
             version = version + 1,
             update_by = #{updateBy},
             update_time = sysdate()
         where stock_id = #{stockId}
+          and version = #{version}
     </update>
 
     <insert id="insertLedger" parameterType="InventoryStockLedger">
         insert into inventory_stock_ledger(
-            stock_id, stock_key, spu_id, sku_id, seller_id, warehouse_kind, warehouse_ref_type, warehouse_name,
+            stock_id, stock_key, spu_id, sku_id, seller_id, sync_policy_id, sync_policy_scope, sync_policy_key,
+            warehouse_kind, warehouse_ref_type, warehouse_name,
             operation_type, operation_source, biz_type, biz_no, delta_qty,
             before_platform_total_qty, after_platform_total_qty, before_available_qty, after_available_qty,
             before_reserved_qty, after_reserved_qty, before_in_transit_qty, after_in_transit_qty,
             risk_confirmed, risk_message, reason, operator_id, operator_name, operate_time, create_time, remark
         ) values (
-            #{stockId}, #{stockKey}, #{spuId}, #{skuId}, #{sellerId}, #{warehouseKind}, #{warehouseRefType}, #{warehouseName},
+            #{stockId}, #{stockKey}, #{spuId}, #{skuId}, #{sellerId}, #{syncPolicyId}, coalesce(#{syncPolicyScope}, ''),
+            coalesce(#{syncPolicyKey}, ''), #{warehouseKind}, #{warehouseRefType}, #{warehouseName},
             #{operationType}, #{operationSource}, #{bizType}, coalesce(#{bizNo}, ''), #{deltaQty},
             #{beforePlatformTotalQty}, #{afterPlatformTotalQty}, #{beforeAvailableQty}, #{afterAvailableQty},
             #{beforeReservedQty}, #{afterReservedQty}, #{beforeInTransitQty}, #{afterInTransitQty},
@@ -228,20 +512,530 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         order by operate_time desc, ledger_id desc
     </select>
 
-    <insert id="refreshSkuReadModel">
-        insert into inventory_overview_sku_read_model(
-            sku_stock_key, spu_id, sku_id, seller_id, system_sku_code, product_name, sku_name, sku_image_url,
-            warehouse_kind_summary, warehouse_count, platform_total_qty, platform_available_qty,
-            platform_reserved_qty, platform_in_transit_qty, source_total_qty, source_available_qty,
-            source_in_transit_qty, inventory_status, latest_source_snapshot_time, latest_stock_update_time,
-            search_text, rebuild_time
+    <sql id="officialMasterSourceStockRows">
+        select null as repository_scope,
+               null as master_sku,
+               null as master_product_name,
+               null as master_warehouse_name,
+               0 as source_total_qty,
+               0 as source_available_qty,
+               0 as source_in_transit_qty,
+               null as source_snapshot_time
+        where 1 = 0
+        <if test="sourceStocks != null and sourceStocks.size() > 0">
+            union all
+            <foreach collection="sourceStocks" item="sourceStock" separator=" union all ">
+                select #{sourceStock.sourceScope} as repository_scope,
+                       #{sourceStock.masterSku} as master_sku,
+                       #{sourceStock.masterProductName} as master_product_name,
+                       #{sourceStock.masterWarehouseName} as master_warehouse_name,
+                       #{sourceStock.sourceTotalQty} as source_total_qty,
+                       #{sourceStock.sourceAvailableQty} as source_available_qty,
+                       #{sourceStock.sourceInTransitQty} as source_in_transit_qty,
+                       #{sourceStock.sourceSnapshotTime} as source_snapshot_time
+            </foreach>
+        </if>
+    </sql>
+
+    <sql id="productSkuSnapshotRows">
+        select null as spu_id,
+               null as sku_id,
+               null as seller_id,
+               null as seller_no,
+               null as seller_name,
+               null as system_spu_code,
+               null as seller_spu_code,
+               null as system_sku_code,
+               null as seller_sku_code,
+               null as product_name,
+               null as product_name_en,
+               null as main_image_url,
+               null as sku_image_url,
+               null as color,
+               null as size,
+               null as model
+        where 1 = 0
+        <if test="skuSnapshots != null and skuSnapshots.size() > 0">
+            union all
+            <foreach collection="skuSnapshots" item="sku" separator=" union all ">
+                select #{sku.spuId} as spu_id,
+                       #{sku.skuId} as sku_id,
+                       #{sku.sellerId} as seller_id,
+                       #{sku.sellerNo} as seller_no,
+                       #{sku.sellerName} as seller_name,
+                       #{sku.systemSpuCode} as system_spu_code,
+                       #{sku.sellerSpuCode} as seller_spu_code,
+                       #{sku.systemSkuCode} as system_sku_code,
+                       #{sku.sellerSkuCode} as seller_sku_code,
+                       #{sku.productName} as product_name,
+                       #{sku.productNameEn} as product_name_en,
+                       #{sku.mainImageUrl} as main_image_url,
+                       #{sku.skuImageUrl} as sku_image_url,
+                       #{sku.color} as color,
+                       #{sku.size} as size,
+                       #{sku.model} as model
+            </foreach>
+        </if>
+    </sql>
+
+    <sql id="productSourceBindingSnapshotRows">
+        select null as sku_id,
+               null as source_scope,
+               null as master_sku,
+               null as master_product_name
+        where 1 = 0
+        <if test="sourceBindings != null and sourceBindings.size() > 0">
+            union all
+            <foreach collection="sourceBindings" item="binding" separator=" union all ">
+                select #{binding.skuId} as sku_id,
+                       #{binding.sourceScope} as source_scope,
+                       #{binding.masterSku} as master_sku,
+                       #{binding.masterProductName} as master_product_name
+            </foreach>
+        </if>
+    </sql>
+
+    <sql id="productWarehouseSnapshotRows">
+        select null as spu_id,
+               null as warehouse_id,
+               null as warehouse_kind,
+               null as warehouse_code,
+               null as warehouse_name
+        where 1 = 0
+        <if test="warehouseSnapshots != null and warehouseSnapshots.size() > 0">
+            union all
+            <foreach collection="warehouseSnapshots" item="warehouse" separator=" union all ">
+                select #{warehouse.spuId} as spu_id,
+                       #{warehouse.warehouseId} as warehouse_id,
+                       #{warehouse.warehouseKind} as warehouse_kind,
+                       #{warehouse.warehouseCode} as warehouse_code,
+                       #{warehouse.warehouseName} as warehouse_name
+            </foreach>
+        </if>
+    </sql>
+
+    <sql id="currentSkuWarehouseStockKeysBySpu">
+        select concat('INV:', sha2(concat_ws('|', 'SKU', sk.sku_id, 'OFFICIAL_MASTER', src.master_warehouse_name), 256)) as stock_key
+        from (
+            <include refid="productSkuSnapshotRows" />
+        ) sk
+        join (
+            <include refid="productSourceBindingSnapshotRows" />
+        ) b on b.sku_id = sk.sku_id
+        join (
+            <include refid="officialMasterSourceStockRows" />
+        ) src on src.repository_scope = b.source_scope
+             and src.master_sku = b.master_sku
+             and coalesce(src.master_product_name, '') = coalesce(b.master_product_name, '')
+        where sk.spu_id = #{spuId}
+        union all
+        select concat('INV:', sha2(concat_ws('|', 'SKU', sk.sku_id, 'SOURCE_UNBOUND'), 256)) as stock_key
+        from (
+            <include refid="productSkuSnapshotRows" />
+        ) sk
+        where sk.spu_id = #{spuId}
+          and exists (
+              select 1
+              from (
+                  <include refid="productWarehouseSnapshotRows" />
+              ) pw
+              where pw.spu_id = sk.spu_id
+                and pw.warehouse_kind = 'official'
+          )
+          and not exists (
+              select 1
+              from (
+                  <include refid="productSourceBindingSnapshotRows" />
+              ) b
+              where b.sku_id = sk.sku_id
+          )
+        union all
+        select concat('INV:', sha2(concat_ws('|', 'SKU', sk.sku_id, 'UNMATCHED_OFFICIAL'), 256)) as stock_key
+        from (
+            <include refid="productSkuSnapshotRows" />
+        ) sk
+        where sk.spu_id = #{spuId}
+          and exists (
+              select 1
+              from (
+                  <include refid="productSourceBindingSnapshotRows" />
+              ) b
+              where b.sku_id = sk.sku_id
+          )
+          and not exists (
+              select 1
+              from (
+                  <include refid="productSourceBindingSnapshotRows" />
+              ) b
+              join (
+                  <include refid="officialMasterSourceStockRows" />
+              ) src
+                on src.repository_scope = b.source_scope
+               and src.master_sku = b.master_sku
+               and coalesce(src.master_product_name, '') = coalesce(b.master_product_name, '')
+              where b.sku_id = sk.sku_id
+          )
+        union all
+        select concat('INV:', sha2(concat_ws('|', 'SKU', sk.sku_id, 'THIRD_PARTY_WAREHOUSE', pw.warehouse_id), 256)) as stock_key
+        from (
+            <include refid="productSkuSnapshotRows" />
+        ) sk
+        join (
+            <include refid="productWarehouseSnapshotRows" />
+        ) pw on pw.spu_id = sk.spu_id
+         and pw.warehouse_kind = 'third_party'
+        where sk.spu_id = #{spuId}
+        union all
+        select concat('INV:', sha2(concat_ws('|', 'SKU', sk.sku_id, 'NO_WAREHOUSE'), 256)) as stock_key
+        from (
+            <include refid="productSkuSnapshotRows" />
+        ) sk
+        where sk.spu_id = #{spuId}
+          and not exists (
+              select 1
+              from (
+                  <include refid="productWarehouseSnapshotRows" />
+              ) pw
+              where pw.spu_id = sk.spu_id
+          )
+          and not exists (
+              select 1
+              from (
+                  <include refid="productSourceBindingSnapshotRows" />
+              ) b
+              where b.sku_id = sk.sku_id
+          )
+    </sql>
+
+    <delete id="deleteObsoleteSkuWarehouseStocksBySpuId">
+        delete from inventory_sku_warehouse_stock
+        where spu_id = #{spuId}
+          and stock_key not in (
+              select stock_key
+              from (
+                  <include refid="currentSkuWarehouseStockKeysBySpu" />
+              ) current_stock_keys
+          )
+    </delete>
+
+    <insert id="upsertOfficialMasterSkuWarehouseStocksBySpuId">
+        insert into inventory_sku_warehouse_stock(
+            stock_key, spu_id, sku_id, seller_id, system_sku_code, warehouse_kind, warehouse_ref_type,
+            warehouse_id, warehouse_code, warehouse_name, source_scope, source_master_warehouse_name,
+            source_inventory_scope, source_inventory_attribute, source_total_qty, source_available_qty,
+            source_in_transit_qty, source_snapshot_time, platform_total_qty, platform_reserved_qty,
+            platform_in_transit_qty, pending_available_inbound_qty, pending_source_deduction_qty,
+            platform_available_qty, effective_status, calc_time, create_by, create_time, update_by, update_time, remark
         )
-        select concat('SKU:', sk.sku_id),
+        select concat('INV:', sha2(concat_ws('|', 'SKU', sk.sku_id, 'OFFICIAL_MASTER', src.master_warehouse_name), 256)),
                sk.spu_id,
                sk.sku_id,
                sk.seller_id,
                sk.system_sku_code,
-               p.product_name,
+               'official',
+               'OFFICIAL_MASTER',
+               null,
+               '',
+               src.master_warehouse_name,
+               'OFFICIAL_MASTER',
+               src.master_warehouse_name,
+               'COMPREHENSIVE',
+               '0',
+               src.source_total_qty,
+               src.source_available_qty,
+               src.source_in_transit_qty,
+               src.source_snapshot_time,
+               0, 0, 0, 0, 0, 0,
+               case
+                 when src.source_available_qty &gt; 0 then 'OUT_OF_STOCK'
+                 when src.source_in_transit_qty &gt; 0 then 'SOURCE_ONLY_IN_TRANSIT'
+                 else 'NO_SOURCE'
+               end,
+               sysdate(), #{operator}, sysdate(), #{operator}, sysdate(), '来源库存刷新生成'
+        from (
+            <include refid="productSkuSnapshotRows" />
+        ) sk
+        join (
+            <include refid="productSourceBindingSnapshotRows" />
+        ) b on b.sku_id = sk.sku_id
+        join (
+            <include refid="officialMasterSourceStockRows" />
+        ) src on src.repository_scope = b.source_scope
+             and src.master_sku = b.master_sku
+             and coalesce(src.master_product_name, '') = coalesce(b.master_product_name, '')
+        where sk.spu_id = #{spuId}
+        on duplicate key update
+            spu_id = values(spu_id),
+            seller_id = values(seller_id),
+            system_sku_code = values(system_sku_code),
+            source_total_qty = values(source_total_qty),
+            source_available_qty = values(source_available_qty),
+            source_in_transit_qty = values(source_in_transit_qty),
+            source_snapshot_time = values(source_snapshot_time),
+            warehouse_kind = 'official',
+            warehouse_ref_type = 'OFFICIAL_MASTER',
+            warehouse_name = values(warehouse_name),
+            source_scope = 'OFFICIAL_MASTER',
+            source_master_warehouse_name = values(source_master_warehouse_name),
+            platform_available_qty = greatest(0,
+              least(platform_total_qty, greatest(0, values(source_available_qty) - pending_source_deduction_qty))
+              - platform_reserved_qty),
+            effective_status = case
+              when greatest(0,
+                least(platform_total_qty, greatest(0, values(source_available_qty) - pending_source_deduction_qty))
+                - platform_reserved_qty) &gt; 0 then 'IN_STOCK'
+              when values(source_available_qty) &lt;= 0 and values(source_in_transit_qty) &gt; 0 then 'SOURCE_ONLY_IN_TRANSIT'
+              when values(source_available_qty) &lt;= 0 and values(source_in_transit_qty) &lt;= 0 then 'NO_SOURCE'
+              else 'OUT_OF_STOCK'
+            end,
+            calc_time = sysdate(),
+            update_by = #{operator},
+            update_time = sysdate()
+    </insert>
+
+    <insert id="upsertSourceUnboundSkuWarehouseStocksBySpuId">
+        insert into inventory_sku_warehouse_stock(
+            stock_key, spu_id, sku_id, seller_id, system_sku_code, warehouse_kind, warehouse_ref_type,
+            warehouse_id, warehouse_code, warehouse_name, source_scope, source_master_warehouse_name,
+            source_inventory_scope, source_inventory_attribute, source_total_qty, source_available_qty,
+            source_in_transit_qty, source_snapshot_time, platform_total_qty, platform_reserved_qty,
+            platform_in_transit_qty, pending_available_inbound_qty, pending_source_deduction_qty,
+            platform_available_qty, effective_status, calc_time, create_by, create_time, update_by, update_time, remark
+        )
+        select concat('INV:', sha2(concat_ws('|', 'SKU', sk.sku_id, 'SOURCE_UNBOUND'), 256)),
+               sk.spu_id,
+               sk.sku_id,
+               sk.seller_id,
+               sk.system_sku_code,
+               'official',
+               'SOURCE_UNBOUND',
+               null,
+               '',
+               '官方仓（来源SKU未绑定）',
+               'OFFICIAL_MASTER',
+               '',
+               'COMPREHENSIVE',
+               '0',
+               0, 0, 0, null, 0, 0, 0, 0, 0, 0, 'SOURCE_UNBOUND',
+               sysdate(), #{operator}, sysdate(), #{operator}, sysdate(), '官方仓来源SKU未绑定占位行'
+        from (
+            <include refid="productSkuSnapshotRows" />
+        ) sk
+        where sk.spu_id = #{spuId}
+          and exists (
+              select 1
+              from (
+                  <include refid="productWarehouseSnapshotRows" />
+              ) pw
+              where pw.spu_id = sk.spu_id
+                and pw.warehouse_kind = 'official'
+          )
+          and not exists (
+              select 1
+              from (
+                  <include refid="productSourceBindingSnapshotRows" />
+              ) b
+              where b.sku_id = sk.sku_id
+          )
+        on duplicate key update
+            spu_id = values(spu_id),
+            seller_id = values(seller_id),
+            system_sku_code = values(system_sku_code),
+            warehouse_kind = 'official',
+            warehouse_ref_type = 'SOURCE_UNBOUND',
+            platform_available_qty = 0,
+            effective_status = 'SOURCE_UNBOUND',
+            calc_time = sysdate(),
+            update_by = #{operator},
+            update_time = sysdate()
+    </insert>
+
+    <insert id="upsertUnmatchedOfficialSkuWarehouseStocksBySpuId">
+        insert into inventory_sku_warehouse_stock(
+            stock_key, spu_id, sku_id, seller_id, system_sku_code, warehouse_kind, warehouse_ref_type,
+            warehouse_id, warehouse_code, warehouse_name, source_scope, source_master_warehouse_name,
+            source_inventory_scope, source_inventory_attribute, source_total_qty, source_available_qty,
+            source_in_transit_qty, source_snapshot_time, platform_total_qty, platform_reserved_qty,
+            platform_in_transit_qty, pending_available_inbound_qty, pending_source_deduction_qty,
+            platform_available_qty, effective_status, calc_time, create_by, create_time, update_by, update_time, remark
+        )
+        select concat('INV:', sha2(concat_ws('|', 'SKU', sk.sku_id, 'UNMATCHED_OFFICIAL'), 256)),
+               sk.spu_id,
+               sk.sku_id,
+               sk.seller_id,
+               sk.system_sku_code,
+               'official',
+               'UNMATCHED_OFFICIAL',
+               null,
+               '',
+               '官方仓（未匹配来源库存）',
+               'OFFICIAL_MASTER',
+               '',
+               'COMPREHENSIVE',
+               '0',
+               0, 0, 0, null, 0, 0, 0, 0, 0, 0, 'NO_SOURCE',
+               sysdate(), #{operator}, sysdate(), #{operator}, sysdate(), '官方仓无来源库存占位行'
+        from (
+            <include refid="productSkuSnapshotRows" />
+        ) sk
+        where sk.spu_id = #{spuId}
+          and exists (
+              select 1
+              from (
+                  <include refid="productSourceBindingSnapshotRows" />
+              ) b
+              where b.sku_id = sk.sku_id
+          )
+          and not exists (
+              select 1
+              from (
+                  <include refid="productSourceBindingSnapshotRows" />
+              ) b
+              join (
+                  <include refid="officialMasterSourceStockRows" />
+              ) src
+                on src.repository_scope = b.source_scope
+               and src.master_sku = b.master_sku
+               and coalesce(src.master_product_name, '') = coalesce(b.master_product_name, '')
+              where b.sku_id = sk.sku_id
+          )
+        on duplicate key update
+            spu_id = values(spu_id),
+            seller_id = values(seller_id),
+            system_sku_code = values(system_sku_code),
+            warehouse_kind = 'official',
+            warehouse_ref_type = 'UNMATCHED_OFFICIAL',
+            platform_available_qty = 0,
+            effective_status = 'NO_SOURCE',
+            calc_time = sysdate(),
+            update_by = #{operator},
+            update_time = sysdate()
+    </insert>
+
+    <insert id="upsertThirdPartySkuWarehouseStocksBySpuId">
+        insert into inventory_sku_warehouse_stock(
+            stock_key, spu_id, sku_id, seller_id, system_sku_code, warehouse_kind, warehouse_ref_type,
+            warehouse_id, warehouse_code, warehouse_name, source_scope, source_master_warehouse_name,
+            source_inventory_scope, source_inventory_attribute, source_total_qty, source_available_qty,
+            source_in_transit_qty, source_snapshot_time, platform_total_qty, platform_reserved_qty,
+            platform_in_transit_qty, pending_available_inbound_qty, pending_source_deduction_qty,
+            platform_available_qty, effective_status, calc_time, create_by, create_time, update_by, update_time, remark
+        )
+        select concat('INV:', sha2(concat_ws('|', 'SKU', sk.sku_id, 'THIRD_PARTY_WAREHOUSE', pw.warehouse_id), 256)),
+               sk.spu_id,
+               sk.sku_id,
+               sk.seller_id,
+               sk.system_sku_code,
+               'third_party',
+               'THIRD_PARTY_WAREHOUSE',
+               pw.warehouse_id,
+               pw.warehouse_code,
+               pw.warehouse_name,
+               '',
+               '',
+               '',
+               '',
+               0, 0, 0, null, 0, 0, 0, 0, 0, 0, 'OUT_OF_STOCK',
+               sysdate(), #{operator}, sysdate(), #{operator}, sysdate(), '三方仓库存刷新生成'
+        from (
+            <include refid="productSkuSnapshotRows" />
+        ) sk
+        join (
+            <include refid="productWarehouseSnapshotRows" />
+        ) pw on pw.spu_id = sk.spu_id
+         and pw.warehouse_kind = 'third_party'
+        where sk.spu_id = #{spuId}
+        on duplicate key update
+            spu_id = values(spu_id),
+            seller_id = values(seller_id),
+            system_sku_code = values(system_sku_code),
+            warehouse_kind = 'third_party',
+            warehouse_ref_type = 'THIRD_PARTY_WAREHOUSE',
+            warehouse_id = values(warehouse_id),
+            warehouse_code = values(warehouse_code),
+            warehouse_name = values(warehouse_name),
+            platform_available_qty = greatest(0, platform_total_qty - platform_reserved_qty),
+            effective_status = case
+              when greatest(0, platform_total_qty - platform_reserved_qty) &gt; 0 then 'IN_STOCK'
+              else 'OUT_OF_STOCK'
+            end,
+            calc_time = sysdate(),
+            update_by = #{operator},
+            update_time = sysdate()
+    </insert>
+
+    <insert id="upsertNoWarehouseSkuWarehouseStocksBySpuId">
+        insert into inventory_sku_warehouse_stock(
+            stock_key, spu_id, sku_id, seller_id, system_sku_code, warehouse_kind, warehouse_ref_type,
+            warehouse_id, warehouse_code, warehouse_name, source_scope, source_master_warehouse_name,
+            source_inventory_scope, source_inventory_attribute, source_total_qty, source_available_qty,
+            source_in_transit_qty, source_snapshot_time, platform_total_qty, platform_reserved_qty,
+            platform_in_transit_qty, pending_available_inbound_qty, pending_source_deduction_qty,
+            platform_available_qty, effective_status, calc_time, create_by, create_time, update_by, update_time, remark
+        )
+        select concat('INV:', sha2(concat_ws('|', 'SKU', sk.sku_id, 'NO_WAREHOUSE'), 256)),
+               sk.spu_id,
+               sk.sku_id,
+               sk.seller_id,
+               sk.system_sku_code,
+               'unconfigured',
+               'NO_WAREHOUSE',
+               null,
+               '',
+               '发货仓库未配置',
+               '',
+               '',
+               '',
+               '',
+               0, 0, 0, null, 0, 0, 0, 0, 0, 0, 'NO_WAREHOUSE',
+               sysdate(), #{operator}, sysdate(), #{operator}, sysdate(), '商城SKU缺少仓库/来源绑定占位行'
+        from (
+            <include refid="productSkuSnapshotRows" />
+        ) sk
+        where sk.spu_id = #{spuId}
+          and not exists (
+              select 1
+              from (
+                  <include refid="productWarehouseSnapshotRows" />
+              ) pw
+              where pw.spu_id = sk.spu_id
+          )
+          and not exists (
+              select 1
+              from (
+                  <include refid="productSourceBindingSnapshotRows" />
+              ) b
+              where b.sku_id = sk.sku_id
+          )
+        on duplicate key update
+            spu_id = values(spu_id),
+            seller_id = values(seller_id),
+            system_sku_code = values(system_sku_code),
+            warehouse_kind = 'unconfigured',
+            warehouse_ref_type = 'NO_WAREHOUSE',
+            platform_available_qty = 0,
+            effective_status = 'NO_WAREHOUSE',
+            calc_time = sysdate(),
+            update_by = #{operator},
+            update_time = sysdate()
+    </insert>
+
+    <insert id="refreshSkuReadModel">
+        insert into inventory_overview_sku_read_model(
+            sku_stock_key, spu_id, sku_id, seller_id, seller_no, seller_name, system_sku_code, product_name, sku_name, sku_image_url,
+            warehouse_kind_summary, warehouse_count, platform_total_qty, platform_available_qty,
+            platform_reserved_qty, platform_in_transit_qty, source_total_qty, source_available_qty,
+            source_in_transit_qty, inventory_status, latest_source_snapshot_time, latest_stock_update_time,
+            sync_mode_summary, sync_policy_scope_summary, search_text, rebuild_time
+        )
+               select concat('SKU:', sk.sku_id),
+               sk.spu_id,
+               sk.sku_id,
+               sk.seller_id,
+               coalesce(sk.seller_no, ''),
+               coalesce(sk.seller_name, ''),
+               sk.system_sku_code,
+               sk.product_name,
                trim(concat_ws(' / ', nullif(sk.color, ''), nullif(sk.size, ''), nullif(sk.model, ''))),
                coalesce(sk.sku_image_url, ''),
                case
@@ -268,18 +1062,30 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                end,
                max(st.source_snapshot_time),
                max(st.update_time),
-               concat_ws(' ', p.system_spu_code, p.product_name, sk.system_sku_code, sk.seller_sku_code, sk.color, sk.size, sk.model),
+               case
+                 when count(st.stock_id) = 0 then 'MANUAL'
+                 when count(distinct coalesce(st.sync_mode, 'MANUAL')) = 1 then min(coalesce(st.sync_mode, 'MANUAL'))
+                 else 'MIXED'
+               end,
+               case
+                 when count(st.stock_id) = 0 then 'SYSTEM'
+                 when count(distinct coalesce(st.sync_policy_scope, 'SYSTEM')) = 1 then min(coalesce(st.sync_policy_scope, 'SYSTEM'))
+                 else 'MIXED'
+               end,
+               concat_ws(' ', sk.system_spu_code, sk.product_name, sk.seller_no, sk.seller_name, sk.system_sku_code, sk.seller_sku_code, sk.color, sk.size, sk.model),
                sysdate()
-        from product_sku sk
-        join product_spu p on p.spu_id = sk.spu_id
+        from (
+            <include refid="productSkuSnapshotRows" />
+        ) sk
         left join inventory_sku_warehouse_stock st on st.sku_id = sk.sku_id
         where sk.sku_id = #{skuId}
-          and sk.del_flag = '0'
-        group by sk.sku_id, sk.spu_id, sk.seller_id, sk.system_sku_code, p.product_name, sk.sku_image_url,
-                 sk.color, sk.size, sk.model, p.system_spu_code, sk.seller_sku_code
+        group by sk.sku_id, sk.spu_id, sk.seller_id, sk.seller_no, sk.seller_name, sk.system_sku_code, sk.product_name, sk.sku_image_url,
+                 sk.color, sk.size, sk.model, sk.system_spu_code, sk.seller_sku_code
         on duplicate key update
             spu_id = values(spu_id),
             seller_id = values(seller_id),
+            seller_no = values(seller_no),
+            seller_name = values(seller_name),
             system_sku_code = values(system_sku_code),
             product_name = values(product_name),
             sku_name = values(sku_name),
@@ -296,24 +1102,28 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             inventory_status = values(inventory_status),
             latest_source_snapshot_time = values(latest_source_snapshot_time),
             latest_stock_update_time = values(latest_stock_update_time),
+            sync_mode_summary = values(sync_mode_summary),
+            sync_policy_scope_summary = values(sync_policy_scope_summary),
             search_text = values(search_text),
             rebuild_time = sysdate()
     </insert>
 
     <insert id="refreshSpuReadModel">
         insert into inventory_overview_spu_read_model(
-            spu_stock_key, spu_id, seller_id, system_spu_code, product_name, main_image_url, sku_count,
+            spu_stock_key, spu_id, seller_id, seller_no, seller_name, system_spu_code, product_name, main_image_url, sku_count,
             warehouse_kind_summary, warehouse_count, platform_total_qty, platform_available_qty,
             platform_reserved_qty, platform_in_transit_qty, source_total_qty, source_available_qty,
             source_in_transit_qty, inventory_status, latest_source_snapshot_time, latest_stock_update_time,
-            search_text, rebuild_time
+            sync_mode_summary, sync_policy_scope_summary, search_text, rebuild_time
         )
-        select concat('SPU:', p.spu_id),
-               p.spu_id,
-               p.seller_id,
-               p.system_spu_code,
-               p.product_name,
-               coalesce(p.main_image_url, ''),
+        select concat('SPU:', sk.spu_id),
+               sk.spu_id,
+               sk.seller_id,
+               coalesce(sk.seller_no, ''),
+               coalesce(sk.seller_name, ''),
+               sk.system_spu_code,
+               sk.product_name,
+               coalesce(sk.main_image_url, ''),
                count(distinct sk.sku_id),
                case when count(distinct srm.warehouse_kind_summary) = 1 then min(srm.warehouse_kind_summary) else 'MIXED' end,
                sum(coalesce(srm.warehouse_count, 0)),
@@ -334,17 +1144,21 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                end,
                max(srm.latest_source_snapshot_time),
                max(srm.latest_stock_update_time),
-               concat_ws(' ', p.system_spu_code, p.seller_spu_code, p.product_name, p.product_name_en, p.seller_name),
+               case when count(distinct srm.sync_mode_summary) = 1 then min(srm.sync_mode_summary) else 'MIXED' end,
+               case when count(distinct srm.sync_policy_scope_summary) = 1 then min(srm.sync_policy_scope_summary) else 'MIXED' end,
+               concat_ws(' ', sk.system_spu_code, sk.seller_spu_code, sk.product_name, sk.product_name_en, sk.seller_name),
                sysdate()
-        from product_spu p
-        join product_sku sk on sk.spu_id = p.spu_id and sk.del_flag = '0'
+        from (
+            <include refid="productSkuSnapshotRows" />
+        ) sk
         join inventory_overview_sku_read_model srm on srm.sku_id = sk.sku_id
-        where p.spu_id = #{spuId}
-          and p.del_flag = '0'
-        group by p.spu_id, p.seller_id, p.system_spu_code, p.product_name, p.main_image_url,
-                 p.seller_spu_code, p.product_name_en, p.seller_name
+        where sk.spu_id = #{spuId}
+        group by sk.spu_id, sk.seller_id, sk.seller_no, sk.seller_name, sk.system_spu_code, sk.product_name, sk.main_image_url,
+                 sk.seller_spu_code, sk.product_name_en
         on duplicate key update
             seller_id = values(seller_id),
+            seller_no = values(seller_no),
+            seller_name = values(seller_name),
             system_spu_code = values(system_spu_code),
             product_name = values(product_name),
             main_image_url = values(main_image_url),
@@ -361,6 +1175,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             inventory_status = values(inventory_status),
             latest_source_snapshot_time = values(latest_source_snapshot_time),
             latest_stock_update_time = values(latest_stock_update_time),
+            sync_mode_summary = values(sync_mode_summary),
+            sync_policy_scope_summary = values(sync_policy_scope_summary),
             search_text = values(search_text),
             rebuild_time = sysdate()
     </insert>

@@ -14,7 +14,7 @@
 
 ## 子 Agent
 
-- 先按最新规则尝试启动 6 个 `gpt-5.3-codex-spark` 只读子 Agent；平台返回额度限制，失败 Agent 均已关闭。
+- 历史记录（已过期口径）：先按最新规则尝试启动 6 个 `gpt-5.3-codex-spark` 只读子 Agent；平台返回额度限制，失败 Agent 均已关闭。
 - 随后回退启动 6 个 `gpt-5.4` 只读子 Agent，覆盖 seller admin、buyer admin、portal 自助入口、product 端内商品、测试契约、SQL seed。
 - 6 个 `gpt-5.4` 子 Agent 均已完成并关闭，均未修改文件。
 - 已采纳 P1：seller/buyer 管理端 role/dept/menu Controller 和主体/账号关键方法需要精确方法级权限合同。
@@ -24,7 +24,7 @@
 
 ## 已完成
 
-- `SellerAdminPermissionContractTest` 补齐 `AdminSellerController` 的 `list/add/edit/changeStatus/resetOwnerPassword` 权限断言。
+- 历史记录（已过期口径）：`SellerAdminPermissionContractTest` 当时补齐 `AdminSellerController` 的 `list/add/edit/changeStatus/resetOwnerPassword` 权限断言；当前已由后续合同覆盖为禁止恢复主体级 `resetOwnerPassword`。
 - `SellerAdminPermissionContractTest` 新增 `sellerRoleDeptMenuHandlersMustUseSpecificPermissions()`，锁定 seller 管理端 role/dept/menu 方法权限。
 - `BuyerAdminPermissionContractTest` 按卖家模板机械复制，锁定 buyer 管理端主体、账号、role/dept/menu 方法权限。
 - `PortalAnonymousEndpointContractTest` 扩展 seller/buyer portal `accounts` / `depts` / `roles` 权限断言。

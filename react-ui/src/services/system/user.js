@@ -106,13 +106,13 @@ export function uploadAvatar(data) {
 }
 // 查询授权角色
 export function getAuthRole(userId) {
-    return request('/system/user/authRole/' + userId, {
+    return request('/api/system/user/authRole/' + userId, {
         method: 'get'
     });
 }
 // 保存授权角色
 export function updateAuthRole(data) {
-    return request('/system/user/authRole', {
+    return request('/api/system/user/authRole', {
         method: 'put',
         params: data
     });

@@ -35,7 +35,7 @@ export default function ImageUploadField({
         if (resp.code !== 200) {
           throw new Error(resp.msg || '上传失败');
         }
-        const url = resp.url || resp.fileName || resp.newFileName;
+        const url = resp.fileName || resp.url || resp.newFileName;
         if (!url) {
           throw new Error('上传响应缺少资源路径');
         }

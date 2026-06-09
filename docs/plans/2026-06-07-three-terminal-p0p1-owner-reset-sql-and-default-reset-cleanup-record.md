@@ -4,7 +4,7 @@
 
 本轮继续以 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md` 为参考方向，按快速推进模式只处理 P0/P1：编译、guard、接口、权限、串端、service/字段缺失。不做浏览器运行态验收、截图、DOM 检测或 UI 细调。
 
-子 Agent 按最新规则先尝试 `gpt-5.3-codex-spark`，平台返回额度限制后已关闭失败 Agent，并回退 6 个 `gpt-5.4` 只读 Agent。回退 Agent 覆盖 SQL owner reset、integration 验证缺口、React guard、后端 runtime、端内菜单 fail-closed、Markdown/AGENTS 口径。
+子 Agent 按最新规则先尝试 `gpt-5.3-codex-spark`，平台返回额度限制后已关闭失败 Agent，并回退 6 个 `gpt-5.4` 只读 Agent。回退 Agent 覆盖 SQL owner reset、integration 验证缺口、React guard、后端 runtime、端内菜单 fail-closed、Markdown/AGENTS 口径。（历史记录，已过期口径）
 
 ## 问题
 

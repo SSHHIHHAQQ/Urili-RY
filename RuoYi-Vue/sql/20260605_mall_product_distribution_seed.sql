@@ -4,8 +4,21 @@
 -- This script is prepared for review; confirm active datasource before executing.
 
 set names utf8mb4;
+set session group_concat_max_len = greatest(@@session.group_concat_max_len, 1048576);
 
 set @confirm_mall_product_distribution_seed := coalesce(@confirm_mall_product_distribution_seed, '');
+set @mall_product_distribution_dict_seed_expected_count :=
+    coalesce(@mall_product_distribution_dict_seed_expected_count, '');
+set @mall_product_distribution_dict_seed_expected_signature :=
+    coalesce(@mall_product_distribution_dict_seed_expected_signature, '');
+set @mall_product_distribution_disabled_status_expected_count :=
+    coalesce(@mall_product_distribution_disabled_status_expected_count, '');
+set @mall_product_distribution_disabled_status_expected_signature :=
+    coalesce(@mall_product_distribution_disabled_status_expected_signature, '');
+set @mall_product_distribution_menu_seed_expected_count :=
+    coalesce(@mall_product_distribution_menu_seed_expected_count, '');
+set @mall_product_distribution_menu_seed_expected_signature :=
+    coalesce(@mall_product_distribution_menu_seed_expected_signature, '');
 
 delimiter //
 
@@ -15,6 +28,24 @@ begin
   if coalesce(@confirm_mall_product_distribution_seed, '')
       <> 'APPLY_MALL_PRODUCT_DISTRIBUTION_SEED' then
     signal sqlstate '45000' set message_text = 'set @confirm_mall_product_distribution_seed = APPLY_MALL_PRODUCT_DISTRIBUTION_SEED before running this migration';
+  end if;
+  if coalesce(@mall_product_distribution_dict_seed_expected_count, '') not regexp '^[0-9]+$' then
+    signal sqlstate '45000' set message_text = 'set @mall_product_distribution_dict_seed_expected_count after previewing mall product distribution dict seed rows';
+  end if;
+  if coalesce(@mall_product_distribution_dict_seed_expected_signature, '') not regexp '^[0-9a-fA-F]{64}$' then
+    signal sqlstate '45000' set message_text = 'set @mall_product_distribution_dict_seed_expected_signature after previewing mall product distribution dict seed rows';
+  end if;
+  if coalesce(@mall_product_distribution_disabled_status_expected_count, '') not regexp '^[0-9]+$' then
+    signal sqlstate '45000' set message_text = 'set @mall_product_distribution_disabled_status_expected_count after previewing product_sales_status DISABLED rows';
+  end if;
+  if coalesce(@mall_product_distribution_disabled_status_expected_signature, '') not regexp '^[0-9a-fA-F]{64}$' then
+    signal sqlstate '45000' set message_text = 'set @mall_product_distribution_disabled_status_expected_signature after previewing product_sales_status DISABLED rows';
+  end if;
+  if coalesce(@mall_product_distribution_menu_seed_expected_count, '') not regexp '^[0-9]+$' then
+    signal sqlstate '45000' set message_text = 'set @mall_product_distribution_menu_seed_expected_count after previewing mall product distribution menu seed rows';
+  end if;
+  if coalesce(@mall_product_distribution_menu_seed_expected_signature, '') not regexp '^[0-9a-fA-F]{64}$' then
+    signal sqlstate '45000' set message_text = 'set @mall_product_distribution_menu_seed_expected_signature after previewing mall product distribution menu seed rows';
   end if;
 end//
 
@@ -55,6 +86,162 @@ begin
      and coalesce(m.perms, '') = coalesce(seed.perms, '')
   ) then
     signal sqlstate '45000' set message_text = 'mall product distribution sys_menu signature is already used by another menu';
+  end if;
+end//
+
+drop procedure if exists assert_mall_product_distribution_count_signature//
+create procedure assert_mall_product_distribution_count_signature(
+  in p_actual_count bigint,
+  in p_actual_signature varchar(64),
+  in p_expected_count varchar(64),
+  in p_expected_signature varchar(64),
+  in p_count_message varchar(255),
+  in p_signature_message varchar(255)
+)
+begin
+  if p_actual_count <> cast(p_expected_count as unsigned) then
+    signal sqlstate '45000' set message_text = p_count_message;
+  end if;
+  if lower(p_actual_signature) <> lower(p_expected_signature) then
+    signal sqlstate '45000' set message_text = p_signature_message;
+  end if;
+end//
+
+drop procedure if exists assert_mall_product_distribution_seed_completed//
+create procedure assert_mall_product_distribution_seed_completed()
+begin
+  if (
+    select count(1)
+    from sys_dict_type t
+    where (
+        t.dict_type = 'product_sales_status'
+        and coalesce(t.dict_name, '') = '商品销售状态'
+        and coalesce(t.status, '') = '0'
+      )
+      or (
+        t.dict_type = 'product_control_status'
+        and coalesce(t.dict_name, '') = '商品管控状态'
+        and coalesce(t.status, '') = '0'
+      )
+      or (
+        t.dict_type = 'product_source_type'
+        and coalesce(t.dict_name, '') = '商品创建来源'
+        and coalesce(t.status, '') = '0'
+      )
+  ) <> 3 then
+    signal sqlstate '45000' set message_text = 'mall product distribution dict type seed completion mismatch';
+  end if;
+
+  if (
+    select count(1)
+    from sys_dict_data d
+    where (
+        d.dict_type = 'product_sales_status'
+        and d.dict_value = 'DRAFT'
+        and coalesce(d.dict_label, '') = '草稿'
+        and coalesce(d.list_class, '') = 'default'
+        and coalesce(d.is_default, '') = 'Y'
+        and coalesce(d.status, '') = '0'
+      )
+      or (
+        d.dict_type = 'product_sales_status'
+        and d.dict_value = 'READY'
+        and coalesce(d.dict_label, '') = '待上架'
+        and coalesce(d.list_class, '') = 'warning'
+        and coalesce(d.is_default, '') = 'N'
+        and coalesce(d.status, '') = '0'
+      )
+      or (
+        d.dict_type = 'product_sales_status'
+        and d.dict_value = 'ON_SALE'
+        and coalesce(d.dict_label, '') = '已上架'
+        and coalesce(d.list_class, '') = 'success'
+        and coalesce(d.is_default, '') = 'N'
+        and coalesce(d.status, '') = '0'
+      )
+      or (
+        d.dict_type = 'product_sales_status'
+        and d.dict_value = 'OFF_SALE'
+        and coalesce(d.dict_label, '') = '已下架'
+        and coalesce(d.list_class, '') = 'info'
+        and coalesce(d.is_default, '') = 'N'
+        and coalesce(d.status, '') = '0'
+      )
+      or (
+        d.dict_type = 'product_control_status'
+        and d.dict_value = 'NORMAL'
+        and coalesce(d.dict_label, '') = '正常'
+        and coalesce(d.list_class, '') = 'success'
+        and coalesce(d.is_default, '') = 'Y'
+        and coalesce(d.status, '') = '0'
+      )
+      or (
+        d.dict_type = 'product_control_status'
+        and d.dict_value = 'DISABLED'
+        and coalesce(d.dict_label, '') = '停用'
+        and coalesce(d.list_class, '') = 'danger'
+        and coalesce(d.is_default, '') = 'N'
+        and coalesce(d.status, '') = '0'
+      )
+      or (
+        d.dict_type = 'product_source_type'
+        and d.dict_value = 'ADMIN_MANUAL'
+        and coalesce(d.dict_label, '') = '管理端手工创建'
+        and coalesce(d.list_class, '') = 'primary'
+        and coalesce(d.is_default, '') = 'Y'
+        and coalesce(d.status, '') = '0'
+      )
+      or (
+        d.dict_type = 'product_source_type'
+        and d.dict_value = 'SELLER_SUBMIT'
+        and coalesce(d.dict_label, '') = '卖家提交'
+        and coalesce(d.list_class, '') = 'success'
+        and coalesce(d.is_default, '') = 'N'
+        and coalesce(d.status, '') = '0'
+      )
+      or (
+        d.dict_type = 'product_source_type'
+        and d.dict_value = 'SOURCE_PRODUCT'
+        and coalesce(d.dict_label, '') = '来源商品库生成'
+        and coalesce(d.list_class, '') = 'info'
+        and coalesce(d.is_default, '') = 'N'
+        and coalesce(d.status, '') = '0'
+      )
+  ) <> 9 then
+    signal sqlstate '45000' set message_text = 'mall product distribution dict data seed completion mismatch';
+  end if;
+
+  if exists (
+    select 1
+    from sys_dict_data d
+    where d.dict_type = 'product_sales_status'
+      and d.dict_value = 'DISABLED'
+      and (
+        coalesce(d.status, '') <> '1'
+        or coalesce(d.remark, '') <> '停用已拆分为商品管控状态，不再作为销售状态'
+      )
+  ) then
+    signal sqlstate '45000' set message_text = 'mall product distribution disabled status completion mismatch';
+  end if;
+
+  if (
+    select count(1)
+    from sys_menu m
+    join tmp_mall_product_distribution_seed_expected seed on seed.menu_id = m.menu_id
+    where coalesce(m.menu_name, '') = seed.menu_name
+      and coalesce(m.parent_id, -1) = seed.parent_id
+      and coalesce(m.order_num, -1) = seed.order_num
+      and coalesce(m.menu_type, '') = seed.menu_type
+      and coalesce(m.visible, '') = seed.visible
+      and coalesce(m.status, '') = seed.status
+      and coalesce(m.path, '') = seed.path
+      and coalesce(m.component, '') = seed.component
+      and coalesce(m.route_name, '') = seed.route_name
+      and coalesce(m.perms, '') = seed.perms
+      and coalesce(m.icon, '') = seed.icon
+      and coalesce(m.remark, '') = seed.remark
+  ) <> (select count(1) from tmp_mall_product_distribution_seed_expected) then
+    signal sqlstate '45000' set message_text = 'mall product distribution sys_menu seed completion mismatch';
   end if;
 end//
 
@@ -232,6 +419,155 @@ create table if not exists product_distribution_operation_log (
   key idx_product_dist_log_operator (operator_name, operation_time)
 ) engine=innodb auto_increment=1 comment='商城商品业务操作日志';
 
+create temporary table if not exists tmp_mall_product_distribution_write_targets (
+  target_group varchar(64) not null,
+  target_key varchar(255) not null,
+  target_signature varchar(64) not null,
+  key idx_mall_product_distribution_write_targets (target_group, target_key)
+) engine=memory;
+
+truncate table tmp_mall_product_distribution_write_targets;
+
+insert into tmp_mall_product_distribution_write_targets(target_group, target_key, target_signature) values
+  ('DICT_SEED', 'TYPE:product_sales_status', sha2('TYPE:product_sales_status:商品销售状态', 256)),
+  ('DICT_SEED', 'DATA:product_sales_status:DRAFT', sha2('DATA:product_sales_status:DRAFT:草稿:default:Y', 256)),
+  ('DICT_SEED', 'DATA:product_sales_status:READY', sha2('DATA:product_sales_status:READY:待上架:warning:N', 256)),
+  ('DICT_SEED', 'DATA:product_sales_status:ON_SALE', sha2('DATA:product_sales_status:ON_SALE:已上架:success:N', 256)),
+  ('DICT_SEED', 'DATA:product_sales_status:OFF_SALE', sha2('DATA:product_sales_status:OFF_SALE:已下架:info:N', 256)),
+  ('DICT_SEED', 'TYPE:product_control_status', sha2('TYPE:product_control_status:商品管控状态', 256)),
+  ('DICT_SEED', 'DATA:product_control_status:NORMAL', sha2('DATA:product_control_status:NORMAL:正常:success:Y', 256)),
+  ('DICT_SEED', 'DATA:product_control_status:DISABLED', sha2('DATA:product_control_status:DISABLED:停用:danger:N', 256)),
+  ('DICT_SEED', 'TYPE:product_source_type', sha2('TYPE:product_source_type:商品创建来源', 256)),
+  ('DICT_SEED', 'DATA:product_source_type:ADMIN_MANUAL', sha2('DATA:product_source_type:ADMIN_MANUAL:管理端手工创建:primary:Y', 256)),
+  ('DICT_SEED', 'DATA:product_source_type:SELLER_SUBMIT', sha2('DATA:product_source_type:SELLER_SUBMIT:卖家提交:success:N', 256)),
+  ('DICT_SEED', 'DATA:product_source_type:SOURCE_PRODUCT', sha2('DATA:product_source_type:SOURCE_PRODUCT:来源商品库生成:info:N', 256));
+
+insert into tmp_mall_product_distribution_write_targets(target_group, target_key, target_signature)
+select 'DISABLED_STATUS',
+       concat_ws(':', 'DATA', dict_code, dict_type, dict_value),
+       sha2(concat_ws(':',
+         dict_code,
+         coalesce(dict_sort, ''),
+         coalesce(dict_label, ''),
+         coalesce(dict_value, ''),
+         coalesce(dict_type, ''),
+         coalesce(list_class, ''),
+         coalesce(status, '')
+       ), 256)
+from sys_dict_data
+where dict_type = 'product_sales_status'
+  and dict_value = 'DISABLED';
+
+select count(1),
+       sha2(coalesce(group_concat(concat_ws(':', target_key, target_signature) order by target_key separator '|'), ''), 256)
+  into @mall_product_distribution_dict_seed_actual_count,
+       @mall_product_distribution_dict_seed_actual_signature
+from tmp_mall_product_distribution_write_targets
+where target_group = 'DICT_SEED';
+
+call assert_mall_product_distribution_count_signature(
+  @mall_product_distribution_dict_seed_actual_count,
+  @mall_product_distribution_dict_seed_actual_signature,
+  @mall_product_distribution_dict_seed_expected_count,
+  @mall_product_distribution_dict_seed_expected_signature,
+  'mall product distribution dict seed exact target count mismatch',
+  'mall product distribution dict seed exact target signature mismatch'
+);
+
+select count(1),
+       sha2(coalesce(group_concat(concat_ws(':', target_key, target_signature) order by target_key separator '|'), ''), 256)
+  into @mall_product_distribution_disabled_status_actual_count,
+       @mall_product_distribution_disabled_status_actual_signature
+from tmp_mall_product_distribution_write_targets
+where target_group = 'DISABLED_STATUS';
+
+call assert_mall_product_distribution_count_signature(
+  @mall_product_distribution_disabled_status_actual_count,
+  @mall_product_distribution_disabled_status_actual_signature,
+  @mall_product_distribution_disabled_status_expected_count,
+  @mall_product_distribution_disabled_status_expected_signature,
+  'mall product distribution DISABLED exact target count mismatch',
+  'mall product distribution DISABLED exact target signature mismatch'
+);
+
+create temporary table if not exists tmp_mall_product_distribution_sys_menu_guard (
+  menu_id    bigint       not null,
+  parent_id  bigint       not null,
+  menu_type  char(1)      not null,
+  path       varchar(200) not null default '',
+  component  varchar(255) not null default '',
+  route_name varchar(50)  not null default '',
+  perms      varchar(100) not null default '',
+  key idx_mall_product_distribution_sys_menu_guard_id (menu_id)
+) engine=memory;
+
+create temporary table if not exists tmp_mall_product_distribution_seed_expected (
+  menu_id    bigint       not null,
+  menu_name  varchar(50)  not null,
+  parent_id  bigint       not null,
+  order_num  int          not null,
+  menu_type  char(1)      not null,
+  visible    char(1)      not null,
+  status     char(1)      not null,
+  path       varchar(200) not null default '',
+  component  varchar(255) not null default '',
+  route_name varchar(50)  not null default '',
+  perms      varchar(100) not null default '',
+  icon       varchar(100) not null default '',
+  remark     varchar(500) not null default '',
+  key idx_mall_product_distribution_seed_expected_id (menu_id)
+) engine=memory;
+
+truncate table tmp_mall_product_distribution_sys_menu_guard;
+truncate table tmp_mall_product_distribution_seed_expected;
+
+insert into tmp_mall_product_distribution_sys_menu_guard(menu_id, parent_id, menu_type, path, component, route_name, perms) values
+    (2402, 2060, 'C', 'distribution', 'Product/Distribution/index', 'DistributionProduct', 'product:distribution:list'),
+    (2481, 2402, 'F', '#', '', '', 'product:distribution:query'),
+    (2482, 2402, 'F', '#', '', '', 'product:distribution:add'),
+    (2483, 2402, 'F', '#', '', '', 'product:distribution:edit'),
+    (2484, 2402, 'F', '#', '', '', 'product:distribution:status'),
+    (2485, 2402, 'F', '#', '', '', 'product:distribution:price'),
+    (2486, 2402, 'F', '#', '', '', 'product:distribution:log');
+
+insert into tmp_mall_product_distribution_seed_expected
+    (menu_id, menu_name, parent_id, order_num, menu_type, visible, status,
+     path, component, route_name, perms, icon, remark)
+values
+    (2402, '商城商品列表', 2060, 15, 'C', '0', '0', 'distribution', 'Product/Distribution/index', 'DistributionProduct', 'product:distribution:list', 'ShareAltOutlined', '商品管理菜单：商城商品列表'),
+    (2481, '商城商品查询', 2402, 1, 'F', '0', '0', '#', '', '', 'product:distribution:query', '#', '商城商品按钮：查询'),
+    (2482, '商城商品新增', 2402, 2, 'F', '0', '0', '#', '', '', 'product:distribution:add', '#', '商城商品按钮：新增'),
+    (2483, '商城商品修改', 2402, 3, 'F', '0', '0', '#', '', '', 'product:distribution:edit', '#', '商城商品按钮：修改'),
+    (2484, '商城商品状态', 2402, 4, 'F', '0', '0', '#', '', '', 'product:distribution:status', '#', '商城商品按钮：状态切换'),
+    (2485, '商城商品调价', 2402, 5, 'F', '0', '0', '#', '', '', 'product:distribution:price', '#', '商城商品按钮：调整销售价'),
+    (2486, '商城商品操作日志', 2402, 6, 'F', '0', '0', '#', '', '', 'product:distribution:log', '#', '商城商品按钮：操作日志');
+
+call assert_mall_product_distribution_sys_menu_guard();
+
+insert into tmp_mall_product_distribution_write_targets(target_group, target_key, target_signature)
+select 'MENU_SEED',
+       concat_ws(':', 'MENU', menu_id, parent_id, menu_type, path, component, route_name, perms),
+       sha2(concat_ws(':', menu_id, parent_id, menu_type, path, component, route_name, perms), 256)
+from tmp_mall_product_distribution_sys_menu_guard;
+
+select count(1),
+       sha2(coalesce(group_concat(concat_ws(':', target_key, target_signature) order by target_key separator '|'), ''), 256)
+  into @mall_product_distribution_menu_seed_actual_count,
+       @mall_product_distribution_menu_seed_actual_signature
+from tmp_mall_product_distribution_write_targets
+where target_group = 'MENU_SEED';
+
+call assert_mall_product_distribution_count_signature(
+  @mall_product_distribution_menu_seed_actual_count,
+  @mall_product_distribution_menu_seed_actual_signature,
+  @mall_product_distribution_menu_seed_expected_count,
+  @mall_product_distribution_menu_seed_expected_signature,
+  'mall product distribution menu seed exact target count mismatch',
+  'mall product distribution menu seed exact target signature mismatch'
+);
+
+start transaction;
+
 insert into sys_dict_type
     (dict_name, dict_type, status, create_by, create_time, update_by, update_time, remark)
 select '商品销售状态', 'product_sales_status', '0', 'admin', sysdate(), '', null, '商城商品SPU/SKU销售状态'
@@ -285,24 +621,6 @@ from (
 ) seed
 where not exists (select 1 from sys_dict_data d where d.dict_type = 'product_source_type' and d.dict_value = seed.dict_value);
 
-create temporary table if not exists tmp_mall_product_distribution_sys_menu_guard (
-  menu_id    bigint       not null,
-  parent_id  bigint       not null,
-  menu_type  char(1)      not null,
-  path       varchar(200) not null default '',
-  component  varchar(255) not null default '',
-  route_name varchar(50)  not null default '',
-  perms      varchar(100) not null default '',
-  key idx_mall_product_distribution_sys_menu_guard_id (menu_id)
-) engine=memory;
-
-truncate table tmp_mall_product_distribution_sys_menu_guard;
-
-insert into tmp_mall_product_distribution_sys_menu_guard(menu_id, parent_id, menu_type, path, component, route_name, perms) values
-    (2402, 2060, 'C', 'distribution', 'Product/Distribution/index', 'DistributionProduct', 'product:distribution:list');
-
-call assert_mall_product_distribution_sys_menu_guard();
-
 insert into sys_menu
     (menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
      is_frame, is_cache, menu_type, visible, status, perms, icon, create_by,
@@ -345,8 +663,32 @@ from (
     union all select 2485, '商城商品调价', 5, 'product:distribution:price', '商城商品按钮：调整销售价'
     union all select 2486, '商城商品操作日志', 6, 'product:distribution:log', '商城商品按钮：操作日志'
 ) seed
-where not exists (select 1 from sys_menu m where m.menu_id = seed.menu_id)
-  and not exists (select 1 from sys_menu p where p.perms = seed.perms);
+on duplicate key update
+    menu_name = values(menu_name),
+    parent_id = values(parent_id),
+    order_num = values(order_num),
+    path = values(path),
+    component = values(component),
+    query = values(query),
+    route_name = values(route_name),
+    is_frame = values(is_frame),
+    is_cache = values(is_cache),
+    menu_type = values(menu_type),
+    visible = values(visible),
+    status = values(status),
+    perms = values(perms),
+    icon = values(icon),
+    update_by = 'admin',
+    update_time = sysdate(),
+    remark = values(remark);
 
+call assert_mall_product_distribution_seed_completed();
+
+commit;
+
+drop temporary table if exists tmp_mall_product_distribution_write_targets;
+drop temporary table if exists tmp_mall_product_distribution_seed_expected;
 drop temporary table if exists tmp_mall_product_distribution_sys_menu_guard;
+drop procedure if exists assert_mall_product_distribution_seed_completed;
 drop procedure if exists assert_mall_product_distribution_sys_menu_guard;
+drop procedure if exists assert_mall_product_distribution_count_signature;

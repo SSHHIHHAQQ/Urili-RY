@@ -6,7 +6,7 @@
 
 ## 子 Agent 情况
 
-- 按用户要求优先尝试 `gpt-5.3-codex-spark`，实际命中额度限制。
+- 历史记录（已过期口径）：按当时用户要求优先尝试 `gpt-5.3-codex-spark`，实际命中额度限制。现行规则已改为默认使用 `gpt-5.4`，不要再把 GPT-5.3 Codex 作为首选。
 - 已降级使用并关闭 6 个 `gpt-5.4` 只读扫描子 Agent。
 - 采纳的 P1 结论：前端 service 缺 `/resetPwd` 调用、三端验证漏跑 `SysMenuServiceImplTest`、账号角色查询权限偏宽、登录日志缺 direct-login 筛选、匿名登录审计可能归属旧 token、seed 覆盖端地址、前端审计类型缺字段。
 
@@ -52,7 +52,7 @@
 ## 残留 P1
 
 - 免密登录管理端提示目前仍以弹窗消息链路成功为准，未等待 portal 端真正消费 token 后 ack。
-- 管理端账号“重置密码”当前主要入口仍是默认密码重置；自定义临时密码弹窗需要另起前端交互切片。
+- 历史记录（已过期口径）：当时管理端账号“重置密码”主要入口仍是默认密码重置，自定义临时密码弹窗需要另起前端交互切片。当前实现已由后续检查点覆盖：管理端账号“重置密码”已接入人工临时密码 `resetPwd`，默认密码重置入口已移除。
 - 账号行缺少账号级审计入口；现有审计弹窗仍以主体级入口为主。
 - `20260604_three_terminal_isolation_migration.sql` 仍需按脚本单独设计半执行保护、preflight 拆分或不可事务化原因说明。
 - `seller_buyer_management_seed.sql` 仍同时承担 fresh bootstrap 和增量修补职责，后续应拆分或增加 profile/freshness guard。

@@ -178,6 +178,10 @@ const PartnerAuditModal: React.FC<PartnerAuditModalProps> = ({
       <Descriptions.Item label="登录地点">{renderDetailText(record.loginLocation)}</Descriptions.Item>
       <Descriptions.Item label="浏览器">{renderDetailText(record.browser)}</Descriptions.Item>
       <Descriptions.Item label="操作系统">{renderDetailText(record.os)}</Descriptions.Item>
+      <Descriptions.Item label="后台操作人">{renderDetailText(record.actingAdminName)}</Descriptions.Item>
+      <Descriptions.Item label="后台操作人ID">{renderDetailText(record.actingAdminId)}</Descriptions.Item>
+      <Descriptions.Item label="免密票据ID">{renderDetailText(record.directLoginTicketId)}</Descriptions.Item>
+      <Descriptions.Item label="代入原因" span={3}>{renderDetailText(record.directLoginReason)}</Descriptions.Item>
       <Descriptions.Item label="登录提示" span={3}>{renderDetailText(record.msg)}</Descriptions.Item>
     </Descriptions>
   );
@@ -188,6 +192,10 @@ const PartnerAuditModal: React.FC<PartnerAuditModalProps> = ({
       <Descriptions.Item label="操作IP">{renderDetailText(record.operIp)}</Descriptions.Item>
       <Descriptions.Item label="操作地点">{renderDetailText(record.operLocation)}</Descriptions.Item>
       <Descriptions.Item label="方法名" span={3}>{renderDetailText(record.method)}</Descriptions.Item>
+      <Descriptions.Item label="后台操作人">{renderDetailText(record.actingAdminName)}</Descriptions.Item>
+      <Descriptions.Item label="后台操作人ID">{renderDetailText(record.actingAdminId)}</Descriptions.Item>
+      <Descriptions.Item label="免密票据ID">{renderDetailText(record.directLoginTicketId)}</Descriptions.Item>
+      <Descriptions.Item label="代入原因" span={3}>{renderDetailText(record.directLoginReason)}</Descriptions.Item>
       <Descriptions.Item label="异常信息" span={3}>{renderDetailText(record.errorMsg)}</Descriptions.Item>
     </Descriptions>
   );
@@ -247,6 +255,12 @@ const PartnerAuditModal: React.FC<PartnerAuditModalProps> = ({
       search: false,
       width: 160,
       render: (_, record) => renderDateTime(record.loginTime),
+    },
+    {
+      title: '后台操作人',
+      dataIndex: 'actingAdminName',
+      width: 130,
+      render: (_, record) => renderCompactText(record.actingAdminName),
     },
     {
       title: '登录时间',
@@ -312,6 +326,12 @@ const PartnerAuditModal: React.FC<PartnerAuditModalProps> = ({
       search: false,
       width: 160,
       render: (_, record) => renderDateTime(record.operTime),
+    },
+    {
+      title: '后台操作人',
+      dataIndex: 'actingAdminName',
+      width: 130,
+      render: (_, record) => renderCompactText(record.actingAdminName),
     },
     {
       title: '操作时间',

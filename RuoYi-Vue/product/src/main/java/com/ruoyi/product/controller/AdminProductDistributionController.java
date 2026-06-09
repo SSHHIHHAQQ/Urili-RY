@@ -24,6 +24,7 @@ import com.ruoyi.product.domain.ProductSkuSalePriceUpdateRequest;
 import com.ruoyi.product.domain.ProductSpu;
 import com.ruoyi.product.domain.ProductStatusUpdateRequest;
 import com.ruoyi.product.service.IProductDistributionService;
+import com.ruoyi.product.service.IProductReviewService;
 
 /**
  * 管理端商城商品列表。
@@ -32,8 +33,13 @@ import com.ruoyi.product.service.IProductDistributionService;
 @RequestMapping("/product/admin/distribution-products")
 public class AdminProductDistributionController extends BaseController
 {
+    private static final String STATUS_DRAFT = "DRAFT";
+
     @Autowired
     private IProductDistributionService productDistributionService;
+
+    @Autowired
+    private IProductReviewService productReviewService;
 
     @PreAuthorize("@ss.hasPermi('product:distribution:list')")
     @GetMapping("/list")
@@ -60,12 +66,20 @@ public class AdminProductDistributionController extends BaseController
         return success(productDistributionService.selectProductById(spuId));
     }
 
+    @PreAuthorize("@ss.hasPermi('product:distribution:query')")
+    @GetMapping("/{spuId}/latest-rejected-submission")
+    public AjaxResult latestRejectedSubmission(@PathVariable("spuId") Long spuId)
+    {
+        return success(productReviewService.selectLatestRejectedReusableSubmission(spuId));
+    }
+
     @PreAuthorize("@ss.hasPermi('product:distribution:add')")
     @Log(title = "商城商品", businessType = BusinessType.INSERT)
     @PostMapping
     public AjaxResult add(@Validated @RequestBody ProductSpu product)
     {
-        return toAjax(productDistributionService.insertProduct(product));
+        int rows = productDistributionService.insertProduct(product);
+        return rows > 0 ? success(product) : error();
     }
 
     @PreAuthorize("@ss.hasPermi('product:distribution:edit')")
@@ -74,6 +88,12 @@ public class AdminProductDistributionController extends BaseController
     public AjaxResult edit(@PathVariable("spuId") Long spuId, @Validated @RequestBody ProductSpu product)
     {
         product.setSpuId(spuId);
+        ProductSpu current = productDistributionService.selectProductById(spuId);
+        if (!STATUS_DRAFT.equals(current.getSpuStatus()))
+        {
+            int rows = productReviewService.submitProductEditReview(product);
+            return rows > 0 ? success("已提交审核") : error();
+        }
         return toAjax(productDistributionService.updateProduct(product));
     }
 
@@ -83,7 +103,15 @@ public class AdminProductDistributionController extends BaseController
     public AjaxResult updateSpuStatus(@PathVariable("spuId") Long spuId,
         @RequestBody ProductStatusUpdateRequest request)
     {
-        return toAjax(productDistributionService.updateSpuStatus(spuId, request.getStatus()));
+        return toAjax(productDistributionService.updateSpuStatus(spuId, request.getStatus(), request.getReason()));
+    }
+
+    @PreAuthorize("@ss.hasPermi('product:distribution:edit')")
+    @Log(title = "商城商品提交审核", businessType = BusinessType.UPDATE)
+    @PostMapping("/{spuId}/submit-review")
+    public AjaxResult submitReview(@PathVariable("spuId") Long spuId)
+    {
+        return toAjax(productReviewService.submitNewProductReview(spuId));
     }
 
     @PreAuthorize("@ss.hasPermi('product:distribution:status')")
@@ -93,11 +121,12 @@ public class AdminProductDistributionController extends BaseController
     {
         if ("SKU".equalsIgnoreCase(request.getOwnerType()))
         {
-            return toAjax(productDistributionService.batchUpdateSkuStatus(request.getSkuIds(), request.getStatus()));
+            return toAjax(productDistributionService.batchUpdateSkuStatus(request.getSkuIds(), request.getStatus(),
+                request.getReason()));
         }
         boolean syncSkuStatus = request.getSyncSkuStatus() == null || request.getSyncSkuStatus();
         return toAjax(productDistributionService.batchUpdateSpuStatus(request.getSpuIds(), request.getStatus(),
-            syncSkuStatus));
+            syncSkuStatus, request.getReason()));
     }
 
     @PreAuthorize("@ss.hasPermi('product:distribution:status')")
@@ -119,7 +148,8 @@ public class AdminProductDistributionController extends BaseController
     @PutMapping("/skus/sale-prices")
     public AjaxResult batchUpdateSkuSalePrice(@RequestBody ProductSkuSalePriceUpdateRequest request)
     {
-        return toAjax(productDistributionService.batchUpdateSkuSalePrice(request));
+        int rows = productReviewService.submitSkuSalePriceReview(request);
+        return rows > 0 ? success("已提交调价审核") : error();
     }
 
     @PreAuthorize("@ss.hasPermi('product:distribution:status')")
@@ -128,7 +158,8 @@ public class AdminProductDistributionController extends BaseController
     public AjaxResult updateSkuStatus(@PathVariable("spuId") Long spuId, @PathVariable("skuId") Long skuId,
         @RequestBody ProductStatusUpdateRequest request)
     {
-        return toAjax(productDistributionService.updateSkuStatus(spuId, skuId, request.getStatus()));
+        return toAjax(productDistributionService.updateSkuStatus(spuId, skuId, request.getStatus(),
+            request.getReason()));
     }
 
     @PreAuthorize("@ss.hasPermi('product:distribution:log')")

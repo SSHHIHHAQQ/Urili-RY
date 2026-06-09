@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.ruoyi.common.constant.Constants;
+import com.ruoyi.common.constant.HttpStatus;
 import com.ruoyi.common.constant.UserConstants;
 import com.ruoyi.common.core.domain.model.LoginBody;
 import com.ruoyi.common.exception.ServiceException;
@@ -517,9 +518,18 @@ public class BuyerServiceImpl implements IBuyerService
         if (session == null || !"buyer".equals(session.getTerminal()) || session.getSubjectId() == null
                 || session.getAccountId() == null || StringUtils.isBlank(session.getTokenId()))
         {
-            throw new ServiceException("登录状态已失效");
+            throw portalSessionExpired();
         }
-        selectBuyerAccountById(session.getSubjectId(), session.getAccountId());
+        BuyerAccount account = buyerMapper.selectBuyerAccountByIdAndBuyerId(session.getSubjectId(), session.getAccountId());
+        if (account == null)
+        {
+            throw portalSessionExpired();
+        }
+    }
+
+    private ServiceException portalSessionExpired()
+    {
+        return new ServiceException("登录状态已失效", HttpStatus.UNAUTHORIZED);
     }
 
     private PortalLoginLog buildBuyerOwnLoginLogQuery(PortalLoginSession session, PortalLoginLog log)
@@ -778,9 +788,9 @@ public class BuyerServiceImpl implements IBuyerService
 
         Buyer buyer = buyerMapper.selectBuyerById(session.getSubjectId());
         BuyerAccount account = buyerMapper.selectBuyerAccountByIdAndBuyerId(session.getSubjectId(), session.getAccountId());
-        if (account == null)
+        if (buyer == null || account == null)
         {
-            throw new ServiceException("买家账号不存在");
+            throw portalSessionExpired();
         }
         if (!PartnerSupport.STATUS_NORMAL.equals(buyer.getStatus()))
         {

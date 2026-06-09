@@ -1,4 +1,6 @@
 import { buildAuditParams } from '@/components/PartnerManagement/PartnerAuditModal';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 
 jest.mock('@ant-design/pro-components', () => ({
   ProTable: jest.fn(() => null),
@@ -63,5 +65,22 @@ describe('partner audit modal params', () => {
       pageNum: 1,
       pageSize: 10,
     });
+  });
+});
+
+describe('partner audit modal admin control fields', () => {
+  const source = readFileSync(join(process.cwd(), 'src/components/PartnerManagement/PartnerAuditModal.tsx'), 'utf8');
+
+  it('keeps acting admin visible in login and oper audit lists', () => {
+    const actingAdminColumns = source.match(/dataIndex: 'actingAdminName'/g) || [];
+
+    expect(actingAdminColumns.length).toBeGreaterThanOrEqual(2);
+    expect(source).toContain("title: '后台操作人'");
+  });
+
+  it('keeps direct-login audit details visible for login and oper audit rows', () => {
+    expect(source).toContain('record.actingAdminId');
+    expect(source).toContain('record.directLoginTicketId');
+    expect(source).toContain('record.directLoginReason');
   });
 });

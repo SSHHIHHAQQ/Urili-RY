@@ -519,6 +519,7 @@ declare namespace API.Partner {
   export interface BuyerPortalProductSku {
     skuId?: number;
     spuId?: number;
+    systemSkuCode?: string;
     color?: string;
     size?: string;
     lengthValue?: string;
@@ -535,10 +536,12 @@ declare namespace API.Partner {
     currencyCode?: string;
     skuStatus?: string;
     sortOrder?: number;
+    warehouseCount?: number;
   }
 
   export interface BuyerPortalProduct {
     spuId?: number;
+    systemSpuCode?: string;
     categoryId?: number;
     categoryCode?: string;
     categoryName?: string;
@@ -552,6 +555,7 @@ declare namespace API.Partner {
     salePriceMin?: number;
     salePriceMax?: number;
     currencySummary?: string;
+    warehouseCount?: number;
     skus?: BuyerPortalProductSku[];
   }
 

@@ -8,7 +8,7 @@
 
 ## 子 Agent 使用情况
 
-- 按用户要求优先尝试 GPT-5.3 Codex；本轮 6 个 `gpt-5.3-codex-spark` 子 Agent 均因额度限制失败并已关闭，平台提示恢复时间为 `2026-06-13 01:59`。
+- 历史记录（已过期口径）：按用户要求优先尝试 GPT-5.3 Codex；本轮 6 个 `gpt-5.3-codex-spark` 子 Agent 均因额度限制失败并已关闭，平台提示恢复时间为 `2026-06-13 01:59`。
 - 降级启动 6 个 `gpt-5.4` 只读扫描 Agent，切片覆盖 seller 部门/角色、buyer 部门/角色、`roleMenuTreeselect` checkedKeys、旧 DDL、旧 `sys_menu` seed、当前串端风险复核；6 个有效子 Agent 均已完成并关闭。
 - 已采纳 P1：seller/buyer 部门实体自身跨主体写入/删除缺少运行时测试，OWNER 角色禁停用/禁删除缺少测试，`roleMenuTreeselect` checkedKeys 主体隔离应显式测试。
 - 记录为后续 P1：旧 DDL 可重放性、旧 `sys_menu` seed slot/signature guard、来源仓库库存读模型半实现与未确认 DDL 边界。

@@ -3,8 +3,13 @@
 -- Data source: upstream_system_sku_inventory_snapshot maintained by upstream WMS inventory sync.
 
 set names utf8mb4;
+set session group_concat_max_len = greatest(@@session.group_concat_max_len, 1048576);
 
 set @confirm_source_warehouse_stock_menu_rename := coalesce(@confirm_source_warehouse_stock_menu_rename, '');
+set @source_warehouse_stock_menu_rename_expected_count :=
+    coalesce(@source_warehouse_stock_menu_rename_expected_count, '');
+set @source_warehouse_stock_menu_rename_expected_signature :=
+    coalesce(@source_warehouse_stock_menu_rename_expected_signature, '');
 
 delimiter //
 
@@ -14,6 +19,12 @@ begin
   if coalesce(@confirm_source_warehouse_stock_menu_rename, '')
       <> 'APPLY_SOURCE_WAREHOUSE_STOCK_MENU_RENAME' then
     signal sqlstate '45000' set message_text = 'set @confirm_source_warehouse_stock_menu_rename = APPLY_SOURCE_WAREHOUSE_STOCK_MENU_RENAME before running this seed';
+  end if;
+  if coalesce(@source_warehouse_stock_menu_rename_expected_count, '') not regexp '^[0-9]+$' then
+    signal sqlstate '45000' set message_text = 'set @source_warehouse_stock_menu_rename_expected_count after previewing exact source warehouse stock sys_menu rows';
+  end if;
+  if coalesce(@source_warehouse_stock_menu_rename_expected_signature, '') not regexp '^[0-9a-fA-F]{64}$' then
+    signal sqlstate '45000' set message_text = 'set @source_warehouse_stock_menu_rename_expected_signature after previewing exact source warehouse stock sys_menu rows';
   end if;
 end//
 
@@ -57,6 +68,48 @@ begin
   end if;
 end//
 
+drop procedure if exists assert_source_warehouse_stock_menu_rename_targets//
+create procedure assert_source_warehouse_stock_menu_rename_targets()
+begin
+  declare v_count bigint default 0;
+  declare v_signature varchar(64) default '';
+
+  select count(distinct m.menu_id),
+         sha2(coalesce(group_concat(distinct
+           concat_ws('|',
+             m.menu_id,
+             coalesce(m.menu_name, ''),
+             coalesce(m.parent_id, ''),
+             coalesce(m.order_num, ''),
+             coalesce(m.path, ''),
+             coalesce(m.component, ''),
+             coalesce(m.query, ''),
+             coalesce(m.route_name, ''),
+             coalesce(m.is_frame, ''),
+             coalesce(m.is_cache, ''),
+             coalesce(m.menu_type, ''),
+             coalesce(m.visible, ''),
+             coalesce(m.status, ''),
+             coalesce(m.perms, ''),
+             coalesce(m.icon, ''),
+             coalesce(m.remark, '')
+           )
+           order by m.menu_id separator '\n'
+         ), ''), 256)
+    into v_count, v_signature
+  from sys_menu m
+  join tmp_source_warehouse_stock_sys_menu_guard seed
+    on m.menu_id = seed.menu_id
+    or (coalesce(seed.perms, '') <> '' and coalesce(m.perms, '') = coalesce(seed.perms, ''));
+
+  if v_count <> cast(@source_warehouse_stock_menu_rename_expected_count as unsigned) then
+    signal sqlstate '45000' set message_text = 'source warehouse stock sys_menu exact target count mismatch';
+  end if;
+  if lower(v_signature) <> lower(@source_warehouse_stock_menu_rename_expected_signature) then
+    signal sqlstate '45000' set message_text = 'source warehouse stock sys_menu exact target signature mismatch';
+  end if;
+end//
+
 delimiter ;
 
 call assert_source_warehouse_stock_menu_rename_confirmed();
@@ -80,6 +133,7 @@ insert into tmp_source_warehouse_stock_sys_menu_guard(menu_id, parent_id, menu_t
     (2421, 2080, 'C', 'source-warehouse-stock', 'Common/PlannedPage/index', 'SourceWarehouseStock', 'inventory:sourceWarehouse:list');
 
 call assert_source_warehouse_stock_sys_menu_guard();
+call assert_source_warehouse_stock_menu_rename_targets();
 
 update sys_menu
 set menu_name = '来源仓库库存',
@@ -104,4 +158,5 @@ select 2421, '来源仓库库存', 2080, 10, 'source-warehouse-stock', 'Inventor
 where not exists (select 1 from sys_menu where menu_id = 2421);
 
 drop temporary table if exists tmp_source_warehouse_stock_sys_menu_guard;
+drop procedure if exists assert_source_warehouse_stock_menu_rename_targets;
 drop procedure if exists assert_source_warehouse_stock_sys_menu_guard;

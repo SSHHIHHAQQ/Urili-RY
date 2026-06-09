@@ -6,7 +6,7 @@
 
 ## 子 Agent 执行
 
-- 先按最新规则尝试 6 个 `gpt-5.3-codex-spark` 子 Agent；平台返回用量限制，提示需等到 `2026-06-08 01:14/01:15` 后再试，失败 Agent 已关闭。
+- 历史记录（已过期口径）：先按最新规则尝试 6 个 `gpt-5.3-codex-spark` 子 Agent；平台返回用量限制，提示需等到 `2026-06-08 01:14/01:15` 后再试，失败 Agent 已关闭。
 - 按 fallback 规则启动并关闭 6 个 `gpt-5.4` 只读子 Agent。
 - 采纳的 P1：
   - `seller_account.password` / `buyer_account.password` 仍存在 `not null default ''` schema 通道，可能让遗漏密码的插入静默落为空密文。

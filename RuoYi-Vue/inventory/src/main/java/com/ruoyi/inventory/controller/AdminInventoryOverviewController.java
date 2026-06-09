@@ -18,7 +18,10 @@ import com.ruoyi.inventory.domain.InventoryOverviewItem;
 import com.ruoyi.inventory.domain.InventorySkuWarehouseStock;
 import com.ruoyi.inventory.domain.InventoryStockLedger;
 import com.ruoyi.inventory.domain.request.InventoryOverviewAdjustRequest;
+import com.ruoyi.inventory.domain.request.InventoryOverviewBatchAdjustRequest;
+import com.ruoyi.inventory.domain.request.InventoryStockSyncPolicyRequest;
 import com.ruoyi.inventory.service.IInventoryOverviewService;
+import com.ruoyi.inventory.service.IInventoryStockSyncPolicyService;
 
 /**
  * 管理端库存总览。
@@ -29,6 +32,9 @@ public class AdminInventoryOverviewController extends BaseController
 {
     @Autowired
     private IInventoryOverviewService inventoryOverviewService;
+
+    @Autowired
+    private IInventoryStockSyncPolicyService inventoryStockSyncPolicyService;
 
     @PreAuthorize("@ss.hasPermi('inventory:overview:list')")
     @GetMapping("/spu/list")
@@ -49,11 +55,48 @@ public class AdminInventoryOverviewController extends BaseController
     }
 
     @PreAuthorize("@ss.hasPermi('inventory:overview:query')")
+    @GetMapping("/warehouse/list")
+    public TableDataInfo warehouseList(InventorySkuWarehouseStock query)
+    {
+        startPage();
+        List<InventorySkuWarehouseStock> list = inventoryOverviewService.selectWarehouseStockList(query);
+        return getDataTable(list);
+    }
+
+    @PreAuthorize("@ss.hasPermi('inventory:overview:query')")
+    @GetMapping("/warehouse/options")
+    public AjaxResult warehouseOptions()
+    {
+        return success(inventoryOverviewService.selectWarehouseOptions());
+    }
+
+    @PreAuthorize("@ss.hasPermi('inventory:overview:query')")
+    @GetMapping("/official-warehouse/options")
+    public AjaxResult officialWarehouseOptions()
+    {
+        return success(inventoryOverviewService.selectOfficialWarehouseOptions());
+    }
+
+    @PreAuthorize("@ss.hasPermi('inventory:overview:query')")
+    @GetMapping("/seller/options")
+    public AjaxResult sellerOptions()
+    {
+        return success(inventoryOverviewService.selectSellerOptions());
+    }
+
+    @PreAuthorize("@ss.hasPermi('inventory:overview:query')")
     @GetMapping("/sku/{skuId}/warehouses")
     public AjaxResult warehouses(@PathVariable("skuId") Long skuId)
     {
         List<InventorySkuWarehouseStock> rows = inventoryOverviewService.selectWarehouseStockListBySkuId(skuId);
         return success(rows);
+    }
+
+    @PreAuthorize("@ss.hasPermi('inventory:overview:query')")
+    @GetMapping("/spu/{spuId}/sku-warehouses")
+    public AjaxResult skuWarehouseGroups(@PathVariable("spuId") Long spuId)
+    {
+        return success(inventoryOverviewService.selectSkuWarehouseGroupsBySpuId(spuId));
     }
 
     @PreAuthorize("@ss.hasPermi('inventory:overview:adjust')")
@@ -64,11 +107,41 @@ public class AdminInventoryOverviewController extends BaseController
     }
 
     @PreAuthorize("@ss.hasPermi('inventory:overview:adjust')")
+    @PostMapping("/adjust/batch-preview")
+    public AjaxResult previewBatchAdjust(@RequestBody InventoryOverviewBatchAdjustRequest request)
+    {
+        return success(inventoryOverviewService.previewBatchAdjust(request));
+    }
+
+    @PreAuthorize("@ss.hasPermi('inventory:overview:syncPolicy')")
+    @PostMapping("/sync-policy/preview")
+    public AjaxResult previewSyncPolicy(@RequestBody InventoryStockSyncPolicyRequest request)
+    {
+        return success(inventoryStockSyncPolicyService.previewSyncPolicy(request));
+    }
+
+    @PreAuthorize("@ss.hasPermi('inventory:overview:adjust')")
     @Log(title = "库存总览调整", businessType = BusinessType.UPDATE)
     @PostMapping("/adjust/confirm")
     public AjaxResult confirmAdjust(@RequestBody InventoryOverviewAdjustRequest request)
     {
         return success(inventoryOverviewService.confirmAdjust(request));
+    }
+
+    @PreAuthorize("@ss.hasPermi('inventory:overview:adjust')")
+    @Log(title = "库存总览批量调整", businessType = BusinessType.UPDATE)
+    @PostMapping("/adjust/batch-confirm")
+    public AjaxResult confirmBatchAdjust(@RequestBody InventoryOverviewBatchAdjustRequest request)
+    {
+        return success(inventoryOverviewService.confirmBatchAdjust(request));
+    }
+
+    @PreAuthorize("@ss.hasPermi('inventory:overview:syncPolicy')")
+    @Log(title = "库存同步方式设置", businessType = BusinessType.UPDATE)
+    @PostMapping("/sync-policy/confirm")
+    public AjaxResult confirmSyncPolicy(@RequestBody InventoryStockSyncPolicyRequest request)
+    {
+        return success(inventoryStockSyncPolicyService.confirmSyncPolicy(request));
     }
 
     @PreAuthorize("@ss.hasPermi('inventory:overview:ledger')")

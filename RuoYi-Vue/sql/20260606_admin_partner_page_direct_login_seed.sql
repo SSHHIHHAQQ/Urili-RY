@@ -94,6 +94,69 @@ begin
   end if;
 end//
 
+drop procedure if exists assert_admin_partner_page_direct_login_seed_completed//
+create procedure assert_admin_partner_page_direct_login_seed_completed()
+begin
+  if (
+    select count(1)
+    from sys_menu
+    where (
+        menu_id = 2011
+        and coalesce(menu_name, '') = '卖家管理'
+        and coalesce(parent_id, -1) = 2010
+        and coalesce(order_num, -1) = 5
+        and coalesce(path, '') = 'seller'
+        and coalesce(component, '') = 'Seller/index'
+        and coalesce(route_name, '') = 'Seller'
+        and coalesce(menu_type, '') = 'C'
+        and coalesce(visible, '') = '0'
+        and coalesce(status, '') = '0'
+        and coalesce(perms, '') = 'seller:admin:list'
+      )
+      or (
+        menu_id = 2012
+        and coalesce(menu_name, '') = '买家管理'
+        and coalesce(parent_id, -1) = 2010
+        and coalesce(order_num, -1) = 10
+        and coalesce(path, '') = 'buyer'
+        and coalesce(component, '') = 'Buyer/index'
+        and coalesce(route_name, '') = 'Buyer'
+        and coalesce(menu_type, '') = 'C'
+        and coalesce(visible, '') = '0'
+        and coalesce(status, '') = '0'
+        and coalesce(perms, '') = 'buyer:admin:list'
+      )
+      or (
+        menu_id = 2205
+        and coalesce(menu_name, '') = '卖家免密登录'
+        and coalesce(parent_id, -1) = 2011
+        and coalesce(order_num, -1) = 30
+        and coalesce(path, '') = '#'
+        and coalesce(component, '') = ''
+        and coalesce(route_name, '') = ''
+        and coalesce(menu_type, '') = 'F'
+        and coalesce(visible, '') = '0'
+        and coalesce(status, '') = '0'
+        and coalesce(perms, '') = 'seller:admin:directLogin'
+      )
+      or (
+        menu_id = 2215
+        and coalesce(menu_name, '') = '买家免密登录'
+        and coalesce(parent_id, -1) = 2012
+        and coalesce(order_num, -1) = 30
+        and coalesce(path, '') = '#'
+        and coalesce(component, '') = ''
+        and coalesce(route_name, '') = ''
+        and coalesce(menu_type, '') = 'F'
+        and coalesce(visible, '') = '0'
+        and coalesce(status, '') = '0'
+        and coalesce(perms, '') = 'buyer:admin:directLogin'
+      )
+  ) <> 4 then
+    signal sqlstate '45000' set message_text = 'admin partner page direct-login seed completion mismatch';
+  end if;
+end//
+
 delimiter ;
 
 call assert_partner_root_menu_exists();
@@ -107,6 +170,8 @@ call assert_sys_menu_signature_available(2011, 'seller', 'Seller/index', 'Seller
 call assert_sys_menu_signature_available(2012, 'buyer', 'Buyer/index', 'Buyer', 'buyer:admin:list', 'buyer admin menu signature is already used by another menu');
 call assert_sys_menu_signature_available(2205, '#', '', '', 'seller:admin:directLogin', 'seller direct-login menu signature is already used by another menu');
 call assert_sys_menu_signature_available(2215, '#', '', '', 'buyer:admin:directLogin', 'buyer direct-login menu signature is already used by another menu');
+
+start transaction;
 
 insert into sys_menu
     (menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
@@ -144,6 +209,11 @@ on duplicate key update
     update_time = sysdate(),
     remark = values(remark);
 
+call assert_admin_partner_page_direct_login_seed_completed();
+
+commit;
+
 drop procedure if exists assert_sys_menu_slot;
 drop procedure if exists assert_partner_root_menu_exists;
 drop procedure if exists assert_sys_menu_signature_available;
+drop procedure if exists assert_admin_partner_page_direct_login_seed_completed;

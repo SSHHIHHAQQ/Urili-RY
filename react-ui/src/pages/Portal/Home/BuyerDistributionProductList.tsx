@@ -57,7 +57,13 @@ function statusTag(status?: string) {
   return <Tag color={color}>{label}</Tag>;
 }
 
-const BuyerDistributionProductList: React.FC = () => {
+type BuyerDistributionProductListProps = {
+  canQuery?: boolean;
+};
+
+const BuyerDistributionProductList: React.FC<BuyerDistributionProductListProps> = ({
+  canQuery = false,
+}) => {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [current, setCurrent] = useState<API.Partner.BuyerPortalProduct>();
@@ -67,7 +73,7 @@ const BuyerDistributionProductList: React.FC = () => {
   const actionRef = useRef<ActionType | undefined>(undefined);
 
   const openDetail = async (record: API.Partner.BuyerPortalProduct) => {
-    if (!record.spuId) {
+    if (!canQuery || !record.spuId) {
       return;
     }
     setDetailOpen(true);
@@ -165,6 +171,14 @@ const BuyerDistributionProductList: React.FC = () => {
       render: (_, record) => displayText(record.skuCount),
     },
     {
+      title: '发货仓',
+      dataIndex: 'warehouseCount',
+      key: 'warehouseCount',
+      width: 88,
+      search: false,
+      render: (_, record) => displayText(record.warehouseCount),
+    },
+    {
       title: '状态',
       dataIndex: 'spuStatus',
       key: 'spuStatus',
@@ -172,16 +186,20 @@ const BuyerDistributionProductList: React.FC = () => {
       search: false,
       render: (_, record) => statusTag(record.spuStatus),
     },
-    {
-      title: '操作',
-      valueType: 'option',
-      width: 88,
-      render: (_, record) => (
-        <Button type="link" size="small" onClick={() => openDetail(record)}>
-          详情
-        </Button>
-      ),
-    },
+    ...(canQuery
+      ? [
+          {
+            title: '操作',
+            valueType: 'option' as const,
+            width: 88,
+            render: (_: unknown, record: BuyerProductRow) => (
+              <Button type="link" size="small" onClick={() => openDetail(record)}>
+                详情
+              </Button>
+            ),
+          },
+        ]
+      : []),
   ];
 
   const skuColumns: ColumnsType<API.Partner.BuyerPortalProductSku> = [
@@ -294,6 +312,9 @@ const BuyerDistributionProductList: React.FC = () => {
             </Descriptions.Item>
             <Descriptions.Item label="币种">
               {displayText(current?.currencySummary)}
+            </Descriptions.Item>
+            <Descriptions.Item label="发货仓">
+              {displayText(current?.warehouseCount)}
             </Descriptions.Item>
             <Descriptions.Item label="卖点" span={2}>
               {displayText(current?.sellingPoint)}

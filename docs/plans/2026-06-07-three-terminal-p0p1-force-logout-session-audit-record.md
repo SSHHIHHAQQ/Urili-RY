@@ -8,7 +8,7 @@
 - 未读取或写入 Redis。
 - 未启动或重启后端。
 - 未修改 source-product / integration 旁支脏改。
-- 本切片未新增子 Agent：改动范围集中在 seller/buyer 强制踢出链路，主 Agent 本地实现和验证更直接；后续横向扫描类任务再启用子 Agent，并按 AGENTS 优先 GPT-5.3 Codex，不可用时降级 `gpt-5.4`。
+- 历史记录（已过期口径）：本切片未新增子 Agent：改动范围集中在 seller/buyer 强制踢出链路，主 Agent 本地实现和验证更直接；后续横向扫描类任务再启用子 Agent，并按 AGENTS 优先 GPT-5.3 Codex，不可用时降级 `gpt-5.4`。
 
 ## 新增问题
 

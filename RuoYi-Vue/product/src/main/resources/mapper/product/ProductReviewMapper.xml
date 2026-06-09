@@ -1,0 +1,273 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.product.mapper.ProductReviewMapper">
+
+    <resultMap type="ProductReviewRequest" id="ProductReviewRequestResult">
+        <id     property="reviewId"             column="review_id"              />
+        <result property="reviewNo"             column="review_no"              />
+        <result property="reviewType"           column="review_type"            />
+        <result property="reviewStatus"         column="review_status"          />
+        <result property="spuId"                column="spu_id"                 />
+        <result property="systemSpuCode"        column="system_spu_code"        />
+        <result property="sellerId"             column="seller_id"              />
+        <result property="sellerName"           column="seller_name"            />
+        <result property="categoryId"           column="category_id"            />
+        <result property="categoryName"         column="category_name"          />
+        <result property="productNameBefore"    column="product_name_before"    />
+        <result property="productNameAfter"     column="product_name_after"     />
+        <result property="mainImageUrlBefore"   column="main_image_url_before"  />
+        <result property="mainImageUrlAfter"    column="main_image_url_after"   />
+        <result property="submitTerminal"       column="submit_terminal"        />
+        <result property="submitSubjectId"      column="submit_subject_id"      />
+        <result property="submitAccountId"      column="submit_account_id"      />
+        <result property="submitUserName"       column="submit_user_name"       />
+        <result property="submitTime"           column="submit_time"            />
+        <result property="reviewerId"           column="reviewer_id"            />
+        <result property="reviewerName"         column="reviewer_name"          />
+        <result property="reviewTime"           column="review_time"            />
+        <result property="reviewReason"         column="review_reason"          />
+        <result property="riskLevel"            column="risk_level"             />
+        <result property="riskSummary"          column="risk_summary"           />
+        <result property="itemCount"            column="item_count"             />
+        <result property="skuCount"             column="sku_count"              />
+        <result property="priceBeforeMin"       column="price_before_min"       />
+        <result property="priceBeforeMax"       column="price_before_max"       />
+        <result property="priceAfterMin"        column="price_after_min"        />
+        <result property="priceAfterMax"        column="price_after_max"        />
+        <result property="currencySummary"      column="currency_summary"       />
+        <result property="warehouseSummary"     column="warehouse_summary"      />
+        <result property="diffSummary"          column="diff_summary"           />
+        <result property="activePendingKey"     column="active_pending_key"     />
+        <result property="delFlag"              column="del_flag"               />
+        <result property="createBy"             column="create_by"              />
+        <result property="createTime"           column="create_time"            />
+        <result property="updateBy"             column="update_by"              />
+        <result property="updateTime"           column="update_time"            />
+        <result property="remark"               column="remark"                 />
+    </resultMap>
+
+    <resultMap type="ProductReviewItem" id="ProductReviewItemResult">
+        <id     property="itemId"        column="item_id"         />
+        <result property="reviewId"      column="review_id"       />
+        <result property="itemType"      column="item_type"       />
+        <result property="changeType"    column="change_type"     />
+        <result property="spuId"         column="spu_id"          />
+        <result property="skuId"         column="sku_id"          />
+        <result property="systemSkuCode" column="system_sku_code" />
+        <result property="sellerSkuCode" column="seller_sku_code" />
+        <result property="itemStatus"    column="item_status"     />
+        <result property="beforeHash"    column="before_hash"     />
+        <result property="afterHash"     column="after_hash"      />
+        <result property="diffSummary"   column="diff_summary"    />
+        <result property="riskSummary"   column="risk_summary"    />
+        <result property="sortOrder"     column="sort_order"      />
+        <result property="createTime"    column="create_time"     />
+    </resultMap>
+
+    <resultMap type="ProductReviewSnapshot" id="ProductReviewSnapshotResult">
+        <id     property="snapshotId"   column="snapshot_id"   />
+        <result property="reviewId"     column="review_id"     />
+        <result property="itemId"       column="item_id"       />
+        <result property="snapshotRole" column="snapshot_role" />
+        <result property="payloadType"  column="payload_type"  />
+        <result property="payloadJson"  column="payload_json"  />
+        <result property="payloadHash"  column="payload_hash"  />
+        <result property="createTime"   column="create_time"   />
+    </resultMap>
+
+    <resultMap type="ProductReviewOperationLog" id="ProductReviewOperationLogResult">
+        <id     property="logId"            column="log_id"            />
+        <result property="reviewId"         column="review_id"         />
+        <result property="spuId"            column="spu_id"            />
+        <result property="operationType"    column="operation_type"    />
+        <result property="beforeStatus"     column="before_status"     />
+        <result property="afterStatus"      column="after_status"      />
+        <result property="operatorTerminal" column="operator_terminal" />
+        <result property="operatorId"       column="operator_id"       />
+        <result property="operatorName"     column="operator_name"     />
+        <result property="operationTime"    column="operation_time"    />
+        <result property="reason"           column="reason"            />
+        <result property="remark"           column="remark"            />
+    </resultMap>
+
+    <select id="selectReviewList" parameterType="ProductReviewRequest" resultMap="ProductReviewRequestResult">
+        select *
+        from product_review_request
+        where del_flag = '0'
+        <if test="keyword != null and keyword != ''">
+            and (
+                review_no like concat('%', #{keyword}, '%')
+                or system_spu_code like concat('%', #{keyword}, '%')
+                or product_name_after like concat('%', #{keyword}, '%')
+                or seller_name like concat('%', #{keyword}, '%')
+            )
+        </if>
+        <if test="reviewType != null and reviewType != ''">
+            and review_type = #{reviewType}
+        </if>
+        <if test="reviewTypes != null and reviewTypes != ''">
+            and find_in_set(review_type, #{reviewTypes})
+        </if>
+        <if test="reviewStatus != null and reviewStatus != ''">
+            and review_status = #{reviewStatus}
+        </if>
+        <if test="sellerId != null">
+            and seller_id = #{sellerId}
+        </if>
+        <if test="categoryId != null">
+            and category_id = #{categoryId}
+        </if>
+        <if test="submitTerminal != null and submitTerminal != ''">
+            and submit_terminal = #{submitTerminal}
+        </if>
+        <if test="params.beginTime != null and params.beginTime != ''">
+            and submit_time &gt;= #{params.beginTime}
+        </if>
+        <if test="params.endTime != null and params.endTime != ''">
+            and submit_time &lt;= #{params.endTime}
+        </if>
+        order by
+            case when review_status = 'PENDING' then 0 else 1 end,
+            submit_time asc,
+            review_id desc
+    </select>
+
+    <select id="selectReviewById" resultMap="ProductReviewRequestResult">
+        select *
+        from product_review_request
+        where review_id = #{reviewId}
+          and del_flag = '0'
+        limit 1
+    </select>
+
+    <select id="selectLatestReviewsBySpuIds" resultMap="ProductReviewRequestResult">
+        select r.*
+        from product_review_request r
+        inner join (
+            select spu_id, max(review_id) as review_id
+            from product_review_request
+            where del_flag = '0'
+              and spu_id in
+              <foreach collection="spuIds" item="spuId" open="(" separator="," close=")">
+                  #{spuId}
+              </foreach>
+            group by spu_id
+        ) latest on latest.review_id = r.review_id
+        where r.del_flag = '0'
+    </select>
+
+    <select id="selectLatestRejectedReusableReviewBySpuId" resultMap="ProductReviewRequestResult">
+        select *
+        from product_review_request
+        where spu_id = #{spuId}
+          and review_status = 'REJECTED'
+          and review_type in ('NEW_PRODUCT', 'ADD_SKU', 'EDIT_PRODUCT_INFO', 'EDIT_SKU_INFO')
+          and del_flag = '0'
+        order by review_id desc
+        limit 1
+    </select>
+
+    <select id="countPendingReviewByKey" resultType="int">
+        select count(1)
+        from product_review_request
+        where active_pending_key = #{activePendingKey}
+          and review_status = 'PENDING'
+          and del_flag = '0'
+    </select>
+
+    <insert id="insertReview" parameterType="ProductReviewRequest" useGeneratedKeys="true" keyProperty="reviewId">
+        insert into product_review_request(
+            review_no, review_type, review_status, spu_id, system_spu_code,
+            seller_id, seller_name, category_id, category_name,
+            product_name_before, product_name_after, main_image_url_before, main_image_url_after,
+            submit_terminal, submit_subject_id, submit_account_id, submit_user_name, submit_time,
+            reviewer_id, reviewer_name, review_time, review_reason,
+            risk_level, risk_summary, item_count, sku_count,
+            price_before_min, price_before_max, price_after_min, price_after_max,
+            currency_summary, warehouse_summary, diff_summary, active_pending_key,
+            del_flag, create_by, create_time, update_by, update_time, remark
+        ) values (
+            #{reviewNo}, #{reviewType}, #{reviewStatus}, #{spuId}, #{systemSpuCode},
+            #{sellerId}, #{sellerName}, #{categoryId}, #{categoryName},
+            #{productNameBefore}, #{productNameAfter}, #{mainImageUrlBefore}, #{mainImageUrlAfter},
+            #{submitTerminal}, #{submitSubjectId}, #{submitAccountId}, #{submitUserName}, #{submitTime},
+            #{reviewerId}, #{reviewerName}, #{reviewTime}, #{reviewReason},
+            #{riskLevel}, #{riskSummary}, #{itemCount}, #{skuCount},
+            #{priceBeforeMin}, #{priceBeforeMax}, #{priceAfterMin}, #{priceAfterMax},
+            #{currencySummary}, #{warehouseSummary}, #{diffSummary}, #{activePendingKey},
+            '0', #{createBy}, sysdate(), #{updateBy}, sysdate(), #{remark}
+        )
+    </insert>
+
+    <update id="updateReviewStatus" parameterType="ProductReviewRequest">
+        update product_review_request
+        set review_status = #{reviewStatus},
+            reviewer_id = #{reviewerId},
+            reviewer_name = #{reviewerName},
+            review_time = #{reviewTime},
+            review_reason = #{reviewReason},
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where review_id = #{reviewId}
+          and del_flag = '0'
+    </update>
+
+    <insert id="insertReviewItem" parameterType="ProductReviewItem" useGeneratedKeys="true" keyProperty="itemId">
+        insert into product_review_item(
+            review_id, item_type, change_type, spu_id, sku_id,
+            system_sku_code, seller_sku_code, item_status,
+            before_hash, after_hash, diff_summary, risk_summary, sort_order, create_time
+        ) values (
+            #{reviewId}, #{itemType}, #{changeType}, #{spuId}, #{skuId},
+            #{systemSkuCode}, #{sellerSkuCode}, #{itemStatus},
+            #{beforeHash}, #{afterHash}, #{diffSummary}, #{riskSummary}, #{sortOrder}, sysdate()
+        )
+    </insert>
+
+    <select id="selectReviewItems" resultMap="ProductReviewItemResult">
+        select *
+        from product_review_item
+        where review_id = #{reviewId}
+        order by sort_order asc, item_id asc
+    </select>
+
+    <update id="updateReviewItemsStatus">
+        update product_review_item
+        set item_status = #{itemStatus}
+        where review_id = #{reviewId}
+    </update>
+
+    <insert id="insertReviewSnapshot" parameterType="ProductReviewSnapshot" useGeneratedKeys="true" keyProperty="snapshotId">
+        insert into product_review_snapshot(
+            review_id, item_id, snapshot_role, payload_type, payload_json, payload_hash, create_time
+        ) values (
+            #{reviewId}, #{itemId}, #{snapshotRole}, #{payloadType}, #{payloadJson}, #{payloadHash}, sysdate()
+        )
+    </insert>
+
+    <select id="selectReviewSnapshots" resultMap="ProductReviewSnapshotResult">
+        select *
+        from product_review_snapshot
+        where review_id = #{reviewId}
+        order by snapshot_id asc
+    </select>
+
+    <insert id="insertReviewOperationLog" parameterType="ProductReviewOperationLog" useGeneratedKeys="true" keyProperty="logId">
+        insert into product_review_operation_log(
+            review_id, spu_id, operation_type, before_status, after_status,
+            operator_terminal, operator_id, operator_name, operation_time, reason, remark
+        ) values (
+            #{reviewId}, #{spuId}, #{operationType}, #{beforeStatus}, #{afterStatus},
+            #{operatorTerminal}, #{operatorId}, #{operatorName}, sysdate(), #{reason}, #{remark}
+        )
+    </insert>
+
+    <select id="selectReviewOperationLogs" resultMap="ProductReviewOperationLogResult">
+        select *
+        from product_review_operation_log
+        where review_id = #{reviewId}
+        order by operation_time desc, log_id desc
+    </select>
+</mapper>

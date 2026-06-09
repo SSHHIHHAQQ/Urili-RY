@@ -46,6 +46,68 @@ begin
   end if;
 end//
 
+drop procedure if exists assert_source_warehouse_stock_read_model_completed//
+create procedure assert_source_warehouse_stock_read_model_completed()
+begin
+  declare v_expected_count bigint default 0;
+  declare v_actual_count bigint default 0;
+  declare v_missing_count bigint default 0;
+
+  select count(1) into v_expected_count from tmp_source_warehouse_stock_detail;
+  select count(1) into v_actual_count
+  from source_warehouse_stock_detail
+  where repository_scope = 'OFFICIAL_MASTER';
+  if v_actual_count <> v_expected_count then
+    signal sqlstate '45000' set message_text = 'source warehouse stock detail read model completed count mismatch';
+  end if;
+
+  select count(1) into v_missing_count
+  from tmp_source_warehouse_stock_detail t
+  left join source_warehouse_stock_detail d
+    on d.inventory_snapshot_id = t.inventory_snapshot_id
+   and d.repository_scope = t.repository_scope
+  where d.inventory_snapshot_id is null;
+  if v_missing_count <> 0 then
+    signal sqlstate '45000' set message_text = 'source warehouse stock detail read model completed missing expected rows';
+  end if;
+
+  select count(1) into v_expected_count from tmp_source_warehouse_stock_group;
+  select count(1) into v_actual_count
+  from source_warehouse_stock_group
+  where repository_scope = 'OFFICIAL_MASTER';
+  if v_actual_count <> v_expected_count then
+    signal sqlstate '45000' set message_text = 'source warehouse stock group read model completed count mismatch';
+  end if;
+
+  select count(1) into v_missing_count
+  from tmp_source_warehouse_stock_group t
+  left join source_warehouse_stock_group g
+    on g.source_stock_group_key = t.source_stock_group_key
+   and g.repository_scope = t.repository_scope
+  where g.source_stock_group_key is null;
+  if v_missing_count <> 0 then
+    signal sqlstate '45000' set message_text = 'source warehouse stock group read model completed missing expected keys';
+  end if;
+
+  select count(1) into v_expected_count from tmp_source_warehouse_stock_filter_metric;
+  select count(1) into v_actual_count
+  from source_warehouse_stock_filter_metric
+  where repository_scope = 'OFFICIAL_MASTER';
+  if v_actual_count <> v_expected_count then
+    signal sqlstate '45000' set message_text = 'source warehouse stock filter read model completed count mismatch';
+  end if;
+
+  select count(1) into v_missing_count
+  from tmp_source_warehouse_stock_filter_metric t
+  left join source_warehouse_stock_filter_metric m
+    on m.metric_key = t.metric_key
+   and m.repository_scope = t.repository_scope
+  where m.metric_key is null;
+  if v_missing_count <> 0 then
+    signal sqlstate '45000' set message_text = 'source warehouse stock filter read model completed missing expected keys';
+  end if;
+end//
+
 delimiter ;
 
 call assert_source_warehouse_stock_read_model_confirmed();
@@ -506,8 +568,11 @@ select * from tmp_source_warehouse_stock_group;
 insert into source_warehouse_stock_filter_metric
 select * from tmp_source_warehouse_stock_filter_metric;
 
+call assert_source_warehouse_stock_read_model_completed();
+
 commit;
 
 drop temporary table if exists tmp_source_warehouse_stock_filter_metric;
 drop temporary table if exists tmp_source_warehouse_stock_group;
 drop temporary table if exists tmp_source_warehouse_stock_detail;
+drop procedure if exists assert_source_warehouse_stock_read_model_completed;

@@ -64,6 +64,30 @@ begin
   end if;
 end//
 
+drop procedure if exists assert_product_category_attribute_seed_completed//
+create procedure assert_product_category_attribute_seed_completed()
+begin
+  if (
+    select count(1)
+    from sys_menu m
+    join tmp_product_category_attribute_seed_expected seed on seed.menu_id = m.menu_id
+    where coalesce(m.menu_name, '') = seed.menu_name
+      and coalesce(m.parent_id, -1) = seed.parent_id
+      and coalesce(m.order_num, -1) = seed.order_num
+      and coalesce(m.menu_type, '') = seed.menu_type
+      and coalesce(m.visible, '') = seed.visible
+      and coalesce(m.status, '') = seed.status
+      and coalesce(m.path, '') = seed.path
+      and coalesce(m.component, '') = seed.component
+      and coalesce(m.route_name, '') = seed.route_name
+      and coalesce(m.perms, '') = seed.perms
+      and coalesce(m.icon, '') = seed.icon
+      and coalesce(m.remark, '') = seed.remark
+  ) <> (select count(1) from tmp_product_category_attribute_seed_expected) then
+    signal sqlstate '45000' set message_text = 'product category attribute seed completion mismatch';
+  end if;
+end//
+
 delimiter ;
 
 create table if not exists product_category (
@@ -161,6 +185,8 @@ create table if not exists product_category_attribute (
   key idx_product_category_attribute_status (status)
 ) engine=innodb auto_increment=1 comment='类目属性配置表';
 
+start transaction;
+
 insert into sys_dict_type
     (dict_name, dict_type, status, create_by, create_time, update_by, update_time, remark)
 select '商品属性类型', 'product_attribute_type', '0', 'admin', sysdate(), '', null, '商品属性类型'
@@ -237,7 +263,25 @@ create temporary table if not exists tmp_product_category_attribute_sys_menu_gua
   key idx_product_category_attribute_sys_menu_guard_id (menu_id)
 ) engine=memory;
 
+create temporary table if not exists tmp_product_category_attribute_seed_expected (
+  menu_id    bigint       not null,
+  menu_name  varchar(50)  not null,
+  parent_id  bigint       not null,
+  order_num  int          not null,
+  menu_type  char(1)      not null,
+  visible    char(1)      not null,
+  status     char(1)      not null,
+  path       varchar(200) not null default '',
+  component  varchar(255) not null default '',
+  route_name varchar(50)  not null default '',
+  perms      varchar(100) not null default '',
+  icon       varchar(100) not null default '',
+  remark     varchar(500) not null default '',
+  key idx_product_category_attribute_seed_expected_id (menu_id)
+) engine=memory;
+
 truncate table tmp_product_category_attribute_sys_menu_guard;
+truncate table tmp_product_category_attribute_seed_expected;
 
 insert into tmp_product_category_attribute_sys_menu_guard(menu_id, parent_id, menu_type, path, component, route_name, perms) values
     (2060, 0, 'M', 'product', '', 'ProductManagement', ''),
@@ -257,6 +301,25 @@ insert into tmp_product_category_attribute_sys_menu_guard(menu_id, parent_id, me
     (2479, 2441, 'F', '#', '', '', 'product:categoryAttribute:edit'),
     (2480, 2441, 'F', '#', '', '', 'product:categoryAttribute:preview');
 
+insert into tmp_product_category_attribute_seed_expected
+    (menu_id, menu_name, parent_id, order_num, menu_type, visible, status,
+     path, component, route_name, perms, icon, remark)
+values
+    (2060, '商品管理', 0, 10, 'M', '0', '0', 'product', '', 'ProductManagement', '', 'ShoppingOutlined', '顶级菜单：商品管理'),
+    (2440, '商品分类配置', 2090, 5, 'C', '0', '0', 'product-category', 'Product/Category/index', 'ProductCategoryConfig', 'product:category:list', 'ApartmentOutlined', '基础配置菜单：商品分类配置'),
+    (2441, '商品属性配置', 2090, 10, 'C', '0', '0', 'product-attribute', 'Product/Attribute/index', 'ProductAttributeConfig', 'product:attribute:list', 'TagsOutlined', '基础配置菜单：商品属性配置'),
+    (2470, '商品分类查询', 2440, 1, 'F', '0', '0', '#', '', '', 'product:category:query', '#', '商品分类按钮：查询'),
+    (2471, '商品分类新增', 2440, 2, 'F', '0', '0', '#', '', '', 'product:category:add', '#', '商品分类按钮：新增'),
+    (2472, '商品分类修改', 2440, 3, 'F', '0', '0', '#', '', '', 'product:category:edit', '#', '商品分类按钮：修改'),
+    (2473, '商品分类删除', 2440, 4, 'F', '0', '0', '#', '', '', 'product:category:remove', '#', '商品分类按钮：删除'),
+    (2474, '商品属性查询', 2441, 1, 'F', '0', '0', '#', '', '', 'product:attribute:query', '#', '商品属性按钮：查询'),
+    (2475, '商品属性新增', 2441, 2, 'F', '0', '0', '#', '', '', 'product:attribute:add', '#', '商品属性按钮：新增'),
+    (2476, '商品属性修改', 2441, 3, 'F', '0', '0', '#', '', '', 'product:attribute:edit', '#', '商品属性按钮：修改'),
+    (2477, '商品属性删除', 2441, 4, 'F', '0', '0', '#', '', '', 'product:attribute:remove', '#', '商品属性按钮：删除'),
+    (2478, '类目属性查看', 2441, 5, 'F', '0', '0', '#', '', '', 'product:categoryAttribute:list', '#', '类目属性按钮：查看'),
+    (2479, '类目属性配置', 2441, 6, 'F', '0', '0', '#', '', '', 'product:categoryAttribute:edit', '#', '类目属性按钮：配置'),
+    (2480, '类目属性预览', 2441, 7, 'F', '0', '0', '#', '', '', 'product:categoryAttribute:preview', '#', '类目属性按钮：预览');
+
 call assert_product_category_attribute_sys_menu_guard();
 
 insert into sys_menu
@@ -274,7 +337,10 @@ set menu_name = '商品分类配置',
     order_num = 5,
     path = 'product-category',
     component = 'Product/Category/index',
+    query = '',
     route_name = 'ProductCategoryConfig',
+    is_frame = 1,
+    is_cache = 0,
     menu_type = 'C',
     visible = '0',
     status = '0',
@@ -300,7 +366,10 @@ set menu_name = '商品属性配置',
     order_num = 10,
     path = 'product-attribute',
     component = 'Product/Attribute/index',
+    query = '',
     route_name = 'ProductAttributeConfig',
+    is_frame = 1,
+    is_cache = 0,
     menu_type = 'C',
     visible = '0',
     status = '0',
@@ -340,8 +409,30 @@ from (
     union all select 2479, '类目属性配置', 2441, 6, 'product:categoryAttribute:edit', '类目属性按钮：配置'
     union all select 2480, '类目属性预览', 2441, 7, 'product:categoryAttribute:preview', '类目属性按钮：预览'
 ) seed
-where not exists (select 1 from sys_menu m where m.menu_id = seed.menu_id)
-  and not exists (select 1 from sys_menu p where p.perms = seed.perms);
+on duplicate key update
+    menu_name = values(menu_name),
+    parent_id = values(parent_id),
+    order_num = values(order_num),
+    path = values(path),
+    component = values(component),
+    query = values(query),
+    route_name = values(route_name),
+    is_frame = values(is_frame),
+    is_cache = values(is_cache),
+    menu_type = values(menu_type),
+    visible = values(visible),
+    status = values(status),
+    perms = values(perms),
+    icon = values(icon),
+    update_by = 'admin',
+    update_time = sysdate(),
+    remark = values(remark);
 
+call assert_product_category_attribute_seed_completed();
+
+commit;
+
+drop temporary table if exists tmp_product_category_attribute_seed_expected;
 drop temporary table if exists tmp_product_category_attribute_sys_menu_guard;
+drop procedure if exists assert_product_category_attribute_seed_completed;
 drop procedure if exists assert_product_category_attribute_sys_menu_guard;

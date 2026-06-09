@@ -17,19 +17,25 @@ public interface IProductDistributionService
 
     ProductSpu selectProductById(Long spuId);
 
+    ProductSpu selectProductById(Long spuId, Long sellerId);
+
     ProductSpu selectOnSaleProductById(Long spuId);
 
     int insertProduct(ProductSpu product);
 
     int updateProduct(ProductSpu product);
 
-    int updateSpuStatus(Long spuId, String status);
+    ProductSpu prepareReviewedProductUpdate(ProductSpu product);
 
-    int updateSkuStatus(Long spuId, Long skuId, String status);
+    int applyReviewedProductUpdate(ProductSpu product);
 
-    int batchUpdateSpuStatus(List<Long> spuIds, String status, boolean syncSkuStatus);
+    int updateSpuStatus(Long spuId, String status, String reason);
 
-    int batchUpdateSkuStatus(List<Long> skuIds, String status);
+    int updateSkuStatus(Long spuId, Long skuId, String status, String reason);
+
+    int batchUpdateSpuStatus(List<Long> spuIds, String status, boolean syncSkuStatus, String reason);
+
+    int batchUpdateSkuStatus(List<Long> skuIds, String status, String reason);
 
     int batchUpdateSpuControlStatus(List<Long> spuIds, String controlStatus, String reason);
 
@@ -42,6 +48,8 @@ public interface IProductDistributionService
     List<ProductSku> selectSkuPageList(ProductSku query);
 
     List<ProductSku> selectSkuList(Long spuId);
+
+    List<ProductSku> selectSkuList(Long spuId, Long sellerId);
 
     List<ProductSku> selectOnSaleSkuList(Long spuId);
 }

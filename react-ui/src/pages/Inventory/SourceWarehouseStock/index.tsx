@@ -3,6 +3,7 @@ import {
   type ProColumns,
   ProTable,
 } from '@ant-design/pro-components';
+import { useAccess } from '@umijs/max';
 import { Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useEffect, useState } from 'react';
@@ -271,14 +272,21 @@ const detailColumns: ColumnsType<API.Integration.SourceWarehouseStockItem> = [
 function SourceWarehouseStockDetailTable({
   sourceStockGroupKey,
   inventoryScope,
+  canListSourceWarehouseStock,
 }: {
   sourceStockGroupKey: string;
   inventoryScope: string;
+  canListSourceWarehouseStock: boolean;
 }) {
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState<API.Integration.SourceWarehouseStockItem[]>([]);
 
   useEffect(() => {
+    if (!canListSourceWarehouseStock) {
+      setRows([]);
+      setLoading(false);
+      return undefined;
+    }
     let alive = true;
     setLoading(true);
     getSourceWarehouseStockGroupDetail(
@@ -305,7 +313,7 @@ function SourceWarehouseStockDetailTable({
     return () => {
       alive = false;
     };
-  }, [sourceStockGroupKey, inventoryScope]);
+  }, [sourceStockGroupKey, inventoryScope, canListSourceWarehouseStock]);
 
   return (
     <Table<API.Integration.SourceWarehouseStockItem>
@@ -322,6 +330,8 @@ function SourceWarehouseStockDetailTable({
 }
 
 export default function SourceWarehouseStockPage() {
+  const access = useAccess();
+  const canListSourceWarehouseStock = access.hasPerms('inventory:sourceWarehouse:list');
   const [inventoryScope, setInventoryScope] = useState('COMPREHENSIVE');
   const [filterOptionsLoading, setFilterOptionsLoading] = useState(false);
   const [masterWarehouseOptions, setMasterWarehouseOptions] = useState<API.Integration.SourceWarehouseStockOption[]>(
@@ -332,6 +342,12 @@ export default function SourceWarehouseStockPage() {
   );
 
   useEffect(() => {
+    if (!canListSourceWarehouseStock) {
+      setMasterWarehouseOptions([]);
+      setSourceWarehouseOptions([]);
+      setFilterOptionsLoading(false);
+      return undefined;
+    }
     let alive = true;
     setFilterOptionsLoading(true);
     Promise.all([
@@ -358,7 +374,7 @@ export default function SourceWarehouseStockPage() {
     return () => {
       alive = false;
     };
-  }, [inventoryScope]);
+  }, [inventoryScope, canListSourceWarehouseStock]);
 
   const columns: ProColumns<API.Integration.SourceWarehouseStockGroupItem>[] = [
     {
@@ -619,6 +635,9 @@ export default function SourceWarehouseStockPage() {
           'source-warehouse-stock',
         )}
         request={async (params) => {
+          if (!canListSourceWarehouseStock) {
+            return { data: [], total: 0, success: true };
+          }
           const { current, pageSize, ...filters } = params;
           const resp = await getSourceWarehouseStockGroupList(
             buildSourceWarehouseStockListParams(filters, current, pageSize),
@@ -637,6 +656,7 @@ export default function SourceWarehouseStockPage() {
             <SourceWarehouseStockDetailTable
               sourceStockGroupKey={record.sourceStockGroupKey}
               inventoryScope={inventoryScope}
+              canListSourceWarehouseStock={canListSourceWarehouseStock}
             />
           ),
           rowExpandable: (record) => !!record.sourceStockGroupKey,

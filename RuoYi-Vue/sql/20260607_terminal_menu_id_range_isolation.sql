@@ -3,7 +3,24 @@
 -- Purpose: keep seller/buyer numeric menuIds in disjoint ranges while preserving the existing number[] API contract.
 
 set names utf8mb4;
+set session group_concat_max_len = greatest(@@session.group_concat_max_len, 1048576);
 set @confirm_terminal_menu_id_range_isolation := coalesce(@confirm_terminal_menu_id_range_isolation, '');
+set @terminal_menu_range_seller_menu_expected_count :=
+    coalesce(@terminal_menu_range_seller_menu_expected_count, '');
+set @terminal_menu_range_seller_menu_expected_signature :=
+    coalesce(@terminal_menu_range_seller_menu_expected_signature, '');
+set @terminal_menu_range_seller_role_menu_expected_count :=
+    coalesce(@terminal_menu_range_seller_role_menu_expected_count, '');
+set @terminal_menu_range_seller_role_menu_expected_signature :=
+    coalesce(@terminal_menu_range_seller_role_menu_expected_signature, '');
+set @terminal_menu_range_buyer_menu_expected_count :=
+    coalesce(@terminal_menu_range_buyer_menu_expected_count, '');
+set @terminal_menu_range_buyer_menu_expected_signature :=
+    coalesce(@terminal_menu_range_buyer_menu_expected_signature, '');
+set @terminal_menu_range_buyer_role_menu_expected_count :=
+    coalesce(@terminal_menu_range_buyer_role_menu_expected_count, '');
+set @terminal_menu_range_buyer_role_menu_expected_signature :=
+    coalesce(@terminal_menu_range_buyer_role_menu_expected_signature, '');
 
 delimiter //
 
@@ -13,6 +30,31 @@ begin
   if coalesce(@confirm_terminal_menu_id_range_isolation, '')
       <> 'APPLY_TERMINAL_MENU_ID_RANGE_ISOLATION' then
     signal sqlstate '45000' set message_text = 'set @confirm_terminal_menu_id_range_isolation = APPLY_TERMINAL_MENU_ID_RANGE_ISOLATION before running this migration';
+  end if;
+
+  if coalesce(@terminal_menu_range_seller_menu_expected_count, '') not regexp '^[0-9]+$' then
+    signal sqlstate '45000' set message_text = 'set @terminal_menu_range_seller_menu_expected_count after previewing exact seller_menu low-ID or low-parent rows';
+  end if;
+  if coalesce(@terminal_menu_range_seller_menu_expected_signature, '') not regexp '^[0-9a-fA-F]{64}$' then
+    signal sqlstate '45000' set message_text = 'set @terminal_menu_range_seller_menu_expected_signature after previewing exact seller_menu low-ID or low-parent rows';
+  end if;
+  if coalesce(@terminal_menu_range_seller_role_menu_expected_count, '') not regexp '^[0-9]+$' then
+    signal sqlstate '45000' set message_text = 'set @terminal_menu_range_seller_role_menu_expected_count after previewing exact seller_role_menu low-ID rows';
+  end if;
+  if coalesce(@terminal_menu_range_seller_role_menu_expected_signature, '') not regexp '^[0-9a-fA-F]{64}$' then
+    signal sqlstate '45000' set message_text = 'set @terminal_menu_range_seller_role_menu_expected_signature after previewing exact seller_role_menu low-ID rows';
+  end if;
+  if coalesce(@terminal_menu_range_buyer_menu_expected_count, '') not regexp '^[0-9]+$' then
+    signal sqlstate '45000' set message_text = 'set @terminal_menu_range_buyer_menu_expected_count after previewing exact buyer_menu low-ID or low-parent rows';
+  end if;
+  if coalesce(@terminal_menu_range_buyer_menu_expected_signature, '') not regexp '^[0-9a-fA-F]{64}$' then
+    signal sqlstate '45000' set message_text = 'set @terminal_menu_range_buyer_menu_expected_signature after previewing exact buyer_menu low-ID or low-parent rows';
+  end if;
+  if coalesce(@terminal_menu_range_buyer_role_menu_expected_count, '') not regexp '^[0-9]+$' then
+    signal sqlstate '45000' set message_text = 'set @terminal_menu_range_buyer_role_menu_expected_count after previewing exact buyer_role_menu low-ID rows';
+  end if;
+  if coalesce(@terminal_menu_range_buyer_role_menu_expected_signature, '') not regexp '^[0-9a-fA-F]{64}$' then
+    signal sqlstate '45000' set message_text = 'set @terminal_menu_range_buyer_role_menu_expected_signature after previewing exact buyer_role_menu low-ID rows';
   end if;
 end//
 
@@ -109,6 +151,32 @@ begin
   end if;
 end//
 
+drop procedure if exists assert_no_terminal_menu_parent_orphans//
+create procedure assert_no_terminal_menu_parent_orphans()
+begin
+  if exists (
+    select 1
+    from seller_menu child
+    left join seller_menu parent on parent.seller_menu_id = child.parent_id
+    where child.parent_id > 0
+      and parent.seller_menu_id is null
+    limit 1
+  ) then
+    signal sqlstate '45000' set message_text = 'seller_menu has orphan parent_id values';
+  end if;
+
+  if exists (
+    select 1
+    from buyer_menu child
+    left join buyer_menu parent on parent.buyer_menu_id = child.parent_id
+    where child.parent_id > 0
+      and parent.buyer_menu_id is null
+    limit 1
+  ) then
+    signal sqlstate '45000' set message_text = 'buyer_menu has orphan parent_id values';
+  end if;
+end//
+
 drop procedure if exists assert_terminal_role_menu_ids_are_migratable//
 create procedure assert_terminal_role_menu_ids_are_migratable()
 begin
@@ -164,6 +232,101 @@ begin
     limit 1
   ) then
     signal sqlstate '45000' set message_text = 'buyer_role_menu low IDs would collide after +200000 migration';
+  end if;
+end//
+
+drop procedure if exists assert_terminal_menu_id_range_expected_targets//
+create procedure assert_terminal_menu_id_range_expected_targets()
+begin
+  declare v_count int default 0;
+  declare v_signature varchar(64) default '';
+
+  select count(1),
+         sha2(coalesce(group_concat(
+           concat_ws(':',
+             m.seller_menu_id,
+             coalesce(m.parent_id, ''),
+             coalesce(m.menu_name, ''),
+             coalesce(m.path, ''),
+             coalesce(m.component, ''),
+             coalesce(m.perms, ''),
+             coalesce(m.menu_type, '')
+           )
+           order by m.seller_menu_id separator '|'
+         ), ''), 256)
+    into v_count, v_signature
+  from seller_menu m
+  where (m.seller_menu_id > 0
+    and m.seller_menu_id < 100000)
+    or (m.parent_id > 0
+    and m.parent_id < 100000);
+
+  if v_count <> cast(@terminal_menu_range_seller_menu_expected_count as unsigned) then
+    signal sqlstate '45000' set message_text = 'seller_menu low-ID expected count does not match migration targets';
+  end if;
+  if lower(v_signature) <> lower(@terminal_menu_range_seller_menu_expected_signature) then
+    signal sqlstate '45000' set message_text = 'seller_menu low-ID exact target signature mismatch';
+  end if;
+
+  select count(1),
+         sha2(coalesce(group_concat(
+           concat_ws(':', rm.seller_role_id, rm.seller_menu_id)
+           order by rm.seller_role_id, rm.seller_menu_id separator '|'
+         ), ''), 256)
+    into v_count, v_signature
+  from seller_role_menu rm
+  where rm.seller_menu_id > 0
+    and rm.seller_menu_id < 100000;
+
+  if v_count <> cast(@terminal_menu_range_seller_role_menu_expected_count as unsigned) then
+    signal sqlstate '45000' set message_text = 'seller_role_menu low-ID expected count does not match migration targets';
+  end if;
+  if lower(v_signature) <> lower(@terminal_menu_range_seller_role_menu_expected_signature) then
+    signal sqlstate '45000' set message_text = 'seller_role_menu low-ID exact target signature mismatch';
+  end if;
+
+  select count(1),
+         sha2(coalesce(group_concat(
+           concat_ws(':',
+             m.buyer_menu_id,
+             coalesce(m.parent_id, ''),
+             coalesce(m.menu_name, ''),
+             coalesce(m.path, ''),
+             coalesce(m.component, ''),
+             coalesce(m.perms, ''),
+             coalesce(m.menu_type, '')
+           )
+           order by m.buyer_menu_id separator '|'
+         ), ''), 256)
+    into v_count, v_signature
+  from buyer_menu m
+  where (m.buyer_menu_id > 0
+    and m.buyer_menu_id < 100000)
+    or (m.parent_id > 0
+    and m.parent_id < 100000);
+
+  if v_count <> cast(@terminal_menu_range_buyer_menu_expected_count as unsigned) then
+    signal sqlstate '45000' set message_text = 'buyer_menu low-ID expected count does not match migration targets';
+  end if;
+  if lower(v_signature) <> lower(@terminal_menu_range_buyer_menu_expected_signature) then
+    signal sqlstate '45000' set message_text = 'buyer_menu low-ID exact target signature mismatch';
+  end if;
+
+  select count(1),
+         sha2(coalesce(group_concat(
+           concat_ws(':', rm.buyer_role_id, rm.buyer_menu_id)
+           order by rm.buyer_role_id, rm.buyer_menu_id separator '|'
+         ), ''), 256)
+    into v_count, v_signature
+  from buyer_role_menu rm
+  where rm.buyer_menu_id > 0
+    and rm.buyer_menu_id < 100000;
+
+  if v_count <> cast(@terminal_menu_range_buyer_role_menu_expected_count as unsigned) then
+    signal sqlstate '45000' set message_text = 'buyer_role_menu low-ID expected count does not match migration targets';
+  end if;
+  if lower(v_signature) <> lower(@terminal_menu_range_buyer_role_menu_expected_signature) then
+    signal sqlstate '45000' set message_text = 'buyer_role_menu low-ID exact target signature mismatch';
   end if;
 end//
 
@@ -235,28 +398,6 @@ begin
   end if;
 end//
 
-drop procedure if exists reset_terminal_menu_auto_increment//
-create procedure reset_terminal_menu_auto_increment(
-  in p_table varchar(64),
-  in p_id_column varchar(64),
-  in p_floor bigint
-)
-begin
-  set @next_terminal_menu_auto_increment = p_floor;
-  set @sql = concat(
-    'select greatest(', p_floor, ', coalesce(max(', p_id_column, '), 0) + 1) ',
-    'into @next_terminal_menu_auto_increment from `', p_table, '`'
-  );
-  prepare stmt from @sql;
-  execute stmt;
-  deallocate prepare stmt;
-
-  set @ddl = concat('alter table `', p_table, '` auto_increment = ', @next_terminal_menu_auto_increment);
-  prepare stmt from @ddl;
-  execute stmt;
-  deallocate prepare stmt;
-end//
-
 delimiter ;
 
 call assert_terminal_menu_id_range_isolation_confirmed();
@@ -265,8 +406,10 @@ call assert_table_exists('buyer_menu', 'Run 20260604_three_terminal_isolation_mi
 call assert_table_exists('seller_role_menu', 'Run 20260604_three_terminal_isolation_migration.sql before terminal menu ID range isolation');
 call assert_table_exists('buyer_role_menu', 'Run 20260604_three_terminal_isolation_migration.sql before terminal menu ID range isolation');
 call assert_no_terminal_menu_orphans();
+call assert_no_terminal_menu_parent_orphans();
 call assert_terminal_menu_ids_are_migratable();
 call assert_terminal_role_menu_ids_are_migratable();
+call assert_terminal_menu_id_range_expected_targets();
 
 start transaction;
 
@@ -301,16 +444,7 @@ where buyer_menu_id > 0
   and buyer_menu_id < 100000;
 
 call assert_no_terminal_menu_orphans();
-call assert_terminal_menu_ids_are_in_final_ranges();
-call assert_terminal_role_menu_ids_are_in_final_ranges();
-
--- MySQL ALTER TABLE causes an implicit commit; keep the explicit commit after
--- auto_increment reset and final guards so this script cannot manually commit
--- before the terminal menu range is fully validated.
-call reset_terminal_menu_auto_increment('seller_menu', 'seller_menu_id', 100000);
-call reset_terminal_menu_auto_increment('buyer_menu', 'buyer_menu_id', 200000);
-
-call assert_no_terminal_menu_orphans();
+call assert_no_terminal_menu_parent_orphans();
 call assert_terminal_menu_ids_are_in_final_ranges();
 call assert_terminal_role_menu_ids_are_in_final_ranges();
 
@@ -319,8 +453,9 @@ commit;
 drop procedure if exists assert_terminal_menu_id_range_isolation_confirmed;
 drop procedure if exists assert_table_exists;
 drop procedure if exists assert_no_terminal_menu_orphans;
+drop procedure if exists assert_no_terminal_menu_parent_orphans;
 drop procedure if exists assert_terminal_menu_ids_are_migratable;
 drop procedure if exists assert_terminal_role_menu_ids_are_migratable;
+drop procedure if exists assert_terminal_menu_id_range_expected_targets;
 drop procedure if exists assert_terminal_menu_ids_are_in_final_ranges;
 drop procedure if exists assert_terminal_role_menu_ids_are_in_final_ranges;
-drop procedure if exists reset_terminal_menu_auto_increment;

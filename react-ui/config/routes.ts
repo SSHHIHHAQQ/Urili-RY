@@ -59,20 +59,32 @@ export default [
   },
   {
     path: '/product/distribution/create',
-    authority: ['product:distribution:add'],
+    authority: [
+      'product:distribution:add',
+      'seller:admin:list',
+      'product:category:list',
+      'product:categoryAttribute:preview',
+      'warehouse:official:list',
+      'warehouse:thirdParty:list',
+    ],
+    authorityMode: 'all',
     wrappers: ['@/wrappers/RemoteMenuRouteGuard'],
     component: './Product/Distribution/EditPage',
   },
   {
     path: '/product/distribution/edit/:spuId',
-    authority: ['product:distribution:edit'],
+    authority: [
+      'product:distribution:query',
+      'product:distribution:edit',
+      'seller:admin:list',
+      'product:category:list',
+      'product:categoryAttribute:preview',
+      'warehouse:official:list',
+      'warehouse:thirdParty:list',
+    ],
+    authorityMode: 'all',
     wrappers: ['@/wrappers/RemoteMenuRouteGuard'],
     component: './Product/Distribution/EditPage',
-  },
-  {
-    path: '*',
-    layout: false,
-    component: './404',
   },
   {
     path: '/user',
@@ -107,11 +119,16 @@ export default [
       {
         name: '字典数据',
         path: '/system/dict-data/index/:id',
+        authority: ['system:dict:list'],
+        wrappers: ['@/wrappers/RemoteMenuRouteGuard'],
         component: './System/DictData',
       },
       {
         name: '分配用户',
         path: '/system/role-auth/user/:id',
+        authority: ['system:role:list', 'system:role:edit'],
+        authorityMode: 'all',
+        wrappers: ['@/wrappers/RemoteMenuRouteGuard'],
         component: './System/Role/authUser',
       },
     ]
@@ -123,6 +140,9 @@ export default [
       {
         name: '任务日志',
         path: '/monitor/job-log/index/:id',
+        authority: ['monitor:job:list', 'monitor:job:query'],
+        authorityMode: 'all',
+        wrappers: ['@/wrappers/RemoteMenuRouteGuard'],
         component: './Monitor/JobLog',
       },
     ]
@@ -134,13 +154,24 @@ export default [
       {
         name: '导入表',
         path: '/tool/gen/import',
+        authority: ['tool:gen:list', 'tool:gen:import'],
+        authorityMode: 'all',
+        wrappers: ['@/wrappers/RemoteMenuRouteGuard'],
         component: './Tool/Gen/import',
       },
       {
         name: '编辑表',
         path: '/tool/gen/edit',
+        authority: ['tool:gen:query', 'tool:gen:edit'],
+        authorityMode: 'all',
+        wrappers: ['@/wrappers/RemoteMenuRouteGuard'],
         component: './Tool/Gen/edit',
       },
     ]
+  },
+  {
+    path: '*',
+    layout: false,
+    component: './404',
   },
 ];

@@ -83,6 +83,16 @@ function displayText(value?: string | number | null) {
   return value === undefined || value === null || value === '' ? '-' : String(value);
 }
 
+function assertPortalSuccess<T extends { code?: number | string; msg?: string }>(
+  response: T,
+  fallbackMessage: string,
+) {
+  if (Number(response?.code) !== 200) {
+    throw new Error(response?.msg || fallbackMessage);
+  }
+  return response;
+}
+
 function renderTags(values?: string[]) {
   if (!values || values.length === 0) {
     return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />;
@@ -152,22 +162,25 @@ const PortalHomePage: React.FC = () => {
     setLoading(true);
     try {
       const service = PORTAL_SERVICE[currentTerminal];
-      const [infoRes, subjectRes, accountRes] = await Promise.all([
+      const [infoResponse, subjectResponse, accountResponse] = await Promise.all([
         service.getInfo(),
         service.getSubjectProfile(),
         service.getAccountProfile(),
       ]);
+      const infoRes = assertPortalSuccess(infoResponse, 'Portal info loading failed');
+      const subjectRes = assertPortalSuccess(subjectResponse, 'Portal subject loading failed');
+      const accountRes = assertPortalSuccess(accountResponse, 'Portal account loading failed');
       const permissions = infoRes.data?.permissions || [];
       const [accountsRes, deptsRes, rolesRes] = await Promise.all([
         hasPortalPermission(permissions, portalPermission(currentTerminal, 'account:list'))
-          ? service.getAccounts()
-          : Promise.resolve({ data: [] }),
+          ? service.getAccounts().then((response) => assertPortalSuccess(response, 'Portal accounts loading failed'))
+          : Promise.resolve({ code: 200, data: [] }),
         hasPortalPermission(permissions, portalPermission(currentTerminal, 'dept:list'))
-          ? service.getDepts()
-          : Promise.resolve({ data: [] }),
+          ? service.getDepts().then((response) => assertPortalSuccess(response, 'Portal depts loading failed'))
+          : Promise.resolve({ code: 200, data: [] }),
         hasPortalPermission(permissions, portalPermission(currentTerminal, 'role:list'))
-          ? service.getRoles()
-          : Promise.resolve({ data: [] }),
+          ? service.getRoles().then((response) => assertPortalSuccess(response, 'Portal roles loading failed'))
+          : Promise.resolve({ code: 200, data: [] }),
       ]);
       setData({
         info: infoRes.data,
@@ -179,9 +192,7 @@ const PortalHomePage: React.FC = () => {
       });
     } catch (error) {
       console.log(error);
-      clearPortalLogin(currentTerminal);
-      message.error('登录状态已失效');
-      history.replace(PORTAL_META[currentTerminal].loginPath);
+      message.error('门户数据加载失败，请稍后重试');
     } finally {
       setLoading(false);
     }
@@ -192,7 +203,10 @@ const PortalHomePage: React.FC = () => {
     sessionRequestSeq.current = requestSeq;
     setSessionLoading(true);
     try {
-      const response = await PORTAL_SERVICE[currentTerminal].getSessions({ pageNum: 1, pageSize: 5 });
+      const response = assertPortalSuccess(
+        await PORTAL_SERVICE[currentTerminal].getSessions({ pageNum: 1, pageSize: 5 }),
+        'Portal sessions loading failed',
+      );
       if (sessionRequestSeq.current === requestSeq) {
         setSessionRows(
           (response.rows || [])
@@ -214,9 +228,6 @@ const PortalHomePage: React.FC = () => {
       }
     } catch (error) {
       console.log(error);
-      if (sessionRequestSeq.current === requestSeq) {
-        setSessionRows([]);
-      }
     } finally {
       if (sessionRequestSeq.current === requestSeq) {
         setSessionLoading(false);
@@ -285,6 +296,10 @@ const PortalHomePage: React.FC = () => {
   const canViewDistributionProducts = hasPortalPermission(
     permissions,
     portalPermission(terminal, 'product:distribution:list'),
+  );
+  const canQueryDistributionProducts = hasPortalPermission(
+    permissions,
+    portalPermission(terminal, 'product:distribution:query'),
   );
   const gridColumns = screens.lg ? 3 : screens.sm ? 2 : 1;
   const contentGridStyle: React.CSSProperties = {
@@ -423,11 +438,11 @@ const PortalHomePage: React.FC = () => {
 
           {canViewDistributionProducts && terminal === 'seller' ? (
             <div style={fullGridStyle}>
-              <SellerOwnDistributionProductList />
+              <SellerOwnDistributionProductList canQuery={canQueryDistributionProducts} />
             </div>
           ) : canViewDistributionProducts && terminal === 'buyer' ? (
             <div style={fullGridStyle}>
-              <BuyerDistributionProductList />
+              <BuyerDistributionProductList canQuery={canQueryDistributionProducts} />
             </div>
           ) : null}
 

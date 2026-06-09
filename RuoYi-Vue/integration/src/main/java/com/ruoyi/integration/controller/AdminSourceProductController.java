@@ -27,7 +27,7 @@ public class AdminSourceProductController extends BaseController
     @Autowired
     private IUpstreamSystemService upstreamSystemService;
 
-    @PreAuthorize("@ss.hasPermi('product:list:list')")
+    @PreAuthorize("@ss.hasPermi('integration:upstream:query')")
     @GetMapping("/list")
     public TableDataInfo list(SourceProductQuery query)
     {
@@ -51,7 +51,7 @@ public class AdminSourceProductController extends BaseController
         }
     }
 
-    @PreAuthorize("@ss.hasPermi('product:list:list')")
+    @PreAuthorize("@ss.hasPermi('integration:upstream:query')")
     @GetMapping("/group-detail")
     public AjaxResult groupDetail(SourceProductQuery query)
     {

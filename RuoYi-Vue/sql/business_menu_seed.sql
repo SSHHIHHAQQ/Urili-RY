@@ -107,6 +107,28 @@ begin
   end if;
 end//
 
+drop procedure if exists assert_business_menu_seed_completed//
+create procedure assert_business_menu_seed_completed()
+begin
+  if (
+    select count(1)
+    from sys_menu m
+    join tmp_business_menu_seed_expected seed on seed.menu_id = m.menu_id
+    where coalesce(m.menu_name, '') = seed.menu_name
+      and coalesce(m.parent_id, -1) = seed.parent_id
+      and coalesce(m.order_num, -1) = seed.order_num
+      and coalesce(m.menu_type, '') = seed.menu_type
+      and coalesce(m.visible, '') = seed.visible
+      and coalesce(m.status, '') = seed.status
+      and coalesce(m.path, '') = seed.path
+      and coalesce(m.component, '') = seed.component
+      and coalesce(m.route_name, '') = seed.route_name
+      and coalesce(m.perms, '') = seed.perms
+  ) <> (select count(1) from tmp_business_menu_seed_expected) then
+    signal sqlstate '45000' set message_text = 'business menu seed completion mismatch';
+  end if;
+end//
+
 delimiter ;
 
 call assert_business_menu_seed_confirmed();
@@ -126,7 +148,9 @@ create temporary table if not exists tmp_business_menu_sys_menu_guard (
 truncate table tmp_business_menu_sys_menu_guard;
 
 insert into tmp_business_menu_sys_menu_guard(menu_id, parent_id, menu_type, path, component, route_name, perms) values
+    (2400, 2060, 'C', 'list', 'Product/SourceProductLibrary/index', 'SourceProductLibrary', 'integration:upstream:query'),
     (2400, 2060, 'C', 'list', 'Product/SourceProductLibrary/index', 'SourceProductLibrary', 'product:list:list'),
+    (2400, 2060, 'C', 'list', 'Common/PlannedPage/index', 'ProductList', 'product:list:list'),
     (2401, 2060, 'C', 'zone', 'Common/PlannedPage/index', 'ProductZone', 'product:zone:list'),
     (2403, 2060, 'C', 'warehouse-link', 'Common/PlannedPage/index', 'WarehouseProductLink', 'product:warehouseLink:list'),
     (2410, 2070, 'C', 'list', 'Common/PlannedPage/index', 'OrderList', 'order:list:list'),
@@ -138,10 +162,47 @@ insert into tmp_business_menu_sys_menu_guard(menu_id, parent_id, menu_type, path
     (2433, 2050, 'C', 'fee', 'Common/PlannedPage/index', 'FeeManagement', 'finance:fee:list'),
     (2434, 2050, 'C', 'profit-reconciliation', 'Common/PlannedPage/index', 'ProfitReconciliation', 'finance:profitReconciliation:list'),
     (2450, 2100, 'C', 'recharge', 'Common/PlannedPage/index', 'RechargeReview', 'review:recharge:list'),
-    (2451, 2100, 'C', 'product-distribution', 'Common/PlannedPage/index', 'ProductDistributionReview', 'review:productDistribution:list'),
-    (2452, 2100, 'C', 'inventory-adjustment', 'Common/PlannedPage/index', 'InventoryAdjustmentReview', 'review:inventoryAdjustment:list');
+    (2451, 2100, 'C', 'product-distribution', 'Product/Review/index', 'ProductDistributionReview', 'review:productDistribution:list'),
+    (2452, 2100, 'C', 'inventory-adjustment', 'Inventory/AdjustmentReview/index', 'InventoryAdjustmentReview', 'review:inventoryAdjustment:list');
+
+create temporary table if not exists tmp_business_menu_seed_expected (
+  menu_id    bigint       not null,
+  menu_name  varchar(50)  not null,
+  parent_id  bigint       not null,
+  order_num  int          not null,
+  menu_type  char(1)      not null,
+  visible    char(1)      not null,
+  status     char(1)      not null,
+  path       varchar(200) not null default '',
+  component  varchar(255) not null default '',
+  route_name varchar(50)  not null default '',
+  perms      varchar(100) not null default '',
+  key idx_business_menu_seed_expected_id (menu_id)
+) engine=memory;
+
+truncate table tmp_business_menu_seed_expected;
+
+insert into tmp_business_menu_seed_expected
+    (menu_id, menu_name, parent_id, order_num, menu_type, visible, status, path, component, route_name, perms)
+values
+    (2400, '来源商品库', 2060, 5, 'C', '0', '0', 'list', 'Product/SourceProductLibrary/index', 'SourceProductLibrary', 'integration:upstream:query'),
+    (2401, '商品专区', 2060, 10, 'C', '0', '0', 'zone', 'Common/PlannedPage/index', 'ProductZone', 'product:zone:list'),
+    (2403, '仓库商品关联', 2060, 20, 'C', '0', '0', 'warehouse-link', 'Common/PlannedPage/index', 'WarehouseProductLink', 'product:warehouseLink:list'),
+    (2410, '订单列表', 2070, 5, 'C', '0', '0', 'list', 'Common/PlannedPage/index', 'OrderList', 'order:list:list'),
+    (2411, '退件管理', 2070, 10, 'C', '0', '0', 'return', 'Common/PlannedPage/index', 'ReturnManagement', 'order:return:list'),
+    (2422, '库存流水', 2080, 15, 'C', '0', '0', 'flow', 'Common/PlannedPage/index', 'InventoryFlow', 'inventory:flow:list'),
+    (2430, '资金账户', 2050, 5, 'C', '0', '0', 'fund-account', 'Common/PlannedPage/index', 'FundAccount', 'finance:fundAccount:list'),
+    (2431, '收款账户', 2050, 10, 'C', '0', '0', 'collection-account', 'Common/PlannedPage/index', 'CollectionAccount', 'finance:collectionAccount:list'),
+    (2432, '分销资金', 2050, 15, 'C', '0', '0', 'distribution-fund', 'Common/PlannedPage/index', 'DistributionFund', 'finance:distributionFund:list'),
+    (2433, '费用管理', 2050, 20, 'C', '0', '0', 'fee', 'Common/PlannedPage/index', 'FeeManagement', 'finance:fee:list'),
+    (2434, '利润对账', 2050, 25, 'C', '0', '0', 'profit-reconciliation', 'Common/PlannedPage/index', 'ProfitReconciliation', 'finance:profitReconciliation:list'),
+    (2450, '充值审核', 2100, 5, 'C', '0', '0', 'recharge', 'Common/PlannedPage/index', 'RechargeReview', 'review:recharge:list'),
+    (2451, '商品审核', 2100, 10, 'C', '0', '0', 'product-distribution', 'Product/Review/index', 'ProductDistributionReview', 'review:productDistribution:list'),
+    (2452, '库存调整审核', 2100, 15, 'C', '0', '0', 'inventory-adjustment', 'Inventory/AdjustmentReview/index', 'InventoryAdjustmentReview', 'review:inventoryAdjustment:list');
 
 call assert_business_menu_sys_menu_guard();
+
+start transaction;
 
 insert into sys_menu
     (menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
@@ -149,7 +210,7 @@ insert into sys_menu
      create_time, update_by, update_time, remark)
 values
     (2400, '来源商品库', 2060, 5, 'list', 'Product/SourceProductLibrary/index', '', 'SourceProductLibrary',
-     1, 0, 'C', '0', '0', 'product:list:list', 'AppstoreOutlined', 'admin',
+     1, 0, 'C', '0', '0', 'integration:upstream:query', 'AppstoreOutlined', 'admin',
      sysdate(), '', null, '商品管理菜单：来源商品库，展示各来源系统同步 SKU 基础信息'),
     (2401, '商品专区', 2060, 10, 'zone', 'Common/PlannedPage/index', '', 'ProductZone',
      1, 0, 'C', '0', '0', 'product:zone:list', 'TagsOutlined', 'admin',
@@ -188,12 +249,12 @@ values
     (2450, '充值审核', 2100, 5, 'recharge', 'Common/PlannedPage/index', '', 'RechargeReview',
      1, 0, 'C', '0', '0', 'review:recharge:list', 'AuditOutlined', 'admin',
      sysdate(), '', null, '审核中心菜单：充值审核，占位入口'),
-    (2451, '商品分销审核', 2100, 10, 'product-distribution', 'Common/PlannedPage/index', '', 'ProductDistributionReview',
+    (2451, '商品审核', 2100, 10, 'product-distribution', 'Product/Review/index', '', 'ProductDistributionReview',
      1, 0, 'C', '0', '0', 'review:productDistribution:list', 'AuditOutlined', 'admin',
-     sysdate(), '', null, '审核中心菜单：商品分销审核，占位入口'),
-    (2452, '库存调整审核', 2100, 15, 'inventory-adjustment', 'Common/PlannedPage/index', '', 'InventoryAdjustmentReview',
+     sysdate(), '', null, '审核中心菜单：商品审核'),
+    (2452, '库存调整审核', 2100, 15, 'inventory-adjustment', 'Inventory/AdjustmentReview/index', '', 'InventoryAdjustmentReview',
      1, 0, 'C', '0', '0', 'review:inventoryAdjustment:list', 'AuditOutlined', 'admin',
-     sysdate(), '', null, '审核中心菜单：库存调整审核，占位入口')
+     sysdate(), '', null, '审核中心菜单：库存调整审核')
 on duplicate key update
     menu_name = values(menu_name),
     parent_id = values(parent_id),
@@ -213,5 +274,11 @@ on duplicate key update
     update_time = sysdate(),
     remark = values(remark);
 
+call assert_business_menu_seed_completed();
+
+commit;
+
 drop temporary table if exists tmp_business_menu_sys_menu_guard;
+drop temporary table if exists tmp_business_menu_seed_expected;
 drop procedure if exists assert_business_menu_sys_menu_guard;
+drop procedure if exists assert_business_menu_seed_completed;

@@ -1,5 +1,5 @@
-import { PlusOutlined } from '@ant-design/icons';
-import { Button, Checkbox, Input, InputNumber, Radio, Space, Table, Tag, Typography } from 'antd';
+import { DownOutlined, PlusOutlined } from '@ant-design/icons';
+import { Button, Checkbox, Dropdown, Input, InputNumber, Radio, Space, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
@@ -17,6 +17,8 @@ type SkuMatrixEditorProps = {
   currencyCode?: string;
   currencyLabel?: string;
   sourceMode?: boolean;
+  onPairSourceSku?: (row: SkuRow) => void;
+  onClearSourceSku?: (row: SkuRow) => void;
   onChange: (value: SkuRow[]) => void;
 };
 
@@ -203,6 +205,10 @@ function normalizeSkuMeasurements(row: SkuRow, unitSystem: MeasurementUnitSystem
   };
 }
 
+function hasSourceBinding(row: SkuRow) {
+  return !!(row.sourceDimensionGroupKey || row.sourceSkuGroupKey || row.masterSku);
+}
+
 function hasMeasurementChange(current: SkuRow[], next: SkuRow[]) {
   return current.some((row, index) => {
     const nextRow = next[index];
@@ -217,6 +223,8 @@ export default function SkuMatrixEditor({
   currencyCode,
   currencyLabel,
   sourceMode = false,
+  onPairSourceSku,
+  onClearSourceSku,
   onChange,
 }: SkuMatrixEditorProps) {
   const [selectedSpecs, setSelectedSpecs] = useState<(keyof API.ProductDistribution.Sku)[]>(['color', 'size']);
@@ -230,6 +238,7 @@ export default function SkuMatrixEditor({
   const [bulkSupplyPrice, setBulkSupplyPrice] = useState<number>();
   const hydratedRowsKeyRef = useRef<string | undefined>(undefined);
   const currentUnits = measurementUnits[unitSystem];
+  const colorSpecSelected = selectedSpecs.includes('color');
 
   useEffect(() => {
     const rowsKey = value.map((row) => row.skuId || row.rowKey).join('|');
@@ -354,26 +363,122 @@ export default function SkuMatrixEditor({
     })));
   };
 
+  const renderSourceMeasurement = (
+    row: SkuRow,
+    field: MeasurementField,
+    kind: MeasurementKind,
+    placeholder: string,
+  ) => {
+    if (sourceMode && !hasSourceBinding(row)) {
+      return <Typography.Text type="secondary">-</Typography.Text>;
+    }
+    const unit = kind === 'dimension' ? currentUnits.dimension : currentUnits.weight;
+    return (
+      <MeasurementInput
+        value={readMeasurementInputValue(row[field], unit, kind)}
+        unit={unit}
+        placeholder={placeholder}
+        disabled={sourceMode && hasSourceBinding(row)}
+        onChange={(nextValue) => updateMeasurementRow(row, field, nextValue, kind)}
+      />
+    );
+  };
+
+  const deleteSkuRow = (row: SkuRow) => {
+    onChange(rows.filter((item) => item.rowKey !== row.rowKey));
+  };
+
+  const renderOperation = (row: SkuRow) => {
+    const deleteDisabled = rows.length <= 1;
+
+    if (!sourceMode) {
+      return (
+        <Button
+          danger
+          type="link"
+          size="small"
+          disabled={deleteDisabled}
+          onClick={() => deleteSkuRow(row)}
+        >
+          删除
+        </Button>
+      );
+    }
+
+    if (!hasSourceBinding(row)) {
+      return (
+        <Space size={0}>
+          <Button type="link" size="small" onClick={() => onPairSourceSku?.(row)}>
+            配对
+          </Button>
+          <Button
+            danger
+            type="link"
+            size="small"
+            disabled={deleteDisabled}
+            onClick={() => deleteSkuRow(row)}
+          >
+            删除
+          </Button>
+        </Space>
+      );
+    }
+
+    return (
+      <Space size={0}>
+        <Button type="link" size="small" onClick={() => onPairSourceSku?.(row)}>
+          更换
+        </Button>
+        <Dropdown
+          menu={{
+            items: [
+              {
+                key: 'clear-source',
+                label: '解除配对',
+                onClick: () => onClearSourceSku?.(row),
+              },
+              {
+                key: 'delete',
+                label: '删除',
+                danger: true,
+                disabled: deleteDisabled,
+                onClick: () => deleteSkuRow(row),
+              },
+            ],
+          }}
+        >
+          <Button type="link" size="small">
+            更多 <DownOutlined />
+          </Button>
+        </Dropdown>
+      </Space>
+    );
+  };
+
   const columns: ColumnsType<SkuRow> = [
     ...(sourceMode ? [
       {
         title: '来源SKU',
         dataIndex: 'masterSku',
-        width: 150,
+        width: 190,
         fixed: 'left' as const,
-        render: (_: unknown, row: SkuRow) => row.masterSku || '-',
+        render: (_: unknown, row: SkuRow) => hasSourceBinding(row)
+          ? <Typography.Text>{row.masterSku || '-'}</Typography.Text>
+          : <Tag color="orange">未配对</Tag>,
       },
       {
         title: '来源商品',
         dataIndex: 'masterProductNameSnapshot',
         width: 220,
-        render: (_: unknown, row: SkuRow) => row.masterProductNameSnapshot || '-',
+        render: (_: unknown, row: SkuRow) => hasSourceBinding(row)
+          ? row.masterProductNameSnapshot || '-'
+          : <Typography.Text type="secondary">未配对来源 SKU</Typography.Text>,
       },
       {
         title: '来源仓',
         dataIndex: 'sourceWarehouseNames',
         width: 180,
-        render: (_: unknown, row: SkuRow) => row.sourceWarehouseNames || '-',
+        render: (_: unknown, row: SkuRow) => hasSourceBinding(row) ? row.sourceWarehouseNames || '-' : '-',
       },
     ] : []),
     ...selectedSpecs.map((field) => ({
@@ -397,11 +502,17 @@ export default function SkuMatrixEditor({
       ),
     },
     {
-      title: 'SKU图',
+      title: colorSpecSelected ? (
+        <span>
+          SKU图
+          <span className={styles.requiredMark}>*</span>
+        </span>
+      ) : 'SKU图',
       dataIndex: 'skuImageUrl',
       width: 104,
       render: (_, row) => (
         <ImageUploadField
+          required={colorSpecSelected}
           size="small"
           value={row.skuImageUrl}
           onChange={(skuImageUrl) => updateRow(row.rowKey!, { skuImageUrl })}
@@ -412,57 +523,25 @@ export default function SkuMatrixEditor({
       title: `长度 (${currentUnits.dimension})`,
       dataIndex: 'lengthValue',
       width: 136,
-      render: (_, row) => (
-        <MeasurementInput
-          value={readMeasurementInputValue(row.lengthValue, currentUnits.dimension, 'dimension')}
-          unit={currentUnits.dimension}
-          placeholder="如 30"
-          disabled={sourceMode}
-          onChange={(nextValue) => updateMeasurementRow(row, 'lengthValue', nextValue, 'dimension')}
-        />
-      ),
+      render: (_, row) => renderSourceMeasurement(row, 'lengthValue', 'dimension', '如 30'),
     },
     {
       title: `宽度 (${currentUnits.dimension})`,
       dataIndex: 'widthValue',
       width: 136,
-      render: (_, row) => (
-        <MeasurementInput
-          value={readMeasurementInputValue(row.widthValue, currentUnits.dimension, 'dimension')}
-          unit={currentUnits.dimension}
-          placeholder="如 20"
-          disabled={sourceMode}
-          onChange={(nextValue) => updateMeasurementRow(row, 'widthValue', nextValue, 'dimension')}
-        />
-      ),
+      render: (_, row) => renderSourceMeasurement(row, 'widthValue', 'dimension', '如 20'),
     },
     {
       title: `高度 (${currentUnits.dimension})`,
       dataIndex: 'heightValue',
       width: 136,
-      render: (_, row) => (
-        <MeasurementInput
-          value={readMeasurementInputValue(row.heightValue, currentUnits.dimension, 'dimension')}
-          unit={currentUnits.dimension}
-          placeholder="如 8"
-          disabled={sourceMode}
-          onChange={(nextValue) => updateMeasurementRow(row, 'heightValue', nextValue, 'dimension')}
-        />
-      ),
+      render: (_, row) => renderSourceMeasurement(row, 'heightValue', 'dimension', '如 8'),
     },
     {
       title: `重量 (${currentUnits.weight})`,
       dataIndex: 'weight',
       width: 136,
-      render: (_, row) => (
-        <MeasurementInput
-          value={readMeasurementInputValue(row.weight, currentUnits.weight, 'weight')}
-          unit={currentUnits.weight}
-          placeholder="如 0.35"
-          disabled={sourceMode}
-          onChange={(nextValue) => updateMeasurementRow(row, 'weight', nextValue, 'weight')}
-        />
-      ),
+      render: (_, row) => renderSourceMeasurement(row, 'weight', 'weight', '如 0.35'),
     },
     {
       title: '供货价',
@@ -499,19 +578,9 @@ export default function SkuMatrixEditor({
     },
     {
       title: '操作',
-      width: 72,
+      width: sourceMode ? 136 : 72,
       fixed: 'right',
-      render: (_, row) => (
-        <Button
-          danger
-          type="link"
-          size="small"
-          disabled={rows.length <= 1}
-          onClick={() => onChange(rows.filter((item) => item.rowKey !== row.rowKey))}
-        >
-          删除
-        </Button>
-      ),
+      render: (_, row) => renderOperation(row),
     },
   ];
 
@@ -525,6 +594,11 @@ export default function SkuMatrixEditor({
           options={specCheckboxOptions}
           onChange={(checked) => changeSelectedSpecs(checked as (keyof API.ProductDistribution.Sku)[])}
         />
+        {colorSpecSelected ? (
+          <Typography.Text type="secondary" className={styles.specImageRuleHint}>
+            启用颜色规格后，每个 SKU 必须上传 SKU 图，买家预览会用 SKU 图展示颜色。
+          </Typography.Text>
+        ) : null}
         {!sourceMode ? (
           <>
             <div className={styles.specValueGrid}>

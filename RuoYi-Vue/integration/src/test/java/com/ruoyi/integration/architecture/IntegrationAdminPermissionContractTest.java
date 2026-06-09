@@ -207,6 +207,62 @@ public class IntegrationAdminPermissionContractTest
     }
 
     @Test
+    public void upstreamWarehousePairingMustUseWarehouseFactLookup() throws IOException
+    {
+        Path backendRoot = findBackendRoot();
+        String serviceImpl = Files.readString(backendRoot.resolve(
+                "integration/src/main/java/com/ruoyi/integration/service/impl/UpstreamSystemServiceImpl.java"),
+                StandardCharsets.UTF_8);
+        String factLookupApi = Files.readString(backendRoot.resolve(
+                "integration/src/main/java/com/ruoyi/integration/service/IWarehouseFactLookupService.java"),
+                StandardCharsets.UTF_8);
+        String factProfile = Files.readString(backendRoot.resolve(
+                "integration/src/main/java/com/ruoyi/integration/domain/WarehouseFact.java"),
+                StandardCharsets.UTF_8);
+        String warehouseFactLookup = Files.readString(backendRoot.resolve(
+                "warehouse/src/main/java/com/ruoyi/warehouse/service/impl/WarehouseFactLookupServiceImpl.java"),
+                StandardCharsets.UTF_8);
+        String integrationPom = Files.readString(backendRoot.resolve("integration/pom.xml"), StandardCharsets.UTF_8);
+        List<String> violations = new ArrayList<>();
+
+        assertSourceContains(serviceImpl, "ObjectProvider<IWarehouseFactLookupService> warehouseFactLookupService",
+                "upstream pairing service must use the warehouse fact lookup port", violations);
+        assertSourceContains(serviceImpl, "WarehouseFact systemWarehouse = requireNormalOfficialWarehouse",
+                "warehouse pairing insert must resolve system warehouse from facts", violations);
+        assertSourceContains(serviceImpl, "pairing.setSystemWarehouseCode(systemWarehouse.getWarehouseCode())",
+                "warehouse pairing insert must store fact-source warehouse code", violations);
+        assertSourceContains(serviceImpl, "pairing.setSystemWarehouseName(systemWarehouse.getWarehouseName())",
+                "warehouse pairing insert must store fact-source warehouse name", violations);
+        assertSourceNotContains(serviceImpl, "pairing.setSystemWarehouseName(trimRequired(request.getSystemWarehouseName()",
+                "warehouse pairing insert must not trust request systemWarehouseName", violations);
+
+        assertSourceContains(factLookupApi, "WarehouseFact selectNormalOfficialWarehouseByCode(String warehouseCode);",
+                "integration warehouse fact lookup API must expose normal official warehouse lookup", violations);
+        assertSourceContains(factProfile, "private String warehouseCode;",
+                "warehouse fact profile must carry warehouse code", violations);
+        assertSourceContains(factProfile, "private String warehouseName;",
+                "warehouse fact profile must carry warehouse name", violations);
+        assertSourceContains(warehouseFactLookup, "implements IWarehouseFactLookupService",
+                "warehouse module must implement the integration fact lookup port", violations);
+        assertSourceContains(warehouseFactLookup, "warehouseMapper.selectWarehouseByCode(normalizedCode)",
+                "warehouse fact lookup must read warehouse facts by code", violations);
+        assertSourceContains(warehouseFactLookup, "!KIND_OFFICIAL.equals(warehouse.getWarehouseKind())",
+                "warehouse fact lookup must reject non-official warehouses", violations);
+        assertSourceContains(warehouseFactLookup, "!STATUS_NORMAL.equals(warehouse.getStatus())",
+                "warehouse fact lookup must reject disabled warehouses", violations);
+        assertSourceContains(warehouseFactLookup, "fact.setWarehouseName(warehouse.getWarehouseName())",
+                "warehouse fact lookup must return the fact-source warehouse name", violations);
+        assertSourceNotContains(integrationPom, "<artifactId>warehouse</artifactId>",
+                "integration module must not depend directly on warehouse module", violations);
+
+        if (!violations.isEmpty())
+        {
+            fail("upstream warehouse pairing must close warehouse fact lookup contract:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    @Test
     public void integrationReadModelHandlersMustUseCurrentAdminMenuPermissions() throws IOException
     {
         Path backendRoot = findBackendRoot();
@@ -215,8 +271,10 @@ public class IntegrationAdminPermissionContractTest
         List<HandlerMethod> sourceProductHandlers = extractHandlerMethods(Files.readString(backendRoot.resolve(
                 "integration/src/main/java/com/ruoyi/integration/controller/AdminSourceProductController.java"),
                 StandardCharsets.UTF_8));
-        assertHandlerAuthorization(sourceProductHandlers, "list", "@ss.hasPermi('product:list:list')", violations);
-        assertHandlerAuthorization(sourceProductHandlers, "groupDetail", "@ss.hasPermi('product:list:list')",
+        assertHandlerAuthorization(sourceProductHandlers, "list",
+                "@ss.hasPermi('integration:upstream:query')", violations);
+        assertHandlerAuthorization(sourceProductHandlers, "groupDetail",
+                "@ss.hasPermi('integration:upstream:query')",
                 violations);
 
         List<HandlerMethod> stockHandlers = extractHandlerMethods(Files.readString(backendRoot.resolve(
@@ -274,9 +332,9 @@ public class IntegrationAdminPermissionContractTest
                     "upstream_system_management_seed.sql must seed " + permission, violations);
         }
 
-        if (!businessSeed.contains("product:list:list") && !sourceProductSeed.contains("product:list:list"))
+        if (!businessSeed.contains("integration:upstream:query") && !sourceProductSeed.contains("integration:upstream:query"))
         {
-            violations.add("source product admin permission product:list:list must exist in seed SQL");
+            violations.add("source product library menu permission integration:upstream:query must exist in seed SQL");
         }
         assertSourceContains(sourceWarehouseSeed, "inventory:sourceWarehouse:list",
                 "source warehouse stock admin permission must exist in seed SQL", violations);
@@ -361,6 +419,14 @@ public class IntegrationAdminPermissionContractTest
         if (!source.contains(expected))
         {
             violations.add(message + ": missing " + expected);
+        }
+    }
+
+    private void assertSourceNotContains(String source, String forbidden, String message, List<String> violations)
+    {
+        if (source.contains(forbidden))
+        {
+            violations.add(message + ": forbidden " + forbidden);
         }
     }
 

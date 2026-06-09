@@ -1,54 +1,104 @@
-import { Table, Typography } from 'antd';
+import { Space, Table, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useCallback, useEffect, useState } from 'react';
 import { getInventoryOverviewWarehouses } from '@/services/inventory/overview';
+import InventorySyncPolicyButton from '@/components/InventorySyncPolicy/InventorySyncPolicyButton';
 import {
   formatDateTime,
   formatQuantity,
+  renderSyncMode,
   renderStatus,
   renderWarehouseKind,
 } from '../helpers';
 import styles from '../style.module.css';
+import InventoryAdjustButton from './InventoryAdjustButton';
 import QuantityCell from './QuantityCell';
 
-const WAREHOUSE_TABLE_SCROLL_X = 1420;
+const WAREHOUSE_TABLE_SCROLL_X = 1540;
 
-export default function SkuWarehouseTable({
-  skuId,
+export type WarehouseStockTableRow = API.InventoryOverview.WarehouseStock & {
+  skuGroupStart?: boolean;
+  skuGroupFirst?: boolean;
+  skuOverview?: API.InventoryOverview.OverviewItem;
+  skuGroupRows?: API.InventoryOverview.WarehouseStock[];
+};
+
+export function WarehouseStockTable({
+  rows,
+  loading,
   canAdjust,
+  canSync,
+  sellerOptions,
+  warehouseOptions,
   onChanged,
+  showSkuColumn = false,
+  showSkuAdjust = false,
+  rowClassName,
 }: {
-  skuId?: number;
+  rows: WarehouseStockTableRow[];
+  loading?: boolean;
   canAdjust: boolean;
+  canSync: boolean;
+  sellerOptions: API.InventoryOverview.SellerOption[];
+  warehouseOptions: API.InventoryOverview.WarehouseOption[];
   onChanged: () => void;
+  showSkuColumn?: boolean;
+  showSkuAdjust?: boolean;
+  rowClassName?: (record: WarehouseStockTableRow, index: number) => string;
 }) {
-  const [rows, setRows] = useState<API.InventoryOverview.WarehouseStock[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  const loadRows = useCallback(async () => {
-    if (!skuId) {
-      setRows([]);
-      return;
-    }
-    setLoading(true);
-    try {
-      const resp = await getInventoryOverviewWarehouses(skuId);
-      setRows(resp.code === 200 ? resp.data || [] : []);
-    } finally {
-      setLoading(false);
-    }
-  }, [skuId]);
-
-  const handleChanged = () => {
-    void loadRows();
-    onChanged();
-  };
-
-  useEffect(() => {
-    void loadRows();
-  }, [loadRows]);
-
-  const columns: ColumnsType<API.InventoryOverview.WarehouseStock> = [
+  const columns: ColumnsType<WarehouseStockTableRow> = [
+    ...(showSkuColumn
+      ? [
+          {
+            title: 'SKU信息',
+            dataIndex: 'systemSkuCode',
+            width: 290,
+            fixed: 'left' as const,
+            render: (_: unknown, record: WarehouseStockTableRow) => (
+              <>
+                <Typography.Text strong>{record.systemSkuCode || '-'}</Typography.Text>
+                <br />
+                <Typography.Text type="secondary" ellipsis={{ tooltip: record.productName }}>
+                  {record.productName || '-'}
+                </Typography.Text>
+                {record.skuName ? (
+                  <>
+                    <br />
+                    <Typography.Text type="secondary" ellipsis={{ tooltip: record.skuName }}>
+                      {record.skuName}
+                    </Typography.Text>
+                  </>
+                ) : null}
+                {showSkuAdjust && record.skuGroupFirst ? (
+                  <>
+                    <br />
+                    <Space size={4}>
+                      <InventoryAdjustButton
+                        scope="SKU"
+                        overviewRecord={record.skuOverview}
+                        presetRows={record.skuGroupRows || []}
+                        canAdjust={canAdjust}
+                        onChanged={onChanged}
+                        buttonText="调整SKU"
+                      />
+                      <InventorySyncPolicyButton
+                        initialScope="SKU"
+                        lockScope
+                        overviewRecord={record.skuOverview}
+                        sellerOptions={sellerOptions}
+                        warehouseOptions={warehouseOptions}
+                        canSync={canSync}
+                        onChanged={onChanged}
+                        buttonText="同步SKU"
+                      />
+                    </Space>
+                  </>
+                ) : null}
+              </>
+            ),
+          },
+        ]
+      : []),
     {
       title: '仓库',
       dataIndex: 'warehouseName',
@@ -102,8 +152,8 @@ export default function SkuWarehouseTable({
           record={record}
           field="PLATFORM_TOTAL"
           value={record.platformTotalQty}
-          disabled={!canAdjust || record.warehouseRefType === 'NO_WAREHOUSE'}
-          onChanged={handleChanged}
+          disabled={!canAdjust || record.warehouseRefType === 'NO_WAREHOUSE' || record.syncMode === 'AUTO_SOURCE_AVAILABLE'}
+          onChanged={onChanged}
         />
       ),
     },
@@ -132,9 +182,15 @@ export default function SkuWarehouseTable({
           field="PLATFORM_IN_TRANSIT"
           value={record.platformInTransitQty}
           disabled={!canAdjust || record.warehouseKind !== 'official'}
-          onChanged={handleChanged}
+          onChanged={onChanged}
         />
       ),
+    },
+    {
+      title: '同步方式',
+      dataIndex: 'syncMode',
+      width: 170,
+      render: (_, record) => renderSyncMode(record.syncMode, record.syncPolicyScope, record.syncStatus),
     },
     {
       title: '状态',
@@ -148,19 +204,101 @@ export default function SkuWarehouseTable({
       width: 170,
       render: (value) => formatDateTime(value as string),
     },
+    {
+      title: '操作',
+      dataIndex: 'operation',
+      width: 170,
+      render: (_, record) => (
+        <Space size={4}>
+          <InventoryAdjustButton
+            scope="WAREHOUSE"
+            warehouseRecord={record}
+            canAdjust={canAdjust}
+            onChanged={onChanged}
+          />
+          <InventorySyncPolicyButton
+            initialScope="SKU_WAREHOUSE"
+            lockScope
+            warehouseRecord={record}
+            sellerOptions={sellerOptions}
+            warehouseOptions={warehouseOptions}
+            canSync={canSync}
+            onChanged={onChanged}
+            buttonText="同步方式"
+          />
+        </Space>
+      ),
+    },
   ];
 
   return (
-    <div className={styles.overviewNestedTable}>
-      <Table<API.InventoryOverview.WarehouseStock>
+    <div className={styles.overviewWarehouseTable}>
+      <Table<WarehouseStockTableRow>
         rowKey="stockId"
         size="small"
         loading={loading}
         columns={columns}
         dataSource={rows}
         pagination={false}
-        scroll={{ x: WAREHOUSE_TABLE_SCROLL_X }}
+        rowClassName={rowClassName}
+        scroll={{ x: showSkuColumn ? WAREHOUSE_TABLE_SCROLL_X + 300 : WAREHOUSE_TABLE_SCROLL_X }}
         tableLayout="fixed"
+      />
+    </div>
+  );
+}
+
+export default function SkuWarehouseTable({
+  skuId,
+  canAdjust,
+  canSync,
+  sellerOptions,
+  warehouseOptions,
+  onChanged,
+}: {
+  skuId?: number;
+  canAdjust: boolean;
+  canSync: boolean;
+  sellerOptions: API.InventoryOverview.SellerOption[];
+  warehouseOptions: API.InventoryOverview.WarehouseOption[];
+  onChanged: () => void;
+}) {
+  const [rows, setRows] = useState<API.InventoryOverview.WarehouseStock[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const loadRows = useCallback(async () => {
+    if (!skuId) {
+      setRows([]);
+      return;
+    }
+    setLoading(true);
+    try {
+      const resp = await getInventoryOverviewWarehouses(skuId);
+      setRows(resp.code === 200 ? resp.data || [] : []);
+    } finally {
+      setLoading(false);
+    }
+  }, [skuId]);
+
+  const handleChanged = () => {
+    void loadRows();
+    onChanged();
+  };
+
+  useEffect(() => {
+    void loadRows();
+  }, [loadRows]);
+
+  return (
+    <div className={styles.overviewNestedTable}>
+      <WarehouseStockTable
+        rows={rows}
+        loading={loading}
+        canAdjust={canAdjust}
+        canSync={canSync}
+        sellerOptions={sellerOptions}
+        warehouseOptions={warehouseOptions}
+        onChanged={handleChanged}
       />
     </div>
   );

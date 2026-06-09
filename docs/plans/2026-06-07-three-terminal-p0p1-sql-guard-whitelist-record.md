@@ -5,7 +5,7 @@
 ## 子 Agent 使用情况
 
 - 本切片集成 compaction 前已经完成的 6 个只读子 Agent 复核结果，覆盖 admin partner 授权 SQL、legacy `sys_user` 回填、非日期高影响 seed guard、文档一致性和残留风险。
-- 当前工具可用模型名包含 `gpt-5.3-codex-spark` 与 `gpt-5.4`；用户最新要求后未再新增子 Agent。后续新增子 Agent 时按用户要求优先 `gpt-5.3-codex-spark`，不可用再降级 `gpt-5.4`。
+- 历史记录（已过期口径）：当前工具可用模型名包含 `gpt-5.3-codex-spark` 与 `gpt-5.4`；当时记录的后续新增子 Agent 优先 `gpt-5.3-codex-spark` 已不再适用。现行规则为默认使用 `gpt-5.4`。
 - 已完成的 6 个子 Agent 后续统一关闭，不继续挂起。
 
 ## 新增问题

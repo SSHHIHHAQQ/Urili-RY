@@ -59,6 +59,7 @@ public class SellerPortalPermissionServiceImpl implements ISellerPortalPermissio
         {
             throw new ServiceException("卖家端菜单不存在");
         }
+        PortalPermissionSupport.assertTerminalMenuId(menu.getMenuId(), "seller");
         return menu;
     }
 

@@ -8,7 +8,7 @@
 
 ## 子 Agent 使用情况
 
-- 按用户要求优先尝试 GPT-5.3 Codex；本轮 6 个 `gpt-5.3-codex-spark` 子 Agent 均因额度限制失败并已关闭，平台提示恢复时间为 `2026-06-13 01:59`。
+- 历史记录（已过期口径）：按用户要求优先尝试 GPT-5.3 Codex；本轮 6 个 `gpt-5.3-codex-spark` 子 Agent 均因额度限制失败并已关闭，平台提示恢复时间为 `2026-06-13 01:59`。
 - 降级启动 6 个 `gpt-5.4` 只读扫描 Agent，并已全部关闭。
 - 已采纳 P1：余额占位不能以 `USD 0.00` 形式返回、不能参与 `balanceMin/balanceMax` 查询、不能透传到 seller/buyer 端内 profile，买家充值列不能表现成可操作动作。
 - 记录为后续 P1：部门/角色运行时隔离测试缺口、旧 DDL 可重放性、旧 `sys_menu` seed slot/signature guard。

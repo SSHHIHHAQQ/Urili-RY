@@ -14,6 +14,9 @@ public class InventoryStockLedger extends BaseEntity
     private Long spuId;
     private Long skuId;
     private Long sellerId;
+    private Long syncPolicyId;
+    private String syncPolicyScope;
+    private String syncPolicyKey;
     private String warehouseKind;
     private String warehouseRefType;
     private String warehouseName;
@@ -49,6 +52,12 @@ public class InventoryStockLedger extends BaseEntity
     public void setSkuId(Long skuId) { this.skuId = skuId; }
     public Long getSellerId() { return sellerId; }
     public void setSellerId(Long sellerId) { this.sellerId = sellerId; }
+    public Long getSyncPolicyId() { return syncPolicyId; }
+    public void setSyncPolicyId(Long syncPolicyId) { this.syncPolicyId = syncPolicyId; }
+    public String getSyncPolicyScope() { return syncPolicyScope; }
+    public void setSyncPolicyScope(String syncPolicyScope) { this.syncPolicyScope = syncPolicyScope; }
+    public String getSyncPolicyKey() { return syncPolicyKey; }
+    public void setSyncPolicyKey(String syncPolicyKey) { this.syncPolicyKey = syncPolicyKey; }
     public String getWarehouseKind() { return warehouseKind; }
     public void setWarehouseKind(String warehouseKind) { this.warehouseKind = warehouseKind; }
     public String getWarehouseRefType() { return warehouseRefType; }

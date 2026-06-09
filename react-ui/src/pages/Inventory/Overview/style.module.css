@@ -19,6 +19,15 @@
   background: #fafafa;
 }
 
+.overviewWarehouseTable {
+  width: 100%;
+  min-width: 0;
+}
+
+.spuSkuWarehouseGroupStart > :global(td.ant-table-cell) {
+  border-top: 8px solid #fafafa !important;
+}
+
 .overviewNestedTable :global(.ant-table-wrapper),
 .overviewNestedTable :global(.ant-pro-table),
 .overviewNestedTable :global(.ant-spin-nested-loading),
@@ -28,7 +37,7 @@
 }
 
 .overviewNestedTable :global(.ant-table) {
-  margin: 0;
+  margin: 0 !important;
   background: #fff;
 }
 

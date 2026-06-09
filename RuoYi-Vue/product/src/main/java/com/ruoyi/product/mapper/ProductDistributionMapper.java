@@ -3,6 +3,10 @@ package com.ruoyi.product.mapper;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 import java.math.BigDecimal;
+import com.ruoyi.inventory.domain.InventoryProductSkuSnapshot;
+import com.ruoyi.inventory.domain.InventoryProductSourceBindingSnapshot;
+import com.ruoyi.inventory.domain.InventoryProductWarehouseSnapshot;
+import com.ruoyi.inventory.domain.InventorySourceSkuKey;
 import com.ruoyi.product.domain.ProductAttributeValue;
 import com.ruoyi.product.domain.ProductImage;
 import com.ruoyi.product.domain.ProductSku;
@@ -20,6 +24,8 @@ public interface ProductDistributionMapper
     List<ProductSpu> selectOnSaleProductList(ProductSpu query);
 
     ProductSpu selectProductById(@Param("spuId") Long spuId);
+
+    ProductSpu selectProductByIdAndSellerId(@Param("spuId") Long spuId, @Param("sellerId") Long sellerId);
 
     ProductSpu selectOnSaleProductById(@Param("spuId") Long spuId);
 
@@ -41,6 +47,8 @@ public interface ProductDistributionMapper
 
     List<ProductSku> selectSkuListBySpuId(@Param("spuId") Long spuId);
 
+    List<ProductSku> selectSkuListBySpuIdAndSellerId(@Param("spuId") Long spuId, @Param("sellerId") Long sellerId);
+
     List<ProductSku> selectOnSaleSkuListBySpuId(@Param("spuId") Long spuId);
 
     ProductSku selectSkuById(@Param("skuId") Long skuId);
@@ -56,6 +64,8 @@ public interface ProductDistributionMapper
 
     int updateSkuSalePrice(@Param("skuId") Long skuId, @Param("salePrice") BigDecimal salePrice,
         @Param("updateBy") String updateBy);
+
+    int deleteSkuById(@Param("spuId") Long spuId, @Param("skuId") Long skuId, @Param("updateBy") String updateBy);
 
     int deleteSkusBySpuId(@Param("spuId") Long spuId, @Param("updateBy") String updateBy);
 
@@ -84,20 +94,28 @@ public interface ProductDistributionMapper
 
     int deleteWarehousesBySpuId(@Param("spuId") Long spuId);
 
-    ProductSkuSourceBinding selectSourceBindingSnapshot(@Param("sourceDimensionGroupKey") String sourceDimensionGroupKey);
-
     ProductSkuSourceBinding selectActiveSourceBindingBySkuId(@Param("skuId") Long skuId);
+
+    List<ProductSkuSourceBinding> selectActiveSourceBindingsBySkuIds(@Param("skuIds") List<Long> skuIds);
 
     ProductSkuSourceBinding selectActiveSourceBindingBySourceSkuGroupKey(@Param("sourceSkuGroupKey") String sourceSkuGroupKey);
 
-    List<ProductSpuWarehouse> selectOfficialWarehousesBySourceDimensionGroup(
-        @Param("sourceDimensionGroupKey") String sourceDimensionGroupKey);
+    List<ProductSkuSourceBinding> selectActiveSourceBindingsBySourceSkuGroupKeys(
+        @Param("sourceSkuGroupKeys") List<String> sourceSkuGroupKeys);
 
-    List<String> selectSourceConnectionCodesByDimensionGroup(
-        @Param("sourceDimensionGroupKey") String sourceDimensionGroupKey);
+    List<Long> selectInventorySkuIdsBySpuId(@Param("spuId") Long spuId);
 
-    List<String> selectUpstreamSkuPairingConnectionCodesBySystemSkuAndMasterSku(@Param("systemSku") String systemSku,
-        @Param("masterSku") String masterSku);
+    List<InventoryProductSkuSnapshot> selectInventorySkuSnapshotsBySpuId(@Param("spuId") Long spuId);
+
+    List<InventoryProductSkuSnapshot> selectInventorySkuSnapshotsBySkuIds(@Param("skuIds") List<Long> skuIds);
+
+    List<InventoryProductSourceBindingSnapshot> selectInventorySourceBindingSnapshotsBySpuId(@Param("spuId") Long spuId);
+
+    List<InventoryProductWarehouseSnapshot> selectInventoryWarehouseSnapshotsBySpuId(@Param("spuId") Long spuId);
+
+    List<InventorySourceSkuKey> selectInventorySourceSkuKeysBySpuId(@Param("spuId") Long spuId);
+
+    List<Long> selectInventorySpuIdsBySourceSkuKeys(@Param("sourceKeys") List<InventorySourceSkuKey> sourceKeys);
 
     int insertSourceBinding(ProductSkuSourceBinding binding);
 
@@ -111,8 +129,4 @@ public interface ProductDistributionMapper
 
     int lockActiveSourceBindingBySkuId(@Param("skuId") Long skuId, @Param("lockedBy") String lockedBy);
 
-    int deleteUpstreamSkuPairingsBySystemSkuAndConnectionCodes(@Param("systemSku") String systemSku,
-        @Param("connectionCodes") List<String> connectionCodes);
-
-    int upsertUpstreamSkuPairingsForBinding(ProductSkuSourceBinding binding);
 }

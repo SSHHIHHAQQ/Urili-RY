@@ -2,8 +2,9 @@ import { LinkOutlined } from '@ant-design/icons';
 import type { Settings as LayoutSettings } from '@ant-design/pro-components';
 import { SettingDrawer } from '@ant-design/pro-components';
 import type { RunTimeLayoutConfig } from '@umijs/max';
-import { history, Link } from '@umijs/max';
+import { history, Link, useModel } from '@umijs/max';
 import { App as AntdApp, ConfigProvider } from 'antd';
+import React from 'react';
 import type { ReactNode } from 'react';
 import { AvatarDropdown, AvatarName, Question, SelectLang } from '@/components';
 import defaultSettings from '../config/defaultSettings';
@@ -12,8 +13,9 @@ import { PageEnum } from './enums/pagesEnums';
 import { errorConfig } from './requestErrorConfig';
 import { getRemoteMenu, getRoutersInfo, getUserInfo, patchRouteWithRemoteMenus, setRemoteMenu } from './services/session';
 import { AntdFeedbackProvider } from './utils/feedback';
+import { selectInitialStateModel, type InitialStateData } from './utils/initialStateModel';
 import { getPortalLoginPath, isPortalRoute } from './utils/portalPaths';
-import { getPortalTerminalFromApiUrl } from './utils/portalRequest';
+import { getPortalTerminalFromApiUrl, isPortalDirectLoginApiUrl } from './utils/portalRequest';
 import './global.css';
 
 
@@ -55,15 +57,39 @@ function isUnauthorizedCode(code: unknown) {
   return Number(code) === 401;
 }
 
+function getErrorRequestUrl(error: any) {
+  return error?.config?.url || error?.response?.config?.url;
+}
+
+function isUnauthorizedError(error: any) {
+  return (
+    isUnauthorizedCode(error?.response?.status) ||
+    isUnauthorizedCode(getResponseCode(error?.response?.data)) ||
+    isUnauthorizedCode(error?.info?.errorCode) ||
+    isUnauthorizedCode(error?.code)
+  );
+}
+
 function handleUnauthorizedResponse(requestUrl?: string) {
   const portalTerminal = getPortalTerminalFromApiUrl(requestUrl);
   if (portalTerminal) {
+    if (isPortalDirectLoginApiUrl(requestUrl)) {
+      return;
+    }
     clearTerminalSessionToken(portalTerminal);
     redirectToPortalLogin(portalTerminal);
     return;
   }
   clearAdminSession();
   redirectToLogin();
+}
+
+function handleUnauthorizedError(error: any) {
+  if (!isUnauthorizedError(error)) {
+    return false;
+  }
+  handleUnauthorizedResponse(getErrorRequestUrl(error));
+  return true;
 }
 
 /**
@@ -81,7 +107,9 @@ export async function getInitialState(): Promise<{
         skipErrorHandler: true,
       });
       if (!response?.user) {
-        clearAdminSession();
+        if (isUnauthorizedCode(getResponseCode(response))) {
+          handleUnauthorizedResponse('/api/getInfo');
+        }
         return undefined;
       }
       const avatar =
@@ -94,8 +122,7 @@ export async function getInitialState(): Promise<{
       } as API.CurrentUser;
     } catch (error) {
       console.log(error);
-      clearAdminSession();
-      redirectToLogin();
+      handleUnauthorizedError(error);
     }
     return undefined;
   };
@@ -116,7 +143,36 @@ export async function getInitialState(): Promise<{
 }
 
 // ProLayout 支持的api https://procomponents.ant.design/components/layout
-export const layout: RunTimeLayoutConfig = ({ initialState, setInitialState }) => {
+type LayoutRuntimeContext = {
+  initialState?: InitialStateData;
+};
+
+function RuntimeSettingDrawer({ settings }: { settings?: Partial<LayoutSettings> }) {
+  const { initialState, setInitialState } = useModel('@@initialState', selectInitialStateModel);
+  const [fallbackSettings, setFallbackSettings] = React.useState(settings);
+  const drawerSettings = initialState?.settings ?? fallbackSettings ?? settings;
+
+  return (
+    <SettingDrawer
+      disableUrlParams
+      enableDarkTheme
+      settings={drawerSettings}
+      onSettingChange={(nextSettings) => {
+        if (typeof setInitialState !== 'function') {
+          setFallbackSettings(nextSettings);
+          return;
+        }
+        setInitialState((preInitialState) => ({
+          ...(preInitialState ?? {}),
+          settings: nextSettings,
+        }));
+      }}
+    />
+  );
+}
+
+export const layout: RunTimeLayoutConfig = (runtimeContext) => {
+  const { initialState } = runtimeContext as unknown as LayoutRuntimeContext;
   return {
     actionsRender: () => [<Question key="doc" />, <SelectLang key="SelectLang" />],
     avatarProps: {
@@ -145,8 +201,14 @@ export const layout: RunTimeLayoutConfig = ({ initialState, setInitialState }) =
     footerRender: false,
     onPageChange: () => {
       const { location } = history;
+      const adminToken = getAccessToken();
       // 如果没有登录，重定向到 login
-      if (!initialState?.currentUser && location.pathname !== PageEnum.LOGIN && !isPortalRoute(location.pathname)) {
+      if (
+        !initialState?.currentUser
+        && (!adminToken || adminToken.length === 0)
+        && location.pathname !== PageEnum.LOGIN
+        && !isPortalRoute(location.pathname)
+      ) {
         redirectToLogin();
       }
     },
@@ -187,17 +249,7 @@ export const layout: RunTimeLayoutConfig = ({ initialState, setInitialState }) =
       return (
         <>
           {children}
-          <SettingDrawer
-            disableUrlParams
-            enableDarkTheme
-            settings={initialState?.settings}
-            onSettingChange={(settings) => {
-              setInitialState((preInitialState) => ({
-                ...preInitialState,
-                settings,
-              }));
-            }}
-          />
+          <RuntimeSettingDrawer settings={initialState?.settings} />
         </>
       );
     },
@@ -233,8 +285,7 @@ export async function onRouteChange({ location }: { clientRoutes: any; location:
     setRemoteMenu(routers);
   } catch (error) {
     console.log(error);
-    clearAdminSession();
-    redirectToLogin();
+    handleUnauthorizedError(error);
   }
 }
 
@@ -265,7 +316,7 @@ export function render(oldRender: () => void) {
     setRemoteMenu(res);
   }).catch(error => {
     console.log(error);
-    clearAdminSession();
+    handleUnauthorizedError(error);
   }).finally(() => {
     oldRender();
   });
@@ -288,18 +339,12 @@ export const request: any = {
       delete headers.isToken;
       if (!authHeader && isToken !== false) {
         const expireTime = getTokenExpireTime();
-        if (expireTime) {
-          const left = Number(expireTime) - Date.now();
-          if (left < 0) {
-            clearAdminSession();
-          } else {
-            const accessToken = getAccessToken();
-            if (accessToken) {
-              headers.Authorization = `Bearer ${accessToken}`;
-            }
+        const left = expireTime ? Number(expireTime) - Date.now() : -1;
+        if (left >= 0) {
+          const accessToken = getAccessToken();
+          if (accessToken) {
+            headers.Authorization = `Bearer ${accessToken}`;
           }
-        } else {
-          clearAdminSession();
         }
       }
       return { url, options };

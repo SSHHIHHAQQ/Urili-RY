@@ -6,7 +6,7 @@
 
 ## 子 Agent 使用情况
 
-- 已按最新规则先尝试 6 个 `gpt-5.3-codex-spark` 子 Agent；平台返回额度限制，失败 Agent 已关闭。
+- 历史记录（已过期口径）：已按最新规则先尝试 6 个 `gpt-5.3-codex-spark` 子 Agent；平台返回额度限制，失败 Agent 已关闭。
 - 随后回退使用 6 个 `gpt-5.4` 只读子 Agent，覆盖 SQL seed、后端 runtime 隔离、React guard/service、Portal 业务接口 scope、三端验证清单、Markdown/复用台账一致性。
 - 6 个回退子 Agent 均已完成并关闭。
 

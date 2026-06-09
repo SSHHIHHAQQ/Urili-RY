@@ -70,7 +70,13 @@ const PRODUCT_STATUS_OPTIONS = Object.entries(PRODUCT_STATUS_VALUE_ENUM).map(
   ([value, item]) => ({ value, label: item.text }),
 );
 
-const SellerOwnDistributionProductList: React.FC = () => {
+type SellerOwnDistributionProductListProps = {
+  canQuery?: boolean;
+};
+
+const SellerOwnDistributionProductList: React.FC<SellerOwnDistributionProductListProps> = ({
+  canQuery = false,
+}) => {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [current, setCurrent] = useState<API.Partner.SellerPortalProduct>();
@@ -80,7 +86,7 @@ const SellerOwnDistributionProductList: React.FC = () => {
   const actionRef = useRef<ActionType | undefined>(undefined);
 
   const openDetail = async (record: API.Partner.SellerPortalProduct) => {
-    if (!record.spuId) {
+    if (!canQuery || !record.spuId) {
       return;
     }
     setDetailOpen(true);
@@ -168,12 +174,15 @@ const SellerOwnDistributionProductList: React.FC = () => {
     {
       title: '价格',
       key: 'price',
-      width: 160,
+      width: 180,
       search: false,
       render: (_, record) => (
         <Space orientation="vertical" size={0}>
           <span>
-            {formatPriceRange(record.salePriceMin, record.salePriceMax)}
+            销售价 {formatPriceRange(record.salePriceMin, record.salePriceMax)}
+          </span>
+          <span>
+            供货价 {formatPriceRange(record.supplyPriceMin, record.supplyPriceMax)}
           </span>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             {displayText(record.currencySummary)}
@@ -190,6 +199,14 @@ const SellerOwnDistributionProductList: React.FC = () => {
       render: (_, record) => displayText(record.skuCount),
     },
     {
+      title: '发货仓',
+      dataIndex: 'warehouseCount',
+      key: 'warehouseCount',
+      width: 88,
+      search: false,
+      render: (_, record) => displayText(record.warehouseCount),
+    },
+    {
       title: '状态',
       dataIndex: 'spuStatus',
       key: 'spuStatus',
@@ -202,16 +219,20 @@ const SellerOwnDistributionProductList: React.FC = () => {
       },
       render: (_, record) => statusTag(record.spuStatus),
     },
-    {
-      title: '操作',
-      valueType: 'option',
-      width: 88,
-      render: (_, record) => (
-        <Button type="link" size="small" onClick={() => openDetail(record)}>
-          详情
-        </Button>
-      ),
-    },
+    ...(canQuery
+      ? [
+          {
+            title: '操作',
+            valueType: 'option' as const,
+            width: 88,
+            render: (_: unknown, record: SellerProductRow) => (
+              <Button type="link" size="small" onClick={() => openDetail(record)}>
+                详情
+              </Button>
+            ),
+          },
+        ]
+      : []),
   ];
 
   const skuColumns: ColumnsType<API.Partner.SellerPortalProductSku> = [
@@ -334,6 +355,12 @@ const SellerOwnDistributionProductList: React.FC = () => {
             </Descriptions.Item>
             <Descriptions.Item label="价格">
               {formatPriceRange(current?.salePriceMin, current?.salePriceMax)}
+            </Descriptions.Item>
+            <Descriptions.Item label="供货价">
+              {formatPriceRange(current?.supplyPriceMin, current?.supplyPriceMax)}
+            </Descriptions.Item>
+            <Descriptions.Item label="发货仓">
+              {displayText(current?.warehouseCount)}
             </Descriptions.Item>
             <Descriptions.Item label="卖点" span={2}>
               {displayText(current?.sellingPoint)}

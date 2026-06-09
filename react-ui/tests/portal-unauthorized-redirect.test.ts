@@ -1,6 +1,8 @@
-import { clearSessionToken, clearTerminalSessionToken } from '@/access';
-import { request } from '@/app';
+import { clearSessionToken, clearTerminalSessionToken, getAccessToken, getTokenExpireTime } from '@/access';
+import { getInitialState, layout, onRouteChange, render as appRender, request } from '@/app';
 import { errorConfig } from '@/requestErrorConfig';
+import { getRoutersInfo, getUserInfo } from '@/services/session';
+import { message } from '@/utils/feedback';
 import { history } from '@umijs/max';
 
 jest.mock('@umijs/max', () => ({
@@ -20,7 +22,7 @@ jest.mock('@umijs/max', () => ({
 jest.mock('@/access', () => ({
   clearSessionToken: jest.fn(),
   clearTerminalSessionToken: jest.fn(),
-  getAccessToken: jest.fn(),
+  getAccessToken: jest.fn(() => 'admin-token'),
   getTokenExpireTime: jest.fn(),
 }));
 
@@ -50,6 +52,11 @@ const mockedHistory = history as unknown as {
 
 const mockedClearSessionToken = clearSessionToken as jest.Mock;
 const mockedClearTerminalSessionToken = clearTerminalSessionToken as jest.Mock;
+const mockedGetAccessToken = getAccessToken as jest.Mock;
+const mockedGetTokenExpireTime = getTokenExpireTime as jest.Mock;
+const mockedMessage = message as unknown as { error: jest.Mock };
+const mockedGetRoutersInfo = getRoutersInfo as jest.Mock;
+const mockedGetUserInfo = getUserInfo as jest.Mock;
 
 function expectErrorHandlerToThrow(error: any, opts: Record<string, unknown> = {}) {
   let thrown: unknown;
@@ -72,6 +79,11 @@ describe('portal unauthorized redirect', () => {
     mockedHistory.replace.mockClear();
     mockedClearSessionToken.mockClear();
     mockedClearTerminalSessionToken.mockClear();
+    mockedMessage.error.mockClear();
+    mockedGetRoutersInfo.mockReset();
+    mockedGetUserInfo.mockReset();
+    mockedGetAccessToken.mockReturnValue('admin-token');
+    mockedGetTokenExpireTime.mockReset();
   });
 
   it('keeps portal 401 scoped to the matched terminal and preserves redirect', () => {
@@ -112,6 +124,22 @@ describe('portal unauthorized redirect', () => {
     );
   });
 
+  it('rejects direct-login BizError 401 without clearing existing portal tokens', () => {
+    const error = new Error('直登票据已失效') as any;
+    error.name = 'BizError';
+    error.config = { url: '/api/seller/direct-login' };
+    error.info = {
+      errorCode: 401,
+      errorMessage: '直登票据已失效',
+    };
+
+    expectErrorHandlerToThrow(error);
+
+    expect(mockedClearTerminalSessionToken).not.toHaveBeenCalled();
+    expect(mockedClearSessionToken).not.toHaveBeenCalled();
+    expect(mockedHistory.replace).not.toHaveBeenCalled();
+  });
+
   it('rejects 401 response bodies after redirecting to the matched portal login', async () => {
     const response = {
       config: { url: '/api/buyer/account/login-logs' },
@@ -131,6 +159,50 @@ describe('portal unauthorized redirect', () => {
       '/buyer/login?redirect=%2Fbuyer%2Fportal%2Faccount%2Flogs',
     );
   });
+
+  it('rejects direct-login 401 response bodies without clearing existing portal tokens', async () => {
+    const response = {
+      config: { url: '/api/buyer/direct-login' },
+      data: { code: 401, msg: '直登票据已失效' },
+    };
+    mockedHistory.location = {
+      pathname: '/buyer/direct-login',
+      search: '?openerOrigin=http%3A%2F%2F127.0.0.1%3A8001',
+      hash: '',
+    };
+
+    await expect(request.responseInterceptors[0](response)).rejects.toBe(response);
+
+    expect(mockedClearTerminalSessionToken).not.toHaveBeenCalled();
+    expect(mockedClearSessionToken).not.toHaveBeenCalled();
+    expect(mockedHistory.replace).not.toHaveBeenCalled();
+  });
+
+  it.each(['seller', 'buyer'])(
+    'rejects %s direct-login HTTP 401 without clearing existing portal tokens',
+    (terminal) => {
+      mockedHistory.location = {
+        pathname: `/${terminal}/direct-login`,
+        search: '?openerOrigin=http%3A%2F%2F127.0.0.1%3A8001',
+        hash: '',
+      };
+      const error = {
+          response: {
+            status: 401,
+            statusText: 'Unauthorized',
+            headers: {},
+            data: {},
+            config: { url: `/api/${terminal}/direct-login` },
+          },
+        } as any;
+
+      expectErrorHandlerToThrow(error);
+
+      expect(mockedClearTerminalSessionToken).not.toHaveBeenCalled();
+      expect(mockedClearSessionToken).not.toHaveBeenCalled();
+      expect(mockedHistory.replace).not.toHaveBeenCalled();
+    },
+  );
 
   it('keeps admin 401 on the admin login flow', () => {
     mockedHistory.location = {
@@ -205,5 +277,163 @@ describe('portal unauthorized redirect', () => {
     expect(mockedHistory.replace).toHaveBeenCalledWith(
       '/user/login?redirect=%2Fseller%3Fpage%3D1',
     );
+  });
+
+  it('does not clear tokens or redirect for non-401 BizError REDIRECT responses', () => {
+    const error = new Error('business redirect') as any;
+    error.name = 'BizError';
+    error.config = { url: '/api/seller/account/profile' };
+    error.info = {
+      errorCode: 500,
+      errorMessage: 'business redirect',
+      showType: 9,
+    };
+
+    expect(() => errorConfig.errorConfig?.errorHandler?.(error, {})).not.toThrow();
+
+    expect(mockedClearTerminalSessionToken).not.toHaveBeenCalled();
+    expect(mockedClearSessionToken).not.toHaveBeenCalled();
+    expect(mockedHistory.replace).not.toHaveBeenCalled();
+    expect(mockedMessage.error).toHaveBeenCalledWith('business redirect');
+  });
+
+  it('keeps admin tokens when getInitialState user info fails with a non-401 error', async () => {
+    mockedHistory.location = {
+      pathname: '/system/user',
+      search: '',
+      hash: '',
+    };
+    mockedGetUserInfo.mockRejectedValue({
+      response: {
+        status: 500,
+        data: { code: 500, msg: 'server error' },
+        config: { url: '/api/getInfo' },
+      },
+    });
+
+    const state = await getInitialState();
+
+    expect(state.currentUser).toBeUndefined();
+    expect(mockedClearSessionToken).not.toHaveBeenCalled();
+    expect(mockedClearTerminalSessionToken).not.toHaveBeenCalled();
+    expect(mockedHistory.replace).not.toHaveBeenCalled();
+  });
+
+  it('keeps admin tokens when route menu loading fails with a non-401 error', async () => {
+    mockedHistory.location = {
+      pathname: '/system/user',
+      search: '',
+      hash: '',
+    };
+    mockedGetRoutersInfo.mockRejectedValue({
+      response: {
+        status: 500,
+        data: { code: 500, msg: 'menu failed' },
+        config: { url: '/api/getRouters' },
+      },
+    });
+
+    await onRouteChange({
+      clientRoutes: [],
+      location: mockedHistory.location,
+    });
+
+    expect(mockedClearSessionToken).not.toHaveBeenCalled();
+    expect(mockedClearTerminalSessionToken).not.toHaveBeenCalled();
+    expect(mockedHistory.replace).not.toHaveBeenCalled();
+  });
+
+  it('keeps admin tokens when initial render menu loading fails with a non-401 error', async () => {
+    mockedHistory.location = {
+      pathname: '/system/user',
+      search: '',
+      hash: '',
+    };
+    mockedGetRoutersInfo.mockRejectedValue({
+      response: {
+        status: 500,
+        data: { code: 500, msg: 'menu failed' },
+        config: { url: '/api/getRouters' },
+      },
+    });
+    const oldRender = jest.fn();
+
+    appRender(oldRender);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    expect(oldRender).toHaveBeenCalled();
+    expect(mockedClearSessionToken).not.toHaveBeenCalled();
+    expect(mockedClearTerminalSessionToken).not.toHaveBeenCalled();
+    expect(mockedHistory.replace).not.toHaveBeenCalled();
+  });
+
+  it('does not redirect from layout page changes when admin token remains after a non-401 startup failure', () => {
+    mockedHistory.location = {
+      pathname: '/system/user',
+      search: '',
+      hash: '',
+    };
+    mockedGetAccessToken.mockReturnValue('admin-token');
+
+    const runtimeLayout = layout({
+      initialState: { currentUser: undefined },
+      setInitialState: jest.fn(),
+    } as any);
+    runtimeLayout.onPageChange?.();
+
+    expect(mockedClearSessionToken).not.toHaveBeenCalled();
+    expect(mockedClearTerminalSessionToken).not.toHaveBeenCalled();
+    expect(mockedHistory.replace).not.toHaveBeenCalled();
+  });
+
+  it('does not clear admin tokens before a request when local expire time is missing or expired', () => {
+    const interceptor = request.requestInterceptors[0];
+
+    mockedGetTokenExpireTime.mockReturnValueOnce(undefined);
+    const missingExpireOptions = { headers: {} as Record<string, string> };
+    const missingExpireResult = interceptor('/api/getInfo', missingExpireOptions);
+
+    expect(missingExpireResult.options.headers.Authorization).toBeUndefined();
+    expect(mockedClearSessionToken).not.toHaveBeenCalled();
+    expect(mockedHistory.replace).not.toHaveBeenCalled();
+
+    mockedGetTokenExpireTime.mockReturnValueOnce(String(Date.now() - 1000));
+    const expiredOptions = { headers: {} as Record<string, string> };
+    const expiredResult = interceptor('/api/getRouters', expiredOptions);
+
+    expect(expiredResult.options.headers.Authorization).toBeUndefined();
+    expect(mockedClearSessionToken).not.toHaveBeenCalled();
+    expect(mockedHistory.replace).not.toHaveBeenCalled();
+  });
+
+  it('attaches admin Authorization only when local expire time is still valid', () => {
+    mockedGetTokenExpireTime.mockReturnValue(String(Date.now() + 1000 * 60));
+
+    const result = request.requestInterceptors[0]('/api/getInfo', {
+      headers: {} as Record<string, string>,
+    });
+
+    expect(result.options.headers.Authorization).toBe('Bearer admin-token');
+    expect(mockedClearSessionToken).not.toHaveBeenCalled();
+    expect(mockedHistory.replace).not.toHaveBeenCalled();
+  });
+
+  it('redirects from layout page changes when both admin user and admin token are missing', () => {
+    mockedHistory.location = {
+      pathname: '/system/user',
+      search: '',
+      hash: '',
+    };
+    mockedGetAccessToken.mockReturnValue('');
+
+    const runtimeLayout = layout({
+      initialState: { currentUser: undefined },
+      setInitialState: jest.fn(),
+    } as any);
+    runtimeLayout.onPageChange?.();
+
+    expect(mockedClearSessionToken).not.toHaveBeenCalled();
+    expect(mockedClearTerminalSessionToken).not.toHaveBeenCalled();
+    expect(mockedHistory.replace).toHaveBeenCalledWith('/user/login?redirect=%2Fsystem%2Fuser');
   });
 });

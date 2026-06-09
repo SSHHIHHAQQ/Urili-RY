@@ -4,6 +4,14 @@
 set names utf8mb4;
 
 set @confirm_product_distribution_status_price_log := coalesce(@confirm_product_distribution_status_price_log, '');
+set @product_distribution_status_price_log_spu_disabled_expected_count :=
+    coalesce(@product_distribution_status_price_log_spu_disabled_expected_count, '');
+set @product_distribution_status_price_log_spu_disabled_expected_signature :=
+    coalesce(@product_distribution_status_price_log_spu_disabled_expected_signature, '');
+set @product_distribution_status_price_log_sku_disabled_expected_count :=
+    coalesce(@product_distribution_status_price_log_sku_disabled_expected_count, '');
+set @product_distribution_status_price_log_sku_disabled_expected_signature :=
+    coalesce(@product_distribution_status_price_log_sku_disabled_expected_signature, '');
 
 delimiter //
 
@@ -13,6 +21,19 @@ begin
   if coalesce(@confirm_product_distribution_status_price_log, '')
       <> 'APPLY_PRODUCT_DISTRIBUTION_STATUS_PRICE_LOG' then
     signal sqlstate '45000' set message_text = 'set @confirm_product_distribution_status_price_log = APPLY_PRODUCT_DISTRIBUTION_STATUS_PRICE_LOG before running this migration';
+  end if;
+
+  if coalesce(@product_distribution_status_price_log_spu_disabled_expected_count, '') not regexp '^[0-9]+$' then
+    signal sqlstate '45000' set message_text = 'set @product_distribution_status_price_log_spu_disabled_expected_count after previewing exact product_spu DISABLED rows';
+  end if;
+  if coalesce(@product_distribution_status_price_log_spu_disabled_expected_signature, '') not regexp '^[0-9a-fA-F]{64}$' then
+    signal sqlstate '45000' set message_text = 'set @product_distribution_status_price_log_spu_disabled_expected_signature after previewing exact product_spu DISABLED rows';
+  end if;
+  if coalesce(@product_distribution_status_price_log_sku_disabled_expected_count, '') not regexp '^[0-9]+$' then
+    signal sqlstate '45000' set message_text = 'set @product_distribution_status_price_log_sku_disabled_expected_count after previewing exact product_sku DISABLED rows';
+  end if;
+  if coalesce(@product_distribution_status_price_log_sku_disabled_expected_signature, '') not regexp '^[0-9a-fA-F]{64}$' then
+    signal sqlstate '45000' set message_text = 'set @product_distribution_status_price_log_sku_disabled_expected_signature after previewing exact product_sku DISABLED rows';
   end if;
 end//
 
@@ -81,6 +102,55 @@ begin
   end if;
 end//
 
+drop procedure if exists assert_product_distribution_status_price_log_expected_targets//
+create procedure assert_product_distribution_status_price_log_expected_targets()
+begin
+  declare v_count int default 0;
+  declare v_signature varchar(64) default '';
+
+  select count(1),
+         sha2(coalesce(group_concat(
+           concat_ws(':',
+             spu_id,
+             coalesce(spu_status, ''),
+             coalesce(control_status, ''),
+             coalesce(control_reason, '')
+           )
+           order by spu_id separator '|'
+         ), ''), 256)
+    into v_count, v_signature
+  from product_spu
+  where spu_status = 'DISABLED';
+
+  if v_count <> cast(@product_distribution_status_price_log_spu_disabled_expected_count as unsigned) then
+    signal sqlstate '45000' set message_text = 'product_spu DISABLED exact target count mismatch';
+  end if;
+  if lower(v_signature) <> lower(@product_distribution_status_price_log_spu_disabled_expected_signature) then
+    signal sqlstate '45000' set message_text = 'product_spu DISABLED exact target signature mismatch';
+  end if;
+
+  select count(1),
+         sha2(coalesce(group_concat(
+           concat_ws(':',
+             sku_id,
+             coalesce(sku_status, ''),
+             coalesce(control_status, ''),
+             coalesce(control_reason, '')
+           )
+           order by sku_id separator '|'
+         ), ''), 256)
+    into v_count, v_signature
+  from product_sku
+  where sku_status = 'DISABLED';
+
+  if v_count <> cast(@product_distribution_status_price_log_sku_disabled_expected_count as unsigned) then
+    signal sqlstate '45000' set message_text = 'product_sku DISABLED exact target count mismatch';
+  end if;
+  if lower(v_signature) <> lower(@product_distribution_status_price_log_sku_disabled_expected_signature) then
+    signal sqlstate '45000' set message_text = 'product_sku DISABLED exact target signature mismatch';
+  end if;
+end//
+
 delimiter ;
 
 call assert_product_distribution_status_price_log_confirmed();
@@ -112,6 +182,7 @@ call add_column_if_missing('product_sku', 'recover_by',
 call add_column_if_missing('product_sku', 'recover_time',
   'datetime null comment ''最近一次恢复时间'' after recover_by');
 call modify_product_sku_sale_price_if_needed();
+call assert_product_distribution_status_price_log_expected_targets();
 
 update product_spu
 set control_status = 'DISABLED',
@@ -186,5 +257,6 @@ from (
 where not exists (select 1 from sys_dict_data d where d.dict_type = 'product_control_status' and d.dict_value = seed.dict_value);
 
 drop procedure if exists create_index_if_missing;
+drop procedure if exists assert_product_distribution_status_price_log_expected_targets;
 drop procedure if exists modify_product_sku_sale_price_if_needed;
 drop procedure if exists add_column_if_missing;

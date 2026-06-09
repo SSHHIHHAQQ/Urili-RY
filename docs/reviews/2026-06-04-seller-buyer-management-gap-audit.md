@@ -2,6 +2,8 @@
 
 日期：2026-06-04
 
+> 历史记录（已过期口径）：本文记录的是 2026-06-04 对原项目功能差异的只读对照；其中“一键重置为默认密码 `U123456` / `U12346`”等建议已被后续三端隔离口径覆盖。当前管理端账号“重置密码”必须人工输入 5-20 位临时密码并调用端账号 `resetPwd`，不得恢复 `resetDefaultPwd` 或默认密码重置入口。
+
 范围：
 
 - 原项目：`E:\Urili\apps\admin-web`、`E:\Urili\packages\contracts`、`E:\Urili\packages\modules\seller`、`E:\Urili\packages\modules\buyer`
@@ -146,4 +148,3 @@
 - 未连接远程 MySQL/Redis；没有确认运行库是否已经执行最新 seed。
 - 未运行 Maven 编译或前端构建；本次是只读功能对照，未改代码。
 - 未做浏览器截图验证；本次目标是检查操作功能是否做齐。
-

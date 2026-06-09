@@ -18,6 +18,22 @@ const componentJsFile = path.join(
   'Home',
   'SellerOwnDistributionProductList.js',
 );
+const schemaPreviewFile = path.join(
+  root,
+  'src',
+  'pages',
+  'Portal',
+  'Home',
+  'SellerProductSchemaPreview.tsx',
+);
+const schemaPreviewJsFile = path.join(
+  root,
+  'src',
+  'pages',
+  'Portal',
+  'Home',
+  'SellerProductSchemaPreview.js',
+);
 const homeFile = path.join(root, 'src', 'pages', 'Portal', 'Home', 'index.tsx');
 const homeJsFile = path.join(root, 'src', 'pages', 'Portal', 'Home', 'index.js');
 const portalServiceFile = path.join(
@@ -39,6 +55,11 @@ const requiredServiceFunctions = [
   'getSellerPortalDistributionProducts',
   'getSellerPortalDistributionProduct',
   'getSellerPortalDistributionProductSkus',
+];
+
+const requiredSchemaServiceFunctions = [
+  'getSellerPortalProductCategories',
+  'getSellerPortalProductSchema',
 ];
 
 const violations = [];
@@ -86,8 +107,17 @@ function assertNoPattern(source, relativePath, pattern, message) {
   }
 }
 
+function assertExactSource(source, relativePath, expected, message) {
+  const normalize = (value) => value.replace(/\r\n/g, '\n').trim();
+  if (normalize(source) !== normalize(expected)) {
+    violations.push(`${relativePath} ${message}`);
+  }
+}
+
 const componentSource = readRequired(componentFile);
 const componentJsSource = readRequired(componentJsFile);
+const schemaPreviewSource = readRequired(schemaPreviewFile);
+const schemaPreviewJsSource = readRequired(schemaPreviewJsFile);
 const homeSource = readRequired(homeFile);
 const homeJsSource = readRequired(homeJsFile);
 const portalServiceSource = readRequired(portalServiceFile);
@@ -130,6 +160,25 @@ function checkComponentSource(source, relativePath, requireTypes) {
   if (requireTypes && !source.includes('ProColumns')) {
     violations.push(`${relativePath} must use standard ProTable template token ProColumns`);
   }
+  if (requireTypes) {
+    if (!source.includes('canQuery?: boolean')) {
+      violations.push(`${relativePath} must accept canQuery prop for seller detail permission gating`);
+    }
+    if (!source.includes('canQuery = false')) {
+      violations.push(`${relativePath} must default canQuery to fail-closed false`);
+    }
+    if (!source.includes('if (!canQuery || !record.spuId)')) {
+      violations.push(`${relativePath} must block detail requests when query permission is missing`);
+    }
+    if (!source.includes('...(canQuery')) {
+      violations.push(`${relativePath} must hide detail action unless seller query permission is present`);
+    }
+    for (const fieldName of ['supplyPriceMin', 'supplyPriceMax', 'warehouseCount']) {
+      if (!source.includes(fieldName)) {
+        violations.push(`${relativePath} must render seller portal product field ${fieldName}`);
+      }
+    }
+  }
   if (!source.includes('pageNum: currentPage')) {
     violations.push(`${relativePath} must map ProTable current to RuoYi pageNum`);
   }
@@ -163,7 +212,54 @@ function checkComponentSource(source, relativePath, requireTypes) {
 }
 
 checkComponentSource(componentSource, toRelative(componentFile), true);
-checkComponentSource(componentJsSource, toRelative(componentJsFile), false);
+assertExactSource(
+  componentJsSource,
+  toRelative(componentJsFile),
+  "export { default } from './SellerOwnDistributionProductList.tsx';",
+  'must be a pure re-export to the guarded TSX seller portal product list implementation',
+);
+
+function checkSchemaPreviewSource(source, relativePath) {
+  if (!source) {
+    return;
+  }
+  for (const fnName of requiredSchemaServiceFunctions) {
+    if (!source.includes(fnName)) {
+      violations.push(`${relativePath} must use ${fnName}`);
+    }
+  }
+  if (!source.includes("from '@/services/portal/session'")) {
+    violations.push(
+      `${relativePath} must import seller schema APIs from portal session service`,
+    );
+  }
+  assertNoPattern(
+    source,
+    relativePath,
+    /getBuyerPortalProduct(?:Categories|Schema)/,
+    'must not use buyer portal schema APIs',
+  );
+  assertNoPattern(
+    source,
+    relativePath,
+    /\brequest\s*(?:<[^;]+?>)?\s*\(/,
+    'must not call request(...) directly',
+  );
+  assertNoPattern(
+    source,
+    relativePath,
+    /from\s+['"]@\/services\/product\//,
+    'must not import admin product services',
+  );
+}
+
+checkSchemaPreviewSource(schemaPreviewSource, toRelative(schemaPreviewFile));
+assertExactSource(
+  schemaPreviewJsSource,
+  toRelative(schemaPreviewJsFile),
+  "export { default, PortalProductSchemaPreview } from './SellerProductSchemaPreview.tsx';",
+  'must be a pure re-export to the guarded TSX seller schema preview implementation',
+);
 
 function checkHomeSource(source, relativePath) {
   if (!source) {
@@ -180,6 +276,29 @@ function checkHomeSource(source, relativePath) {
     violations.push(
       `${relativePath} must import SellerOwnDistributionProductList`,
     );
+  }
+  if (
+    !source.includes("import SellerProductSchemaPreview from './SellerProductSchemaPreview';")
+  ) {
+    violations.push(`${relativePath} must import SellerProductSchemaPreview`);
+  }
+  const schemaPreviewIndex = source.indexOf('<SellerProductSchemaPreview');
+  if (schemaPreviewIndex < 0) {
+    violations.push(`${relativePath} must render SellerProductSchemaPreview`);
+  } else {
+    const sellerBranchIndex = source.lastIndexOf(
+      "terminal === 'seller'",
+      schemaPreviewIndex,
+    );
+    const buyerBranchIndex = source.lastIndexOf(
+      "terminal === 'buyer'",
+      schemaPreviewIndex,
+    );
+    if (sellerBranchIndex < 0 || (buyerBranchIndex >= 0 && buyerBranchIndex > sellerBranchIndex)) {
+      violations.push(
+        `${relativePath} must render SellerProductSchemaPreview only in seller branch`,
+      );
+    }
   }
   const componentIndex = source.indexOf(
     '<SellerOwnDistributionProductList',
@@ -202,6 +321,15 @@ function checkHomeSource(source, relativePath) {
         `${relativePath} must render SellerOwnDistributionProductList only in seller branch`,
       );
     }
+  }
+  if (!source.includes('canQueryDistributionProducts')) {
+    violations.push(`${relativePath} must compute distribution query permission`);
+  }
+  if (!source.includes("portalPermission(terminal, 'product:distribution:query')")) {
+    violations.push(`${relativePath} must check product:distribution:query before wiring detail actions`);
+  }
+  if (!source.includes('<SellerOwnDistributionProductList canQuery={canQueryDistributionProducts} />')) {
+    violations.push(`${relativePath} must pass query permission into SellerOwnDistributionProductList`);
   }
 }
 
@@ -255,7 +383,12 @@ function checkPortalServiceSource(source, relativePath) {
 }
 
 checkPortalServiceSource(portalServiceSource, toRelative(portalServiceFile));
-checkPortalServiceSource(portalServiceJsSource, toRelative(portalServiceJsFile));
+assertExactSource(
+  portalServiceJsSource,
+  toRelative(portalServiceJsFile),
+  "export * from './session.ts';",
+  'must be a pure re-export to the guarded TS portal session service implementation',
+);
 
 if (violations.length > 0) {
   console.error('Seller portal product template guard failed:');

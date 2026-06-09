@@ -4,7 +4,7 @@
 
 ## 子 Agent 使用情况
 
-- 用户最新指定：子 Agent 优先使用 GPT-5.3 Codex，工具模型为 `gpt-5.3-codex-spark`；不可用时降级 `gpt-5.4`。
+- 历史记录（已过期口径）：用户最新指定：子 Agent 优先使用 GPT-5.3 Codex，工具模型为 `gpt-5.3-codex-spark`；不可用时降级 `gpt-5.4`。
 - 本轮先尝试 GPT-5.3 Codex，平台返回用量/可用性限制，提示恢复时间为 `2026-06-13 01:59`；失败子 Agent 已关闭。
 - 实际降级使用并关闭 6 个 `gpt-5.4` 只读子 Agent，切片覆盖 seller 后端、buyer 后端、React 管理模板、portal endpoint、SQL/seed、验证脚本。
 

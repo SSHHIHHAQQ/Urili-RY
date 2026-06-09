@@ -12,13 +12,13 @@
 
 - 删除 `react-ui/src/services/seller/seller.ts` / `.js` 中未接通的 `resetAdminSellerAccountPassword(...)` 导出。
 - 删除 `react-ui/src/services/buyer/buyer.ts` / `.js` 中未接通的 `resetAdminBuyerAccountPassword(...)` 导出。
-- 保留 `resetAdminSellerAccountDefaultPassword(...)` / `resetAdminBuyerAccountDefaultPassword(...)`，当前 UI 继续只做默认密码重置。
-- `docs/architecture/reuse-ledger.md` 已登记当前前端口径：不导出指定密码重置 service；后续如要恢复自定义密码弹窗，必须先重新确认产品口径。
+- 历史记录（已过期口径）：当时保留 `resetAdminSellerAccountDefaultPassword(...)` / `resetAdminBuyerAccountDefaultPassword(...)`，当前 UI 继续只做默认密码重置。当前实现已由后续检查点覆盖：管理端账号“重置密码”必须人工输入 5-20 位临时密码并调用 `resetPwd`。
+- 历史记录（已过期口径）：当时 `docs/architecture/reuse-ledger.md` 登记为不导出指定密码重置 service；当前实现已由后续检查点覆盖：seller/buyer 管理端账号重置密码已接入人工临时密码 `resetPwd`，默认密码重置入口已移除。
 - `docs/plans/2026-06-04-three-terminal-isolation-goal-tracker.md` 已追加本检查点。
 
 ## 残留问题
 
-- P1：后端仍保留指定密码重置 API 和 service 能力，作为后端能力不在本轮删除；当前只是移除前端未接通导出，避免 UI 契约噪音。
+- 历史记录（已过期口径）：当时后端仍保留指定密码重置 API 和 service 能力，前端只是移除未接通导出。当前实现已由后续检查点覆盖：该能力已作为管理端账号“重置密码”的人工临时密码入口接入。
 - P1：端内 role-menu 当前已有本端存在性校验，但 `seller_menu` / `buyer_menu` ID 空间仍可能重叠；跨端提交同数字 ID 仍可能绑定成本端同号菜单，后续应做端内菜单 ID 段隔离或稳定 `businessKey` 方案。
 
 ## 验证命令
@@ -35,7 +35,7 @@
 ## 权限检查结果
 
 - 本轮不新增后端接口、不新增菜单权限、不修改按钮权限。
-- 管理端账号弹窗仍通过 `resetAccountDefaultPassword` 调默认密码接口，权限仍使用既有 `seller:admin:account:resetPwd` / `buyer:admin:account:resetPwd`。
+- 历史记录（已过期口径）：当时管理端账号弹窗仍通过 `resetAccountDefaultPassword` 调默认密码接口。当前实现已由后续检查点覆盖：弹窗提交人工临时密码并调用 `resetPwd`，权限仍使用 `seller:admin:account:resetPwd` / `buyer:admin:account:resetPwd`。
 
 ## 字典/选项复用检查结果
 
@@ -64,4 +64,4 @@
 
 ## 一句话总结
 
-seller/buyer 管理端前端 service 已清掉未接通的指定密码重置导出，当前 UI 契约只保留默认密码 `U12346` 重置。
+历史记录（已过期口径）：当时 seller/buyer 管理端前端 service 已清掉未接通的指定密码重置导出，UI 契约只保留默认密码 `U12346` 重置。当前实现已由后续检查点覆盖：管理端账号“重置密码”使用人工临时密码 `resetPwd`。

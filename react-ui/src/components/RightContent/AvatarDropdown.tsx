@@ -10,6 +10,7 @@ import HeaderDropdown from '../HeaderDropdown';
 import { setRemoteMenu } from '@/services/session';
 import { clearSessionToken } from '@/access';
 import { logout } from '@/services/system/auth';
+import { selectInitialStateModel } from '@/utils/initialStateModel';
 
 export type GlobalHeaderRightProps = {
   menu?: boolean;
@@ -17,7 +18,7 @@ export type GlobalHeaderRightProps = {
 };
 
 export const AvatarName = () => {
-  const { initialState } = useModel('@@initialState');
+  const { initialState } = useModel('@@initialState', selectInitialStateModel);
   const { currentUser } = initialState || {};
   return <span className="anticon">{currentUser?.nickName}</span>;
 };
@@ -64,7 +65,7 @@ export const AvatarDropdown: React.FC<GlobalHeaderRightProps> = ({ menu, childre
   };
   const { styles } = useStyles();
 
-  const { initialState, setInitialState } = useModel('@@initialState');
+  const { initialState, setInitialState } = useModel('@@initialState', selectInitialStateModel);
 
   const onMenuClick = useCallback(
     (event: MenuInfo) => {

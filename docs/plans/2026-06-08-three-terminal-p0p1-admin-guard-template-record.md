@@ -4,7 +4,7 @@
 
 ## 子 Agent 使用情况
 
-- 按用户最新规则优先尝试 6 个 `gpt-5.3-codex-spark` 子 Agent。
+- 历史记录（已过期口径）：按当时用户规则优先尝试 6 个 `gpt-5.3-codex-spark` 子 Agent；现行规则为默认使用 `gpt-5.4`。
 - 平台返回额度或可用性限制，失败的 `gpt-5.3-codex-spark` 子 Agent 已关闭。
 - 按 fallback 规则启动 6 个 `gpt-5.4` 只读子 Agent，已全部关闭。
 - 主 Agent 已合并并复核结论，只采纳确定 P0/P1；P2 不阻塞当前推进。

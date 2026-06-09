@@ -1,12 +1,15 @@
 package com.ruoyi.warehouse.service.impl;
 
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.ruoyi.common.exception.ServiceException;
@@ -14,15 +17,18 @@ import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.finance.domain.FinanceCurrencyOption;
 import com.ruoyi.finance.service.IFinanceCurrencyService;
 import com.ruoyi.integration.domain.UpstreamSystemConnection;
+import com.ruoyi.integration.domain.UpstreamWarehousePairingSnapshot;
 import com.ruoyi.integration.domain.UpstreamWarehousePairing;
 import com.ruoyi.integration.domain.UpstreamWarehouseSyncItem;
 import com.ruoyi.integration.domain.request.WarehousePairingRequest;
 import com.ruoyi.integration.service.IUpstreamSystemService;
+import com.ruoyi.integration.service.IUpstreamWarehousePairingProjectionService;
 import com.ruoyi.integration.support.UpstreamSystemConstants;
 import com.ruoyi.warehouse.domain.UsCity;
 import com.ruoyi.warehouse.domain.UsState;
 import com.ruoyi.warehouse.domain.Warehouse;
 import com.ruoyi.warehouse.domain.WarehouseOption;
+import com.ruoyi.warehouse.domain.WarehouseSellerProfile;
 import com.ruoyi.warehouse.domain.WarehouseSyncCandidate;
 import com.ruoyi.warehouse.domain.WarehouseSyncConnection;
 import com.ruoyi.warehouse.domain.request.OfficialWarehousePairingRequest;
@@ -30,6 +36,7 @@ import com.ruoyi.warehouse.domain.request.OfficialWarehouseSyncRequest;
 import com.ruoyi.warehouse.domain.request.WarehouseStatusRequest;
 import com.ruoyi.warehouse.mapper.WarehouseMapper;
 import com.ruoyi.warehouse.service.IWarehouseService;
+import com.ruoyi.warehouse.service.WarehouseSellerLookupService;
 
 /**
  * 仓库服务实现。
@@ -52,18 +59,66 @@ public class WarehouseServiceImpl implements IWarehouseService
     @Autowired
     private IUpstreamSystemService upstreamSystemService;
 
+    @Autowired
+    private ObjectProvider<WarehouseSellerLookupService> sellerLookupServiceProvider;
+
+    @Autowired
+    private ObjectProvider<IUpstreamWarehousePairingProjectionService> warehousePairingProjectionServiceProvider;
+
     @Override
     public List<Warehouse> selectOfficialWarehouseList(Warehouse query)
     {
         query = normalizeQuery(query, KIND_OFFICIAL);
-        return warehouseMapper.selectWarehouseList(query);
+        List<Warehouse> warehouses = warehouseMapper.selectWarehouseList(query);
+        enrichWarehousePairings(warehouses);
+        return warehouses;
     }
 
     @Override
     public List<Warehouse> selectThirdPartyWarehouseList(Warehouse query)
     {
         query = normalizeQuery(query, KIND_THIRD_PARTY);
-        return warehouseMapper.selectWarehouseList(query);
+        if (StringUtils.isNotBlank(query.getSellerKeyword()) && !Boolean.TRUE.equals(query.getSellerKeywordPrepared()))
+        {
+            throw new ServiceException("第三方仓库卖家筛选未预处理");
+        }
+        List<Warehouse> warehouses = warehouseMapper.selectWarehouseList(query);
+        enrichWarehousePairings(warehouses);
+        enrichSellerProfiles(warehouses);
+        return warehouses;
+    }
+
+    @Override
+    public boolean prepareThirdPartyWarehouseQuery(Warehouse query)
+    {
+        if (query == null)
+        {
+            return true;
+        }
+        query.setSellerKeywordPrepared(Boolean.FALSE);
+        query.setSellerIds(null);
+        String sellerKeyword = StringUtils.trimToNull(query.getSellerKeyword());
+        query.setSellerKeyword(sellerKeyword);
+        if (sellerKeyword == null)
+        {
+            return true;
+        }
+
+        List<WarehouseSellerProfile> sellers = sellerLookupService().selectSellerProfilesByKeyword(sellerKeyword);
+        query.setSellerKeywordPrepared(Boolean.TRUE);
+        if (sellers.isEmpty())
+        {
+            return false;
+        }
+        if (query.getSellerId() != null)
+        {
+            return sellers.stream().anyMatch(item -> Objects.equals(query.getSellerId(), item.getSellerId()));
+        }
+        query.setSellerIds(sellers.stream()
+            .map(WarehouseSellerProfile::getSellerId)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toList()));
+        return !query.getSellerIds().isEmpty();
     }
 
     @Override
@@ -78,6 +133,8 @@ public class WarehouseServiceImpl implements IWarehouseService
         {
             throw new ServiceException("仓库不存在");
         }
+        enrichWarehousePairing(warehouse);
+        enrichSellerProfile(warehouse);
         return warehouse;
     }
 
@@ -166,29 +223,30 @@ public class WarehouseServiceImpl implements IWarehouseService
     @Override
     public List<WarehouseSyncConnection> selectSyncConnections(String keyword)
     {
-        return selectConnectionsByPairingRole(UpstreamSystemConstants.PAIRING_ROLE_FULFILLMENT, keyword);
+        return selectOfficialSyncConnections(keyword);
     }
 
     @Override
     public List<WarehouseSyncCandidate> selectSyncCandidates(String connectionCode, String keyword)
     {
-        return selectCandidatesByPairingRole(UpstreamSystemConstants.PAIRING_ROLE_FULFILLMENT, connectionCode, keyword);
+        UpstreamSystemConnection connection = selectEnabledSyncConnection(connectionCode);
+        String pairingRole = pairingRoleForSettlementType(connection.getSettlementType());
+        return selectCandidatesForConnection(connection, pairingRole, keyword);
     }
 
     @Override
     @Transactional
     public int syncOfficialWarehouse(OfficialWarehouseSyncRequest request)
     {
-        UpstreamSystemConnection connection = selectEnabledConnection(request.getConnectionCode(),
-            UpstreamSystemConstants.PAIRING_ROLE_FULFILLMENT);
+        UpstreamSystemConnection connection = selectEnabledSyncConnection(request.getConnectionCode());
+        String pairingRole = pairingRoleForSettlementType(connection.getSettlementType());
         String upstreamWarehouseCode = trimRequired(request.getUpstreamWarehouseCode(), "上游仓库编码不能为空");
         UpstreamWarehouseSyncItem candidate = selectSyncCandidate(connection.getConnectionCode(), upstreamWarehouseCode);
         if (!UpstreamSystemConstants.STATUS_ACTIVE.equals(candidate.getStatus()))
         {
             throw new ServiceException("上游仓库不是可同步状态");
         }
-        if (isUpstreamWarehousePaired(connection.getConnectionCode(), upstreamWarehouseCode,
-            UpstreamSystemConstants.PAIRING_ROLE_FULFILLMENT))
+        if (isUpstreamWarehousePaired(connection.getConnectionCode(), upstreamWarehouseCode, pairingRole))
         {
             throw new ServiceException("该上游仓库已配对，不能重复同步");
         }
@@ -204,8 +262,8 @@ public class WarehouseServiceImpl implements IWarehouseService
         pairingRequest.setUpstreamWarehouseCode(upstreamWarehouseCode);
         pairingRequest.setSystemWarehouseCode(request.getWarehouseCode());
         pairingRequest.setSystemWarehouseName(request.getWarehouseName());
-        pairingRequest.setPairingRole(UpstreamSystemConstants.PAIRING_ROLE_FULFILLMENT);
-        pairingRequest.setRemark("官方仓同步自动配对");
+        pairingRequest.setPairingRole(pairingRole);
+        pairingRequest.setRemark("官方仓同步自动配对：" + pairingRoleLabel(pairingRole) + "仓");
         upstreamSystemService.insertWarehousePairing(connection.getConnectionCode(), pairingRequest);
         return rows;
     }
@@ -287,7 +345,9 @@ public class WarehouseServiceImpl implements IWarehouseService
     @Override
     public List<WarehouseOption> selectNormalSellerOptions(String keyword)
     {
-        return warehouseMapper.selectNormalSellerOptions(StringUtils.trimToNull(keyword));
+        return sellerLookupService().selectNormalSellerOptions(StringUtils.trimToNull(keyword)).stream()
+            .map(this::toWarehouseOption)
+            .collect(Collectors.toList());
     }
 
     @Override
@@ -324,6 +384,8 @@ public class WarehouseServiceImpl implements IWarehouseService
         {
             throw new ServiceException("仓库不存在");
         }
+        enrichWarehousePairing(warehouse);
+        enrichSellerProfile(warehouse);
         return warehouse;
     }
 
@@ -373,10 +435,173 @@ public class WarehouseServiceImpl implements IWarehouseService
         {
             throw new ServiceException("归属卖家不能为空");
         }
-        if (warehouseMapper.countNormalSellerById(sellerId) <= 0)
+        if (!sellerLookupService().isNormalSeller(sellerId))
         {
             throw new ServiceException("归属卖家不存在");
         }
+    }
+
+    private void enrichSellerProfiles(List<Warehouse> warehouses)
+    {
+        if (warehouses == null || warehouses.isEmpty())
+        {
+            return;
+        }
+        Set<Long> sellerIds = warehouses.stream()
+            .map(Warehouse::getSellerId)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (sellerIds.isEmpty())
+        {
+            return;
+        }
+        Map<Long, WarehouseSellerProfile> sellerMap = sellerLookupService().selectSellerProfilesByIds(sellerIds)
+            .stream()
+            .collect(Collectors.toMap(WarehouseSellerProfile::getSellerId, Function.identity(), (left, right) -> left));
+        for (Warehouse warehouse : warehouses)
+        {
+            applySellerProfile(warehouse, sellerMap.get(warehouse.getSellerId()));
+        }
+    }
+
+    private void enrichWarehousePairings(List<Warehouse> warehouses)
+    {
+        if (warehouses == null || warehouses.isEmpty())
+        {
+            return;
+        }
+        List<String> warehouseCodes = warehouses.stream()
+            .map(Warehouse::getWarehouseCode)
+            .filter(StringUtils::isNotBlank)
+            .collect(Collectors.toCollection(LinkedHashSet::new))
+            .stream()
+            .collect(Collectors.toList());
+        if (warehouseCodes.isEmpty())
+        {
+            return;
+        }
+        Map<String, UpstreamWarehousePairingSnapshot> pairingMap =
+            warehousePairingProjectionService().selectActiveWarehousePairingSnapshotsBySystemWarehouseCodes(
+                    warehouseCodes)
+                .stream()
+                .filter(item -> StringUtils.isNotBlank(item.getSystemWarehouseCode()))
+                .filter(item -> StringUtils.isNotBlank(item.getPairingRole()))
+                .collect(Collectors.toMap(
+                    item -> pairingKey(item.getSystemWarehouseCode(), item.getPairingRole()),
+                    Function.identity(),
+                    (left, right) -> left));
+        for (Warehouse warehouse : warehouses)
+        {
+            applyFulfillmentPairing(warehouse, pairingMap.get(pairingKey(warehouse.getWarehouseCode(),
+                UpstreamSystemConstants.PAIRING_ROLE_FULFILLMENT)));
+            applyQuotePairing(warehouse, pairingMap.get(pairingKey(warehouse.getWarehouseCode(),
+                UpstreamSystemConstants.PAIRING_ROLE_QUOTE)));
+        }
+    }
+
+    private void enrichWarehousePairing(Warehouse warehouse)
+    {
+        if (warehouse == null)
+        {
+            return;
+        }
+        enrichWarehousePairings(List.of(warehouse));
+    }
+
+    private void applyFulfillmentPairing(Warehouse warehouse, UpstreamWarehousePairingSnapshot pairing)
+    {
+        if (warehouse == null || pairing == null)
+        {
+            return;
+        }
+        warehouse.setWarehousePairingId(pairing.getWarehousePairingId());
+        warehouse.setConnectionCode(pairing.getConnectionCode());
+        warehouse.setMasterWarehouseName(pairing.getMasterWarehouseName());
+        warehouse.setUpstreamWarehouseCode(pairing.getUpstreamWarehouseCode());
+        warehouse.setUpstreamWarehouseName(pairing.getUpstreamWarehouseName());
+        warehouse.setPairingRole(pairing.getPairingRole());
+        warehouse.setPairingStatus(pairing.getStatus());
+    }
+
+    private void applyQuotePairing(Warehouse warehouse, UpstreamWarehousePairingSnapshot pairing)
+    {
+        if (warehouse == null || pairing == null)
+        {
+            return;
+        }
+        warehouse.setQuoteWarehousePairingId(pairing.getWarehousePairingId());
+        warehouse.setQuoteConnectionCode(pairing.getConnectionCode());
+        warehouse.setQuoteMasterWarehouseName(pairing.getMasterWarehouseName());
+        warehouse.setQuoteUpstreamWarehouseCode(pairing.getUpstreamWarehouseCode());
+        warehouse.setQuoteUpstreamWarehouseName(pairing.getUpstreamWarehouseName());
+        warehouse.setQuotePairingStatus(pairing.getStatus());
+    }
+
+    private String pairingKey(String warehouseCode, String pairingRole)
+    {
+        return StringUtils.trimToEmpty(warehouseCode) + "::" + StringUtils.trimToEmpty(pairingRole);
+    }
+
+    private void enrichSellerProfile(Warehouse warehouse)
+    {
+        if (warehouse == null || warehouse.getSellerId() == null)
+        {
+            return;
+        }
+        applySellerProfile(warehouse, sellerLookupService().selectSellerProfile(warehouse.getSellerId()));
+    }
+
+    private void applySellerProfile(Warehouse warehouse, WarehouseSellerProfile seller)
+    {
+        if (warehouse == null || seller == null)
+        {
+            return;
+        }
+        warehouse.setSellerNo(seller.getSellerNo());
+        warehouse.setSellerCode(seller.getSellerCode());
+        warehouse.setSellerName(seller.getSellerName());
+        warehouse.setSellerShortName(seller.getSellerShortName());
+    }
+
+    private WarehouseOption toWarehouseOption(WarehouseSellerProfile seller)
+    {
+        WarehouseOption option = new WarehouseOption();
+        String sellerCode = StringUtils.defaultString(seller.getSellerCode());
+        String sellerName = StringUtils.defaultIfBlank(seller.getSellerShortName(), seller.getSellerName());
+        option.setLabel(StringUtils.isBlank(sellerCode) ? sellerName : sellerCode + " - " + sellerName);
+        option.setValue(seller.getSellerId());
+        option.setCode(seller.getSellerCode());
+        option.setName(seller.getSellerName());
+        option.setSearchText(String.join(" ", nonNullSellerOptionParts(seller)));
+        return option;
+    }
+
+    private List<String> nonNullSellerOptionParts(WarehouseSellerProfile seller)
+    {
+        return java.util.stream.Stream.of(seller.getSellerNo(), seller.getSellerCode(), seller.getSellerName(),
+                seller.getSellerShortName())
+            .filter(StringUtils::isNotBlank)
+            .collect(Collectors.toList());
+    }
+
+    private WarehouseSellerLookupService sellerLookupService()
+    {
+        WarehouseSellerLookupService service = sellerLookupServiceProvider.getIfAvailable();
+        if (service == null)
+        {
+            throw new ServiceException("卖家资料查询服务不可用");
+        }
+        return service;
+    }
+
+    private IUpstreamWarehousePairingProjectionService warehousePairingProjectionService()
+    {
+        IUpstreamWarehousePairingProjectionService service = warehousePairingProjectionServiceProvider.getIfAvailable();
+        if (service == null)
+        {
+            throw new ServiceException("上游仓库配对投影服务不可用");
+        }
+        return service;
     }
 
     private void checkWarehouseCodeUnique(Warehouse warehouse)
@@ -409,10 +634,30 @@ public class WarehouseServiceImpl implements IWarehouseService
             .collect(Collectors.toList());
     }
 
+    private List<WarehouseSyncConnection> selectOfficialSyncConnections(String keyword)
+    {
+        UpstreamSystemConnection query = new UpstreamSystemConnection();
+        query.setStatus(UpstreamSystemConstants.STATUS_ENABLED);
+        return upstreamSystemService.selectConnectionList(query).stream()
+            .filter(item -> isOfficialSyncSettlementType(item.getSettlementType()))
+            .filter(item -> StringUtils.isBlank(keyword)
+                || StringUtils.containsIgnoreCase(item.getConnectionCode(), keyword)
+                || StringUtils.containsIgnoreCase(item.getMasterWarehouseName(), keyword))
+            .map(this::toSyncConnection)
+            .collect(Collectors.toList());
+    }
+
     private List<WarehouseSyncCandidate> selectCandidatesByPairingRole(String pairingRole, String connectionCode,
         String keyword)
     {
         UpstreamSystemConnection connection = selectEnabledConnection(connectionCode, pairingRole);
+        return selectCandidatesForConnection(connection, pairingRole, keyword);
+    }
+
+    private List<WarehouseSyncCandidate> selectCandidatesForConnection(UpstreamSystemConnection connection,
+        String pairingRole, String keyword)
+    {
+        String connectionCode = connection.getConnectionCode();
         Map<String, UpstreamWarehousePairing> pairingMap = upstreamSystemService.selectWarehousePairingList(connectionCode)
             .stream()
             .filter(item -> pairingRole.equals(item.getPairingRole()))
@@ -422,7 +667,7 @@ public class WarehouseServiceImpl implements IWarehouseService
             .filter(item -> StringUtils.isBlank(keyword)
                 || StringUtils.containsIgnoreCase(item.getWarehouseCode(), keyword)
                 || StringUtils.containsIgnoreCase(item.getWarehouseName(), keyword))
-            .map(item -> toSyncCandidate(connection, item, pairingMap.get(item.getWarehouseCode())))
+            .map(item -> toSyncCandidate(connection, item, pairingMap.get(item.getWarehouseCode()), pairingRole))
             .collect(Collectors.toList());
     }
 
@@ -430,7 +675,7 @@ public class WarehouseServiceImpl implements IWarehouseService
     {
         String normalizedCode = trimRequired(connectionCode, "主仓接入编号不能为空");
         UpstreamSystemConnection connection = upstreamSystemService.selectConnectionByCode(normalizedCode);
-        if (!UpstreamSystemConstants.STATUS_ENABLED.equals(connection.getStatus()))
+        if (connection == null || !UpstreamSystemConstants.STATUS_ENABLED.equals(connection.getStatus()))
         {
             throw new ServiceException("主仓接入已停用，不能同步仓库");
         }
@@ -439,6 +684,18 @@ public class WarehouseServiceImpl implements IWarehouseService
         {
             throw new ServiceException("该主仓接入不能作为" + pairingRoleLabel(pairingRole) + "仓");
         }
+        return connection;
+    }
+
+    private UpstreamSystemConnection selectEnabledSyncConnection(String connectionCode)
+    {
+        String normalizedCode = trimRequired(connectionCode, "主仓接入编号不能为空");
+        UpstreamSystemConnection connection = upstreamSystemService.selectConnectionByCode(normalizedCode);
+        if (connection == null || !UpstreamSystemConstants.STATUS_ENABLED.equals(connection.getStatus()))
+        {
+            throw new ServiceException("主仓接入已停用，不能同步仓库");
+        }
+        pairingRoleForSettlementType(connection.getSettlementType());
         return connection;
     }
 
@@ -476,6 +733,27 @@ public class WarehouseServiceImpl implements IWarehouseService
             : UpstreamSystemConstants.SETTLEMENT_TYPE_UPSTREAM_PAYABLE;
     }
 
+    private String pairingRoleForSettlementType(String settlementType)
+    {
+        String normalized = normalizeSettlementType(settlementType);
+        if (UpstreamSystemConstants.SETTLEMENT_TYPE_UPSTREAM_PAYABLE.equals(normalized))
+        {
+            return UpstreamSystemConstants.PAIRING_ROLE_FULFILLMENT;
+        }
+        if (UpstreamSystemConstants.SETTLEMENT_TYPE_SELF_OPERATED_RECEIVABLE.equals(normalized))
+        {
+            return UpstreamSystemConstants.PAIRING_ROLE_QUOTE;
+        }
+        throw new ServiceException("主仓接入结算类型不支持同步仓库");
+    }
+
+    private boolean isOfficialSyncSettlementType(String settlementType)
+    {
+        String normalized = normalizeSettlementType(settlementType);
+        return UpstreamSystemConstants.SETTLEMENT_TYPE_UPSTREAM_PAYABLE.equals(normalized)
+            || UpstreamSystemConstants.SETTLEMENT_TYPE_SELF_OPERATED_RECEIVABLE.equals(normalized);
+    }
+
     private String normalizeSettlementType(String value)
     {
         String trimmed = StringUtils.trimToEmpty(value);
@@ -508,7 +786,7 @@ public class WarehouseServiceImpl implements IWarehouseService
     }
 
     private WarehouseSyncCandidate toSyncCandidate(UpstreamSystemConnection connection, UpstreamWarehouseSyncItem item,
-        UpstreamWarehousePairing pairing)
+        UpstreamWarehousePairing pairing, String pairingRole)
     {
         WarehouseSyncCandidate candidate = new WarehouseSyncCandidate();
         candidate.setConnectionCode(connection.getConnectionCode());
@@ -523,6 +801,10 @@ public class WarehouseServiceImpl implements IWarehouseService
             candidate.setPairingRole(pairing.getPairingRole());
             candidate.setSystemWarehouseCode(pairing.getSystemWarehouseCode());
             candidate.setSystemWarehouseName(pairing.getSystemWarehouseName());
+        }
+        else
+        {
+            candidate.setPairingRole(pairingRole);
         }
         return candidate;
     }

@@ -5,7 +5,20 @@
 -- 3. Keep existing rows as fulfillment by default and fail closed before remote DDL.
 
 set names utf8mb4;
+set session group_concat_max_len = greatest(@@session.group_concat_max_len, 1048576);
 set @confirm_upstream_pairing_role_binding := coalesce(@confirm_upstream_pairing_role_binding, '');
+set @upstream_pairing_warehouse_role_expected_count :=
+    coalesce(@upstream_pairing_warehouse_role_expected_count, '');
+set @upstream_pairing_warehouse_role_expected_signature :=
+    coalesce(@upstream_pairing_warehouse_role_expected_signature, '');
+set @upstream_pairing_logistics_role_expected_count :=
+    coalesce(@upstream_pairing_logistics_role_expected_count, '');
+set @upstream_pairing_logistics_role_expected_signature :=
+    coalesce(@upstream_pairing_logistics_role_expected_signature, '');
+set @upstream_pairing_logistics_warehouse_expected_count :=
+    coalesce(@upstream_pairing_logistics_warehouse_expected_count, '');
+set @upstream_pairing_logistics_warehouse_expected_signature :=
+    coalesce(@upstream_pairing_logistics_warehouse_expected_signature, '');
 
 delimiter //
 
@@ -15,6 +28,25 @@ begin
   if coalesce(@confirm_upstream_pairing_role_binding, '')
       <> 'APPLY_UPSTREAM_PAIRING_ROLE_BINDING' then
     signal sqlstate '45000' set message_text = 'set @confirm_upstream_pairing_role_binding = APPLY_UPSTREAM_PAIRING_ROLE_BINDING before running this migration';
+  end if;
+
+  if coalesce(@upstream_pairing_warehouse_role_expected_count, '') not regexp '^[0-9]+$' then
+    signal sqlstate '45000' set message_text = 'set @upstream_pairing_warehouse_role_expected_count after previewing exact warehouse pairing role targets';
+  end if;
+  if coalesce(@upstream_pairing_warehouse_role_expected_signature, '') not regexp '^[0-9a-fA-F]{64}$' then
+    signal sqlstate '45000' set message_text = 'set @upstream_pairing_warehouse_role_expected_signature after previewing exact warehouse pairing role targets';
+  end if;
+  if coalesce(@upstream_pairing_logistics_role_expected_count, '') not regexp '^[0-9]+$' then
+    signal sqlstate '45000' set message_text = 'set @upstream_pairing_logistics_role_expected_count after previewing exact logistics pairing role targets';
+  end if;
+  if coalesce(@upstream_pairing_logistics_role_expected_signature, '') not regexp '^[0-9a-fA-F]{64}$' then
+    signal sqlstate '45000' set message_text = 'set @upstream_pairing_logistics_role_expected_signature after previewing exact logistics pairing role targets';
+  end if;
+  if coalesce(@upstream_pairing_logistics_warehouse_expected_count, '') not regexp '^[0-9]+$' then
+    signal sqlstate '45000' set message_text = 'set @upstream_pairing_logistics_warehouse_expected_count after previewing exact logistics warehouse-code targets';
+  end if;
+  if coalesce(@upstream_pairing_logistics_warehouse_expected_signature, '') not regexp '^[0-9a-fA-F]{64}$' then
+    signal sqlstate '45000' set message_text = 'set @upstream_pairing_logistics_warehouse_expected_signature after previewing exact logistics warehouse-code targets';
   end if;
 end//
 
@@ -147,6 +179,103 @@ begin
   end if;
 end//
 
+drop procedure if exists assert_upstream_pairing_role_backfill_targets//
+create procedure assert_upstream_pairing_role_backfill_targets()
+begin
+  declare v_count int default 0;
+  declare v_signature varchar(64) default '';
+
+  select count(1),
+         sha2(coalesce(group_concat(
+           concat_ws(':',
+             warehouse_pairing_id,
+             coalesce(connection_code, ''),
+             coalesce(system_warehouse_code, ''),
+             coalesce(upstream_warehouse_code, ''),
+             coalesce(system_warehouse_name, ''),
+             coalesce(pairing_role, '')
+           )
+           order by warehouse_pairing_id separator '|'
+         ), ''), 256)
+    into v_count, v_signature
+  from upstream_system_warehouse_pairing
+  where pairing_role is null or pairing_role = '';
+
+  if v_count <> cast(@upstream_pairing_warehouse_role_expected_count as unsigned) then
+    signal sqlstate '45000' set message_text = 'warehouse pairing role exact target count mismatch';
+  end if;
+  if lower(v_signature) <> lower(@upstream_pairing_warehouse_role_expected_signature) then
+    signal sqlstate '45000' set message_text = 'warehouse pairing role exact target signature mismatch';
+  end if;
+
+  select count(1),
+         sha2(coalesce(group_concat(
+           concat_ws(':',
+             logistics_channel_pairing_id,
+             coalesce(connection_code, ''),
+             coalesce(system_warehouse_code, ''),
+             coalesce(upstream_warehouse_code, ''),
+             coalesce(system_channel_code, ''),
+             coalesce(upstream_channel_code, ''),
+             coalesce(system_channel_name, ''),
+             coalesce(pairing_role, '')
+           )
+           order by logistics_channel_pairing_id separator '|'
+         ), ''), 256)
+    into v_count, v_signature
+  from upstream_system_logistics_channel_pairing
+  where pairing_role is null or pairing_role = '';
+
+  if v_count <> cast(@upstream_pairing_logistics_role_expected_count as unsigned) then
+    signal sqlstate '45000' set message_text = 'logistics pairing role exact target count mismatch';
+  end if;
+  if lower(v_signature) <> lower(@upstream_pairing_logistics_role_expected_signature) then
+    signal sqlstate '45000' set message_text = 'logistics pairing role exact target signature mismatch';
+  end if;
+end//
+
+drop procedure if exists assert_upstream_pairing_warehouse_code_backfill_targets//
+create procedure assert_upstream_pairing_warehouse_code_backfill_targets()
+begin
+  declare v_count int default 0;
+  declare v_signature varchar(64) default '';
+
+  select count(1),
+         sha2(coalesce(group_concat(
+           concat_ws(':',
+             l.logistics_channel_pairing_id,
+             coalesce(l.connection_code, ''),
+             coalesce(l.system_channel_code, ''),
+             coalesce(l.upstream_channel_code, ''),
+             coalesce(nullif(l.pairing_role, ''), 'FULFILLMENT'),
+             p.warehouse_pairing_id,
+             coalesce(p.system_warehouse_code, ''),
+             coalesce(p.upstream_warehouse_code, '')
+           )
+           order by l.logistics_channel_pairing_id separator '|'
+         ), ''), 256)
+    into v_count, v_signature
+  from upstream_system_logistics_channel_pairing l
+  inner join upstream_system_warehouse_pairing p
+          on p.connection_code = l.connection_code
+         and p.pairing_role = coalesce(nullif(l.pairing_role, ''), 'FULFILLMENT')
+  where l.system_warehouse_code = ''
+    and l.upstream_warehouse_code = ''
+    and (
+        select count(1)
+        from upstream_system_warehouse_pairing p2
+        where p2.connection_code = l.connection_code
+          and p2.pairing_role = coalesce(nullif(l.pairing_role, ''), 'FULFILLMENT')
+    ) = 1;
+
+  if v_count <> cast(@upstream_pairing_logistics_warehouse_expected_count as unsigned) then
+    signal sqlstate '45000' set message_text = 'logistics warehouse-code backfill exact target count mismatch';
+  end if;
+  if lower(v_signature) <> lower(@upstream_pairing_logistics_warehouse_expected_signature) then
+    signal sqlstate '45000' set message_text = 'logistics warehouse-code backfill exact target signature mismatch';
+  end if;
+end//
+
 delimiter ;
 
 call assert_upstream_pairing_role_binding_confirmed();
@@ -171,6 +300,9 @@ call add_column_if_missing('upstream_system_logistics_channel_pairing', 'upstrea
   'varchar(100) not null default '''' comment ''领星仓库代码'' after `system_warehouse_code`');
 call add_column_if_missing('upstream_system_logistics_channel_pairing', 'pairing_role',
   'varchar(32) not null default ''FULFILLMENT'' comment ''配对用途：FULFILLMENT履约渠道，QUOTE报价渠道'' after `system_channel_name`');
+
+call assert_upstream_pairing_role_backfill_targets();
+call assert_upstream_pairing_warehouse_code_backfill_targets();
 
 update upstream_system_warehouse_pairing
 set pairing_role = 'FULFILLMENT'
@@ -247,3 +379,5 @@ drop procedure if exists add_column_if_missing;
 drop procedure if exists drop_index_if_exists;
 drop procedure if exists recreate_index_if_mismatch;
 drop procedure if exists assert_index_definition;
+drop procedure if exists assert_upstream_pairing_role_backfill_targets;
+drop procedure if exists assert_upstream_pairing_warehouse_code_backfill_targets;

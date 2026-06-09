@@ -146,7 +146,7 @@ begin
     from seller_menu
     where perms = p_perms
       and (
-        parent_id <> p_parent_id
+        coalesce(parent_id, -1) <> p_parent_id
         or coalesce(menu_type, '') <> coalesce(p_menu_type, '')
         or coalesce(path, '') <> coalesce(p_path, '')
         or coalesce(component, '') <> coalesce(p_component, '')
@@ -173,7 +173,7 @@ begin
     from buyer_menu
     where perms = p_perms
       and (
-        parent_id <> p_parent_id
+        coalesce(parent_id, -1) <> p_parent_id
         or coalesce(menu_type, '') <> coalesce(p_menu_type, '')
         or coalesce(path, '') <> coalesce(p_path, '')
         or coalesce(component, '') <> coalesce(p_component, '')
@@ -223,11 +223,19 @@ begin
   if exists (
     select 1
     from seller_menu
-    where coalesce(perms, '') = ''
-       or coalesce(perms, '') = '*'
-       or coalesce(perms, '') not like 'seller:%'
-       or coalesce(perms, '') like 'seller:admin:%'
-       or coalesce(perms, '') like 'buyer:%'
+    where (
+        menu_type in ('C', 'F')
+        and coalesce(trim(perms), '') = ''
+      )
+       or (
+        coalesce(trim(perms), '') <> ''
+        and (
+          coalesce(trim(perms), '') = '*'
+          or coalesce(trim(perms), '') not like 'seller:%'
+          or coalesce(trim(perms), '') like 'seller:admin:%'
+          or coalesce(trim(perms), '') like 'buyer:%'
+        )
+      )
   ) then
     signal sqlstate '45000' set message_text = 'seller_menu contains invalid terminal perms';
   end if;
@@ -244,9 +252,10 @@ begin
   if exists (
     select 1
     from (
-      select perms
+      select trim(perms) as perms_unique
       from seller_menu
-      group by perms
+      where coalesce(trim(perms), '') <> ''
+      group by trim(perms)
       having count(1) > 1
     ) duplicate_seller_menu_perms
   ) then
@@ -286,11 +295,19 @@ begin
   if exists (
     select 1
     from buyer_menu
-    where coalesce(perms, '') = ''
-       or coalesce(perms, '') = '*'
-       or coalesce(perms, '') not like 'buyer:%'
-       or coalesce(perms, '') like 'buyer:admin:%'
-       or coalesce(perms, '') like 'seller:%'
+    where (
+        menu_type in ('C', 'F')
+        and coalesce(trim(perms), '') = ''
+      )
+       or (
+        coalesce(trim(perms), '') <> ''
+        and (
+          coalesce(trim(perms), '') = '*'
+          or coalesce(trim(perms), '') not like 'buyer:%'
+          or coalesce(trim(perms), '') like 'buyer:admin:%'
+          or coalesce(trim(perms), '') like 'seller:%'
+        )
+      )
   ) then
     signal sqlstate '45000' set message_text = 'buyer_menu contains invalid terminal perms';
   end if;
@@ -307,13 +324,36 @@ begin
   if exists (
     select 1
     from (
-      select perms
+      select trim(perms) as perms_unique
       from buyer_menu
-      group by perms
+      where coalesce(trim(perms), '') <> ''
+      group by trim(perms)
       having count(1) > 1
     ) duplicate_buyer_menu_perms
   ) then
     signal sqlstate '45000' set message_text = 'buyer_menu perms must be unique before terminal role grants';
+  end if;
+
+  if exists (
+    select 1
+    from seller_role_menu rm
+    left join seller_menu m on m.seller_menu_id = rm.seller_menu_id
+    where m.seller_menu_id is null
+       or m.seller_menu_id < 100000
+       or m.seller_menu_id >= 200000
+  ) then
+    signal sqlstate '45000' set message_text = 'seller_role_menu has orphan or out-of-range seller_menu_id values';
+  end if;
+
+  if exists (
+    select 1
+    from buyer_role_menu rm
+    left join buyer_menu m on m.buyer_menu_id = rm.buyer_menu_id
+    where m.buyer_menu_id is null
+       or m.buyer_menu_id < 200000
+       or m.buyer_menu_id >= 300000
+  ) then
+    signal sqlstate '45000' set message_text = 'buyer_role_menu has orphan or out-of-range buyer_menu_id values';
   end if;
 end//
 
@@ -325,6 +365,58 @@ begin
     from information_schema.statistics
     where table_schema = database() and table_name = p_table and index_name = p_index
   ) then
+    set @ddl = concat('alter table `', p_table, '` add ', p_definition);
+    prepare stmt from @ddl;
+    execute stmt;
+    deallocate prepare stmt;
+  end if;
+end//
+
+drop procedure if exists add_column_if_missing//
+create procedure add_column_if_missing(in p_table varchar(64), in p_column varchar(64), in p_definition text)
+begin
+  if not exists (
+    select 1
+    from information_schema.columns
+    where table_schema = database() and table_name = p_table and column_name = p_column
+  ) then
+    set @ddl = concat('alter table `', p_table, '` add column `', p_column, '` ', p_definition);
+    prepare stmt from @ddl;
+    execute stmt;
+    deallocate prepare stmt;
+  end if;
+end//
+
+drop procedure if exists recreate_index_if_mismatch//
+create procedure recreate_index_if_mismatch(
+  in p_table varchar(64),
+  in p_index varchar(64),
+  in p_expected_columns varchar(512),
+  in p_expected_non_unique int,
+  in p_definition text
+)
+begin
+  declare v_index_count int default 0;
+  declare v_actual_columns text default '';
+  declare v_actual_non_unique int default null;
+
+  select count(distinct index_name),
+         coalesce(group_concat(column_name order by seq_in_index separator ','), ''),
+         max(non_unique)
+    into v_index_count, v_actual_columns, v_actual_non_unique
+  from information_schema.statistics
+  where table_schema = database() and table_name = p_table and index_name = p_index;
+
+  if v_index_count > 0
+      and (v_actual_columns <> p_expected_columns or v_actual_non_unique <> p_expected_non_unique) then
+    set @ddl = concat('alter table `', p_table, '` drop index `', p_index, '`');
+    prepare stmt from @ddl;
+    execute stmt;
+    deallocate prepare stmt;
+    set v_index_count = 0;
+  end if;
+
+  if v_index_count = 0 then
     set @ddl = concat('alter table `', p_table, '` add ', p_definition);
     prepare stmt from @ddl;
     execute stmt;
@@ -351,9 +443,369 @@ begin
   where table_schema = database() and table_name = p_table and index_name = p_index;
 
   if v_index_count <> 1
-      or v_actual_columns <> 'perms'
+      or v_actual_columns <> 'perms_unique_key'
       or v_actual_non_unique <> 0 then
     signal sqlstate '45000' set message_text = p_message;
+  end if;
+end//
+
+drop procedure if exists assert_terminal_owner_role_slots_ready//
+create procedure assert_terminal_owner_role_slots_ready()
+begin
+  if exists (
+    select 1
+    from seller_role r
+    join seller s on s.seller_id = r.seller_id
+                 and s.status = '0'
+    where r.role_key = 'owner'
+      and (
+        coalesce(r.status, '') <> '0'
+        or coalesce(r.del_flag, '') <> '0'
+      )
+  ) then
+    signal sqlstate '45000' set message_text = 'seller owner role must be active before terminal owner grants';
+  end if;
+
+  if exists (
+    select 1
+    from seller_role r
+    join seller s on s.seller_id = r.seller_id
+                 and s.status = '0'
+    where r.role_key = 'owner'
+      and r.del_flag = '0'
+      and (
+        coalesce(r.role_name, '') <> 'Owner'
+        or coalesce(r.role_sort, -1) <> 1
+        or coalesce(r.status, '') <> '0'
+        or coalesce(r.remark, '') <> '默认卖家端 Owner 角色'
+      )
+  ) then
+    signal sqlstate '45000' set message_text = 'seller owner role signature mismatch before terminal owner grants';
+  end if;
+
+  if exists (
+    select 1
+    from buyer_role r
+    join buyer b on b.buyer_id = r.buyer_id
+                and b.status = '0'
+    where r.role_key = 'owner'
+      and (
+        coalesce(r.status, '') <> '0'
+        or coalesce(r.del_flag, '') <> '0'
+      )
+  ) then
+    signal sqlstate '45000' set message_text = 'buyer owner role must be active before terminal owner grants';
+  end if;
+
+  if exists (
+    select 1
+    from buyer_role r
+    join buyer b on b.buyer_id = r.buyer_id
+                and b.status = '0'
+    where r.role_key = 'owner'
+      and r.del_flag = '0'
+      and (
+        coalesce(r.role_name, '') <> 'Owner'
+        or coalesce(r.role_sort, -1) <> 1
+        or coalesce(r.status, '') <> '0'
+        or coalesce(r.remark, '') <> '默认买家端 Owner 角色'
+      )
+  ) then
+    signal sqlstate '45000' set message_text = 'buyer owner role signature mismatch before terminal owner grants';
+  end if;
+end//
+
+drop procedure if exists assert_seller_buyer_management_seed_completed//
+create procedure assert_seller_buyer_management_seed_completed()
+begin
+  if exists (
+    select 1
+    from tmp_seller_buyer_sys_menu_guard seed
+    left join sys_menu m on m.menu_id = seed.menu_id
+    where m.menu_id is null
+       or coalesce(m.parent_id, -1) <> seed.parent_id
+       or coalesce(m.menu_type, '') <> coalesce(seed.menu_type, '')
+       or coalesce(m.path, '') <> coalesce(seed.path, '')
+       or coalesce(m.component, '') <> coalesce(seed.component, '')
+       or coalesce(m.route_name, '') <> coalesce(seed.route_name, '')
+       or coalesce(m.perms, '') <> coalesce(seed.perms, '')
+  ) then
+    signal sqlstate '45000' set message_text = 'seller/buyer management sys_menu final signature mismatch';
+  end if;
+
+  if not exists (select 1 from sys_config where config_key = 'portal.seller.web.url')
+      or not exists (select 1 from sys_config where config_key = 'portal.buyer.web.url') then
+    signal sqlstate '45000' set message_text = 'seller/buyer management portal web url config is incomplete';
+  end if;
+
+  if exists (
+    select 1
+    from (
+      select 'seller:account:list' as perms
+      union all select 'seller:account:loginLog:list'
+      union all select 'seller:account:operLog:list'
+      union all select 'seller:account:session:list'
+      union all select 'seller:dept:list'
+      union all select 'seller:role:list'
+      union all select 'seller:product:category:list'
+      union all select 'seller:product:schema:query'
+      union all select 'seller:product:distribution:list'
+      union all select 'seller:product:distribution:query'
+    ) expected
+    where not exists (
+      select 1
+      from seller_menu m
+      where m.perms = expected.perms
+        and m.parent_id = 0
+        and coalesce(m.menu_type, '') = 'F'
+        and coalesce(m.path, '') = ''
+        and coalesce(m.component, '') = ''
+        and coalesce(m.route_name, '') = ''
+    )
+  ) then
+    signal sqlstate '45000' set message_text = 'seller/buyer management seller terminal permission final state mismatch';
+  end if;
+
+  if exists (
+    select 1
+    from (
+      select 'buyer:account:list' as perms
+      union all select 'buyer:account:loginLog:list'
+      union all select 'buyer:account:operLog:list'
+      union all select 'buyer:account:session:list'
+      union all select 'buyer:dept:list'
+      union all select 'buyer:role:list'
+      union all select 'buyer:product:category:list'
+      union all select 'buyer:product:schema:query'
+      union all select 'buyer:product:distribution:list'
+      union all select 'buyer:product:distribution:query'
+    ) expected
+    where not exists (
+      select 1
+      from buyer_menu m
+      where m.perms = expected.perms
+        and m.parent_id = 0
+        and coalesce(m.menu_type, '') = 'F'
+        and coalesce(m.path, '') = ''
+        and coalesce(m.component, '') = ''
+        and coalesce(m.route_name, '') = ''
+    )
+  ) then
+    signal sqlstate '45000' set message_text = 'seller/buyer management buyer terminal permission final state mismatch';
+  end if;
+
+  if exists (
+    select 1
+    from seller_role_menu rm
+    left join seller_menu m on m.seller_menu_id = rm.seller_menu_id
+    where m.seller_menu_id is null
+       or m.seller_menu_id < 100000
+       or m.seller_menu_id >= 200000
+  ) then
+    signal sqlstate '45000' set message_text = 'seller_role_menu final state has orphan or out-of-range seller_menu_id values';
+  end if;
+
+  if exists (
+    select 1
+    from buyer_role_menu rm
+    left join buyer_menu m on m.buyer_menu_id = rm.buyer_menu_id
+    where m.buyer_menu_id is null
+       or m.buyer_menu_id < 200000
+       or m.buyer_menu_id >= 300000
+  ) then
+    signal sqlstate '45000' set message_text = 'buyer_role_menu final state has orphan or out-of-range buyer_menu_id values';
+  end if;
+
+  if exists (
+    select 1
+    from seller_account_role ar
+    left join seller_account a on a.seller_account_id = ar.seller_account_id
+    left join seller_role r on r.seller_role_id = ar.seller_role_id
+    where a.seller_account_id is null
+       or r.seller_role_id is null
+       or a.seller_id <> r.seller_id
+  ) then
+    signal sqlstate '45000' set message_text = 'seller_account_role final state has orphan or cross-subject role bindings';
+  end if;
+
+  if exists (
+    select 1
+    from buyer_account_role ar
+    left join buyer_account a on a.buyer_account_id = ar.buyer_account_id
+    left join buyer_role r on r.buyer_role_id = ar.buyer_role_id
+    where a.buyer_account_id is null
+       or r.buyer_role_id is null
+       or a.buyer_id <> r.buyer_id
+  ) then
+    signal sqlstate '45000' set message_text = 'buyer_account_role final state has orphan or cross-subject role bindings';
+  end if;
+
+  if exists (
+    select 1
+    from seller_account a
+    join seller s on s.seller_id = a.seller_id
+                 and s.status = '0'
+    join seller_role r on r.seller_id = a.seller_id
+                      and r.role_key = 'owner'
+                      and r.status = '0'
+                      and r.del_flag = '0'
+    left join seller_account_role ar on ar.seller_account_id = a.seller_account_id
+                                    and ar.seller_role_id = r.seller_role_id
+    where a.account_role = 'OWNER'
+      and ar.seller_account_id is null
+  ) then
+    signal sqlstate '45000' set message_text = 'seller owner account role binding final state mismatch';
+  end if;
+
+  if exists (
+    select 1
+    from buyer_account a
+    join buyer b on b.buyer_id = a.buyer_id
+                and b.status = '0'
+    join buyer_role r on r.buyer_id = a.buyer_id
+                     and r.role_key = 'owner'
+                     and r.status = '0'
+                     and r.del_flag = '0'
+    left join buyer_account_role ar on ar.buyer_account_id = a.buyer_account_id
+                                   and ar.buyer_role_id = r.buyer_role_id
+    where a.account_role = 'OWNER'
+      and ar.buyer_account_id is null
+  ) then
+    signal sqlstate '45000' set message_text = 'buyer owner account role binding final state mismatch';
+  end if;
+
+  if exists (
+    select 1
+    from seller_role r
+    join seller s on s.seller_id = r.seller_id
+                 and s.status = '0'
+    join (
+      select 'seller:account:list' as perms
+      union all select 'seller:account:loginLog:list'
+      union all select 'seller:account:operLog:list'
+      union all select 'seller:account:session:list'
+      union all select 'seller:dept:list'
+      union all select 'seller:role:list'
+      union all select 'seller:product:category:list'
+      union all select 'seller:product:schema:query'
+      union all select 'seller:product:distribution:list'
+      union all select 'seller:product:distribution:query'
+    ) expected
+    join seller_menu m on m.perms = expected.perms
+                      and m.parent_id = 0
+                      and coalesce(m.menu_type, '') = 'F'
+                      and coalesce(m.path, '') = ''
+                      and coalesce(m.component, '') = ''
+                      and coalesce(m.route_name, '') = ''
+    left join seller_role_menu rm on rm.seller_role_id = r.seller_role_id
+                                 and rm.seller_menu_id = m.seller_menu_id
+    where r.role_key = 'owner'
+      and r.status = '0'
+      and r.del_flag = '0'
+      and rm.seller_role_id is null
+  ) then
+    signal sqlstate '45000' set message_text = 'seller owner role terminal permission grants final state mismatch';
+  end if;
+
+  if exists (
+    select 1
+    from seller_role r
+    join seller s on s.seller_id = r.seller_id
+                 and s.status = '0'
+    join seller_role_menu rm on rm.seller_role_id = r.seller_role_id
+    join seller_menu m on m.seller_menu_id = rm.seller_menu_id
+    left join (
+      select 'seller:account:list' as perms
+      union all select 'seller:account:loginLog:list'
+      union all select 'seller:account:operLog:list'
+      union all select 'seller:account:session:list'
+      union all select 'seller:dept:list'
+      union all select 'seller:role:list'
+      union all select 'seller:product:category:list'
+      union all select 'seller:product:schema:query'
+      union all select 'seller:product:distribution:list'
+      union all select 'seller:product:distribution:query'
+    ) expected on expected.perms = m.perms
+    where r.role_key = 'owner'
+      and r.status = '0'
+      and r.del_flag = '0'
+      and (
+        m.perms like 'seller:account:%'
+        or m.perms in ('seller:dept:list', 'seller:role:list')
+        or m.perms like 'seller:product:category:%'
+        or m.perms like 'seller:product:schema:%'
+        or m.perms like 'seller:product:distribution:%'
+      )
+      and expected.perms is null
+  ) then
+    signal sqlstate '45000' set message_text = 'seller owner role terminal permission grants final state has unexpected permissions';
+  end if;
+
+  if exists (
+    select 1
+    from buyer_role r
+    join buyer b on b.buyer_id = r.buyer_id
+                and b.status = '0'
+    join (
+      select 'buyer:account:list' as perms
+      union all select 'buyer:account:loginLog:list'
+      union all select 'buyer:account:operLog:list'
+      union all select 'buyer:account:session:list'
+      union all select 'buyer:dept:list'
+      union all select 'buyer:role:list'
+      union all select 'buyer:product:category:list'
+      union all select 'buyer:product:schema:query'
+      union all select 'buyer:product:distribution:list'
+      union all select 'buyer:product:distribution:query'
+    ) expected
+    join buyer_menu m on m.perms = expected.perms
+                     and m.parent_id = 0
+                     and coalesce(m.menu_type, '') = 'F'
+                     and coalesce(m.path, '') = ''
+                     and coalesce(m.component, '') = ''
+                     and coalesce(m.route_name, '') = ''
+    left join buyer_role_menu rm on rm.buyer_role_id = r.buyer_role_id
+                                and rm.buyer_menu_id = m.buyer_menu_id
+    where r.role_key = 'owner'
+      and r.status = '0'
+      and r.del_flag = '0'
+      and rm.buyer_role_id is null
+  ) then
+    signal sqlstate '45000' set message_text = 'buyer owner role terminal permission grants final state mismatch';
+  end if;
+
+  if exists (
+    select 1
+    from buyer_role r
+    join buyer b on b.buyer_id = r.buyer_id
+                and b.status = '0'
+    join buyer_role_menu rm on rm.buyer_role_id = r.buyer_role_id
+    join buyer_menu m on m.buyer_menu_id = rm.buyer_menu_id
+    left join (
+      select 'buyer:account:list' as perms
+      union all select 'buyer:account:loginLog:list'
+      union all select 'buyer:account:operLog:list'
+      union all select 'buyer:account:session:list'
+      union all select 'buyer:dept:list'
+      union all select 'buyer:role:list'
+      union all select 'buyer:product:category:list'
+      union all select 'buyer:product:schema:query'
+      union all select 'buyer:product:distribution:list'
+      union all select 'buyer:product:distribution:query'
+    ) expected on expected.perms = m.perms
+    where r.role_key = 'owner'
+      and r.status = '0'
+      and r.del_flag = '0'
+      and (
+        m.perms like 'buyer:account:%'
+        or m.perms in ('buyer:dept:list', 'buyer:role:list')
+        or m.perms like 'buyer:product:category:%'
+        or m.perms like 'buyer:product:schema:%'
+        or m.perms like 'buyer:product:distribution:%'
+      )
+      and expected.perms is null
+  ) then
+    signal sqlstate '45000' set message_text = 'buyer owner role terminal permission grants final state has unexpected permissions';
   end if;
 end//
 
@@ -589,6 +1041,7 @@ create table if not exists seller_menu (
   visible               char(1)         not null default '0'       comment '显示状态',
   status                char(1)         not null default '0'       comment '菜单状态',
   perms                 varchar(100)    default ''                 comment '权限标识',
+  perms_unique_key      varchar(100)    generated always as (case when trim(coalesce(perms, '')) = '' then null else trim(perms) end) stored comment '非空权限唯一约束辅助列',
   icon                  varchar(100)    default '#'                comment '菜单图标',
   create_by             varchar(64)     default ''                 comment '创建者',
   create_time           datetime                                   comment '创建时间',
@@ -596,7 +1049,8 @@ create table if not exists seller_menu (
   update_time           datetime                                   comment '更新时间',
   remark                varchar(500)    default ''                 comment '备注',
   primary key (seller_menu_id),
-  unique key uk_seller_menu_perms (perms),
+  unique key uk_seller_menu_perms (perms_unique_key),
+  key idx_seller_menu_perms_lookup (perms),
   key idx_seller_menu_parent (parent_id),
   key idx_seller_menu_status (status)
 ) engine=innodb auto_increment=100000 comment = '卖家端菜单权限表';
@@ -616,6 +1070,7 @@ create table if not exists buyer_menu (
   visible               char(1)         not null default '0'       comment '显示状态',
   status                char(1)         not null default '0'       comment '菜单状态',
   perms                 varchar(100)    default ''                 comment '权限标识',
+  perms_unique_key      varchar(100)    generated always as (case when trim(coalesce(perms, '')) = '' then null else trim(perms) end) stored comment '非空权限唯一约束辅助列',
   icon                  varchar(100)    default '#'                comment '菜单图标',
   create_by             varchar(64)     default ''                 comment '创建者',
   create_time           datetime                                   comment '创建时间',
@@ -623,7 +1078,8 @@ create table if not exists buyer_menu (
   update_time           datetime                                   comment '更新时间',
   remark                varchar(500)    default ''                 comment '备注',
   primary key (buyer_menu_id),
-  unique key uk_buyer_menu_perms (perms),
+  unique key uk_buyer_menu_perms (perms_unique_key),
+  key idx_buyer_menu_perms_lookup (perms),
   key idx_buyer_menu_parent (parent_id),
   key idx_buyer_menu_status (status)
 ) engine=innodb auto_increment=200000 comment = '买家端菜单权限表';
@@ -820,14 +1276,21 @@ create table if not exists portal_direct_login_ticket (
 ) engine=innodb auto_increment=1 comment = '管理端免密代入审计票据表';
 
 call assert_terminal_menu_range_ready();
-call add_index_if_missing('seller_menu', 'uk_seller_menu_perms',
-  'unique key uk_seller_menu_perms (perms)');
-call add_index_if_missing('buyer_menu', 'uk_buyer_menu_perms',
-  'unique key uk_buyer_menu_perms (perms)');
+call add_column_if_missing('seller_menu', 'perms_unique_key',
+  'varchar(100) generated always as (case when trim(coalesce(perms, '''')) = '''' then null else trim(perms) end) stored');
+call add_column_if_missing('buyer_menu', 'perms_unique_key',
+  'varchar(100) generated always as (case when trim(coalesce(perms, '''')) = '''' then null else trim(perms) end) stored');
+call recreate_index_if_mismatch('seller_menu', 'uk_seller_menu_perms',
+  'perms_unique_key', 0, 'unique key uk_seller_menu_perms (perms_unique_key)');
+call recreate_index_if_mismatch('buyer_menu', 'uk_buyer_menu_perms',
+  'perms_unique_key', 0, 'unique key uk_buyer_menu_perms (perms_unique_key)');
 call assert_terminal_menu_perms_unique_index('seller_menu', 'uk_seller_menu_perms',
   'seller_menu perms unique index is invalid');
 call assert_terminal_menu_perms_unique_index('buyer_menu', 'uk_buyer_menu_perms',
   'buyer_menu perms unique index is invalid');
+call assert_terminal_owner_role_slots_ready();
+
+start transaction;
 
 insert into sys_dict_type
     (dict_name, dict_type, status, create_by, create_time, update_by, update_time, remark)
@@ -1412,6 +1875,7 @@ select a.seller_account_id, r.seller_role_id
 from seller_account a
 join seller_role r on r.seller_id = a.seller_id
                   and r.role_key = 'owner'
+                  and r.status = '0'
                   and r.del_flag = '0'
 where a.account_role = 'OWNER'
   and not exists (
@@ -1426,6 +1890,7 @@ select a.buyer_account_id, r.buyer_role_id
 from buyer_account a
 join buyer_role r on r.buyer_id = a.buyer_id
                  and r.role_key = 'owner'
+                 and r.status = '0'
                  and r.del_flag = '0'
 where a.account_role = 'OWNER'
   and not exists (
@@ -1495,6 +1960,10 @@ where r.del_flag = '0'
         and rm.buyer_menu_id = m.buyer_menu_id
   );
 
+call assert_seller_buyer_management_seed_completed();
+
+commit;
+
 drop temporary table if exists tmp_seller_buyer_sys_menu_guard;
 drop procedure if exists assert_seller_buyer_management_seed_confirmed;
 drop procedure if exists assert_seller_buyer_management_seed_profile;
@@ -1503,4 +1972,8 @@ drop procedure if exists assert_seller_menu_permission_slot;
 drop procedure if exists assert_buyer_menu_permission_slot;
 drop procedure if exists assert_terminal_menu_range_ready;
 drop procedure if exists add_index_if_missing;
+drop procedure if exists add_column_if_missing;
+drop procedure if exists recreate_index_if_mismatch;
 drop procedure if exists assert_terminal_menu_perms_unique_index;
+drop procedure if exists assert_terminal_owner_role_slots_ready;
+drop procedure if exists assert_seller_buyer_management_seed_completed;

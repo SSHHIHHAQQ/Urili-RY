@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.inventory.mapper.InventoryStockSyncPolicyMapper">
+
+    <resultMap type="InventoryStockSyncPolicy" id="InventoryStockSyncPolicyResult">
+        <id     property="policyId"      column="policy_id" />
+        <result property="policyKey"     column="policy_key" />
+        <result property="sellerId"      column="seller_id" />
+        <result property="scopeType"     column="scope_type" />
+        <result property="warehouseKey"  column="warehouse_key" />
+        <result property="warehouseName" column="warehouse_name" />
+        <result property="spuId"         column="spu_id" />
+        <result property="skuId"         column="sku_id" />
+        <result property="stockId"       column="stock_id" />
+        <result property="syncMode"      column="sync_mode" />
+        <result property="enabled"       column="enabled" />
+        <result property="version"       column="version" />
+        <result property="lastApplyTime" column="last_apply_time" />
+        <result property="createBy"      column="create_by" />
+        <result property="createTime"    column="create_time" />
+        <result property="updateBy"      column="update_by" />
+        <result property="updateTime"    column="update_time" />
+        <result property="remark"        column="remark" />
+    </resultMap>
+
+    <insert id="upsertPolicy" parameterType="InventoryStockSyncPolicy" useGeneratedKeys="true" keyProperty="policyId">
+        insert into inventory_stock_sync_policy(
+            policy_key, seller_id, scope_type, warehouse_key, warehouse_name, spu_id, sku_id, stock_id,
+            sync_mode, enabled, version, last_apply_time, create_by, create_time, update_by, update_time, remark
+        ) values (
+            #{policyKey}, #{sellerId}, #{scopeType}, coalesce(#{warehouseKey}, ''), coalesce(#{warehouseName}, ''),
+            #{spuId}, #{skuId}, #{stockId}, #{syncMode}, 'Y', 0, sysdate(),
+            #{createBy}, sysdate(), #{updateBy}, sysdate(), coalesce(#{remark}, '')
+        )
+        on duplicate key update
+            seller_id = values(seller_id),
+            scope_type = values(scope_type),
+            warehouse_key = values(warehouse_key),
+            warehouse_name = values(warehouse_name),
+            spu_id = values(spu_id),
+            sku_id = values(sku_id),
+            stock_id = values(stock_id),
+            sync_mode = values(sync_mode),
+            enabled = 'Y',
+            version = version + 1,
+            last_apply_time = sysdate(),
+            update_by = values(update_by),
+            update_time = sysdate(),
+            remark = values(remark)
+    </insert>
+
+    <select id="selectPolicyByKey" resultMap="InventoryStockSyncPolicyResult">
+        select *
+        from inventory_stock_sync_policy
+        where policy_key = #{policyKey}
+          and enabled = 'Y'
+    </select>
+
+    <select id="selectEnabledPoliciesBySellerIds" resultMap="InventoryStockSyncPolicyResult">
+        select *
+        from inventory_stock_sync_policy
+        where enabled = 'Y'
+          and seller_id in
+          <foreach collection="sellerIds" item="sellerId" open="(" separator="," close=")">
+              #{sellerId}
+          </foreach>
+        order by seller_id asc, scope_type asc, policy_id asc
+    </select>
+
+    <select id="selectEnabledPoliciesBySpuId" resultMap="InventoryStockSyncPolicyResult">
+        select distinct p.*
+        from inventory_stock_sync_policy p
+        where p.enabled = 'Y'
+          and exists (
+              select 1
+              from inventory_sku_warehouse_stock st
+              where st.spu_id = #{spuId}
+                and st.seller_id = p.seller_id
+          )
+        order by p.seller_id asc, p.scope_type asc, p.policy_id asc
+    </select>
+</mapper>

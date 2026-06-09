@@ -372,6 +372,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             #{menuId}
         </foreach>
           and m.status = '0'
+          and m.buyer_menu_id &gt;= 200000
+          and m.buyer_menu_id &lt; 300000
         where r.buyer_id = #{buyerId}
           and r.buyer_role_id = #{roleId}
     </insert>

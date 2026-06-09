@@ -64,6 +64,52 @@ begin
   end if;
 end//
 
+drop procedure if exists assert_warehouse_management_seed_completed//
+create procedure assert_warehouse_management_seed_completed()
+begin
+  declare v_dict_type_count int default 0;
+  declare v_dict_data_count int default 0;
+
+  select count(1)
+    into v_dict_type_count
+  from sys_dict_type
+  where status = '0'
+    and dict_type = 'warehouse_kind';
+
+  if v_dict_type_count <> 1 then
+    signal sqlstate '45000' set message_text = 'warehouse management seed did not complete warehouse_kind dict type';
+  end if;
+
+  select count(1)
+    into v_dict_data_count
+  from sys_dict_data
+  where status = '0'
+    and dict_type = 'warehouse_kind'
+    and dict_value in ('official', 'third_party');
+
+  if v_dict_data_count <> 2 then
+    signal sqlstate '45000' set message_text = 'warehouse management seed did not complete warehouse_kind dict data';
+  end if;
+
+  if exists (
+    select 1
+    from tmp_warehouse_management_sys_menu_guard seed
+    where not exists (
+      select 1
+      from sys_menu m
+      where m.menu_id = seed.menu_id
+        and coalesce(m.parent_id, -1) = seed.parent_id
+        and coalesce(m.menu_type, '') = seed.menu_type
+        and coalesce(m.path, '') = coalesce(seed.path, '')
+        and coalesce(m.component, '') = coalesce(seed.component, '')
+        and coalesce(m.route_name, '') = coalesce(seed.route_name, '')
+        and coalesce(m.perms, '') = coalesce(seed.perms, '')
+    )
+  ) then
+    signal sqlstate '45000' set message_text = 'warehouse management seed did not complete expected sys_menu state';
+  end if;
+end//
+
 delimiter ;
 
 call assert_warehouse_management_seed_confirmed();
@@ -122,22 +168,6 @@ create table if not exists third_party_warehouse (
   key idx_third_party_warehouse_seller (seller_id)
 ) engine=innodb comment='第三方仓扩展表';
 
-insert into sys_dict_type
-    (dict_name, dict_type, status, create_by, create_time, update_by, update_time, remark)
-select '仓库类型', 'warehouse_kind', '0', 'admin', sysdate(), '', null, '仓库类型'
-where not exists (select 1 from sys_dict_type where dict_type = 'warehouse_kind');
-
-insert into sys_dict_data
-    (dict_sort, dict_label, dict_value, dict_type, css_class, list_class, is_default, status, create_by, create_time, update_by, update_time, remark)
-select seed.dict_sort, seed.dict_label, seed.dict_value, 'warehouse_kind', '', '', seed.is_default, '0', 'admin', sysdate(), '', null, '仓库类型'
-from (
-    select 1 as dict_sort, '官方仓库' as dict_label, 'official' as dict_value, 'Y' as is_default
-    union all select 2, '第三方仓库', 'third_party', 'N'
-) seed
-where not exists (
-    select 1 from sys_dict_data d where d.dict_type = 'warehouse_kind' and d.dict_value = seed.dict_value
-);
-
 create temporary table if not exists tmp_warehouse_management_sys_menu_guard (
   menu_id bigint(20) not null,
   parent_id bigint(20) not null,
@@ -165,6 +195,24 @@ insert into tmp_warehouse_management_sys_menu_guard(menu_id, parent_id, menu_typ
     (202204, 2022, 'F', '#', '', '', 'warehouse:thirdParty:status');
 
 call assert_warehouse_management_sys_menu_guard();
+
+start transaction;
+
+insert into sys_dict_type
+    (dict_name, dict_type, status, create_by, create_time, update_by, update_time, remark)
+select '仓库类型', 'warehouse_kind', '0', 'admin', sysdate(), '', null, '仓库类型'
+where not exists (select 1 from sys_dict_type where dict_type = 'warehouse_kind');
+
+insert into sys_dict_data
+    (dict_sort, dict_label, dict_value, dict_type, css_class, list_class, is_default, status, create_by, create_time, update_by, update_time, remark)
+select seed.dict_sort, seed.dict_label, seed.dict_value, 'warehouse_kind', '', '', seed.is_default, '0', 'admin', sysdate(), '', null, '仓库类型'
+from (
+    select 1 as dict_sort, '官方仓库' as dict_label, 'official' as dict_value, 'Y' as is_default
+    union all select 2, '第三方仓库', 'third_party', 'N'
+) seed
+where not exists (
+    select 1 from sys_dict_data d where d.dict_type = 'warehouse_kind' and d.dict_value = seed.dict_value
+);
 
 insert into sys_menu
     (menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
@@ -223,5 +271,10 @@ on duplicate key update
     update_time = sysdate(),
     remark = values(remark);
 
+call assert_warehouse_management_seed_completed();
+
+commit;
+
 drop temporary table if exists tmp_warehouse_management_sys_menu_guard;
+drop procedure if exists assert_warehouse_management_seed_completed;
 drop procedure if exists assert_warehouse_management_sys_menu_guard;

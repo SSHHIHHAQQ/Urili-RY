@@ -8,26 +8,39 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.core.task.TaskExecutor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.DateUtils;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.finance.domain.FinanceCurrency;
 import com.ruoyi.finance.service.IFinanceCurrencyService;
+import com.ruoyi.integration.domain.SourceOfficialWarehouseOption;
+import com.ruoyi.integration.domain.SourceProductBindingSnapshot;
+import com.ruoyi.integration.domain.SourceSkuPairingProjection;
 import com.ruoyi.integration.service.ISourceReadModelRefreshService;
+import com.ruoyi.integration.service.ISourceSkuPairingProjectionService;
+import com.ruoyi.inventory.service.IInventoryOverviewService;
 import com.ruoyi.product.domain.ProductAttributeValue;
 import com.ruoyi.product.domain.ProductCategory;
 import com.ruoyi.product.domain.ProductCategoryAttribute;
 import com.ruoyi.product.domain.ProductDistributionOperationLog;
 import com.ruoyi.product.domain.ProductImage;
+import com.ruoyi.product.domain.ProductReviewRequest;
 import com.ruoyi.product.domain.ProductSellerSnapshot;
 import com.ruoyi.product.domain.ProductSku;
 import com.ruoyi.product.domain.ProductSkuSourceBinding;
@@ -36,6 +49,7 @@ import com.ruoyi.product.domain.ProductSpu;
 import com.ruoyi.product.domain.ProductSpuWarehouse;
 import com.ruoyi.product.mapper.ProductDistributionMapper;
 import com.ruoyi.product.mapper.ProductDistributionOperationLogMapper;
+import com.ruoyi.product.mapper.ProductReviewMapper;
 import com.ruoyi.product.service.IProductConfigService;
 import com.ruoyi.product.service.IProductDistributionService;
 import com.ruoyi.product.service.ProductSellerLookupService;
@@ -48,6 +62,8 @@ import com.ruoyi.warehouse.service.IWarehouseService;
 @Service
 public class ProductDistributionServiceImpl implements IProductDistributionService
 {
+    private static final Logger log = LoggerFactory.getLogger(ProductDistributionServiceImpl.class);
+
     private static final String STATUS_NORMAL = "0";
     private static final String YES = "Y";
     private static final String OWNER_TYPE_SPU = "SPU";
@@ -91,6 +107,9 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
     private ProductDistributionOperationLogMapper operationLogMapper;
 
     @Autowired
+    private ProductReviewMapper productReviewMapper;
+
+    @Autowired
     private IProductConfigService productConfigService;
 
     @Autowired
@@ -105,10 +124,21 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
     @Autowired
     private ObjectProvider<ISourceReadModelRefreshService> sourceReadModelRefreshService;
 
+    @Autowired
+    private ObjectProvider<ISourceSkuPairingProjectionService> sourceSkuPairingProjectionService;
+
+    @Autowired
+    private ObjectProvider<IInventoryOverviewService> inventoryOverviewService;
+
+    @Autowired
+    @Qualifier("threadPoolTaskExecutor")
+    private TaskExecutor readModelRefreshExecutor;
+
     @Override
     public List<ProductSpu> selectProductList(ProductSpu query)
     {
         List<ProductSpu> products = productDistributionMapper.selectProductList(query);
+        fillLatestReviewSummaries(products);
         for (ProductSpu product : products)
         {
             product.setSkus(productDistributionMapper.selectSkuListBySpuId(product.getSpuId()));
@@ -131,6 +161,7 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
     public ProductSpu selectProductById(Long spuId)
     {
         ProductSpu product = requireProduct(spuId);
+        fillLatestReviewSummary(product);
         product.setSkus(productDistributionMapper.selectSkuListBySpuId(spuId));
         fillWarehouseBindings(product);
         product.setAttributeValues(productDistributionMapper.selectAttributeValuesBySpuId(spuId));
@@ -139,11 +170,72 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
     }
 
     @Override
+    public ProductSpu selectProductById(Long spuId, Long sellerId)
+    {
+        if (sellerId == null)
+        {
+            throw new ServiceException("卖家主体不能为空");
+        }
+        ProductSpu product = requireProduct(spuId, sellerId);
+        fillLatestReviewSummary(product);
+        product.setSkus(productDistributionMapper.selectSkuListBySpuIdAndSellerId(spuId, sellerId));
+        fillWarehouseBindings(product);
+        product.setAttributeValues(productDistributionMapper.selectAttributeValuesBySpuId(spuId));
+        product.setImages(productDistributionMapper.selectImagesBySpuId(spuId));
+        return product;
+    }
+
+    private void fillLatestReviewSummaries(List<ProductSpu> products)
+    {
+        if (products == null || products.isEmpty())
+        {
+            return;
+        }
+        List<Long> spuIds = products.stream().map(ProductSpu::getSpuId).filter(Objects::nonNull).distinct()
+            .collect(Collectors.toList());
+        if (spuIds.isEmpty())
+        {
+            return;
+        }
+        Map<Long, ProductReviewRequest> reviewMap = productReviewMapper.selectLatestReviewsBySpuIds(spuIds).stream()
+            .collect(Collectors.toMap(ProductReviewRequest::getSpuId, Function.identity(), (a, b) -> a));
+        for (ProductSpu product : products)
+        {
+            applyLatestReviewSummary(product, reviewMap.get(product.getSpuId()));
+        }
+    }
+
+    private void fillLatestReviewSummary(ProductSpu product)
+    {
+        if (product == null || product.getSpuId() == null)
+        {
+            return;
+        }
+        List<ProductReviewRequest> reviews = productReviewMapper.selectLatestReviewsBySpuIds(List.of(product.getSpuId()));
+        applyLatestReviewSummary(product, reviews.isEmpty() ? null : reviews.get(0));
+    }
+
+    private void applyLatestReviewSummary(ProductSpu product, ProductReviewRequest review)
+    {
+        if (product == null || review == null)
+        {
+            return;
+        }
+        product.setLatestReviewId(review.getReviewId());
+        product.setLatestReviewNo(review.getReviewNo());
+        product.setLatestReviewStatus(review.getReviewStatus());
+        product.setLatestReviewFeedback(StringUtils.defaultString(review.getReviewReason()));
+        product.setLatestReviewTime(review.getReviewTime());
+    }
+
+    @Override
     public ProductSpu selectOnSaleProductById(Long spuId)
     {
         ProductSpu product = requireOnSaleProduct(spuId);
         product.setSkus(productDistributionMapper.selectOnSaleSkuListBySpuId(spuId));
         fillWarehouseBindings(product);
+        product.setAttributeValues(productDistributionMapper.selectAttributeValuesBySpuId(spuId));
+        product.setImages(productDistributionMapper.selectImagesBySpuId(spuId));
         return product;
     }
 
@@ -151,16 +243,26 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
     @Transactional
     public int insertProduct(ProductSpu product)
     {
-        normalizeSpuForSave(product, null);
+        OfficialSourceSaveContext sourceContext = buildOfficialSourceSaveContext(product);
+        normalizeSpuForSave(product, null, sourceContext);
         product.setSystemSpuCode(generateSpuCode());
         String operator = currentUsername();
         product.setCreateBy(operator);
         product.setUpdateBy(operator);
+        long saveStartedAt = System.currentTimeMillis();
         int rows = productDistributionMapper.insertSpu(product);
+        long spuSavedAt = System.currentTimeMillis();
         saveWarehouses(product);
-        saveSkus(product, List.of());
+        long warehousesSavedAt = System.currentTimeMillis();
+        saveSkus(product, List.of(), sourceContext);
+        long skusSavedAt = System.currentTimeMillis();
         saveAttributeValues(product);
+        long attributesSavedAt = System.currentTimeMillis();
         saveImages(product);
+        long imagesSavedAt = System.currentTimeMillis();
+        refreshInventoryOverviewAfterCommit(product.getSpuId());
+        logCoreSaveCost("insert", product.getSpuId(), saveStartedAt, spuSavedAt, warehousesSavedAt, skusSavedAt,
+            attributesSavedAt, imagesSavedAt);
         return rows;
     }
 
@@ -169,32 +271,87 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
     public int updateProduct(ProductSpu product)
     {
         ProductSpu current = requireProduct(product.getSpuId());
-        normalizeSpuForSave(product, current);
+        ensureNoPendingProductReview(current.getSpuId());
+        OfficialSourceSaveContext sourceContext = buildOfficialSourceSaveContext(product);
+        normalizeSpuForSave(product, current, sourceContext);
         product.setSystemSpuCode(current.getSystemSpuCode());
         product.setSourceType(current.getSourceType());
         product.setSourceRefType(current.getSourceRefType());
         product.setSourceRefId(current.getSourceRefId());
         product.setUpdateBy(currentUsername());
+        long saveStartedAt = System.currentTimeMillis();
         int rows = productDistributionMapper.updateSpu(product);
+        long spuSavedAt = System.currentTimeMillis();
         saveWarehouses(product);
-        saveSkus(product, productDistributionMapper.selectSkuListBySpuId(product.getSpuId()));
+        long warehousesSavedAt = System.currentTimeMillis();
+        saveSkus(product, productDistributionMapper.selectSkuListBySpuId(product.getSpuId()), sourceContext);
+        long skusSavedAt = System.currentTimeMillis();
         saveAttributeValues(product);
+        long attributesSavedAt = System.currentTimeMillis();
         saveImages(product);
+        long imagesSavedAt = System.currentTimeMillis();
+        refreshInventoryOverviewAfterCommit(product.getSpuId());
+        logCoreSaveCost("update", product.getSpuId(), saveStartedAt, spuSavedAt, warehousesSavedAt, skusSavedAt,
+            attributesSavedAt, imagesSavedAt);
+        return rows;
+    }
+
+    @Override
+    public ProductSpu prepareReviewedProductUpdate(ProductSpu product)
+    {
+        ProductSpu current = requireProduct(product.getSpuId());
+        if (STATUS_DRAFT.equals(current.getSpuStatus()))
+        {
+            throw new ServiceException("草稿商品请直接保存，不需要提交编辑审核");
+        }
+        ensureControlNormal(current.getControlStatus(), "停用商品不能提交编辑审核");
+        normalizeReviewedProductForSave(product, current, buildOfficialSourceSaveContext(product));
+        return product;
+    }
+
+    @Override
+    @Transactional
+    public int applyReviewedProductUpdate(ProductSpu product)
+    {
+        ProductSpu current = requireProduct(product.getSpuId());
+        if (STATUS_DRAFT.equals(current.getSpuStatus()))
+        {
+            throw new ServiceException("草稿商品不能按编辑审核生效");
+        }
+        OfficialSourceSaveContext sourceContext = buildOfficialSourceSaveContext(product);
+        normalizeReviewedProductForSave(product, current, sourceContext);
+        product.setUpdateBy(currentUsername());
+        long saveStartedAt = System.currentTimeMillis();
+        int rows = productDistributionMapper.updateSpu(product);
+        long spuSavedAt = System.currentTimeMillis();
+        saveWarehouses(product);
+        long warehousesSavedAt = System.currentTimeMillis();
+        saveSkus(product, productDistributionMapper.selectSkuListBySpuId(product.getSpuId()), sourceContext);
+        long skusSavedAt = System.currentTimeMillis();
+        saveAttributeValues(product);
+        long attributesSavedAt = System.currentTimeMillis();
+        saveImages(product);
+        long imagesSavedAt = System.currentTimeMillis();
+        refreshInventoryOverviewAfterCommit(product.getSpuId());
+        logCoreSaveCost("review-apply", product.getSpuId(), saveStartedAt, spuSavedAt, warehousesSavedAt,
+            skusSavedAt, attributesSavedAt, imagesSavedAt);
         return rows;
     }
 
     @Override
     @Transactional
-    public int updateSpuStatus(Long spuId, String status)
+    public int updateSpuStatus(Long spuId, String status, String reason)
     {
         String batchNo = generateBatchNo();
-        return updateSpuStatusInternal(spuId, status, batchNo, true);
+        return updateSpuStatusInternal(spuId, status, batchNo, true, reason);
     }
 
-    private int updateSpuStatusInternal(Long spuId, String status, String batchNo, boolean syncSkuStatus)
+    private int updateSpuStatusInternal(Long spuId, String status, String batchNo, boolean syncSkuStatus, String reason)
     {
         ProductSpu product = requireProduct(spuId);
+        ensureNoPendingProductReview(product.getSpuId());
         String targetStatus = normalizeStatus(status);
+        String normalizedReason = normalizeSalesStatusReason(targetStatus, reason);
         validateSpuTransition(product.getSpuStatus(), targetStatus);
         ensureControlNormal(product.getControlStatus(), "停用商品不能调整销售状态");
         if (STATUS_ON_SALE.equals(targetStatus))
@@ -202,15 +359,15 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
             validateSpuOnSale(product);
         }
         int rows = productDistributionMapper.updateSpuStatus(spuId, targetStatus, currentUsername());
-        recordSpuStatusLog(batchNo, product, targetStatus);
+        recordSpuStatusLog(batchNo, product, targetStatus, normalizedReason);
         if (syncSkuStatus)
         {
-            rows += syncSkuStatusBySpuFlow(product, targetStatus, batchNo);
+            rows += syncSkuStatusBySpuFlow(product, targetStatus, batchNo, normalizedReason);
         }
         return rows;
     }
 
-    private int syncSkuStatusBySpuFlow(ProductSpu product, String targetStatus, String batchNo)
+    private int syncSkuStatusBySpuFlow(ProductSpu product, String targetStatus, String batchNo, String reason)
     {
         int rows = 0;
         List<ProductSku> skus = productDistributionMapper.selectSkuListBySpuId(product.getSpuId());
@@ -241,7 +398,7 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
             }
             validateSkuTransition(sku.getSkuStatus(), skuTargetStatus);
             rows += productDistributionMapper.updateSkuStatus(sku.getSkuId(), skuTargetStatus, currentUsername());
-            recordSkuStatusLog(batchNo, product, sku, skuTargetStatus);
+            recordSkuStatusLog(batchNo, product, sku, skuTargetStatus, reason);
             lockSkuSourceBindingIfNeeded(product, sku, skuTargetStatus, batchNo);
         }
         return rows;
@@ -249,21 +406,23 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
 
     @Override
     @Transactional
-    public int updateSkuStatus(Long spuId, Long skuId, String status)
+    public int updateSkuStatus(Long spuId, Long skuId, String status, String reason)
     {
         String batchNo = generateBatchNo();
-        return updateSkuStatusInternal(spuId, skuId, status, batchNo);
+        return updateSkuStatusInternal(spuId, skuId, status, batchNo, reason);
     }
 
-    private int updateSkuStatusInternal(Long spuId, Long skuId, String status, String batchNo)
+    private int updateSkuStatusInternal(Long spuId, Long skuId, String status, String batchNo, String reason)
     {
         ProductSpu product = requireProduct(spuId);
+        ensureNoPendingProductReview(product.getSpuId());
         ProductSku sku = productDistributionMapper.selectSkuById(skuId);
         if (sku == null || !spuId.equals(sku.getSpuId()))
         {
             throw new ServiceException("商品 SKU 不存在");
         }
         String targetStatus = normalizeStatus(status);
+        String normalizedReason = normalizeSalesStatusReason(targetStatus, reason);
         validateSkuTransition(sku.getSkuStatus(), targetStatus);
         ensureControlNormal(product.getControlStatus(), "SPU 已停用，不能调整 SKU 销售状态");
         ensureControlNormal(sku.getControlStatus(), "停用 SKU 不能调整销售状态");
@@ -276,28 +435,28 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
             }
         }
         int rows = productDistributionMapper.updateSkuStatus(skuId, targetStatus, currentUsername());
-        recordSkuStatusLog(batchNo, product, sku, targetStatus);
+        recordSkuStatusLog(batchNo, product, sku, targetStatus, normalizedReason);
         lockSkuSourceBindingIfNeeded(product, sku, targetStatus, batchNo);
         return rows;
     }
 
     @Override
     @Transactional
-    public int batchUpdateSpuStatus(List<Long> spuIds, String status, boolean syncSkuStatus)
+    public int batchUpdateSpuStatus(List<Long> spuIds, String status, boolean syncSkuStatus, String reason)
     {
         List<Long> ids = requireIds(spuIds, "请选择商品");
         String batchNo = generateBatchNo();
         int rows = 0;
         for (Long spuId : ids)
         {
-            rows += updateSpuStatusInternal(spuId, status, batchNo, syncSkuStatus);
+            rows += updateSpuStatusInternal(spuId, status, batchNo, syncSkuStatus, reason);
         }
         return rows;
     }
 
     @Override
     @Transactional
-    public int batchUpdateSkuStatus(List<Long> skuIds, String status)
+    public int batchUpdateSkuStatus(List<Long> skuIds, String status, String reason)
     {
         List<Long> ids = requireIds(skuIds, "请选择 SKU");
         String batchNo = generateBatchNo();
@@ -309,7 +468,7 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
             {
                 throw new ServiceException("商品 SKU 不存在：" + skuId);
             }
-            rows += updateSkuStatusInternal(sku.getSpuId(), skuId, status, batchNo);
+            rows += updateSkuStatusInternal(sku.getSpuId(), skuId, status, batchNo, reason);
         }
         return rows;
     }
@@ -383,6 +542,7 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
             BigDecimal salePrice = item.getSalePrice();
             validateMoney(salePrice, "SKU 销售价不能为空且不能小于 0");
             ProductSpu product = requireProduct(sku.getSpuId());
+            ensureNoPendingProductReview(product.getSpuId());
             ensureControlNormal(product.getControlStatus(), "SPU 已停用，不能调整 SKU 销售价");
             ensureControlNormal(sku.getControlStatus(), "停用 SKU 不能调整销售价");
             rows += productDistributionMapper.updateSkuSalePrice(item.getSkuId(), salePrice, currentUsername());
@@ -405,6 +565,17 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
     }
 
     @Override
+    public List<ProductSku> selectSkuList(Long spuId, Long sellerId)
+    {
+        if (sellerId == null)
+        {
+            throw new ServiceException("卖家主体不能为空");
+        }
+        requireProduct(spuId, sellerId);
+        return productDistributionMapper.selectSkuListBySpuIdAndSellerId(spuId, sellerId);
+    }
+
+    @Override
     public List<ProductSku> selectSkuPageList(ProductSku query)
     {
         return productDistributionMapper.selectSkuPageList(query);
@@ -417,7 +588,7 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
         return productDistributionMapper.selectOnSaleSkuListBySpuId(spuId);
     }
 
-    private void normalizeSpuForSave(ProductSpu product, ProductSpu current)
+    private void normalizeSpuForSave(ProductSpu product, ProductSpu current, OfficialSourceSaveContext sourceContext)
     {
         product.setProductName(requireTrim(product.getProductName(), "商品名称不能为空"));
         product.setProductNameEn(requireTrim(product.getProductNameEn(), "商品英文标题不能为空"));
@@ -427,6 +598,10 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
         product.setDetailContent(StringUtils.defaultString(product.getDetailContent()));
         product.setRemark(StringUtils.defaultString(product.getRemark()));
         product.setSpuStatus(normalizeStatus(StringUtils.defaultIfBlank(product.getSpuStatus(), STATUS_DRAFT)));
+        if (current == null && !STATUS_DRAFT.equals(product.getSpuStatus()))
+        {
+            throw new ServiceException("新增商品只能保存为草稿，请提交商品审核后进入待上架");
+        }
         product.setControlStatus(current == null ? CONTROL_NORMAL
             : normalizeControlStatus(StringUtils.defaultIfBlank(current.getControlStatus(), CONTROL_NORMAL)));
         product.setControlReason(current == null ? "" : trimToEmpty(current.getControlReason()));
@@ -443,7 +618,7 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
         product.setSourceRefId(current == null ? "" : trimToEmpty(current.getSourceRefId()));
         fillSellerSnapshot(product);
         fillCategorySnapshot(product);
-        normalizeWarehouseBindings(product, current);
+        normalizeWarehouseBindings(product, current, sourceContext);
         if (StringUtils.isNotBlank(product.getSellerSpuCode())
             && productDistributionMapper.countSellerSpuCode(product.getSellerId(), product.getSellerSpuCode(),
                 product.getSpuId()) > 0)
@@ -453,6 +628,61 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
         if (STATUS_ON_SALE.equals(product.getSpuStatus()))
         {
             validateSpuBasics(product);
+        }
+    }
+
+    private void normalizeReviewedProductForSave(ProductSpu product, ProductSpu current,
+        OfficialSourceSaveContext sourceContext)
+    {
+        product.setSpuId(current.getSpuId());
+        product.setSpuStatus(current.getSpuStatus());
+        normalizeSpuForSave(product, current, sourceContext);
+        product.setSystemSpuCode(current.getSystemSpuCode());
+        product.setSourceType(current.getSourceType());
+        product.setSourceRefType(current.getSourceRefType());
+        product.setSourceRefId(current.getSourceRefId());
+        List<ProductSku> currentSkus = productDistributionMapper.selectSkuListBySpuId(current.getSpuId());
+        ensureReviewedSkuDeletionNotSubmitted(product, currentSkus);
+        normalizeSubmittedSkus(product, currentSkus, sourceContext);
+    }
+
+    private void ensureReviewedSkuDeletionNotSubmitted(ProductSpu product, List<ProductSku> currentSkus)
+    {
+        Set<Long> submittedSkuIds = new HashSet<>();
+        if (product.getSkus() != null)
+        {
+            for (ProductSku sku : product.getSkus())
+            {
+                if (sku != null && sku.getSkuId() != null)
+                {
+                    submittedSkuIds.add(sku.getSkuId());
+                }
+            }
+        }
+        for (ProductSku currentSku : currentSkus)
+        {
+            if (currentSku.getSkuId() != null && !submittedSkuIds.contains(currentSku.getSkuId()))
+            {
+                throw new ServiceException("已审核商品暂不支持删除 SKU，请先保留原 SKU 再提交审核");
+            }
+        }
+    }
+
+    private void normalizeSubmittedSkus(ProductSpu product, List<ProductSku> currentSkus,
+        OfficialSourceSaveContext sourceContext)
+    {
+        List<ProductSku> skus = product.getSkus();
+        if (skus == null || skus.isEmpty())
+        {
+            throw new ServiceException("至少需要维护一个 SKU");
+        }
+        Map<Long, ProductSku> currentSkuMap = currentSkus.stream()
+            .filter(sku -> sku.getSkuId() != null)
+            .collect(Collectors.toMap(ProductSku::getSkuId, Function.identity()));
+        int index = 0;
+        for (ProductSku sku : skus)
+        {
+            normalizeSku(product, sku, currentSkuMap.get(sku.getSkuId()), index++, sourceContext);
         }
     }
 
@@ -495,12 +725,13 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
         product.setCategoryName(category.getCategoryName());
     }
 
-    private void normalizeWarehouseBindings(ProductSpu product, ProductSpu current)
+    private void normalizeWarehouseBindings(ProductSpu product, ProductSpu current,
+        OfficialSourceSaveContext sourceContext)
     {
         String requestedKind = trimToEmpty(product.getWarehouseKind());
         if (WAREHOUSE_OFFICIAL.equals(requestedKind))
         {
-            normalizeOfficialWarehouseBindings(product, current);
+            normalizeOfficialWarehouseBindings(product, current, sourceContext);
             return;
         }
         normalizeManualWarehouseBindings(product, current);
@@ -557,7 +788,8 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
         product.setWarehouseIds(warehouses.stream().map(ProductSpuWarehouse::getWarehouseId).collect(Collectors.toList()));
     }
 
-    private void normalizeOfficialWarehouseBindings(ProductSpu product, ProductSpu current)
+    private void normalizeOfficialWarehouseBindings(ProductSpu product, ProductSpu current,
+        OfficialSourceSaveContext sourceContext)
     {
         Map<Long, ProductSpuWarehouse> warehouseMap = new HashMap<>();
         String selectedCurrency = null;
@@ -571,9 +803,9 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
             String sourceDimensionGroupKey = requireTrim(sku.getSourceDimensionGroupKey(),
                 "官方仓 SKU 必须从来源商品库选择来源 SKU");
             dimensionKeys.add(sourceDimensionGroupKey);
-            ProductSkuSourceBinding snapshot = requireSourceSnapshot(sourceDimensionGroupKey);
+            ProductSkuSourceBinding snapshot = requireSourceSnapshot(sourceDimensionGroupKey, sourceContext);
             List<ProductSpuWarehouse> warehouses =
-                productDistributionMapper.selectOfficialWarehousesBySourceDimensionGroup(sourceDimensionGroupKey);
+                selectOfficialWarehousesBySourceDimensionGroup(sourceDimensionGroupKey, sourceContext);
             if (warehouses == null || warehouses.isEmpty())
             {
                 throw new ServiceException("来源 SKU 未配对到正常官方履约仓：" + snapshot.getMasterSku());
@@ -716,7 +948,7 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
             StringUtils.defaultIfBlank(warehouse.getWarehouseCode(), String.valueOf(warehouse.getWarehouseId())));
     }
 
-    private void saveSkus(ProductSpu product, List<ProductSku> currentSkus)
+    private void saveSkus(ProductSpu product, List<ProductSku> currentSkus, OfficialSourceSaveContext sourceContext)
     {
         List<ProductSku> skus = product.getSkus();
         if (skus == null || skus.isEmpty())
@@ -727,11 +959,16 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
         Map<Long, ProductSku> currentSkuMap = currentSkus.stream()
             .filter(sku -> sku.getSkuId() != null)
             .collect(Collectors.toMap(ProductSku::getSkuId, Function.identity()));
+        Map<Long, ProductSkuSourceBinding> activeBindingBySkuId = officialWarehouseProduct
+            ? selectActiveSourceBindingsBySkuIds(currentSkuMap.keySet()) : new HashMap<>();
+        Map<String, ProductSkuSourceBinding> activeBindingBySourceSkuGroupKey = officialWarehouseProduct
+            ? selectActiveSourceBindingsBySourceSkuGroupKeys(collectSourceSkuGroupKeys(skus, sourceContext))
+            : new HashMap<>();
         Set<Long> submittedSkuIds = new HashSet<>();
         int index = 0;
         for (ProductSku sku : skus)
         {
-            normalizeSku(product, sku, currentSkuMap.get(sku.getSkuId()), index++);
+            normalizeSku(product, sku, currentSkuMap.get(sku.getSkuId()), index++, sourceContext);
             if (sku.getSkuId() == null)
             {
                 sku.setSystemSkuCode(generateSkuCode());
@@ -746,20 +983,105 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
                 sku.setUpdateBy(currentUsername());
                 productDistributionMapper.updateSku(sku);
             }
-            saveSkuSourceBinding(product, sku, currentSkuMap.get(sku.getSkuId()), officialWarehouseProduct);
+            saveSkuSourceBinding(product, sku, currentSkuMap.get(sku.getSkuId()), officialWarehouseProduct,
+                sourceContext, activeBindingBySkuId, activeBindingBySourceSkuGroupKey);
         }
+        ensureOfficialSourceBindingsSaved(product, skus);
         for (ProductSku currentSku : currentSkus)
         {
             if (!submittedSkuIds.contains(currentSku.getSkuId()))
             {
+                if (BINDING_LOCKED.equals(currentSku.getLockStatus()))
+                {
+                    throw new ServiceException("已锁定来源 SKU 绑定的 SKU 不能通过商品编辑删除");
+                }
                 handleRemovedSkuSourceBinding(product, currentSku);
-                productDistributionMapper.updateSkuControlStatus(currentSku.getSkuId(), CONTROL_DISABLED, "商品编辑移除SKU",
-                    currentUsername());
+                productDistributionMapper.deleteSkuById(product.getSpuId(), currentSku.getSkuId(), currentUsername());
             }
         }
     }
 
-    private void normalizeSku(ProductSpu product, ProductSku sku, ProductSku currentSku, int index)
+    private Map<Long, ProductSkuSourceBinding> selectActiveSourceBindingsBySkuIds(Set<Long> skuIds)
+    {
+        Map<Long, ProductSkuSourceBinding> result = new HashMap<>();
+        if (skuIds == null || skuIds.isEmpty())
+        {
+            return result;
+        }
+        List<Long> ids = skuIds.stream().filter(id -> id != null).distinct().collect(Collectors.toList());
+        if (ids.isEmpty())
+        {
+            return result;
+        }
+        List<ProductSkuSourceBinding> bindings = productDistributionMapper.selectActiveSourceBindingsBySkuIds(ids);
+        if (bindings == null)
+        {
+            return result;
+        }
+        for (ProductSkuSourceBinding binding : bindings)
+        {
+            if (binding != null && binding.getSkuId() != null)
+            {
+                result.putIfAbsent(binding.getSkuId(), binding);
+            }
+        }
+        return result;
+    }
+
+    private Map<String, ProductSkuSourceBinding> selectActiveSourceBindingsBySourceSkuGroupKeys(
+        Set<String> sourceSkuGroupKeys)
+    {
+        Map<String, ProductSkuSourceBinding> result = new HashMap<>();
+        if (sourceSkuGroupKeys == null || sourceSkuGroupKeys.isEmpty())
+        {
+            return result;
+        }
+        List<String> keys = sourceSkuGroupKeys.stream().filter(StringUtils::isNotBlank).distinct()
+            .collect(Collectors.toList());
+        if (keys.isEmpty())
+        {
+            return result;
+        }
+        List<ProductSkuSourceBinding> bindings =
+            productDistributionMapper.selectActiveSourceBindingsBySourceSkuGroupKeys(keys);
+        if (bindings == null)
+        {
+            return result;
+        }
+        for (ProductSkuSourceBinding binding : bindings)
+        {
+            if (binding != null && StringUtils.isNotBlank(binding.getSourceSkuGroupKey()))
+            {
+                result.putIfAbsent(binding.getSourceSkuGroupKey(), binding);
+            }
+        }
+        return result;
+    }
+
+    private Set<String> collectSourceSkuGroupKeys(List<ProductSku> skus, OfficialSourceSaveContext sourceContext)
+    {
+        Set<String> sourceSkuGroupKeys = new LinkedHashSet<>();
+        if (skus == null)
+        {
+            return sourceSkuGroupKeys;
+        }
+        for (ProductSku sku : skus)
+        {
+            if (sku == null || StringUtils.isBlank(sku.getSourceDimensionGroupKey()))
+            {
+                continue;
+            }
+            ProductSkuSourceBinding snapshot = requireSourceSnapshot(sku.getSourceDimensionGroupKey(), sourceContext);
+            if (StringUtils.isNotBlank(snapshot.getSourceSkuGroupKey()))
+            {
+                sourceSkuGroupKeys.add(snapshot.getSourceSkuGroupKey());
+            }
+        }
+        return sourceSkuGroupKeys;
+    }
+
+    private void normalizeSku(ProductSpu product, ProductSku sku, ProductSku currentSku, int index,
+        OfficialSourceSaveContext sourceContext)
     {
         if (sku.getSkuId() != null && currentSku == null)
         {
@@ -782,7 +1104,7 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
         sku.setSkuImageUrl(trimToEmpty(sku.getSkuImageUrl()));
         if (isOfficialWarehouseProduct(product))
         {
-            applySourceSnapshotToSku(sku, requireSourceSnapshot(sku.getSourceDimensionGroupKey()));
+            applySourceSnapshotToSku(sku, requireSourceSnapshot(sku.getSourceDimensionGroupKey(), sourceContext));
         }
         sku.setCurrencyCode(resolveWarehouseCurrency(product));
         sku.setSkuStatus(normalizeSkuSaveStatus(product, sku, currentSku));
@@ -816,6 +1138,10 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
     private String normalizeSkuSaveStatus(ProductSpu product, ProductSku sku, ProductSku currentSku)
     {
         String requested = normalizeStatus(StringUtils.defaultIfBlank(sku.getSkuStatus(), STATUS_DRAFT));
+        if (currentSku == null && !STATUS_DRAFT.equals(requested))
+        {
+            throw new ServiceException("新增 SKU 只能保存为草稿，请提交商品审核后进入待上架");
+        }
         if (currentSku == null && STATUS_ON_SALE.equals(product.getSpuStatus()) && STATUS_ON_SALE.equals(requested))
         {
             return STATUS_DRAFT;
@@ -833,10 +1159,92 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
             || WAREHOUSE_OFFICIAL.equals(trimToEmpty(product.getWarehouseKind()));
     }
 
+    private OfficialSourceSaveContext buildOfficialSourceSaveContext(ProductSpu product)
+    {
+        if (!isOfficialWarehouseProduct(product))
+        {
+            return OfficialSourceSaveContext.empty();
+        }
+        Set<String> dimensionKeys = collectSubmittedSourceDimensionKeys(product);
+        if (dimensionKeys.isEmpty())
+        {
+            return OfficialSourceSaveContext.empty();
+        }
+        List<String> keyList = new ArrayList<>(dimensionKeys);
+        Map<String, ProductSkuSourceBinding> snapshotMap = new HashMap<>();
+        List<SourceProductBindingSnapshot> snapshots =
+            sourceSkuPairingProjectionService().selectOfficialSourceBindingSnapshots(keyList);
+        if (snapshots != null)
+        {
+            for (SourceProductBindingSnapshot source : snapshots)
+            {
+                ProductSkuSourceBinding snapshot = toProductSkuSourceBinding(source);
+                if (snapshot != null && StringUtils.isNotBlank(snapshot.getSourceDimensionGroupKey()))
+                {
+                    snapshotMap.put(snapshot.getSourceDimensionGroupKey(), snapshot);
+                }
+            }
+        }
+        Map<String, List<ProductSpuWarehouse>> warehouseMap = new HashMap<>();
+        List<SourceOfficialWarehouseOption> options =
+            sourceSkuPairingProjectionService().selectOfficialWarehousesBySourceDimensionGroups(keyList);
+        if (options != null)
+        {
+            for (SourceOfficialWarehouseOption option : options)
+            {
+                String key = trimToEmpty(option.getSourceDimensionGroupKey());
+                if (StringUtils.isBlank(key))
+                {
+                    continue;
+                }
+                warehouseMap.computeIfAbsent(key, ignored -> new ArrayList<>())
+                    .add(toProductSpuWarehouse(option));
+            }
+        }
+        return new OfficialSourceSaveContext(true, snapshotMap, warehouseMap);
+    }
+
+    private Set<String> collectSubmittedSourceDimensionKeys(ProductSpu product)
+    {
+        Set<String> dimensionKeys = new LinkedHashSet<>();
+        if (product == null || product.getSkus() == null)
+        {
+            return dimensionKeys;
+        }
+        for (ProductSku sku : product.getSkus())
+        {
+            if (sku == null)
+            {
+                continue;
+            }
+            String key = trimToEmpty(sku.getSourceDimensionGroupKey());
+            if (StringUtils.isNotBlank(key))
+            {
+                dimensionKeys.add(key);
+            }
+        }
+        return dimensionKeys;
+    }
+
     private ProductSkuSourceBinding requireSourceSnapshot(String sourceDimensionGroupKey)
     {
+        return requireSourceSnapshot(sourceDimensionGroupKey, OfficialSourceSaveContext.empty());
+    }
+
+    private ProductSkuSourceBinding requireSourceSnapshot(String sourceDimensionGroupKey,
+        OfficialSourceSaveContext sourceContext)
+    {
         String dimensionGroupKey = requireTrim(sourceDimensionGroupKey, "官方仓 SKU 必须选择来源 SKU");
-        ProductSkuSourceBinding snapshot = productDistributionMapper.selectSourceBindingSnapshot(dimensionGroupKey);
+        ProductSkuSourceBinding snapshot = null;
+        if (sourceContext != null && sourceContext.isBatchLoaded())
+        {
+            snapshot = sourceContext.snapshot(dimensionGroupKey);
+        }
+        else
+        {
+            snapshot = toProductSkuSourceBinding(
+                sourceSkuPairingProjectionService().selectOfficialSourceBindingSnapshot(dimensionGroupKey));
+        }
         if (snapshot == null)
         {
             throw new ServiceException("来源 SKU 不存在或不是可用状态");
@@ -854,6 +1262,31 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
         {
             throw new ServiceException("来源 SKU 缺少完整尺寸重量：" + snapshot.getMasterSku());
         }
+        return snapshot;
+    }
+
+    private ProductSkuSourceBinding toProductSkuSourceBinding(SourceProductBindingSnapshot source)
+    {
+        if (source == null)
+        {
+            return null;
+        }
+        ProductSkuSourceBinding snapshot = new ProductSkuSourceBinding();
+        snapshot.setSourceScope(source.getSourceScope());
+        snapshot.setSourceSkuGroupKey(source.getSourceSkuGroupKey());
+        snapshot.setSourceDimensionGroupKey(source.getSourceDimensionGroupKey());
+        snapshot.setMasterSku(source.getMasterSku());
+        snapshot.setMasterProductNameSnapshot(source.getMasterProductNameSnapshot());
+        snapshot.setSourcePayloadHash(source.getSourcePayloadHash());
+        snapshot.setWmsPayloadHash(source.getWmsPayloadHash());
+        snapshot.setMeasureLengthCm(source.getMeasureLengthCm());
+        snapshot.setMeasureWidthCm(source.getMeasureWidthCm());
+        snapshot.setMeasureHeightCm(source.getMeasureHeightCm());
+        snapshot.setMeasureWeightKg(source.getMeasureWeightKg());
+        snapshot.setMeasureSource(source.getMeasureSource());
+        snapshot.setCurrencyCode(source.getCurrencyCode());
+        snapshot.setSourceWarehouseNames(source.getSourceWarehouseNames());
+        snapshot.setSourceWarehouseCount(source.getSourceWarehouseCount());
         return snapshot;
     }
 
@@ -880,18 +1313,20 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
     }
 
     private void saveSkuSourceBinding(ProductSpu product, ProductSku sku, ProductSku currentSku,
-        boolean officialWarehouseProduct)
+        boolean officialWarehouseProduct, OfficialSourceSaveContext sourceContext,
+        Map<Long, ProductSkuSourceBinding> activeBindingBySkuId,
+        Map<String, ProductSkuSourceBinding> activeBindingBySourceSkuGroupKey)
     {
         if (!officialWarehouseProduct)
         {
             releaseUnlockedSkuSourceBinding(product, sku, "商品切换为非官方仓");
             return;
         }
-        ProductSkuSourceBinding snapshot = requireSourceSnapshot(sku.getSourceDimensionGroupKey());
+        ProductSkuSourceBinding snapshot = requireSourceSnapshot(sku.getSourceDimensionGroupKey(), sourceContext);
         ProductSkuSourceBinding currentBinding =
-            productDistributionMapper.selectActiveSourceBindingBySkuId(sku.getSkuId());
+            activeBindingBySkuId.get(sku.getSkuId());
         ProductSkuSourceBinding occupiedBinding =
-            productDistributionMapper.selectActiveSourceBindingBySourceSkuGroupKey(snapshot.getSourceSkuGroupKey());
+            activeBindingBySourceSkuGroupKey.get(snapshot.getSourceSkuGroupKey());
         if (occupiedBinding != null && !sku.getSkuId().equals(occupiedBinding.getSkuId()))
         {
             throw new ServiceException("该官方来源 SKU 已绑定其他商城 SKU：" + snapshot.getMasterSku());
@@ -906,32 +1341,66 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
         if (currentBinding == null)
         {
             binding.setCreateBy(currentUsername());
-            productDistributionMapper.insertSourceBinding(binding);
+            requireAffectedRows(productDistributionMapper.insertSourceBinding(binding), "官方仓 SKU 来源绑定保存失败");
             recordSkuSourceLog(generateBatchNo(), OP_SOURCE_BIND, product, sku, "-", binding.getMasterSku(), "");
         }
         else if (StringUtils.equals(currentBinding.getSourceDimensionGroupKey(), binding.getSourceDimensionGroupKey()))
         {
             binding.setBindingId(currentBinding.getBindingId());
-            productDistributionMapper.updateActiveSourceBinding(binding);
+            requireAffectedRows(productDistributionMapper.updateActiveSourceBinding(binding), "官方仓 SKU 来源绑定更新失败");
         }
         else
         {
             productDistributionMapper.markSourceBindingReplaced(currentBinding.getBindingId(), "草稿商品换绑来源 SKU",
                 currentUsername());
             binding.setCreateBy(currentUsername());
-            productDistributionMapper.insertSourceBinding(binding);
+            requireAffectedRows(productDistributionMapper.insertSourceBinding(binding), "官方仓 SKU 来源绑定保存失败");
             recordSkuSourceLog(generateBatchNo(), OP_SOURCE_REBIND, product, sku, currentBinding.getMasterSku(),
                 binding.getMasterSku(), "草稿商品换绑来源 SKU");
         }
+        boolean sourcePairingProjectionChanged = isSourcePairingProjectionChanged(currentBinding, binding);
         if (isSourcePairingProjectionScopeChanged(currentBinding, binding))
         {
             removeSourcePairingProjection(currentBinding);
         }
-        syncSourcePairingProjection(binding);
+        if (sourcePairingProjectionChanged)
+        {
+            syncSourcePairingProjection(binding);
+        }
         if (!lockedBefore && BINDING_LOCKED.equals(binding.getLockStatus()))
         {
             recordSkuSourceLog(generateBatchNo(), OP_SOURCE_LOCK, product, sku, binding.getMasterSku(),
                 binding.getMasterSku(), "商品提交后锁定来源 SKU 绑定");
+        }
+    }
+
+    private void ensureOfficialSourceBindingsSaved(ProductSpu product, List<ProductSku> skus)
+    {
+        if (!isOfficialWarehouseProduct(product))
+        {
+            return;
+        }
+        Set<Long> skuIds = skus.stream()
+            .map(ProductSku::getSkuId)
+            .filter(id -> id != null)
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+        Map<Long, ProductSkuSourceBinding> savedBindingBySkuId = selectActiveSourceBindingsBySkuIds(skuIds);
+        for (ProductSku sku : skus)
+        {
+            ProductSkuSourceBinding savedBinding = savedBindingBySkuId.get(sku.getSkuId());
+            if (savedBinding == null
+                || !StringUtils.equals(savedBinding.getSourceDimensionGroupKey(), sku.getSourceDimensionGroupKey()))
+            {
+                throw new ServiceException("官方仓 SKU 来源绑定保存失败，请重新配对来源 SKU");
+            }
+        }
+    }
+
+    private void requireAffectedRows(int rows, String message)
+    {
+        if (rows <= 0)
+        {
+            throw new ServiceException(message);
         }
     }
 
@@ -1022,7 +1491,26 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
             return false;
         }
         return !StringUtils.equals(currentBinding.getSystemSkuCode(), binding.getSystemSkuCode())
+            || !StringUtils.equals(currentBinding.getSourceSkuGroupKey(), binding.getSourceSkuGroupKey())
             || !StringUtils.equals(currentBinding.getSourceDimensionGroupKey(), binding.getSourceDimensionGroupKey());
+    }
+
+    private boolean isSourcePairingProjectionChanged(ProductSkuSourceBinding currentBinding,
+        ProductSkuSourceBinding binding)
+    {
+        if (binding == null)
+        {
+            return false;
+        }
+        if (currentBinding == null)
+        {
+            return true;
+        }
+        return !StringUtils.equals(currentBinding.getSystemSkuCode(), binding.getSystemSkuCode())
+            || !StringUtils.equals(currentBinding.getSourceSkuGroupKey(), binding.getSourceSkuGroupKey())
+            || !StringUtils.equals(currentBinding.getSourceDimensionGroupKey(), binding.getSourceDimensionGroupKey())
+            || !StringUtils.equals(currentBinding.getBindingStatus(), binding.getBindingStatus())
+            || !StringUtils.equals(currentBinding.getLockStatus(), binding.getLockStatus());
     }
 
     private void removeSourcePairingProjection(ProductSkuSourceBinding binding)
@@ -1031,30 +1519,34 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
         {
             return;
         }
-        deleteUpstreamSkuPairings(binding);
-        refreshSourceReadModels(binding.getSourceDimensionGroupKey());
+        Set<String> affectedConnectionCodes = deleteUpstreamSkuPairings(binding);
+        refreshSourcePairingProjectionReadModels(affectedConnectionCodes);
     }
 
     private void syncSourcePairingProjection(ProductSkuSourceBinding binding)
     {
-        deleteUpstreamSkuPairings(binding);
-        productDistributionMapper.upsertUpstreamSkuPairingsForBinding(binding);
-        refreshSourceReadModels(binding.getSourceDimensionGroupKey());
+        Set<String> affectedConnectionCodes = deleteUpstreamSkuPairings(binding);
+        sourceSkuPairingProjectionService().upsertPairingsForProjection(toProjection(binding));
+        addConnectionCodes(affectedConnectionCodes,
+            selectSourceConnectionCodesByDimensionGroup(binding.getSourceDimensionGroupKey()));
+        refreshSourcePairingProjectionReadModels(affectedConnectionCodes);
     }
 
-    private void deleteUpstreamSkuPairings(ProductSkuSourceBinding binding)
+    private Set<String> deleteUpstreamSkuPairings(ProductSkuSourceBinding binding)
     {
+        Set<String> connectionCodes = new LinkedHashSet<>();
         if (binding == null || StringUtils.isBlank(binding.getSystemSkuCode()))
         {
-            return;
+            return connectionCodes;
         }
-        List<String> connectionCodes = selectConnectionCodesForPairingProjectionCleanup(binding);
-        if (connectionCodes == null || connectionCodes.isEmpty())
+        addConnectionCodes(connectionCodes, selectConnectionCodesForPairingProjectionCleanup(binding));
+        if (connectionCodes.isEmpty())
         {
-            return;
+            return connectionCodes;
         }
-        productDistributionMapper.deleteUpstreamSkuPairingsBySystemSkuAndConnectionCodes(binding.getSystemSkuCode(),
-            connectionCodes);
+        sourceSkuPairingProjectionService().deletePairingsBySystemSkuAndConnectionCodes(binding.getSystemSkuCode(),
+            new ArrayList<>(connectionCodes));
+        return connectionCodes;
     }
 
     private List<String> selectConnectionCodesForPairingProjectionCleanup(ProductSkuSourceBinding binding)
@@ -1062,30 +1554,185 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
         List<String> connectionCodes = List.of();
         if (StringUtils.isNotBlank(binding.getSourceDimensionGroupKey()))
         {
-            connectionCodes =
-                productDistributionMapper.selectSourceConnectionCodesByDimensionGroup(binding.getSourceDimensionGroupKey());
+            connectionCodes = selectSourceConnectionCodesByDimensionGroup(binding.getSourceDimensionGroupKey());
         }
         if ((connectionCodes == null || connectionCodes.isEmpty()) && StringUtils.isNotBlank(binding.getMasterSku()))
         {
-            connectionCodes = productDistributionMapper.selectUpstreamSkuPairingConnectionCodesBySystemSkuAndMasterSku(
+            connectionCodes = sourceSkuPairingProjectionService().selectPairingConnectionCodesBySystemSkuAndMasterSku(
                 binding.getSystemSkuCode(), binding.getMasterSku());
         }
         return connectionCodes;
     }
 
-    private void refreshSourceReadModels(String sourceDimensionGroupKey)
+    private List<String> selectSourceConnectionCodesByDimensionGroup(String sourceDimensionGroupKey)
     {
+        if (StringUtils.isBlank(sourceDimensionGroupKey))
+        {
+            return List.of();
+        }
         List<String> connectionCodes =
-            productDistributionMapper.selectSourceConnectionCodesByDimensionGroup(sourceDimensionGroupKey);
-        ISourceReadModelRefreshService readModelRefreshService = sourceReadModelRefreshService.getIfAvailable();
-        if (readModelRefreshService == null)
+            sourceSkuPairingProjectionService().selectSourceConnectionCodesByDimensionGroup(sourceDimensionGroupKey);
+        return connectionCodes == null ? List.of() : connectionCodes;
+    }
+
+    private List<ProductSpuWarehouse> selectOfficialWarehousesBySourceDimensionGroup(String sourceDimensionGroupKey)
+    {
+        return selectOfficialWarehousesBySourceDimensionGroup(sourceDimensionGroupKey, OfficialSourceSaveContext.empty());
+    }
+
+    private List<ProductSpuWarehouse> selectOfficialWarehousesBySourceDimensionGroup(String sourceDimensionGroupKey,
+        OfficialSourceSaveContext sourceContext)
+    {
+        String dimensionGroupKey = requireTrim(sourceDimensionGroupKey, "官方仓 SKU 必须选择来源 SKU");
+        if (sourceContext != null && sourceContext.isBatchLoaded())
+        {
+            return sourceContext.officialWarehouses(dimensionGroupKey);
+        }
+        List<SourceOfficialWarehouseOption> options =
+            sourceSkuPairingProjectionService().selectOfficialWarehousesBySourceDimensionGroup(dimensionGroupKey);
+        if (options == null || options.isEmpty())
+        {
+            return List.of();
+        }
+        List<ProductSpuWarehouse> warehouses = new ArrayList<>();
+        for (SourceOfficialWarehouseOption option : options)
+        {
+            warehouses.add(toProductSpuWarehouse(option));
+        }
+        return warehouses;
+    }
+
+    private ProductSpuWarehouse toProductSpuWarehouse(SourceOfficialWarehouseOption option)
+    {
+        ProductSpuWarehouse warehouse = new ProductSpuWarehouse();
+        warehouse.setWarehouseId(option.getWarehouseId());
+        warehouse.setWarehouseCode(option.getWarehouseCode());
+        warehouse.setWarehouseName(option.getWarehouseName());
+        warehouse.setWarehouseKind(option.getWarehouseKind());
+        warehouse.setSettlementCurrency(option.getSettlementCurrency());
+        return warehouse;
+    }
+
+    private SourceSkuPairingProjection toProjection(ProductSkuSourceBinding binding)
+    {
+        SourceSkuPairingProjection projection = new SourceSkuPairingProjection();
+        projection.setSourceDimensionGroupKey(binding.getSourceDimensionGroupKey());
+        projection.setSystemSkuCode(binding.getSystemSkuCode());
+        projection.setSystemSkuName(binding.getSystemSkuNameSnapshot());
+        projection.setSellerName(binding.getSellerNameSnapshot());
+        projection.setUpdateBy(binding.getUpdateBy());
+        return projection;
+    }
+
+    private ISourceSkuPairingProjectionService sourceSkuPairingProjectionService()
+    {
+        ISourceSkuPairingProjectionService service = sourceSkuPairingProjectionService.getIfAvailable();
+        if (service == null)
+        {
+            throw new ServiceException("来源SKU配对投影服务不可用");
+        }
+        return service;
+    }
+
+    private void addConnectionCodes(Set<String> target, List<String> connectionCodes)
+    {
+        if (connectionCodes == null)
         {
             return;
         }
         for (String connectionCode : connectionCodes)
         {
-            readModelRefreshService.refreshOfficialMasterByConnection(connectionCode);
+            if (StringUtils.isNotBlank(connectionCode))
+            {
+                target.add(connectionCode);
+            }
         }
+    }
+
+    private void refreshSourcePairingProjectionReadModels(Set<String> connectionCodes)
+    {
+        if (connectionCodes == null || connectionCodes.isEmpty())
+        {
+            return;
+        }
+        List<String> refreshConnectionCodes = new ArrayList<>(connectionCodes);
+        runAfterCommitAsync("source-pairing-read-model-refresh", () -> {
+            ISourceReadModelRefreshService readModelRefreshService = sourceReadModelRefreshService.getIfAvailable();
+            if (readModelRefreshService == null)
+            {
+                return;
+            }
+            for (String connectionCode : refreshConnectionCodes)
+            {
+                readModelRefreshService.refreshOfficialMasterSkuPairingByConnection(connectionCode);
+            }
+        });
+    }
+
+    private void refreshInventoryOverviewAfterCommit(Long spuId)
+    {
+        if (spuId == null)
+        {
+            return;
+        }
+        runAfterCommitAsync("product-inventory-overview-refresh", () -> refreshInventoryOverview(spuId));
+    }
+
+    private void refreshInventoryOverview(Long spuId)
+    {
+        if (spuId == null || inventoryOverviewService == null)
+        {
+            return;
+        }
+        IInventoryOverviewService overviewService = inventoryOverviewService.getIfAvailable();
+        if (overviewService != null)
+        {
+            overviewService.refreshProductInventoryOverview(spuId);
+        }
+    }
+
+    private void runAfterCommitAsync(String taskName, Runnable task)
+    {
+        Runnable asyncTask = () -> readModelRefreshExecutor.execute(() -> runLoggedReadModelTask(taskName, task));
+        if (TransactionSynchronizationManager.isSynchronizationActive())
+        {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization()
+            {
+                @Override
+                public void afterCommit()
+                {
+                    asyncTask.run();
+                }
+            });
+        }
+        else
+        {
+            asyncTask.run();
+        }
+    }
+
+    private void runLoggedReadModelTask(String taskName, Runnable task)
+    {
+        long startedAt = System.currentTimeMillis();
+        try
+        {
+            task.run();
+            log.info("商城商品后台读模型刷新完成 task={} cost={}ms", taskName, System.currentTimeMillis() - startedAt);
+        }
+        catch (Exception e)
+        {
+            log.error("商城商品后台读模型刷新失败 task={} cost={}ms", taskName, System.currentTimeMillis() - startedAt, e);
+        }
+    }
+
+    private void logCoreSaveCost(String action, Long spuId, long saveStartedAt, long spuSavedAt,
+        long warehousesSavedAt, long skusSavedAt, long attributesSavedAt, long imagesSavedAt)
+    {
+        long now = System.currentTimeMillis();
+        log.info("商城商品核心保存完成 action={} spuId={} total={}ms spu={}ms warehouses={}ms skusAndSource={}ms attributes={}ms images={}ms asyncRegister={}ms",
+            action, spuId, now - saveStartedAt, spuSavedAt - saveStartedAt, warehousesSavedAt - spuSavedAt,
+            skusSavedAt - warehousesSavedAt, attributesSavedAt - skusSavedAt, imagesSavedAt - attributesSavedAt,
+            now - imagesSavedAt);
     }
 
     private void lockSkuSourceBindingIfNeeded(ProductSpu product, ProductSku sku, String targetStatus, String batchNo)
@@ -1290,6 +1937,16 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
         return product;
     }
 
+    private ProductSpu requireProduct(Long spuId, Long sellerId)
+    {
+        ProductSpu product = productDistributionMapper.selectProductByIdAndSellerId(spuId, sellerId);
+        if (product == null)
+        {
+            throw new ServiceException("商城商品不存在");
+        }
+        return product;
+    }
+
     private ProductSpu requireOnSaleProduct(Long spuId)
     {
         ProductSpu product = productDistributionMapper.selectOnSaleProductById(spuId);
@@ -1374,9 +2031,9 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
         {
             return;
         }
-        if (STATUS_DRAFT.equals(currentStatus) && !STATUS_READY.equals(targetStatus))
+        if (STATUS_DRAFT.equals(currentStatus))
         {
-            throw new ServiceException("草稿商品只能提交为待上架");
+            throw new ServiceException("草稿商品请提交商品审核，审核通过后进入待上架");
         }
         if (STATUS_READY.equals(currentStatus) && !STATUS_ON_SALE.equals(targetStatus))
         {
@@ -1398,9 +2055,9 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
         {
             return;
         }
-        if (STATUS_DRAFT.equals(currentStatus) && !STATUS_READY.equals(targetStatus))
+        if (STATUS_DRAFT.equals(currentStatus))
         {
-            throw new ServiceException("草稿 SKU 只能提交为待上架");
+            throw new ServiceException("草稿 SKU 请提交商品审核，审核通过后进入待上架");
         }
         if (STATUS_READY.equals(currentStatus) && !STATUS_ON_SALE.equals(targetStatus))
         {
@@ -1413,6 +2070,14 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
         if (STATUS_OFF_SALE.equals(currentStatus) && !STATUS_ON_SALE.equals(targetStatus))
         {
             throw new ServiceException("已下架 SKU 只能切换为已上架");
+        }
+    }
+
+    private void ensureNoPendingProductReview(Long spuId)
+    {
+        if (productReviewMapper.countPendingReviewByKey("SPU:" + spuId) > 0)
+        {
+            throw new ServiceException("当前商品存在待审核单，审核完成后再修改商品");
         }
     }
 
@@ -1470,6 +2135,17 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
         return CONTROL_NORMAL.equals(controlStatus) ? "" : normalizedReason;
     }
 
+    private String normalizeSalesStatusReason(String targetStatus, String reason)
+    {
+        String normalizedReason = trimToEmpty(reason);
+        if ((STATUS_ON_SALE.equals(targetStatus) || STATUS_OFF_SALE.equals(targetStatus))
+            && StringUtils.isBlank(normalizedReason))
+        {
+            throw new ServiceException("销售状态调整原因不能为空");
+        }
+        return normalizedReason;
+    }
+
     private void ensureControlNormal(String controlStatus, String message)
     {
         if (!CONTROL_NORMAL.equals(StringUtils.defaultIfBlank(controlStatus, CONTROL_NORMAL)))
@@ -1509,23 +2185,26 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
         return "PLOG" + DateUtils.dateTimeNow("yyyyMMddHHmmss") + UUID.randomUUID().toString().replace("-", "");
     }
 
-    private void recordSpuStatusLog(String batchNo, ProductSpu product, String targetStatus)
+    private void recordSpuStatusLog(String batchNo, ProductSpu product, String targetStatus, String reason)
     {
         ProductDistributionOperationLog log = baseOperationLog(batchNo, OP_SALES_STATUS_CHANGE, OWNER_TYPE_SPU,
             product, null);
         log.setBeforeSalesStatus(product.getSpuStatus());
         log.setAfterSalesStatus(targetStatus);
+        log.setReason(reason);
         log.setChangeSummary("SPU销售状态：" + displayChange(product.getSpuStatus(), targetStatus));
         log.setDiffJson(simpleDiff("spuStatus", product.getSpuStatus(), targetStatus));
         operationLogMapper.insertOperationLog(log);
     }
 
-    private void recordSkuStatusLog(String batchNo, ProductSpu product, ProductSku sku, String targetStatus)
+    private void recordSkuStatusLog(String batchNo, ProductSpu product, ProductSku sku, String targetStatus,
+        String reason)
     {
         ProductDistributionOperationLog log = baseOperationLog(batchNo, OP_SALES_STATUS_CHANGE, OWNER_TYPE_SKU,
             product, sku);
         log.setBeforeSalesStatus(sku.getSkuStatus());
         log.setAfterSalesStatus(targetStatus);
+        log.setReason(reason);
         log.setChangeSummary("SKU销售状态：" + displayChange(sku.getSkuStatus(), targetStatus));
         log.setDiffJson(simpleDiff("skuStatus", sku.getSkuStatus(), targetStatus));
         operationLogMapper.insertOperationLog(log);
@@ -1676,5 +2355,44 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
     private String currentUsername()
     {
         return SecurityUtils.getUsername();
+    }
+
+    private static class OfficialSourceSaveContext
+    {
+        private static final OfficialSourceSaveContext EMPTY =
+            new OfficialSourceSaveContext(false, Map.of(), Map.of());
+
+        private final boolean batchLoaded;
+        private final Map<String, ProductSkuSourceBinding> snapshotMap;
+        private final Map<String, List<ProductSpuWarehouse>> warehouseMap;
+
+        private OfficialSourceSaveContext(boolean batchLoaded, Map<String, ProductSkuSourceBinding> snapshotMap,
+            Map<String, List<ProductSpuWarehouse>> warehouseMap)
+        {
+            this.batchLoaded = batchLoaded;
+            this.snapshotMap = snapshotMap == null ? Map.of() : snapshotMap;
+            this.warehouseMap = warehouseMap == null ? Map.of() : warehouseMap;
+        }
+
+        private static OfficialSourceSaveContext empty()
+        {
+            return EMPTY;
+        }
+
+        private boolean isBatchLoaded()
+        {
+            return batchLoaded;
+        }
+
+        private ProductSkuSourceBinding snapshot(String sourceDimensionGroupKey)
+        {
+            return snapshotMap.get(sourceDimensionGroupKey);
+        }
+
+        private List<ProductSpuWarehouse> officialWarehouses(String sourceDimensionGroupKey)
+        {
+            List<ProductSpuWarehouse> warehouses = warehouseMap.get(sourceDimensionGroupKey);
+            return warehouses == null ? List.of() : warehouses;
+        }
     }
 }
