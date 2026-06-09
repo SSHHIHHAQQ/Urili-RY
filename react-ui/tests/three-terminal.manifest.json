@@ -78,6 +78,9 @@
     "BuyerPortalProductServiceImplTest"
   ],
   "criticalBackendExplicitTestClasses": [
+    "AdminAccountPermissionUiContractTest",
+    "SellerAdminPermissionContractTest",
+    "BuyerAdminPermissionContractTest",
     "FinanceAdminRouteContractTest",
     "FinanceCurrencyServiceImplTest",
     "CurrencyRateSyncSchedulePolicyTest",
@@ -90,6 +93,7 @@
     "InventoryAdminRouteContractTest",
     "InventoryAdjustmentReviewPolicyEffectTest",
     "RouterVoPermissionContractTest",
+    "StandalonePartnerSeedMenuContractTest",
     "PortalPasswordChangeContractTest",
     "ProductDistributionMapperContractTest",
     "ProductDistributionServiceImplTest",

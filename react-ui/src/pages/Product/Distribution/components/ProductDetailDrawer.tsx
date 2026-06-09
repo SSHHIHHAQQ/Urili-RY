@@ -100,6 +100,42 @@ function warehouseKindLabel(kind?: string) {
   return kind ? warehouseKindText[kind] || kind : '--';
 }
 
+function uniqueTextList(values: Array<string | undefined>) {
+  return Array.from(new Set(values.map((value) => value?.trim()).filter(Boolean) as string[]));
+}
+
+function isOfficialWarehouse(product?: API.ProductDistribution.Spu) {
+  return product?.warehouseKind === 'official' || product?.warehouseKindSummary === 'official' || product?.warehouseKindSummary === '官方仓';
+}
+
+function formatWarehouseItem(warehouse: API.ProductDistribution.ProductWarehouse) {
+  const name = warehouse.warehouseName?.trim();
+  const code = warehouse.warehouseCode?.trim();
+  if (name && code && name !== code) return `${name}（${code}）`;
+  return name || code || '';
+}
+
+function warehouseSummaryText(product?: API.ProductDistribution.Spu) {
+  const warehouseNames = uniqueTextList((product?.warehouses || []).map(formatWarehouseItem));
+  if (warehouseNames.length) return warehouseNames.join(' / ');
+  const warehouseCodes = uniqueTextList(product?.outboundWarehouseCodes || []);
+  if (warehouseCodes.length) return warehouseCodes.join(' / ');
+  if (isOfficialWarehouse(product)) return '由来源 SKU 的官方履约仓派生';
+  return '--';
+}
+
+function currencySummaryText(product?: API.ProductDistribution.Spu) {
+  if (product?.currencySummary?.trim()) return product.currencySummary.trim();
+  const warehouseCurrencies = uniqueTextList((product?.warehouses || []).map((item) => item.settlementCurrency));
+  if (warehouseCurrencies.length === 1) return warehouseCurrencies[0];
+  if (warehouseCurrencies.length > 1) return '多币种';
+  const skuCurrencies = uniqueTextList((product?.skus || []).map((item) => item.currencyCode));
+  if (skuCurrencies.length === 1) return skuCurrencies[0];
+  if (skuCurrencies.length > 1) return '多币种';
+  if (isOfficialWarehouse(product)) return '由官方履约仓派生';
+  return '--';
+}
+
 function renderSourceSku(record: API.ProductDistribution.Sku) {
   if (!record.masterSku) return '--';
   return (
@@ -315,6 +351,8 @@ export default function ProductDetailDrawer({
               <ReadonlyField label="绑定卖家" value={product.sellerName} />
               <ReadonlyField label="商品分类" value={categoryPath || product.categoryName} />
               <ReadonlyField label="仓库类型" value={warehouseKindLabel(product.warehouseKind || product.warehouseKindSummary)} />
+              <ReadonlyField label="发货仓库" value={warehouseSummaryText(product)} span={2} multiline />
+              <ReadonlyField label="币种" value={currencySummaryText(product)} />
               <ReadonlyField label="系统SPU" value={product.systemSpuCode} />
               <ReadonlyField label="创建时间" value={product.createTime} />
               <ReadonlyField label="更新时间" value={product.updateTime} />

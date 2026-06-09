@@ -88,6 +88,38 @@ describe('verify-three-terminal backend gate', () => {
     expect(setupSource).toContain("path.join(uiRoot, 'src', '.umi-test', 'exports.ts')");
   });
 
+  it('ignores local generated frontend directories during manifest discovery', () => {
+    const source = readSource('scripts/verify-three-terminal.mjs');
+    const generatedDirs = [
+      '.umi-test',
+      '.umi-undefined',
+      'test-results',
+    ];
+
+    generatedDirs.forEach((dirName) => {
+      expect(source).toContain(`'${dirName}'`);
+    });
+
+    const tempFiles = [
+      path.join(uiRoot, 'src', '.umi-test', 'portal-generated.test.ts'),
+      path.join(uiRoot, 'src', '.umi-undefined', 'partner-generated.test.ts'),
+      path.join(uiRoot, 'test-results', 'three-terminal-generated.test.ts'),
+    ];
+
+    try {
+      tempFiles.forEach((file) => {
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.writeFileSync(file, "test('generated local artifact', () => expect(true).toBe(true));\n", 'utf8');
+      });
+
+      const result = runManifestCheck();
+
+      expect(result.status).toBe(0);
+    } finally {
+      tempFiles.forEach((file) => fs.rmSync(file, { force: true }));
+    }
+  });
+
   it('runs the domain JS mirror guard from lint and covers shared admin domains', () => {
     const packageJson = JSON.parse(readSource('package.json'));
     const mirrorGuard = readSource('scripts/check-product-upstream-js-mirrors.mjs');
@@ -142,19 +174,39 @@ describe('verify-three-terminal backend gate', () => {
     });
   });
 
-  it('rejects critical backend tests removed from the three-terminal manifest', () => {
+  it('keeps admin account, seller/buyer admin permission, and partner seed contracts critical', () => {
+    const manifest = JSON.parse(readSource('tests/three-terminal.manifest.json'));
+    const critical = new Set(manifest.criticalBackendExplicitTestClasses);
+
+    [
+      'AdminAccountPermissionUiContractTest',
+      'SellerAdminPermissionContractTest',
+      'BuyerAdminPermissionContractTest',
+      'StandalonePartnerSeedMenuContractTest',
+    ].forEach((testClass) => {
+      expect(critical.has(testClass)).toBe(true);
+    });
+  });
+
+  it.each([
+    'IntegrationAdminPermissionContractTest',
+    'AdminAccountPermissionUiContractTest',
+    'SellerAdminPermissionContractTest',
+    'BuyerAdminPermissionContractTest',
+    'StandalonePartnerSeedMenuContractTest',
+  ])('rejects critical backend test removed from the three-terminal manifest: %s', (criticalTestClass) => {
     withMutatedJsonFile('tests/three-terminal.manifest.json', (manifest) => {
       manifest.backendTestClasses = manifest.backendTestClasses.filter(
-        (testClass: string) => testClass !== 'IntegrationAdminPermissionContractTest',
+        (testClass: string) => testClass !== criticalTestClass,
       );
     }, () => {
       const result = runManifestCheck();
 
       expect(result.status).not.toBe(0);
-      expect(`${result.stdout}${result.stderr}`).toContain(
-        'critical backend test classes are not included in three-terminal manifest',
+      expect(`${result.stdout}${result.stderr}`).toMatch(
+        /critical backend (?:test classes are not included in three-terminal manifest|explicit test classes are missing from backendTestClasses)/,
       );
-      expect(`${result.stdout}${result.stderr}`).toContain('IntegrationAdminPermissionContractTest');
+      expect(`${result.stdout}${result.stderr}`).toContain(criticalTestClass);
     });
   });
 

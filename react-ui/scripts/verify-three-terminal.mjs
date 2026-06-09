@@ -31,6 +31,9 @@ const frontendDiscoveryIgnoredDirs = new Set([
   '.cache',
   '.umi',
   '.umi-production',
+  '.umi-test',
+  '.umi-undefined',
+  'test-results',
 ]);
 const criticalBackendTestClassPattern = /(?:Terminal|ThreeTerminal|Portal|DirectLogin|Partner|SqlExecutionGuard|Admin.*(?:Permission|Route)|Permission.*Account|SysMenuServiceImpl|LogAspectSensitiveFieldFilter|TokenServiceTerminalIsolation|Finance|Currency)/;
 const criticalBackendTestPathPattern = /^(?:ruoyi-system[\\/]src[\\/]test[\\/]java[\\/]com[\\/]ruoyi[\\/]system[\\/]architecture[\\/]|seller[\\/]src[\\/]test[\\/]java[\\/]|buyer[\\/]src[\\/]test[\\/]java[\\/]|product[\\/]src[\\/]test[\\/]java[\\/]|integration[\\/]src[\\/]test[\\/]java[\\/]|inventory[\\/]src[\\/]test[\\/]java[\\/]|warehouse[\\/]src[\\/]test[\\/]java[\\/]|finance[\\/]src[\\/]test[\\/]java[\\/])/;
