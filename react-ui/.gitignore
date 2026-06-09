@@ -34,6 +34,7 @@ functions/*
 .umi-production
 .umi-test
 /src/.umi-undefined
+/src/.umi-production
 /test-results
 
 # screenshot

@@ -24,6 +24,7 @@
     "dist",
     "coverage",
     "test-results",
-    "src/.umi-undefined"
+    "src/.umi-undefined",
+    "src/.umi-production"
   ]
 }

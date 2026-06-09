@@ -318,11 +318,13 @@ public class PortalDirectLoginSupportTest
     }
 
     @Test
-    public void consumeTokenShouldConsumeTicketAndRealScopedPayloadOnTerminalMismatch()
+    public void consumeTokenShouldRejectWrongTerminalWithoutConsumingRealScopedPayload()
     {
         PortalDirectLoginResult result = support.createToken("seller", 7L, "SAAA010001",
                 activeAccount(44L, "seller-owner"), "Support inspection",
                 PortalDirectLoginSupport.SELLER_WEB_URL_CONFIG_KEY, "http://fallback/seller/direct-login");
+        String sellerCacheKey = cacheKey(result.getToken());
+        String buyerCacheKey = cacheKey("buyer", result.getToken());
         PortalDirectLoginToken[] auditedPayload = new PortalDirectLoginToken[1];
         ServiceException[] auditedException = new ServiceException[1];
 
@@ -336,12 +338,20 @@ public class PortalDirectLoginSupportTest
         assertEquals("免密登录票据端类型不匹配", exception.getMessage());
         assertNull(auditedException[0]);
         assertNull(auditedPayload[0]);
+        assertEquals(0, ticketMapper.usedCalls);
+        assertEquals(0, ticketMapper.expiredCalls);
+        assertFalse(redisCache.deletedKeys.contains(sellerCacheKey));
+        assertTrue(redisCache.deletedKeys.contains(buyerCacheKey));
+        assertNotNull(redisCache.getCacheObject(sellerCacheKey));
+
+        PortalDirectLoginToken payload = support.consumeToken("seller", result.getToken(), token -> {
+        });
+
+        assertEquals(result.getTicketId(), payload.getTicketId());
         assertEquals(1, ticketMapper.usedCalls);
         assertEquals(result.getTicketId(), ticketMapper.usedTicketId);
-        assertEquals(0, ticketMapper.expiredCalls);
-        assertTrue(redisCache.deletedKeys.contains(cacheKey(result.getToken())));
-        assertTrue(redisCache.deletedKeys.contains(cacheKey("buyer", result.getToken())));
-        assertNull(redisCache.getCacheObject(cacheKey(result.getToken())));
+        assertTrue(redisCache.deletedKeys.contains(sellerCacheKey));
+        assertNull(redisCache.getCacheObject(sellerCacheKey));
     }
 
     @Test

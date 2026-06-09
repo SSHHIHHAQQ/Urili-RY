@@ -210,6 +210,24 @@
   - `codegraph sync .`：通过，输出 `Already up to date`。
 - 远端影响：本轮未执行远程 MySQL DDL/DML，未读取或写入 Redis，SQL 脚本未回放到远端库。
 
+### 2026-06-09 SKU 审核详情展示修正
+
+- 问题原因：
+  - 多 SKU 连续左右对比时，每个 SKU 缺少足够稳定的身份头，审核员只能看到字段变化，很难快速判断变化属于哪个具体 SKU。
+  - 供货价标签原先表达的是“涨跌幅未超过风险阈值”，文案却显示为“供货价正常”，在实际已调价场景下会误导审核员。
+  - 部分字段用展示字符串直接比较，`30.00 cm` / `30 cm`、仓库类型 code / 中文 label 等语义相同但格式不同的值可能被误判为变化。
+- 修正内容：
+  - SKU 左右对比卡片固定保留 SKU 身份区：SKU 图、客户 SKU、系统 SKU、规格摘要和变化项先展示，下面再展示左右对齐字段。
+  - 尺寸重量拆分为长、宽、高、重量四个字段分别比较，避免只改一个尺寸时整块尺寸重量全部被红绿高亮。
+  - 比较逻辑增加规范化处理，减少数字字符串、单位格式和仓库类型 label/code 导致的误判。
+  - 供货价标签改为 `供货价上涨` / `供货价下降` / `供货价未变` / `新增供货价` / `缺供货价`，删除“供货价正常”。
+  - 供货价左右对比只保留供货价字段，SKU 规格改由 SKU 身份区展示，避免价格审核区域混入 SKU 资料审核。
+- 验证结果：
+  - `npm run tsc -- --pretty false`：通过。
+  - `npx jest --config jest.config.ts tests/product-distribution-permission-guard.test.ts --runInBand`：通过，10 tests，0 failures/errors。
+  - 浏览器插件工具本轮未暴露；Playwright bash 包装脚本在当前 Windows 环境不可用，`npx --package` 也未能把临时 Playwright 包挂入 `require` 路径，因此未完成自动浏览器 DOM 验证。
+  - 本轮未执行远程 MySQL DDL/DML，未读取或写入 Redis。
+
 ## 后续建议
 
 1. 单独设计已审核商品删除 SKU 的审核类型和生效规则，当前第一版先禁止删除既有 SKU。

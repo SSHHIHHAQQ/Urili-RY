@@ -23,7 +23,10 @@ public class SqlExecutionGuardContractTest
             "(?i)\\b(?:insert(?:\\s+ignore)?\\s+into|replace\\s+into|update\\s+|delete\\s+(?:from\\s+|\\w+\\s+from\\s+)|alter\\s+table|create\\s+table|create\\s+(?:or\\s+replace\\s+)?view|create\\s+(?:unique\\s+)?index|drop\\s+index|drop\\s+table|drop\\s+view|truncate\\s+table|rename\\s+table)\\b");
 
     private static final Pattern DYNAMIC_HIGH_IMPACT_SQL_HINT = Pattern.compile(
-            "(?is)\\bset\\s+@ddl\\s*=\\s*concat\\s*\\(\\s*'\\s*(?:alter\\s+table|create\\s+table|create\\s+(?:or\\s+replace\\s+)?view|create\\s+(?:unique\\s+)?index|drop\\s+index|drop\\s+table|drop\\s+view|truncate\\s+table|rename\\s+table)\\b");
+            "(?is)\\bset\\s+@(?:ddl|dml|sql)\\s*=\\s*(?:concat\\s*\\([^;]*?)?'\\s*(?:insert(?:\\s+ignore)?\\s+into|replace\\s+into|update\\s+|delete\\s+(?:from\\s+|\\w+\\s+from\\s+)|alter\\s+table|create\\s+table|create\\s+(?:or\\s+replace\\s+)?view|create\\s+(?:unique\\s+)?index|drop\\s+index|drop\\s+table|drop\\s+view|truncate\\s+table|rename\\s+table)");
+
+    private static final Pattern DYNAMIC_HIGH_IMPACT_EXECUTION_POINT = Pattern.compile(
+            "(?im)^\\s*prepare\\s+\\w+\\s+from\\s+@(?:ddl|dml)\\s*;");
 
     private static final Pattern BARE_CREATE_INDEX_STATEMENT = Pattern.compile(
             "(?im)^\\s*create\\s+(?:unique\\s+)?index\\b");
@@ -289,6 +292,14 @@ public class SqlExecutionGuardContractTest
         {
             fail("dynamic drop index must be treated as high impact SQL");
         }
+        if (!containsHighImpactSql("set @sql = concat('update ', p_table, ' set status = ''1''')"))
+        {
+            fail("dynamic update must be treated as high impact SQL");
+        }
+        if (!containsHighImpactSql("set @dml = concat('delete from ', p_table, ' where id = 1')"))
+        {
+            fail("dynamic delete must be treated as high impact SQL");
+        }
     }
 
     @Test
@@ -335,6 +346,25 @@ public class SqlExecutionGuardContractTest
         if (violations.isEmpty())
         {
             fail("auto-discovered SQL guard order must not accept an undeclared confirmed procedure before DDL/DML");
+        }
+
+        violations.clear();
+        assertConfirmationCallBeforeDml(Paths.get("dynamic_bad_order.sql"),
+                "delimiter //\n"
+                        + "create procedure assert_dynamic_confirmed()\n"
+                        + "begin\n"
+                        + "  signal sqlstate '45000' set message_text = 'dynamic';\n"
+                        + "end//\n"
+                        + "delimiter ;\n"
+                        + "set @dml = concat('update seller_account set status = ''1'' where seller_id = 1');\n"
+                        + "prepare stmt from @dml;\n"
+                        + "execute stmt;\n"
+                        + "call assert_dynamic_confirmed();\n",
+                violations);
+
+        if (violations.isEmpty())
+        {
+            fail("auto-discovered SQL guard order must not accept dynamic DML before confirmation");
         }
 
         violations.clear();
@@ -5584,13 +5614,12 @@ public class SqlExecutionGuardContractTest
         String lowerSource = source.toLowerCase();
         int executableStart = lowerSource.indexOf("delimiter ;");
         String executableSource = executableStart >= 0 ? source.substring(executableStart) : source;
-        Matcher matcher = HIGH_IMPACT_STATEMENT.matcher(executableSource);
-        if (!matcher.find())
+        int firstHighImpactStatement = firstHighImpactStatementIndex(executableSource);
+        if (firstHighImpactStatement < 0)
         {
             return;
         }
         Matcher confirmMatcher = CONFIRM_CALL_NAME.matcher(executableSource);
-        int firstHighImpactStatement = matcher.start();
         if (!confirmMatcher.find() || confirmMatcher.start() > firstHighImpactStatement)
         {
             violations.add(sqlFile.getFileName() + " must call its confirmation procedure before first DDL/DML");
@@ -5608,6 +5637,33 @@ public class SqlExecutionGuardContractTest
         {
             violations.add(sqlFile.getFileName() + " must call its own declared confirmation procedure before first DDL/DML");
         }
+    }
+
+    private int firstHighImpactStatementIndex(String source)
+    {
+        int first = firstMatchStart(HIGH_IMPACT_STATEMENT, source);
+        first = minNonNegative(first, firstMatchStart(DYNAMIC_HIGH_IMPACT_SQL_HINT, source));
+        first = minNonNegative(first, firstMatchStart(DYNAMIC_HIGH_IMPACT_EXECUTION_POINT, source));
+        return first;
+    }
+
+    private int firstMatchStart(Pattern pattern, String source)
+    {
+        Matcher matcher = pattern.matcher(source);
+        return matcher.find() ? matcher.start() : -1;
+    }
+
+    private int minNonNegative(int left, int right)
+    {
+        if (left < 0)
+        {
+            return right;
+        }
+        if (right < 0)
+        {
+            return left;
+        }
+        return Math.min(left, right);
     }
 
     private Set<String> findDeclaredConfirmProcedures(String source)

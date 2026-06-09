@@ -106,6 +106,7 @@ describe('verify-three-terminal backend gate', () => {
     const generatedDirs = [
       '.umi-test',
       '.umi-undefined',
+      '.umi-production',
       'test-results',
     ];
 
@@ -116,6 +117,7 @@ describe('verify-three-terminal backend gate', () => {
     const tempFiles = [
       path.join(uiRoot, 'src', '.umi-test', 'portal-generated.test.ts'),
       path.join(uiRoot, 'src', '.umi-undefined', 'partner-generated.test.ts'),
+      path.join(uiRoot, 'src', '.umi-production', 'production-generated.test.ts'),
       path.join(uiRoot, 'test-results', 'three-terminal-generated.test.ts'),
     ];
 
@@ -140,27 +142,52 @@ describe('verify-three-terminal backend gate', () => {
 
     expect(tsconfig.exclude).toEqual(expect.arrayContaining([
       'src/.umi-undefined',
+      'src/.umi-production',
       'test-results',
     ]));
     expect(reactGitignore).toContain('/src/.umi-undefined');
+    expect(reactGitignore).toContain('/src/.umi-production');
     expect(reactGitignore).toContain('/test-results');
     expect(rootGitignore).toContain('.codegraph/');
     expect(rootGitignore).toContain('.umi-test/');
     expect(rootGitignore).toContain('node_modules/');
     expect(rootGitignore).toContain('react-ui/src/.umi-undefined/');
+    expect(rootGitignore).toContain('react-ui/src/.umi-production/');
     expect(rootGitignore).toContain('react-ui/test-results/');
 
-    const generatedFile = path.join(uiRoot, 'src', '.umi-undefined', 'generated-typecheck-noise.ts');
+    const generatedFiles = [
+      path.join(uiRoot, 'src', '.umi-undefined', 'generated-typecheck-noise.ts'),
+      path.join(uiRoot, 'src', '.umi-production', 'generated-typecheck-noise.ts'),
+    ];
     try {
-      fs.mkdirSync(path.dirname(generatedFile), { recursive: true });
-      fs.writeFileSync(generatedFile, 'const generatedNoise: string = 1;\n', 'utf8');
+      generatedFiles.forEach((generatedFile) => {
+        fs.mkdirSync(path.dirname(generatedFile), { recursive: true });
+        fs.writeFileSync(generatedFile, 'const generatedNoise: string = 1;\n', 'utf8');
+      });
 
       const result = runTypecheck();
 
       expect(result.status).toBe(0);
     } finally {
-      fs.rmSync(generatedFile, { force: true });
+      generatedFiles.forEach((generatedFile) => fs.rmSync(generatedFile, { force: true }));
     }
+  });
+
+  it('keeps urili secret config bound to environment placeholders', () => {
+    const applicationYml = fs.readFileSync(
+      path.resolve(uiRoot, '..', 'RuoYi-Vue', 'ruoyi-admin', 'src', 'main', 'resources', 'application.yml'),
+      'utf8',
+    );
+    const secretCipherSupport = fs.readFileSync(
+      path.resolve(uiRoot, '..', 'RuoYi-Vue', 'ruoyi-system', 'src', 'main', 'java', 'com', 'ruoyi', 'system', 'service', 'support', 'SecretCipherSupport.java'),
+      'utf8',
+    );
+
+    expect(applicationYml).toContain('encryption-key: ${URILI_SECRET_ENCRYPTION_KEY:}');
+    expect(applicationYml).toContain('encryption-key-id: ${URILI_SECRET_ENCRYPTION_KEY_ID:local-v1}');
+    expect(secretCipherSupport).toContain('@Value("${urili.secret.encryption-key:}")');
+    expect(secretCipherSupport).toContain('@Value("${urili.secret.encryption-key-id:default}")');
+    expect(secretCipherSupport).toContain('缺少 URILI_SECRET_ENCRYPTION_KEY');
   });
 
   it('runs the domain JS mirror guard from lint and covers shared admin domains', () => {

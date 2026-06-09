@@ -10,6 +10,7 @@ AGENTS.md
 RuoYi-Vue/.github/
 react-ui/.github/
 react-ui/src/.umi-undefined/
+react-ui/src/.umi-production/
 react-ui/test-results/
 react-ui/.claude/
 react-ui/.husky/
