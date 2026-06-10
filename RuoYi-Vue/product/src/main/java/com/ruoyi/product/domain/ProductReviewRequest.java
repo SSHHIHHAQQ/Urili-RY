@@ -53,6 +53,8 @@ public class ProductReviewRequest extends BaseEntity
     private List<ProductReviewItem> items;
     private List<ProductReviewSnapshot> snapshots;
     private List<ProductReviewOperationLog> logs;
+    private List<ProductReviewListDisplayItem> listDisplayItems;
+    private List<String> listChangedModules;
 
     public Long getReviewId() { return reviewId; }
     public void setReviewId(Long reviewId) { this.reviewId = reviewId; }
@@ -136,4 +138,8 @@ public class ProductReviewRequest extends BaseEntity
     public void setSnapshots(List<ProductReviewSnapshot> snapshots) { this.snapshots = snapshots; }
     public List<ProductReviewOperationLog> getLogs() { return logs; }
     public void setLogs(List<ProductReviewOperationLog> logs) { this.logs = logs; }
+    public List<ProductReviewListDisplayItem> getListDisplayItems() { return listDisplayItems; }
+    public void setListDisplayItems(List<ProductReviewListDisplayItem> listDisplayItems) { this.listDisplayItems = listDisplayItems; }
+    public List<String> getListChangedModules() { return listChangedModules; }
+    public void setListChangedModules(List<String> listChangedModules) { this.listChangedModules = listChangedModules; }
 }

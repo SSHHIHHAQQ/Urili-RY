@@ -30,6 +30,7 @@ import com.ruoyi.common.filter.PropertyPreExcludeFilter;
 import com.ruoyi.common.utils.ExceptionUtil;
 import com.ruoyi.common.utils.ServletUtils;
 import com.ruoyi.common.utils.StringUtils;
+import com.ruoyi.common.utils.file.ImageResourceUtils;
 import com.ruoyi.common.utils.ip.IpUtils;
 import com.ruoyi.framework.manager.AsyncManager;
 import com.ruoyi.framework.manager.factory.AsyncFactory;
@@ -51,6 +52,8 @@ public class PortalLogAspect
     /** Excluded sensitive properties. */
     public static final String[] EXCLUDE_PROPERTIES = { "password", "oldPassword", "newPassword", "confirmPassword",
             "token", "jwt", "directLoginToken", "loginUrl", "accessToken", "refreshToken", "authorization",
+            "appKey", "appSecret", "credential", "credentialCiphertext", "appKeyCiphertext",
+            "appSecretCiphertext",
             "subjectId", "accountId", "sellerId", "buyerId", "sellerAccountId", "buyerAccountId",
             "directLoginTicketId", "actingAdminId", "actingAdminName", "directLoginReason", "terminal",
             "tokenId", "operParam", "jsonResult" };
@@ -161,8 +164,8 @@ public class PortalLogAspect
         }
         if (portalLog.isSaveResponseData() && StringUtils.isNotNull(jsonResult))
         {
-            operLog.setJsonResult(StringUtils.substring(
-                    JSON.toJSONString(jsonResult, excludePropertyPreFilter(portalLog.excludeParamNames())), 0, 2000));
+            operLog.setJsonResult(sanitizeLogText(
+                    JSON.toJSONString(jsonResult, excludePropertyPreFilter(portalLog.excludeParamNames()))));
         }
     }
 
@@ -173,13 +176,13 @@ public class PortalLogAspect
         if (StringUtils.isEmpty(paramsMap) && StringUtils.equalsAny(requestMethod, HttpMethod.PUT.name(), HttpMethod.POST.name(), HttpMethod.DELETE.name()))
         {
             String params = argsArrayToString(joinPoint.getArgs(), excludeParamNames);
-            operLog.setOperParam(params);
+            operLog.setOperParam(sanitizeLogText(params));
         }
         else
         {
             Map<?, ?> filteredParamsMap = filterRequestParamMap(paramsMap, excludeParamNames);
-            operLog.setOperParam(StringUtils.substring(JSON.toJSONString(filteredParamsMap,
-                    excludePropertyPreFilter(excludeParamNames)), 0, PARAM_MAX_LENGTH));
+            operLog.setOperParam(sanitizeLogText(JSON.toJSONString(filteredParamsMap,
+                    excludePropertyPreFilter(excludeParamNames))));
         }
     }
 
@@ -247,7 +250,7 @@ public class PortalLogAspect
                 {
                     try
                     {
-                        String jsonObj = JSON.toJSONString(o, excludePropertyPreFilter(excludeParamNames));
+                        String jsonObj = sanitizeLogText(JSON.toJSONString(o, excludePropertyPreFilter(excludeParamNames)));
                         params.append(jsonObj).append(" ");
                         if (params.length() >= PARAM_MAX_LENGTH)
                         {
@@ -262,6 +265,11 @@ public class PortalLogAspect
             }
         }
         return params.toString();
+    }
+
+    private String sanitizeLogText(String value)
+    {
+        return StringUtils.substring(ImageResourceUtils.redactInlineImagePayloads(value), 0, PARAM_MAX_LENGTH);
     }
 
     public PropertyPreExcludeFilter excludePropertyPreFilter(String[] excludeParamNames)

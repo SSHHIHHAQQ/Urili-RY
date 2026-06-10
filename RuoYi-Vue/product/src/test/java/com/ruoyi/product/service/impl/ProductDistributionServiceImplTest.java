@@ -85,6 +85,60 @@ public class ProductDistributionServiceImplTest
     }
 
     @Test
+    public void selectProductListLoadsCurrentPageSkusInSingleBatch() throws Exception
+    {
+        RecordingProductDistributionMapper mapper = new RecordingProductDistributionMapper();
+        ProductSpu first = new ProductSpu();
+        first.setSpuId(1L);
+        ProductSpu second = new ProductSpu();
+        second.setSpuId(2L);
+        ProductSku firstSku = new ProductSku();
+        firstSku.setSpuId(1L);
+        ProductSku secondSku = new ProductSku();
+        secondSku.setSpuId(2L);
+        mapper.productListResult = List.of(first, second);
+        mapper.batchSkuListResult = List.of(firstSku, secondSku);
+        ProductDistributionServiceImpl service = service(mapper.proxy());
+
+        List<ProductSpu> result = service.selectProductList(new ProductSpu());
+
+        assertSame(mapper.productListResult, result);
+        assertEquals(List.of(1L, 2L), mapper.batchSkuSpuIds);
+        assertNull(mapper.skuListSpuId);
+        assertEquals(1, result.get(0).getSkus().size());
+        assertSame(firstSku, result.get(0).getSkus().get(0));
+        assertEquals(1, result.get(1).getSkus().size());
+        assertSame(secondSku, result.get(1).getSkus().get(0));
+    }
+
+    @Test
+    public void selectOnSaleProductListLoadsCurrentPageSkusInSingleBatch() throws Exception
+    {
+        RecordingProductDistributionMapper mapper = new RecordingProductDistributionMapper();
+        ProductSpu first = new ProductSpu();
+        first.setSpuId(1L);
+        ProductSpu second = new ProductSpu();
+        second.setSpuId(2L);
+        ProductSku firstSku = new ProductSku();
+        firstSku.setSpuId(1L);
+        ProductSku secondSku = new ProductSku();
+        secondSku.setSpuId(2L);
+        mapper.onSaleProductListResult = List.of(first, second);
+        mapper.onSaleBatchSkuListResult = List.of(firstSku, secondSku);
+        ProductDistributionServiceImpl service = service(mapper.proxy());
+
+        List<ProductSpu> result = service.selectOnSaleProductList(new ProductSpu());
+
+        assertSame(mapper.onSaleProductListResult, result);
+        assertEquals(List.of(1L, 2L), mapper.onSaleBatchSkuSpuIds);
+        assertNull(mapper.onSaleSkuListSpuId);
+        assertEquals(1, result.get(0).getSkus().size());
+        assertSame(firstSku, result.get(0).getSkus().get(0));
+        assertEquals(1, result.get(1).getSkus().size());
+        assertSame(secondSku, result.get(1).getSkus().get(0));
+    }
+
+    @Test
     public void selectSkuListWithSellerScopeRejectsOtherSellerAtProductQueryBeforeReadingSkus() throws Exception
     {
         RecordingProductDistributionMapper mapper = new RecordingProductDistributionMapper();
@@ -404,7 +458,15 @@ public class ProductDistributionServiceImplTest
         private ProductSpu scopedProductByIdResult;
         private Long scopedProductByIdSpuId;
         private Long scopedProductByIdSellerId;
+        private List<ProductSpu> productListResult = new ArrayList<>();
         private List<ProductSku> skuListResult = new ArrayList<>();
+        private Long skuListSpuId;
+        private List<Long> batchSkuSpuIds = new ArrayList<>();
+        private List<ProductSku> batchSkuListResult = new ArrayList<>();
+        private List<ProductSpu> onSaleProductListResult = new ArrayList<>();
+        private Long onSaleSkuListSpuId;
+        private List<Long> onSaleBatchSkuSpuIds = new ArrayList<>();
+        private List<ProductSku> onSaleBatchSkuListResult = new ArrayList<>();
         private Long scopedSkuListSpuId;
         private Long scopedSkuListSellerId;
         private ProductSkuSourceBinding activeSourceBindingBySkuIdResult;
@@ -432,6 +494,22 @@ public class ProductDistributionServiceImplTest
                     scopedProductByIdSpuId = (Long) args[0];
                     scopedProductByIdSellerId = (Long) args[1];
                     return scopedProductByIdResult;
+                case "selectProductList":
+                    return productListResult;
+                case "selectSkuListBySpuId":
+                    skuListSpuId = (Long) args[0];
+                    return skuListResult;
+                case "selectSkuListBySpuIds":
+                    batchSkuSpuIds = copyLongList(args[0]);
+                    return batchSkuListResult;
+                case "selectOnSaleProductList":
+                    return onSaleProductListResult;
+                case "selectOnSaleSkuListBySpuId":
+                    onSaleSkuListSpuId = (Long) args[0];
+                    return skuListResult;
+                case "selectOnSaleSkuListBySpuIds":
+                    onSaleBatchSkuSpuIds = copyLongList(args[0]);
+                    return onSaleBatchSkuListResult;
                 case "selectSkuListBySpuIdAndSellerId":
                     scopedSkuListSpuId = (Long) args[0];
                     scopedSkuListSellerId = (Long) args[1];

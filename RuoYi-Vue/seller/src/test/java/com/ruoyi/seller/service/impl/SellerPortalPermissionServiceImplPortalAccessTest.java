@@ -38,6 +38,42 @@ public class SellerPortalPermissionServiceImplPortalAccessTest
     }
 
     @Test
+    public void selectPermissionsRejectsDisabledSellerSessionBeforePermissionLookup()
+    {
+        Seller seller = seller(11L);
+        seller.setStatus("1");
+        SellerAccount account = account(22L, 11L);
+        RecordingSellerMapper sellerMapper = recordingSellerMapper(1, account);
+        RecordingSellerPortalPermissionMapper permissionMapper = new RecordingSellerPortalPermissionMapper()
+                .withPermissions("seller:product:list");
+        SellerPortalPermissionServiceImpl service = service(sellerService(seller), sellerMapper.proxy(),
+                permissionMapper.proxy());
+
+        assertServiceException("卖家已停用", () -> service.selectPermissions(session(11L, 22L)));
+        assertEquals(0, sellerMapper.countOnlineSessionCallCount);
+        assertEquals(0, permissionMapper.selectRoleKeysCallCount);
+        assertEquals(0, permissionMapper.selectPermissionsCallCount);
+    }
+
+    @Test
+    public void selectPermissionsRejectsDisabledSellerAccountSessionBeforePermissionLookup()
+    {
+        Seller seller = seller(11L);
+        SellerAccount account = account(22L, 11L);
+        account.setStatus("1");
+        RecordingSellerMapper sellerMapper = recordingSellerMapper(1, account);
+        RecordingSellerPortalPermissionMapper permissionMapper = new RecordingSellerPortalPermissionMapper()
+                .withPermissions("seller:product:list");
+        SellerPortalPermissionServiceImpl service = service(sellerService(seller), sellerMapper.proxy(),
+                permissionMapper.proxy());
+
+        assertServiceException("卖家端账号已停用", () -> service.selectPermissions(session(11L, 22L)));
+        assertEquals(0, sellerMapper.countOnlineSessionCallCount);
+        assertEquals(0, permissionMapper.selectRoleKeysCallCount);
+        assertEquals(0, permissionMapper.selectPermissionsCallCount);
+    }
+
+    @Test
     public void selectPortalPermissionInfoRejectsMalformedSellerSessionBeforeLookup()
     {
         SellerPortalPermissionServiceImpl service = service(failOnLookup(ISellerService.class, "seller service"),

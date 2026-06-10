@@ -6,8 +6,8 @@
 
 - 目标功能：管理端“商品管理 / 商城商品列表”首版正式能力。
 - SQL 文件：`RuoYi-Vue/sql/20260605_mall_product_distribution_seed.sql`
-- 目标 MySQL：远端腾讯云 MySQL，主机 `gz-cynosdbmysql-grp-lucf5kyf.sql.tencentcdb.com`，端口 `28634`，数据库 `fenxiao`。
-- 目标 Redis：远端 Redis，主机 `114.132.156.75`，端口 `6379`，数据库索引 `0`。
+- 目标 MySQL：远端运行库，连接来源为本机 `.env.local`，地址已脱敏。
+- 目标 Redis：远端 Redis，连接来源为本机 `.env.local`，地址已脱敏。
 - 连接来源：后端激活配置读取 `.env.local` 中的 `RUOYI_DB_URL`、`RUOYI_DB_USERNAME`、`RUOYI_DB_PASSWORD`；执行记录不保存密码或密钥。
 
 ## 2. 执行前确认
@@ -16,6 +16,10 @@
 - `application-druid.yml` 使用环境变量 `RUOYI_DB_URL`、`RUOYI_DB_USERNAME`、`RUOYI_DB_PASSWORD`。
 - 本地 Docker daemon 未运行，未读取或写入本地 Docker MySQL/Redis。
 - 本机没有 `mysql` 命令行客户端，因此使用 Maven 缓存中的 MySQL JDBC 驱动执行 SQL。
+- 用户确认来源：用户已在当前任务链路中确认允许把商城商品列表首版 SQL 执行到当前远端运行库。
+- 确认 token：该早期建表脚本执行时未设置独立 SQL session token；后续新增或重放同类远端 DDL/DML 必须补独立确认 token 后再执行。
+- 影响范围：创建商品基础表、初始化商品字典和管理端菜单/按钮权限，不清空任何已有表，不删除业务数据。
+- 回滚方式：未自动执行回滚；如需回滚，需先确认没有正式商品数据依赖，再人工删除新增表、字典项、菜单按钮并恢复菜单组件。
 
 ## 3. 执行内容
 
@@ -70,7 +74,7 @@ DICT product_source_type=3
 
 ## 6. 风险与后续
 
-- SQL 已执行到远端 `fenxiao` 运行库。
+- SQL 已执行到当前远端运行库。
 - 仍需重启后端，使新编译代码进入运行态。
 - 仍需用管理端账号验证新接口和页面入口。
 - 如果后续需要给非 admin 角色授权，需要按角色补 `sys_role_menu` 分配；本脚本只创建菜单和按钮权限点。

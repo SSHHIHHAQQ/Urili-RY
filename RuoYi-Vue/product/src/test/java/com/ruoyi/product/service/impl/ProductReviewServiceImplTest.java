@@ -16,6 +16,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import com.alibaba.fastjson2.JSON;
 import org.junit.After;
 import org.junit.Test;
@@ -26,9 +27,11 @@ import com.ruoyi.common.core.domain.model.LoginUser;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.product.domain.ProductDistributionOperationLog;
 import com.ruoyi.product.domain.ProductReviewItem;
+import com.ruoyi.product.domain.ProductReviewListDisplayItem;
 import com.ruoyi.product.domain.ProductReviewOperationLog;
 import com.ruoyi.product.domain.ProductReviewRequest;
 import com.ruoyi.product.domain.ProductReviewSnapshot;
+import com.ruoyi.product.domain.ProductReviewTypeCount;
 import com.ruoyi.product.domain.ProductSku;
 import com.ruoyi.product.domain.ProductSkuSupplyPriceUpdateRequest;
 import com.ruoyi.product.domain.ProductSpu;
@@ -443,10 +446,34 @@ public class ProductReviewServiceImplTest
     }
 
     @Test
-    public void selectReviewListAlsoRecomputesSupplyPriceRangeFromSnapshots() throws Exception
+    public void selectReviewListUsesStoredSupplyPriceRangeWithoutSnapshotQueries() throws Exception
+    {
+        RecordingProductReviewMapper reviewMapper = new RecordingProductReviewMapper();
+        ProductReviewRequest review = legacyReviewWithSalePriceRange("NEW_PRODUCT");
+        reviewMapper.reviewList = List.of(review);
+        ProductReviewServiceImpl service = service(reviewMapper.proxy(),
+                new RecordingProductDistributionService().proxy(), new RecordingProductDistributionMapper().proxy(),
+                new RecordingOperationLogMapper().proxy());
+
+        List<ProductReviewRequest> result = service.selectReviewList(new ProductReviewRequest());
+
+        assertEquals(1, result.size());
+        assertSame(review, result.get(0));
+        assertEquals(new BigDecimal("99.00"), result.get(0).getPriceAfterMin());
+        assertEquals(new BigDecimal("199.00"), result.get(0).getPriceAfterMax());
+        assertEquals(0, reviewMapper.selectReviewItemsCalls);
+        assertEquals(0, reviewMapper.selectReviewSnapshotsCalls);
+        assertTrue(reviewMapper.reviewItemsBatchReviewIds.isEmpty());
+        assertTrue(reviewMapper.reviewSnapshotsBatchReviewIds.isEmpty());
+    }
+
+    @Test
+    public void selectReviewListBatchesLegacySupplyPriceRangeFallback() throws Exception
     {
         RecordingProductReviewMapper reviewMapper = new RecordingProductReviewMapper();
         ProductReviewRequest legacyReview = legacyReviewWithSalePriceRange("NEW_PRODUCT");
+        legacyReview.setPriceAfterMin(null);
+        legacyReview.setPriceAfterMax(null);
         reviewMapper.reviewList = List.of(legacyReview);
         reviewMapper.reviewItems = List.of(reviewItem(901L, "CREATE"));
         ProductSku afterSku = reviewSku(100L, "10.00", "99.00");
@@ -458,9 +485,69 @@ public class ProductReviewServiceImplTest
         List<ProductReviewRequest> result = service.selectReviewList(new ProductReviewRequest());
 
         assertEquals(1, result.size());
-        assertSame(legacyReview, result.get(0));
         assertEquals(new BigDecimal("10.00"), result.get(0).getPriceAfterMin());
         assertEquals(new BigDecimal("10.00"), result.get(0).getPriceAfterMax());
+        assertEquals(0, reviewMapper.selectReviewItemsCalls);
+        assertEquals(0, reviewMapper.selectReviewSnapshotsCalls);
+        assertEquals(List.of(900L), reviewMapper.reviewItemsBatchReviewIds);
+        assertEquals(List.of(900L), reviewMapper.reviewSnapshotsBatchReviewIds);
+    }
+
+    @Test
+    public void selectReviewListAddsPriceTabDisplayItemsForChangedSupplyPriceSkusOnly() throws Exception
+    {
+        RecordingProductReviewMapper reviewMapper = new RecordingProductReviewMapper();
+        ProductReviewRequest priceReview = legacyReviewWithSalePriceRange("EDIT_PRICE");
+        priceReview.setCurrencySummary("USD");
+        reviewMapper.reviewList = List.of(priceReview);
+        ProductReviewItem changedItem = reviewItem(901L, "UPDATE");
+        ProductReviewItem unchangedItem = reviewItem(902L, "UPDATE");
+        reviewMapper.reviewItems = List.of(changedItem, unchangedItem);
+        ProductSku beforeChangedSku = reviewSku(100L, "10.00", "99.00");
+        ProductSku afterChangedSku = reviewSku(100L, "12.00", "99.00");
+        ProductSku beforeUnchangedSku = reviewSku(101L, "20.00", "199.00");
+        ProductSku afterUnchangedSku = reviewSku(101L, "20.00", "199.00");
+        reviewMapper.reviewSnapshots = List.of(
+                skuSnapshot(changedItem, "BEFORE", beforeChangedSku),
+                skuSnapshot(changedItem, "AFTER", afterChangedSku),
+                skuSnapshot(unchangedItem, "BEFORE", beforeUnchangedSku),
+                skuSnapshot(unchangedItem, "AFTER", afterUnchangedSku));
+        ProductReviewServiceImpl service = service(reviewMapper.proxy(),
+                new RecordingProductDistributionService().proxy(), new RecordingProductDistributionMapper().proxy(),
+                new RecordingOperationLogMapper().proxy());
+        ProductReviewRequest query = new ProductReviewRequest();
+        query.setReviewType("EDIT_PRICE");
+
+        List<ProductReviewRequest> result = service.selectReviewList(query);
+
+        assertEquals(1, result.size());
+        assertEquals(1, result.get(0).getListDisplayItems().size());
+        ProductReviewListDisplayItem displayItem = result.get(0).getListDisplayItems().get(0);
+        assertEquals(Long.valueOf(100L), displayItem.getSkuId());
+        assertEquals(new BigDecimal("10.00"), displayItem.getBeforeSupplyPrice());
+        assertEquals(new BigDecimal("12.00"), displayItem.getAfterSupplyPrice());
+        assertEquals("USD", displayItem.getCurrencyCode());
+        assertEquals("UP", displayItem.getPriceDirection());
+        assertEquals(List.of("供货价"), displayItem.getChangedFieldNames());
+        assertEquals(List.of("供货价"), result.get(0).getListChangedModules());
+    }
+
+    @Test
+    public void selectPendingReviewTypeCountsReturnsTypedCountsAndAllTotal() throws Exception
+    {
+        RecordingProductReviewMapper reviewMapper = new RecordingProductReviewMapper();
+        reviewMapper.pendingReviewTypeCounts = List.of(reviewTypeCount("NEW_PRODUCT", 5L),
+                reviewTypeCount("EDIT_PRICE", 3L));
+        ProductReviewServiceImpl service = service(reviewMapper.proxy(),
+                new RecordingProductDistributionService().proxy(), new RecordingProductDistributionMapper().proxy(),
+                new RecordingOperationLogMapper().proxy());
+
+        Map<String, Long> result = service.selectPendingReviewTypeCounts();
+
+        assertEquals(Long.valueOf(8L), result.get("ALL"));
+        assertEquals(Long.valueOf(5L), result.get("NEW_PRODUCT"));
+        assertEquals(Long.valueOf(3L), result.get("EDIT_PRICE"));
+        assertEquals(1, reviewMapper.selectPendingReviewTypeCountsCalls);
     }
 
     @Test
@@ -674,6 +761,14 @@ public class ProductReviewServiceImplTest
         return review;
     }
 
+    private ProductReviewTypeCount reviewTypeCount(String reviewType, Long total)
+    {
+        ProductReviewTypeCount count = new ProductReviewTypeCount();
+        count.setReviewType(reviewType);
+        count.setTotal(total);
+        return count;
+    }
+
     private ProductSku reviewSku(Long skuId, String supplyPrice, String salePrice)
     {
         ProductSku sku = draftSku();
@@ -687,6 +782,7 @@ public class ProductReviewServiceImplTest
     {
         String payload = JSON.toJSONString(sku);
         ProductReviewSnapshot snapshot = new ProductReviewSnapshot();
+        snapshot.setReviewId(item.getReviewId());
         snapshot.setItemId(item.getItemId());
         snapshot.setSnapshotRole(role);
         snapshot.setPayloadType("SKU");
@@ -724,11 +820,17 @@ public class ProductReviewServiceImplTest
         private ProductReviewRequest reviewById;
         private ProductReviewRequest latestRejectedReusableReview;
         private Long latestRejectedReusableSpuId;
+        private List<ProductReviewTypeCount> pendingReviewTypeCounts = new ArrayList<>();
+        private int selectPendingReviewTypeCountsCalls;
         private ProductReviewRequest updatedReview;
         private Long updatedItemsReviewId;
         private String updatedItemsStatus;
         private List<ProductReviewItem> reviewItems = new ArrayList<>();
         private List<ProductReviewSnapshot> reviewSnapshots = new ArrayList<>();
+        private int selectReviewItemsCalls;
+        private int selectReviewSnapshotsCalls;
+        private List<Long> reviewItemsBatchReviewIds = new ArrayList<>();
+        private List<Long> reviewSnapshotsBatchReviewIds = new ArrayList<>();
         private final List<ProductReviewItem> insertedItems = new ArrayList<>();
         private final List<ProductReviewSnapshot> insertedSnapshots = new ArrayList<>();
         private final List<ProductReviewOperationLog> insertedOperationLogs = new ArrayList<>();
@@ -749,6 +851,9 @@ public class ProductReviewServiceImplTest
                     return reviewList;
                 case "selectReviewById":
                     return reviewById;
+                case "selectPendingReviewTypeCounts":
+                    selectPendingReviewTypeCountsCalls++;
+                    return pendingReviewTypeCounts;
                 case "selectLatestRejectedReusableReviewBySpuId":
                     latestRejectedReusableSpuId = (Long) args[0];
                     return latestRejectedReusableReview;
@@ -769,6 +874,10 @@ public class ProductReviewServiceImplTest
                     insertedItems.add(item);
                     return 1;
                 case "selectReviewItems":
+                    selectReviewItemsCalls++;
+                    return reviewItems;
+                case "selectReviewItemsByReviewIds":
+                    reviewItemsBatchReviewIds = new ArrayList<>((List<Long>) args[0]);
                     return reviewItems;
                 case "updateReviewItemsStatus":
                     updatedItemsReviewId = (Long) args[0];
@@ -778,6 +887,10 @@ public class ProductReviewServiceImplTest
                     insertedSnapshots.add((ProductReviewSnapshot) args[0]);
                     return 1;
                 case "selectReviewSnapshots":
+                    selectReviewSnapshotsCalls++;
+                    return reviewSnapshots;
+                case "selectReviewSnapshotsByReviewIds":
+                    reviewSnapshotsBatchReviewIds = new ArrayList<>((List<Long>) args[0]);
                     return reviewSnapshots;
                 case "insertReviewOperationLog":
                     insertedOperationLogs.add((ProductReviewOperationLog) args[0]);

@@ -32,6 +32,7 @@ public final class UpstreamMaskUtils
             return "";
         }
         return value
+            .replaceAll("(?i)(\"(?:appKey|app_key)\"\\s*:\\s*\")([^\"]+)(\")", "$1****$3")
             .replaceAll("(?i)(\"appSecret\"\\s*:\\s*\")([^\"]+)(\")", "$1****$3")
             .replaceAll("(?i)(\"authcode\"\\s*:\\s*\")([^\"]+)(\")", "$1****$3")
             .replaceAll("(?i)(\"password\"\\s*:\\s*\")([^\"]+)(\")", "$1****$3");

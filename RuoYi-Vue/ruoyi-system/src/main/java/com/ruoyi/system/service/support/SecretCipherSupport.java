@@ -5,10 +5,13 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.Base64;
+import jakarta.annotation.PostConstruct;
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import com.ruoyi.common.exception.ServiceException;
@@ -19,6 +22,8 @@ import com.ruoyi.common.exception.ServiceException;
 @Component
 public class SecretCipherSupport
 {
+    private static final Logger log = LoggerFactory.getLogger(SecretCipherSupport.class);
+
     private static final String CIPHER_PREFIX = "v1:";
 
     private static final int IV_LENGTH = 12;
@@ -30,8 +35,17 @@ public class SecretCipherSupport
     @Value("${urili.secret.encryption-key:}")
     private String encryptionKey;
 
-    @Value("${urili.secret.encryption-key-id:default}")
+    @Value("${urili.secret.encryption-key-id:local-v1}")
     private String encryptionKeyId;
+
+    @PostConstruct
+    public void warnIfEncryptionKeyMissing()
+    {
+        if (StringUtils.isBlank(encryptionKey))
+        {
+            log.warn("URILI_SECRET_ENCRYPTION_KEY 未配置，外部系统凭证保存、解密和同步能力将 fail-closed");
+        }
+    }
 
     public String encrypt(String plaintext)
     {
@@ -50,6 +64,10 @@ public class SecretCipherSupport
             buffer.put(iv);
             buffer.put(ciphertext);
             return CIPHER_PREFIX + Base64.getEncoder().encodeToString(buffer.array());
+        }
+        catch (ServiceException ex)
+        {
+            throw ex;
         }
         catch (Exception ex)
         {
@@ -91,7 +109,7 @@ public class SecretCipherSupport
 
     public String getEncryptionKeyId()
     {
-        return StringUtils.defaultIfBlank(encryptionKeyId, "default");
+        return StringUtils.defaultIfBlank(encryptionKeyId, "local-v1");
     }
 
     private SecretKeySpec buildKey() throws Exception

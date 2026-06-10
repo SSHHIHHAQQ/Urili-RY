@@ -1,7 +1,11 @@
 package com.ruoyi.framework.aspectj;
 
 import java.util.Collection;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.apache.commons.lang3.ArrayUtils;
@@ -28,6 +32,7 @@ import com.ruoyi.common.utils.ExceptionUtil;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.common.utils.ServletUtils;
 import com.ruoyi.common.utils.StringUtils;
+import com.ruoyi.common.utils.file.ImageResourceUtils;
 import com.ruoyi.common.utils.ip.IpUtils;
 import com.ruoyi.framework.manager.AsyncManager;
 import com.ruoyi.framework.manager.factory.AsyncFactory;
@@ -46,7 +51,9 @@ public class LogAspect
 
     /** 排除敏感属性字段 */
     public static final String[] EXCLUDE_PROPERTIES = { "password", "oldPassword", "newPassword", "confirmPassword",
-            "token", "jwt", "directLoginToken", "loginUrl", "accessToken", "refreshToken", "authorization" };
+            "token", "jwt", "directLoginToken", "loginUrl", "accessToken", "refreshToken", "authorization",
+            "appKey", "appSecret", "credential", "credentialCiphertext", "appKeyCiphertext",
+            "appSecretCiphertext" };
 
     /** 计算操作消耗时间 */
     private static final ThreadLocal<Long> TIME_THREADLOCAL = new NamedThreadLocal<Long>("Cost Time");
@@ -164,8 +171,8 @@ public class LogAspect
         // 是否需要保存response，参数和值
         if (log.isSaveResponseData() && StringUtils.isNotNull(jsonResult))
         {
-            operLog.setJsonResult(StringUtils.substring(
-                    JSON.toJSONString(jsonResult, excludePropertyPreFilter(log.excludeParamNames())), 0, 2000));
+            operLog.setJsonResult(sanitizeLogText(
+                    JSON.toJSONString(jsonResult, excludePropertyPreFilter(log.excludeParamNames()))));
         }
     }
 
@@ -182,11 +189,13 @@ public class LogAspect
         if (StringUtils.isEmpty(paramsMap) && StringUtils.equalsAny(requestMethod, HttpMethod.PUT.name(), HttpMethod.POST.name(), HttpMethod.DELETE.name()))
         {
             String params = argsArrayToString(joinPoint.getArgs(), excludeParamNames);
-            operLog.setOperParam(params);
+            operLog.setOperParam(sanitizeLogText(params));
         }
         else
         {
-            operLog.setOperParam(StringUtils.substring(JSON.toJSONString(paramsMap, excludePropertyPreFilter(excludeParamNames)), 0, PARAM_MAX_LENGTH));
+            Map<?, ?> filteredParamsMap = filterRequestParamMap(paramsMap, excludeParamNames);
+            operLog.setOperParam(sanitizeLogText(JSON.toJSONString(filteredParamsMap,
+                    excludePropertyPreFilter(excludeParamNames))));
         }
     }
 
@@ -204,7 +213,7 @@ public class LogAspect
                 {
                     try
                     {
-                        String jsonObj = JSON.toJSONString(o, excludePropertyPreFilter(excludeParamNames));
+                        String jsonObj = sanitizeLogText(JSON.toJSONString(o, excludePropertyPreFilter(excludeParamNames)));
                         params.append(jsonObj).append(" ");
                         if (params.length() >= PARAM_MAX_LENGTH)
                         {
@@ -221,12 +230,44 @@ public class LogAspect
         return params.toString();
     }
 
+    private String sanitizeLogText(String value)
+    {
+        return StringUtils.substring(ImageResourceUtils.redactInlineImagePayloads(value), 0, PARAM_MAX_LENGTH);
+    }
+
     /**
      * 忽略敏感属性
      */
     public PropertyPreExcludeFilter excludePropertyPreFilter(String[] excludeParamNames)
     {
         return new PropertyPreExcludeFilter().addExcludes(ArrayUtils.addAll(EXCLUDE_PROPERTIES, excludeParamNames));
+    }
+
+    private Map<?, ?> filterRequestParamMap(Map<?, ?> paramsMap, String[] excludeParamNames)
+    {
+        if (StringUtils.isEmpty(paramsMap))
+        {
+            return paramsMap;
+        }
+        Set<String> excludedNames = new HashSet<>();
+        for (String name : ArrayUtils.addAll(EXCLUDE_PROPERTIES, excludeParamNames))
+        {
+            if (StringUtils.isNotEmpty(name))
+            {
+                excludedNames.add(name.toLowerCase(Locale.ROOT));
+            }
+        }
+        Map<Object, Object> filteredParamsMap = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : paramsMap.entrySet())
+        {
+            Object key = entry.getKey();
+            if (key != null && excludedNames.contains(String.valueOf(key).toLowerCase(Locale.ROOT)))
+            {
+                continue;
+            }
+            filteredParamsMap.put(key, entry.getValue());
+        }
+        return filteredParamsMap;
     }
 
     /**

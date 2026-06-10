@@ -65,6 +65,15 @@ public interface BuyerPortalPermissionMapper
     public int batchBuyerAccountRoles(@Param("buyerId") Long buyerId, @Param("accountId") Long accountId,
             @Param("roleIds") Long[] roleIds);
 
+    public int insertBuyerOwnerRoleIfMissing(@Param("buyerId") Long buyerId, @Param("createBy") String createBy);
+
+    public int insertBuyerOwnerRoleMenusIfMissing(@Param("buyerId") Long buyerId, @Param("perms") String[] perms);
+
+    public int countBuyerOwnerRoleMenuGrants(@Param("buyerId") Long buyerId, @Param("perms") String[] perms);
+
+    public int insertBuyerOwnerAccountRoleIfMissing(@Param("buyerId") Long buyerId,
+            @Param("accountId") Long accountId);
+
     public int deleteBuyerRoleMenuByRoleId(@Param("buyerId") Long buyerId, @Param("roleId") Long roleId);
 
     public int batchBuyerRoleMenu(@Param("buyerId") Long buyerId, @Param("roleId") Long roleId,

@@ -12,7 +12,7 @@
 
 ## 子 Agent 使用
 
-- 先按用户要求尝试 6 个 GPT-5.3 Codex 子 Agent（`gpt-5.3-codex-spark`）。
+- 历史记录（已过期口径）：当轮先按当时用户要求尝试 6 个 GPT-5.3 Codex 子 Agent（`gpt-5.3-codex-spark`）。
 - 平台返回额度限制，提示需要等到 2026-06-14 15:12 后再试；该批 6 个子 Agent 已关闭。
 - 回退使用 6 个 `gpt-5.4` 只读子 Agent，覆盖：
   - seller/buyer 后端账号隔离
@@ -22,6 +22,7 @@
   - product/inventory/integration/warehouse
   - `verify-three-terminal` 门禁覆盖
 - 6 个 `gpt-5.4` 子 Agent 均已关闭。
+- 当前现行规则以 `AGENTS.md` 为准：子 Agent 默认且只能使用 `gpt-5.4`，不得再使用 GPT-5.3 Codex；本段仅保留 2026-06-08 当轮工具事实，不作为后续模型选择依据。
 
 ## 结论处理
 
@@ -63,7 +64,7 @@
 
 - `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl product -am "-Dtest=ProductReviewServiceImplTest" "-DfailIfNoTests=false" "-Dsurefire.failIfNoSpecifiedTests=false" test`
   - 通过，`ProductReviewServiceImplTest` 9 个测试。
-- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system "-Dtest=SqlExecutionGuardContractTest" test`
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system -am "-Dtest=SqlExecutionGuardContractTest" test`
   - 通过，68 个测试。
 - `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl product,inventory,integration,warehouse,ruoyi-system,seller,buyer -am -DskipITs -DskipTests compile`
   - 通过，10 个 reactor 模块编译成功。

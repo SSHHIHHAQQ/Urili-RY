@@ -27,6 +27,8 @@ public final class UpstreamSystemConstants
 
     public static final String CREDENTIAL_STATUS_CONFIGURED = "CONFIGURED";
 
+    public static final String CREDENTIAL_STATUS_PENDING = "PENDING";
+
     public static final String CREDENTIAL_STATUS_INVALID = "INVALID";
 
     public static final String SYNC_STATUS_NEVER = "NEVER";

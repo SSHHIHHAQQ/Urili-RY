@@ -12,13 +12,9 @@
   - 本机 `.env.local` 的 `RUOYI_*` 变量
 - 激活 profile：`druid`
 - 目标 MySQL：
-  - host：`gz-cynosdbmysql-grp-lucf5kyf.sql.tencentcdb.com`
-  - port：`28634`
-  - database：`fenxiao`
+  - 远端运行库，地址已脱敏
 - 目标 Redis：
-  - host：`114.132.156.75`
-  - port：`6379`
-  - database：`0`
+  - 远端 Redis，地址已脱敏
 - 执行方式：
   - 本机没有可用 `mysql` CLI。
   - 使用本机 Maven 缓存中的 MySQL JDBC 驱动执行 SQL。
@@ -54,7 +50,7 @@
 
 ## 验证结果
 
-- 当前 database：`fenxiao`
+- 当前 database：远端运行库，名称已脱敏
 - 审核表：
   - `product_review_request`
   - `product_review_item`
@@ -81,6 +77,6 @@
   - `GET /product/admin/reviews/list?pageNum=1&pageSize=5` 返回 `code=200`，当前 `total=0`。
   - `GET /getRouters` 能找到 `ProductDistributionReview`，组件为 `Product/Review/index`。
 - 追加验证：
-  - `mvn -pl ruoyi-system -Dtest=SqlExecutionGuardContractTest test`：通过，64 个测试通过。
+  - `mvn -pl ruoyi-system -am "-Dtest=SqlExecutionGuardContractTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，64 个测试通过。
   - `mvn -pl product -am -DskipTests compile`：通过。
   - `mvn -pl ruoyi-admin -am -DskipTests package`：停止旧进程后通过。

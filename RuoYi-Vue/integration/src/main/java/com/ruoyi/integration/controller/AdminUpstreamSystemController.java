@@ -73,7 +73,8 @@ public class AdminUpstreamSystemController extends BaseController
     }
 
     @PreAuthorize("@ss.hasPermi('integration:upstream:add')")
-    @Log(title = "上游系统接入", businessType = BusinessType.INSERT)
+    @Log(title = "上游系统接入", businessType = BusinessType.INSERT,
+            excludeParamNames = { "appKey", "appSecret", "appKeyCiphertext", "appSecretCiphertext" })
     @PostMapping
     public AjaxResult add(@Validated @RequestBody UpstreamConnectionRequest request)
     {
@@ -90,7 +91,8 @@ public class AdminUpstreamSystemController extends BaseController
     }
 
     @PreAuthorize("@ss.hasPermi('integration:upstream:credential')")
-    @Log(title = "上游系统重新授权", businessType = BusinessType.UPDATE)
+    @Log(title = "上游系统重新授权", businessType = BusinessType.UPDATE,
+            excludeParamNames = { "appKey", "appSecret", "appKeyCiphertext", "appSecretCiphertext" })
     @PutMapping("/{connectionCode}/credentials")
     public AjaxResult credentials(@PathVariable("connectionCode") String connectionCode,
         @Validated @RequestBody UpstreamCredentialRequest request)

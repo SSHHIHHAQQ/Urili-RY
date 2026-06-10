@@ -1,4 +1,5 @@
 import { request } from '@umijs/max';
+import { sanitizePartnerSessionPageParams } from '@/services/seller-buyer/sessionParams';
 
 export async function getAdminBuyerList(params?: API.Partner.BuyerListParams) {
   return request<API.Partner.BuyerPageResult>('/api/buyer/admin/buyers/list', {
@@ -268,12 +269,12 @@ export async function forceLogoutAdminBuyerSessions(buyerId: number) {
   });
 }
 
-export async function getAdminBuyerSessions(buyerId: number, params?: Record<string, any>) {
+export async function getAdminBuyerSessions(buyerId: number, params?: API.Partner.PartnerSessionPageParams) {
   return request<API.Partner.PortalAuditPageResult<API.Partner.PortalSessionProfile>>(
     `/api/buyer/admin/buyers/${buyerId}/sessions/list`,
     {
       method: 'GET',
-      params,
+      params: sanitizePartnerSessionPageParams(params),
     },
   );
 }
@@ -284,12 +285,16 @@ export async function forceLogoutAdminBuyerAccountSessions(buyerId: number, buye
   });
 }
 
-export async function getAdminBuyerAccountSessions(buyerId: number, buyerAccountId: number, params?: Record<string, any>) {
+export async function getAdminBuyerAccountSessions(
+  buyerId: number,
+  buyerAccountId: number,
+  params?: API.Partner.PartnerSessionPageParams,
+) {
   return request<API.Partner.PortalAuditPageResult<API.Partner.PortalSessionProfile>>(
     `/api/buyer/admin/buyers/${buyerId}/accounts/${buyerAccountId}/sessions/list`,
     {
       method: 'GET',
-      params,
+      params: sanitizePartnerSessionPageParams(params),
     },
   );
 }

@@ -48,7 +48,7 @@
 
 ## 验证命令
 
-- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system "-Dtest=PortalDirectLoginSupportTest,PortalDirectLoginAuthContractTest,SqlExecutionGuardContractTest" test`：通过，`16` 个测试通过。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system -am "-Dtest=PortalDirectLoginSupportTest,PortalDirectLoginAuthContractTest,SqlExecutionGuardContractTest" test`：通过，`16` 个测试通过。当前可复用命令必须保留 `-am`，避免本机 Maven 缓存掩盖 reactor 依赖漂移。
 - `cd E:\Urili-Ruoyi\react-ui; npm run test:unit -- --runTestsByPath tests/portal-direct-login-message.test.ts tests/terminal-session-token.test.ts tests/portal-session-request.test.ts --runInBand`：通过，`3` 个 test suite、`7` 个测试通过。
 - `cd E:\Urili-Ruoyi\react-ui; npm run verify:three-terminal`：通过，最终输出 `three-terminal verification passed.`；覆盖 portal token guard、partner/product guards、React typecheck、portal Jest 单测和后端三端合同。
 

@@ -83,6 +83,11 @@ declare namespace API.ProductDistribution {
     warehouseCount?: number;
     inventoryStatus?: string;
     stockUpdateTime?: string;
+    latestReviewId?: number;
+    latestReviewNo?: string;
+    latestReviewStatus?: string;
+    latestReviewFeedback?: string;
+    latestReviewTime?: string;
     sourceBindingId?: number;
     sourceScope?: string;
     sourceSkuGroupKey?: string;

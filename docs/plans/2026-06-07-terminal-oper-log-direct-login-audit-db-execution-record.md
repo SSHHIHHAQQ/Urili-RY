@@ -10,7 +10,7 @@
 
 - 连接来源：`E:\Urili-Ruoyi\.env.local` 中的 `RUOYI_DB_URL` / `RUOYI_DB_USERNAME` / `RUOYI_DB_PASSWORD`。
 - 激活配置依据：`RuoYi-Vue/ruoyi-admin/src/main/resources/application.yml` 当前 `spring.profiles.active=druid`，`application-druid.yml` 使用 `RUOYI_DB_*` 环境变量。
-- 目标库：远程 MySQL，JDBC URL 指向 `gz-cynosdbmysql-grp-lucf5kyf.sql.tencentcdb.com:28634/fenxiao`。
+- 目标库：远程 MySQL，JDBC URL 来源为本机 `.env.local`，地址已脱敏。
 - 本记录不输出数据库密码、Redis 密码或 token secret。
 
 ## 执行前检查

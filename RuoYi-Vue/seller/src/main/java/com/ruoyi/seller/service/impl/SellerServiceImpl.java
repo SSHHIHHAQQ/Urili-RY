@@ -21,6 +21,7 @@ import com.ruoyi.seller.domain.Seller;
 import com.ruoyi.seller.domain.SellerAccount;
 import com.ruoyi.seller.mapper.SellerMapper;
 import com.ruoyi.seller.mapper.SellerPortalDeptMapper;
+import com.ruoyi.seller.mapper.SellerPortalPermissionMapper;
 import com.ruoyi.seller.service.ISellerService;
 import com.ruoyi.system.domain.PortalDept;
 import com.ruoyi.system.domain.PortalDirectLoginTicket;
@@ -35,6 +36,7 @@ import com.ruoyi.system.domain.PortalOwnLoginLogProfile;
 import com.ruoyi.system.domain.PortalOwnOperLogProfile;
 import com.ruoyi.system.domain.PortalOwnSessionProfile;
 import com.ruoyi.system.domain.PortalPasswordChangeRequest;
+import com.ruoyi.system.domain.PortalRole;
 import com.ruoyi.system.domain.PortalSessionProfile;
 import com.ruoyi.system.mapper.PortalDirectLoginTicketMapper;
 import com.ruoyi.system.service.ISysConfigService;
@@ -51,6 +53,18 @@ public class SellerServiceImpl implements ISellerService
 {
     private static final String SELLER_NO_PREFIX = "S";
 
+    private static final String OWNER_ROLE_KEY = "owner";
+
+    private static final String[] DEFAULT_OWNER_PERMS = {
+        "seller:account:list",
+        "seller:account:loginLog:list",
+        "seller:account:operLog:list",
+        "seller:account:session:list",
+        "seller:dept:list",
+        "seller:role:list",
+        "seller:portal:home"
+    };
+
     private static final String LOGIN_BLACK_IP_CONFIG_KEY = "sys.login.blackIPList";
 
     @Autowired
@@ -58,6 +72,9 @@ public class SellerServiceImpl implements ISellerService
 
     @Autowired
     private SellerPortalDeptMapper deptMapper;
+
+    @Autowired
+    private SellerPortalPermissionMapper permissionMapper;
 
     @Autowired
     private PortalDirectLoginTicketMapper ticketMapper;
@@ -175,7 +192,9 @@ public class SellerServiceImpl implements ISellerService
             throw new ServiceException("登录账号已存在");
         }
         account.setPassword(SecurityUtils.encryptPassword(account.getPassword()));
-        return sellerMapper.insertSellerAccount(account);
+        int rows = sellerMapper.insertSellerAccount(account);
+        bindOwnerRoleIfNeeded(sellerId, account);
+        return rows;
     }
 
     @Override
@@ -878,6 +897,7 @@ public class SellerServiceImpl implements ISellerService
         owner.setUpdateBy(SecurityUtils.getUsername());
         owner.setRemark("卖家主账号");
         sellerMapper.updateSellerAccount(owner);
+        bindOwnerRoleIfNeeded(seller.getSellerId(), owner);
     }
 
     private void normalizeSellerAccount(SellerAccount account, boolean requirePassword)
@@ -921,6 +941,41 @@ public class SellerServiceImpl implements ISellerService
         {
             throw new ServiceException("卖家主账号已存在");
         }
+    }
+
+    private void bindOwnerRoleIfNeeded(Long sellerId, SellerAccount account)
+    {
+        if (!PartnerSupport.ACCOUNT_ROLE_OWNER.equals(account.getAccountRole()))
+        {
+            return;
+        }
+        Long sellerAccountId = account.getSellerAccountId() != null ? account.getSellerAccountId() : account.getAccountId();
+        if (sellerAccountId == null)
+        {
+            throw new ServiceException("卖家主账号ID不能为空");
+        }
+        PortalRole ownerRole = ensureOwnerRoleReady(sellerId);
+        permissionMapper.insertSellerOwnerAccountRoleIfMissing(sellerId, sellerAccountId);
+        if (!permissionMapper.selectSellerAccountRoleIds(sellerId, sellerAccountId).contains(ownerRole.getRoleId()))
+        {
+            throw new ServiceException("卖家主账号绑定 owner 角色失败");
+        }
+    }
+
+    private PortalRole ensureOwnerRoleReady(Long sellerId)
+    {
+        permissionMapper.insertSellerOwnerRoleIfMissing(sellerId, SecurityUtils.getUsername());
+        PortalRole ownerRole = permissionMapper.checkSellerRoleKeyUnique(sellerId, OWNER_ROLE_KEY);
+        if (ownerRole == null || !PartnerSupport.STATUS_NORMAL.equals(ownerRole.getStatus()))
+        {
+            throw new ServiceException("卖家端 owner 角色不存在或已停用");
+        }
+        permissionMapper.insertSellerOwnerRoleMenusIfMissing(sellerId, DEFAULT_OWNER_PERMS);
+        if (permissionMapper.countSellerOwnerRoleMenuGrants(sellerId, DEFAULT_OWNER_PERMS) != DEFAULT_OWNER_PERMS.length)
+        {
+            throw new ServiceException("卖家端 owner 默认菜单权限不完整");
+        }
+        return ownerRole;
     }
 
     private int forceLogoutSellerSessionScope(Long sellerId, Long sellerAccountId)

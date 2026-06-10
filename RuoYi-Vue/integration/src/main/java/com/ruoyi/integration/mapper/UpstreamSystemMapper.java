@@ -43,6 +43,8 @@ public interface UpstreamSystemMapper
 
     int updateConnectionCredentials(UpstreamSystemConnection connection);
 
+    int updateConnectionCredentialStatus(UpstreamSystemConnection connection);
+
     int updateConnectionStatus(@Param("connectionCode") String connectionCode, @Param("status") String status,
         @Param("updateBy") String updateBy);
 

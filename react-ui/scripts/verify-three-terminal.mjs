@@ -36,10 +36,10 @@ const frontendDiscoveryIgnoredDirs = new Set([
   'test-results',
 ]);
 const criticalBackendTestClassPattern = /(?:Terminal|ThreeTerminal|Portal|DirectLogin|Partner|SqlExecutionGuard|Admin.*(?:Permission|Route)|Permission.*Account|SysMenuServiceImpl|LogAspectSensitiveFieldFilter|TokenServiceTerminalIsolation|Finance|Currency)/;
-const criticalBackendTestPathPattern = /^(?:ruoyi-system[\\/]src[\\/]test[\\/]java[\\/]com[\\/]ruoyi[\\/]system[\\/]architecture[\\/]|seller[\\/]src[\\/]test[\\/]java[\\/]|buyer[\\/]src[\\/]test[\\/]java[\\/]|product[\\/]src[\\/]test[\\/]java[\\/]|integration[\\/]src[\\/]test[\\/]java[\\/]|inventory[\\/]src[\\/]test[\\/]java[\\/]|warehouse[\\/]src[\\/]test[\\/]java[\\/]|finance[\\/]src[\\/]test[\\/]java[\\/])/;
+const criticalBackendTestPathPattern = /^(?:ruoyi-system[\\/]src[\\/]test[\\/]java[\\/]com[\\/]ruoyi[\\/]system[\\/]architecture[\\/]|seller[\\/]src[\\/]test[\\/]java[\\/]|buyer[\\/]src[\\/]test[\\/]java[\\/]|product[\\/]src[\\/]test[\\/]java[\\/]|integration[\\/]src[\\/]test[\\/]java[\\/]|inventory[\\/]src[\\/]test[\\/]java[\\/]|warehouse[\\/]src[\\/]test[\\/]java[\\/]|finance[\\/]src[\\/]test[\\/]java[\\/]|logistics[\\/]src[\\/]test[\\/]java[\\/])/;
 const criticalBackendExplicitTestClasses = new Set(manifest.criticalBackendExplicitTestClasses);
 const frontendDiscoveryRoots = [uiRoot];
-const criticalFrontendTestPathPattern = /(?:terminal|portal|partner|remote-menu|getrouters|authority|auth-sidecar|direct-login|unauthorized|redirect|three-terminal|namespace|menu-id|menu-range|account-scope|permission-contract|system-user-service|product-distribution-permission|product-center|source-product|upstream-system-permission|inventory-overview|inventory-adjustment-review|source-warehouse|warehouse|finance|currency)/i;
+const criticalFrontendTestPathPattern = /(?:terminal|portal|partner|remote-menu|getrouters|authority|auth-sidecar|direct-login|unauthorized|redirect|three-terminal|namespace|menu-id|menu-range|account-scope|permission-contract|system-user-service|product-distribution-permission|product-review|product-center|source-product|upstream-system-permission|inventory-overview|inventory-adjustment-review|source-warehouse|warehouse|finance|currency|logistics|carrier)/i;
 const criticalFrontendExplicitTestPaths = new Set(
   manifest.criticalFrontendExplicitTestPaths.map(normalizeFrontendTestPath),
 );

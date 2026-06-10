@@ -15,7 +15,7 @@
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
-  padding: 8px 16px;
+  padding: 6px 12px;
   background: #fafafa;
 }
 
@@ -43,4 +43,23 @@
 
 .overviewNestedTable :global(.ant-table-container) {
   border-inline-start: 1px solid #f0f0f0;
+}
+
+.overviewNestedTable :global(.ant-table-cell) {
+  padding-top: 9px !important;
+  padding-bottom: 9px !important;
+}
+
+.compactSkuInfo {
+  max-width: 100%;
+  line-height: 20px;
+}
+
+.compactSkuInfo :global(.ant-typography) {
+  max-width: 100%;
+  margin-bottom: 0;
+}
+
+.overviewWarehouseActions :global(.ant-btn-link) {
+  padding-inline: 0;
 }

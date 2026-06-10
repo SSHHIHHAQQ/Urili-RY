@@ -1,8 +1,10 @@
-import { Space, Table, Typography } from 'antd';
+import { Button, Dropdown, Space, Table, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import { DownOutlined } from '@ant-design/icons';
 import { useCallback, useEffect, useState } from 'react';
 import { getInventoryOverviewWarehouses } from '@/services/inventory/overview';
-import InventorySyncPolicyButton from '@/components/InventorySyncPolicy/InventorySyncPolicyButton';
+import InventorySyncPolicyButton, { InventorySyncPolicyModal } from '@/components/InventorySyncPolicy/InventorySyncPolicyButton';
+import { InventoryAdjustModal } from '@/components/InventoryAdjust/InventoryAdjustButton';
 import {
   formatDateTime,
   formatQuantity,
@@ -14,7 +16,9 @@ import styles from '../style.module.css';
 import InventoryAdjustButton from './InventoryAdjustButton';
 import QuantityCell from './QuantityCell';
 
-const WAREHOUSE_TABLE_SCROLL_X = 1540;
+const WAREHOUSE_TABLE_SCROLL_X = 1810;
+const SKU_COLUMN_WIDTH = 230;
+const OPERATION_COLUMN_WIDTH = 220;
 
 export type WarehouseStockTableRow = API.InventoryOverview.WarehouseStock & {
   skuGroupStart?: boolean;
@@ -22,6 +26,99 @@ export type WarehouseStockTableRow = API.InventoryOverview.WarehouseStock & {
   skuOverview?: API.InventoryOverview.OverviewItem;
   skuGroupRows?: API.InventoryOverview.WarehouseStock[];
 };
+
+function WarehouseOperationCell({
+  record,
+  showSkuAdjust,
+  canAdjust,
+  canSync,
+  sellerOptions,
+  warehouseOptions,
+  onChanged,
+}: {
+  record: WarehouseStockTableRow;
+  showSkuAdjust: boolean;
+  canAdjust: boolean;
+  canSync: boolean;
+  sellerOptions: API.InventoryOverview.SellerOption[];
+  warehouseOptions: API.InventoryOverview.WarehouseOption[];
+  onChanged: () => void;
+}) {
+  const [skuAdjustOpen, setSkuAdjustOpen] = useState(false);
+  const [skuSyncOpen, setSkuSyncOpen] = useState(false);
+  const hasSkuActions = showSkuAdjust && record.skuGroupFirst;
+  const moreItems = hasSkuActions
+    ? [
+        { key: 'adjustSku', label: '调整SKU', disabled: !canAdjust },
+        { key: 'syncSku', label: '同步SKU', disabled: !canSync },
+      ]
+    : [];
+
+  return (
+    <>
+      <Space size={8} className={styles.overviewWarehouseActions}>
+        <InventoryAdjustButton
+          scope="WAREHOUSE"
+          warehouseRecord={record}
+          canAdjust={canAdjust}
+          onChanged={onChanged}
+        />
+        <InventorySyncPolicyButton
+          initialScope="SKU_WAREHOUSE"
+          lockScope
+          warehouseRecord={record}
+          sellerOptions={sellerOptions}
+          warehouseOptions={warehouseOptions}
+          canSync={canSync}
+          onChanged={onChanged}
+          buttonText="同步方式"
+        />
+        {moreItems.length ? (
+          <Dropdown
+            menu={{
+              items: moreItems,
+              onClick: ({ key }) => {
+                if (key === 'adjustSku') {
+                  setSkuAdjustOpen(true);
+                } else if (key === 'syncSku') {
+                  setSkuSyncOpen(true);
+                }
+              },
+            }}
+            trigger={['click']}
+          >
+            <Button type="link" size="small">
+              更多 <DownOutlined />
+            </Button>
+          </Dropdown>
+        ) : null}
+      </Space>
+      {hasSkuActions ? (
+        <>
+          <InventoryAdjustModal
+            open={skuAdjustOpen}
+            onOpenChange={setSkuAdjustOpen}
+            scope="SKU"
+            overviewRecord={record.skuOverview}
+            presetRows={record.skuGroupRows || []}
+            canAdjust={canAdjust}
+            onChanged={onChanged}
+          />
+          <InventorySyncPolicyModal
+            open={skuSyncOpen}
+            onOpenChange={setSkuSyncOpen}
+            initialScope="SKU"
+            lockScope
+            overviewRecord={record.skuOverview}
+            sellerOptions={sellerOptions}
+            warehouseOptions={warehouseOptions}
+            onChanged={onChanged}
+          />
+        </>
+      ) : null}
+    </>
+  );
+}
 
 export function WarehouseStockTable({
   rows,
@@ -52,49 +149,19 @@ export function WarehouseStockTable({
           {
             title: 'SKU信息',
             dataIndex: 'systemSkuCode',
-            width: 290,
-            fixed: 'left' as const,
+            width: SKU_COLUMN_WIDTH,
             render: (_: unknown, record: WarehouseStockTableRow) => (
-              <>
+              <Space direction="vertical" size={1} className={styles.compactSkuInfo}>
                 <Typography.Text strong>{record.systemSkuCode || '-'}</Typography.Text>
-                <br />
                 <Typography.Text type="secondary" ellipsis={{ tooltip: record.productName }}>
                   {record.productName || '-'}
                 </Typography.Text>
                 {record.skuName ? (
-                  <>
-                    <br />
-                    <Typography.Text type="secondary" ellipsis={{ tooltip: record.skuName }}>
-                      {record.skuName}
-                    </Typography.Text>
-                  </>
+                  <Typography.Text type="secondary" ellipsis={{ tooltip: record.skuName }}>
+                    {record.skuName}
+                  </Typography.Text>
                 ) : null}
-                {showSkuAdjust && record.skuGroupFirst ? (
-                  <>
-                    <br />
-                    <Space size={4}>
-                      <InventoryAdjustButton
-                        scope="SKU"
-                        overviewRecord={record.skuOverview}
-                        presetRows={record.skuGroupRows || []}
-                        canAdjust={canAdjust}
-                        onChanged={onChanged}
-                        buttonText="调整SKU"
-                      />
-                      <InventorySyncPolicyButton
-                        initialScope="SKU"
-                        lockScope
-                        overviewRecord={record.skuOverview}
-                        sellerOptions={sellerOptions}
-                        warehouseOptions={warehouseOptions}
-                        canSync={canSync}
-                        onChanged={onChanged}
-                        buttonText="同步SKU"
-                      />
-                    </Space>
-                  </>
-                ) : null}
-              </>
+              </Space>
             ),
           },
         ]
@@ -207,26 +274,17 @@ export function WarehouseStockTable({
     {
       title: '操作',
       dataIndex: 'operation',
-      width: 170,
+      width: showSkuAdjust ? OPERATION_COLUMN_WIDTH : 170,
       render: (_, record) => (
-        <Space size={4}>
-          <InventoryAdjustButton
-            scope="WAREHOUSE"
-            warehouseRecord={record}
-            canAdjust={canAdjust}
-            onChanged={onChanged}
-          />
-          <InventorySyncPolicyButton
-            initialScope="SKU_WAREHOUSE"
-            lockScope
-            warehouseRecord={record}
-            sellerOptions={sellerOptions}
-            warehouseOptions={warehouseOptions}
-            canSync={canSync}
-            onChanged={onChanged}
-            buttonText="同步方式"
-          />
-        </Space>
+        <WarehouseOperationCell
+          record={record}
+          showSkuAdjust={showSkuAdjust}
+          canAdjust={canAdjust}
+          canSync={canSync}
+          sellerOptions={sellerOptions}
+          warehouseOptions={warehouseOptions}
+          onChanged={onChanged}
+        />
       ),
     },
   ];
@@ -241,7 +299,7 @@ export function WarehouseStockTable({
         dataSource={rows}
         pagination={false}
         rowClassName={rowClassName}
-        scroll={{ x: showSkuColumn ? WAREHOUSE_TABLE_SCROLL_X + 300 : WAREHOUSE_TABLE_SCROLL_X }}
+        scroll={{ x: showSkuColumn ? WAREHOUSE_TABLE_SCROLL_X + SKU_COLUMN_WIDTH : WAREHOUSE_TABLE_SCROLL_X }}
         tableLayout="fixed"
       />
     </div>

@@ -38,6 +38,42 @@ public class BuyerPortalPermissionServiceImplPortalAccessTest
     }
 
     @Test
+    public void selectPermissionsRejectsDisabledBuyerSessionBeforePermissionLookup()
+    {
+        Buyer buyer = buyer(11L);
+        buyer.setStatus("1");
+        BuyerAccount account = account(22L, 11L);
+        RecordingBuyerMapper buyerMapper = recordingBuyerMapper(1, account);
+        RecordingBuyerPortalPermissionMapper permissionMapper = new RecordingBuyerPortalPermissionMapper()
+                .withPermissions("buyer:product:list");
+        BuyerPortalPermissionServiceImpl service = service(buyerService(buyer), buyerMapper.proxy(),
+                permissionMapper.proxy());
+
+        assertServiceException("买家已停用", () -> service.selectPermissions(session(11L, 22L)));
+        assertEquals(0, buyerMapper.countOnlineSessionCallCount);
+        assertEquals(0, permissionMapper.selectRoleKeysCallCount);
+        assertEquals(0, permissionMapper.selectPermissionsCallCount);
+    }
+
+    @Test
+    public void selectPermissionsRejectsDisabledBuyerAccountSessionBeforePermissionLookup()
+    {
+        Buyer buyer = buyer(11L);
+        BuyerAccount account = account(22L, 11L);
+        account.setStatus("1");
+        RecordingBuyerMapper buyerMapper = recordingBuyerMapper(1, account);
+        RecordingBuyerPortalPermissionMapper permissionMapper = new RecordingBuyerPortalPermissionMapper()
+                .withPermissions("buyer:product:list");
+        BuyerPortalPermissionServiceImpl service = service(buyerService(buyer), buyerMapper.proxy(),
+                permissionMapper.proxy());
+
+        assertServiceException("买家端账号已停用", () -> service.selectPermissions(session(11L, 22L)));
+        assertEquals(0, buyerMapper.countOnlineSessionCallCount);
+        assertEquals(0, permissionMapper.selectRoleKeysCallCount);
+        assertEquals(0, permissionMapper.selectPermissionsCallCount);
+    }
+
+    @Test
     public void selectPortalPermissionInfoRejectsMalformedBuyerSessionBeforeLookup()
     {
         BuyerPortalPermissionServiceImpl service = service(failOnLookup(IBuyerService.class, "buyer service"),

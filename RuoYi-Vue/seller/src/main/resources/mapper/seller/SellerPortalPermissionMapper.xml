@@ -355,6 +355,81 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         </foreach>
     </insert>
 
+    <insert id="insertSellerOwnerRoleIfMissing">
+        insert into seller_role(
+            seller_id, role_name, role_key, role_sort, status, del_flag,
+            create_by, create_time, remark
+        )
+        select #{sellerId}, 'Owner', 'owner', 1, '0', '0',
+               #{createBy}, sysdate(), '默认卖家端 Owner 角色'
+        where not exists (
+            select 1
+            from seller_role r
+            where r.seller_id = #{sellerId}
+              and r.role_key = 'owner'
+        )
+    </insert>
+
+    <insert id="insertSellerOwnerRoleMenusIfMissing">
+        insert into seller_role_menu(seller_role_id, seller_menu_id)
+        select r.seller_role_id, m.seller_menu_id
+        from seller_role r
+        inner join seller_menu m on m.perms in
+        <foreach collection="perms" item="perm" open="(" separator="," close=")">
+            #{perm}
+        </foreach>
+          and m.status = '0'
+          and m.seller_menu_id &gt;= 100000
+          and m.seller_menu_id &lt; 200000
+        where r.seller_id = #{sellerId}
+          and r.role_key = 'owner'
+          and r.status = '0'
+          and r.del_flag = '0'
+          and not exists (
+              select 1
+              from seller_role_menu rm
+              where rm.seller_role_id = r.seller_role_id
+                and rm.seller_menu_id = m.seller_menu_id
+          )
+    </insert>
+
+    <select id="countSellerOwnerRoleMenuGrants" resultType="Integer">
+        select count(distinct m.seller_menu_id)
+        from seller_role r
+        inner join seller_role_menu rm on rm.seller_role_id = r.seller_role_id
+        inner join seller_menu m on m.seller_menu_id = rm.seller_menu_id
+        where r.seller_id = #{sellerId}
+          and r.role_key = 'owner'
+          and r.status = '0'
+          and r.del_flag = '0'
+          and m.status = '0'
+          and m.seller_menu_id &gt;= 100000
+          and m.seller_menu_id &lt; 200000
+          and m.perms in
+        <foreach collection="perms" item="perm" open="(" separator="," close=")">
+            #{perm}
+        </foreach>
+    </select>
+
+    <insert id="insertSellerOwnerAccountRoleIfMissing">
+        insert into seller_account_role(seller_account_id, seller_role_id)
+        select a.seller_account_id, r.seller_role_id
+        from seller_account a
+        inner join seller_role r on r.seller_id = a.seller_id
+        where a.seller_id = #{sellerId}
+          and a.seller_account_id = #{accountId}
+          and a.account_role = 'OWNER'
+          and r.role_key = 'owner'
+          and r.status = '0'
+          and r.del_flag = '0'
+          and not exists (
+              select 1
+              from seller_account_role ar
+              where ar.seller_account_id = a.seller_account_id
+                and ar.seller_role_id = r.seller_role_id
+          )
+    </insert>
+
     <delete id="deleteSellerRoleMenuByRoleId">
         delete rm
         from seller_role_menu rm

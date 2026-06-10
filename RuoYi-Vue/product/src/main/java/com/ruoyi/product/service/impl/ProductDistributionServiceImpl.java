@@ -5,6 +5,7 @@ import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -28,6 +29,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.DateUtils;
 import com.ruoyi.common.utils.SecurityUtils;
+import com.ruoyi.common.utils.file.ImageResourceUtils;
 import com.ruoyi.finance.domain.FinanceCurrency;
 import com.ruoyi.finance.service.IFinanceCurrencyService;
 import com.ruoyi.integration.domain.SourceOfficialWarehouseOption;
@@ -141,10 +143,7 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
     {
         List<ProductSpu> products = productDistributionMapper.selectProductList(query);
         fillLatestReviewSummaries(products);
-        for (ProductSpu product : products)
-        {
-            product.setSkus(productDistributionMapper.selectSkuListBySpuId(product.getSpuId()));
-        }
+        fillSkusForProducts(products);
         return products;
     }
 
@@ -152,11 +151,48 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
     public List<ProductSpu> selectOnSaleProductList(ProductSpu query)
     {
         List<ProductSpu> products = productDistributionMapper.selectOnSaleProductList(query);
+        fillOnSaleSkusForProducts(products);
+        return products;
+    }
+
+    private void fillSkusForProducts(List<ProductSpu> products)
+    {
+        List<Long> spuIds = extractSpuIds(products);
+        if (spuIds.isEmpty())
+        {
+            return;
+        }
+        assignSkusToProducts(products, productDistributionMapper.selectSkuListBySpuIds(spuIds));
+    }
+
+    private void fillOnSaleSkusForProducts(List<ProductSpu> products)
+    {
+        List<Long> spuIds = extractSpuIds(products);
+        if (spuIds.isEmpty())
+        {
+            return;
+        }
+        assignSkusToProducts(products, productDistributionMapper.selectOnSaleSkuListBySpuIds(spuIds));
+    }
+
+    private List<Long> extractSpuIds(List<ProductSpu> products)
+    {
+        if (products == null || products.isEmpty())
+        {
+            return List.of();
+        }
+        return products.stream().map(ProductSpu::getSpuId).filter(Objects::nonNull).distinct()
+            .collect(Collectors.toList());
+    }
+
+    private void assignSkusToProducts(List<ProductSpu> products, List<ProductSku> skus)
+    {
+        Map<Long, List<ProductSku>> skusBySpuId = skus.stream().filter(sku -> sku.getSpuId() != null)
+            .collect(Collectors.groupingBy(ProductSku::getSpuId, LinkedHashMap::new, Collectors.toList()));
         for (ProductSpu product : products)
         {
-            product.setSkus(productDistributionMapper.selectOnSaleSkuListBySpuId(product.getSpuId()));
+            product.setSkus(skusBySpuId.getOrDefault(product.getSpuId(), List.of()));
         }
-        return products;
     }
 
     @Override
@@ -643,8 +679,9 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
         product.setProductNameEn(requireTrim(product.getProductNameEn(), "商品英文标题不能为空"));
         product.setSellerSpuCode(trimToEmpty(product.getSellerSpuCode()));
         product.setSellingPoint(trimToEmpty(product.getSellingPoint()));
-        product.setMainImageUrl(trimToEmpty(product.getMainImageUrl()));
-        product.setDetailContent(StringUtils.defaultString(product.getDetailContent()));
+        product.setMainImageUrl(ImageResourceUtils.normalizeStoredImageResource(product.getMainImageUrl(), "SPU主图"));
+        product.setDetailContent(ImageResourceUtils.normalizeDetailContentImageResources(product.getDetailContent(),
+            "详情图文图片"));
         product.setRemark(StringUtils.defaultString(product.getRemark()));
         product.setSpuStatus(normalizeStatus(StringUtils.defaultIfBlank(product.getSpuStatus(), STATUS_DRAFT)));
         if (current == null && !STATUS_DRAFT.equals(product.getSpuStatus()))
@@ -1302,7 +1339,7 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
         sku.setModel(trimToEmpty(sku.getModel()));
         sku.setPackageQuantity(trimToEmpty(sku.getPackageQuantity()));
         sku.setCapacity(trimToEmpty(sku.getCapacity()));
-        sku.setSkuImageUrl(trimToEmpty(sku.getSkuImageUrl()));
+        sku.setSkuImageUrl(ImageResourceUtils.normalizeStoredImageResource(sku.getSkuImageUrl(), "SKU图"));
         if (isOfficialWarehouseProduct(product))
         {
             applySourceSnapshotToSku(sku, requireSourceSnapshot(sku.getSourceDimensionGroupKey(), sourceContext));
@@ -2120,7 +2157,8 @@ public class ProductDistributionServiceImpl implements IProductDistributionServi
         }
         for (ProductImage image : images)
         {
-            image.setImageUrl(requireTrim(image.getImageUrl(), "商品图片不能为空"));
+            image.setImageUrl(requireTrim(ImageResourceUtils.normalizeStoredImageResource(image.getImageUrl(),
+                "商品图片"), "商品图片不能为空"));
             image.setImageRole(requireTrim(image.getImageRole(), "商品图片角色不能为空"));
             image.setSortOrder(image.getSortOrder() == null ? 0 : image.getSortOrder());
             image.setCreateBy(currentUsername());

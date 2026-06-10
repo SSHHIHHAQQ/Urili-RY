@@ -45,12 +45,15 @@ import {
   getControlStatusText,
   inventoryStatusColor,
   inventoryStatusText,
+  inventoryStatusValueEnum,
   getSalesStatusText,
   resolveResourceUrl,
+  reviewStatusValueEnum,
   salesStatusTabOptions,
   type SalesStatusTabValue,
   salesStatusValueEnum,
   sourceTypeValueEnum,
+  warehouseKindValueEnum,
   warehouseKindText,
 } from './constants';
 import ProductDetailDrawer from './components/ProductDetailDrawer';
@@ -882,7 +885,9 @@ export default function ProductDistributionPage() {
     {
       title: '仓库类型',
       dataIndex: 'warehouseKindSummary',
-      search: false,
+      valueType: 'select',
+      valueEnum: warehouseKindValueEnum,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       width: 100,
       render: (_, record) => renderWarehouseKindTag(record.warehouseKindSummary),
     },
@@ -917,7 +922,9 @@ export default function ProductDistributionPage() {
     {
       title: '审核状态',
       dataIndex: 'latestReviewStatus',
-      search: false,
+      valueType: 'select',
+      valueEnum: reviewStatusValueEnum,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       width: 110,
       render: (_, record) => renderLatestReviewStatus(record),
     },
@@ -1013,6 +1020,14 @@ export default function ProductDistributionPage() {
 
   const skuListColumns: ProColumns<API.ProductDistribution.Sku>[] = [
     {
+      title: '所属商品审核状态',
+      dataIndex: 'latestReviewStatus',
+      valueType: 'select',
+      valueEnum: reviewStatusValueEnum,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
+      hideInTable: true,
+    },
+    {
       title: 'SKU图',
       dataIndex: 'skuImageUrl',
       search: false,
@@ -1027,7 +1042,6 @@ export default function ProductDistributionPage() {
     {
       title: '来源SKU',
       dataIndex: 'masterSku',
-      search: false,
       width: 220,
       render: (_, record) => renderSourceSku(record),
     },
@@ -1078,7 +1092,9 @@ export default function ProductDistributionPage() {
     {
       title: '仓库类型',
       dataIndex: 'warehouseKindSummary',
-      search: false,
+      valueType: 'select',
+      valueEnum: warehouseKindValueEnum,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       width: 100,
       render: (_, record) => renderWarehouseKindTag(record.warehouseKindSummary),
     },
@@ -1098,7 +1114,10 @@ export default function ProductDistributionPage() {
     },
     {
       title: '库存状态',
-      search: false,
+      dataIndex: 'inventoryStatus',
+      valueType: 'select',
+      valueEnum: inventoryStatusValueEnum,
+      fieldProps: SEARCHABLE_SELECT_PROPS,
       width: 90,
       render: (_, record) => renderInventoryStatus(record),
     },

@@ -206,6 +206,8 @@ describe('remote menu route guard', () => {
     expect(getStaticRouteAuthority('/tool/gen/edit')).toEqual(['tool:gen:query', 'tool:gen:edit']);
     expect(getStaticRouteAuthorityMode('/tool/gen/edit')).toBe('all');
     expect(getStaticRouteAuthority('/seller/direct-login')).toBeUndefined();
+    expect(getStaticRouteAuthority('/seller/direct-login/next')).toEqual(['seller:admin:list']);
+    expect(getStaticRouteAuthority('/buyer/direct-login/next')).toEqual(['buyer:admin:list']);
     expect(getStaticRouteAuthority('/seller/portal/orders/1')).toBeUndefined();
     expect(getStaticRouteAuthority('/buyer/login')).toBeUndefined();
     expect(getStaticRouteAuthority('/buyer/portal/account/profile')).toBeUndefined();

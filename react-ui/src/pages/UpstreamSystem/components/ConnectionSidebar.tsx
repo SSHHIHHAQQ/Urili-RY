@@ -7,7 +7,7 @@ import {
 } from '@ant-design/icons';
 import { Button, Empty, Input, Spin, Tooltip, Typography } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
-import { systemKindText } from '../constants';
+import { settlementTypeDisplayText, systemKindText } from '../constants';
 import { statusTag } from '../helpers';
 import styles from '../style.module.css';
 
@@ -53,6 +53,7 @@ export default function ConnectionSidebar({
         item.masterWarehouseName,
         item.connectionCode,
         systemKindText[item.systemKind || ''] || item.systemKind,
+        settlementTypeDisplayText(item.settlementType),
       ]
         .filter(Boolean)
         .some((value) =>
@@ -110,7 +111,8 @@ export default function ConnectionSidebar({
           </div>
           <div className={styles.connectionItemCode}>
             <Typography.Text type="secondary" ellipsis>
-              {connection.connectionCode}
+              {connection.connectionCode} ·{' '}
+              {settlementTypeDisplayText(connection.settlementType)}
             </Typography.Text>
           </div>
           {statusTag(connection.status)}

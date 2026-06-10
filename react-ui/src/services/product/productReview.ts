@@ -9,6 +9,12 @@ export async function getProductReviewList(params?: Record<string, any>) {
   });
 }
 
+export async function getProductReviewPendingCounts() {
+  return request<API.ProductReview.PendingCountResult>(`${baseUrl}/pending-counts`, {
+    method: 'GET',
+  });
+}
+
 export async function getProductReview(reviewId: number) {
   return request<API.ProductReview.InfoResult>(`${baseUrl}/${reviewId}`, {
     method: 'GET',

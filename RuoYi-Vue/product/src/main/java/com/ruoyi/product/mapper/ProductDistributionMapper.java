@@ -47,9 +47,13 @@ public interface ProductDistributionMapper
 
     List<ProductSku> selectSkuListBySpuId(@Param("spuId") Long spuId);
 
+    List<ProductSku> selectSkuListBySpuIds(@Param("spuIds") List<Long> spuIds);
+
     List<ProductSku> selectSkuListBySpuIdAndSellerId(@Param("spuId") Long spuId, @Param("sellerId") Long sellerId);
 
     List<ProductSku> selectOnSaleSkuListBySpuId(@Param("spuId") Long spuId);
+
+    List<ProductSku> selectOnSaleSkuListBySpuIds(@Param("spuIds") List<Long> spuIds);
 
     ProductSku selectSkuById(@Param("skuId") Long skuId);
 

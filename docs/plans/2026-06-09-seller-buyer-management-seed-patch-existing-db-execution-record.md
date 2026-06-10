@@ -25,9 +25,9 @@
 
 ## 数据源确认
 
-当时执行摘要记录的目标为远程 MySQL `fenxiao@TENCENT64.site:28594`，连接来源为本机 `.env.local` 中的 `RUOYI_DB_*`，未输出数据库密码、Redis 密码或 token secret。
+当时执行摘要记录的目标为远程 MySQL，连接来源为本机 `.env.local` 中的 `RUOYI_DB_*`，地址已脱敏，未输出数据库密码、Redis 密码或 token secret。
 
-后续只读核验记录确认当前三端隔离核验目标为远程 MySQL `gz-cynosdbmysql-grp-lucf5kyf.sql.tencentcdb.com:28634/fenxiao`。本补记保留历史执行摘要中的目标显示，同时记录后续只读核验的当前目标，避免混淆历史执行和当前配置。
+后续只读核验记录确认当前三端隔离核验目标为远程 MySQL，连接来源为本机 `.env.local`，地址已脱敏。本补记保留历史执行与后续只读核验属于不同时间点的事实，避免混淆历史执行和当前配置。
 
 Redis 配置当时仍指向远端 Redis，但该 seed 执行未连接、读取或写入 Redis。
 

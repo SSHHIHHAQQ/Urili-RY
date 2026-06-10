@@ -1,7 +1,7 @@
 -- Seller/buyer portal product category list permission seed
 -- Scope:
 -- 1. Add seller:product:category:list and buyer:product:category:list as hidden button permissions.
--- 2. Grant the permissions to current active seller/buyer Owner roles.
+-- 2. Do not default-grant these product permissions to terminal Owner roles.
 
 set names utf8mb4;
 set @confirm_portal_product_category_permission_seed := coalesce(@confirm_portal_product_category_permission_seed, '');
@@ -233,23 +233,6 @@ begin
     signal sqlstate '45000' set message_text = 'seller product category permission was not created';
   end if;
 
-  if exists (
-    select 1
-    from seller_role r
-    where r.del_flag = '0'
-      and r.status = '0'
-      and r.role_key = 'owner'
-      and not exists (
-        select 1
-        from seller_role_menu rm
-        join seller_menu m on m.seller_menu_id = rm.seller_menu_id
-        where rm.seller_role_id = r.seller_role_id
-          and m.perms = 'seller:product:category:list'
-      )
-  ) then
-    signal sqlstate '45000' set message_text = 'seller owner roles must have product category permission';
-  end if;
-
   if not exists (
     select 1
     from buyer_menu
@@ -263,22 +246,6 @@ begin
     signal sqlstate '45000' set message_text = 'buyer product category permission was not created';
   end if;
 
-  if exists (
-    select 1
-    from buyer_role r
-    where r.del_flag = '0'
-      and r.status = '0'
-      and r.role_key = 'owner'
-      and not exists (
-        select 1
-        from buyer_role_menu rm
-        join buyer_menu m on m.buyer_menu_id = rm.buyer_menu_id
-        where rm.buyer_role_id = r.buyer_role_id
-          and m.perms = 'buyer:product:category:list'
-      )
-  ) then
-    signal sqlstate '45000' set message_text = 'buyer owner roles must have product category permission';
-  end if;
 end//
 
 delimiter ;
@@ -304,25 +271,6 @@ where not exists (
     select 1 from seller_menu where perms = 'seller:product:category:list'
 );
 
-insert into seller_role_menu (seller_role_id, seller_menu_id)
-select r.seller_role_id, m.seller_menu_id
-from seller_role r
-join seller_menu m on m.perms = 'seller:product:category:list'
-                  and m.parent_id = 0
-                  and coalesce(m.menu_type, '') = 'F'
-                  and coalesce(m.path, '') = ''
-                  and coalesce(m.component, '') = ''
-                  and coalesce(m.route_name, '') = ''
-where r.del_flag = '0'
-  and r.status = '0'
-  and r.role_key = 'owner'
-  and not exists (
-      select 1
-      from seller_role_menu rm
-      where rm.seller_role_id = r.seller_role_id
-        and rm.seller_menu_id = m.seller_menu_id
-  );
-
 insert into buyer_menu
     (menu_name, parent_id, order_num, path, component, query, route_name,
      is_frame, is_cache, menu_type, visible, status, perms, icon, create_by,
@@ -334,25 +282,6 @@ select
 where not exists (
     select 1 from buyer_menu where perms = 'buyer:product:category:list'
 );
-
-insert into buyer_role_menu (buyer_role_id, buyer_menu_id)
-select r.buyer_role_id, m.buyer_menu_id
-from buyer_role r
-join buyer_menu m on m.perms = 'buyer:product:category:list'
-                 and m.parent_id = 0
-                 and coalesce(m.menu_type, '') = 'F'
-                 and coalesce(m.path, '') = ''
-                 and coalesce(m.component, '') = ''
-                 and coalesce(m.route_name, '') = ''
-where r.del_flag = '0'
-  and r.status = '0'
-  and r.role_key = 'owner'
-  and not exists (
-      select 1
-      from buyer_role_menu rm
-      where rm.buyer_role_id = r.buyer_role_id
-        and rm.buyer_menu_id = m.buyer_menu_id
-  );
 
 call assert_portal_product_category_permission_seed_completed();
 commit;

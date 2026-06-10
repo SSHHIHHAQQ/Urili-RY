@@ -4,7 +4,7 @@ import {
   ProTable,
 } from '@ant-design/pro-components';
 import { Button, Popconfirm, Space, Tabs, Tag, Typography } from 'antd';
-import { type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
+import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import {
   deleteLogisticsChannelPairing,
   deleteWarehousePairing,
@@ -19,9 +19,11 @@ import {
   getProTableScroll,
 } from '@/utils/proTableSearch';
 import {
+  normalizeSettlementTypeValue,
   pairingRoleTagColor,
   pairingRoleText,
   requestOperationText,
+  requestResultText,
 } from '../constants';
 import { resultOk, statusTag } from '../helpers';
 import styles from '../style.module.css';
@@ -45,6 +47,14 @@ type SyncTabsProps = {
   warehouseActionRef: ActionRef;
 };
 
+const requestResultLabel = (value?: string) => {
+  const normalizedValue = value?.toUpperCase() || '';
+  return requestResultText[normalizedValue] || value || '-';
+};
+
+const requestResultColor = (value?: string) =>
+  value?.toUpperCase() === 'SUCCESS' ? 'green' : 'red';
+
 export default function SyncTabs({
   access,
   dimensionActionRef,
@@ -63,8 +73,11 @@ export default function SyncTabs({
   const canQueryOfficialWarehouses = access.hasPerms('warehouse:official:list');
   const canQueryInventory = access.hasPerms('integration:upstream:inventoryQuery');
   const canViewLogs = access.hasPerms('integration:upstream:log');
+  const normalizedSettlementType = normalizeSettlementTypeValue(
+    selectedConnection.settlementType,
+  );
   const currentPairingRole =
-    selectedConnection.settlementType === 'self-operated-receivable'
+    normalizedSettlementType === 'self-operated-receivable'
       ? 'QUOTE'
       : 'FULFILLMENT';
   const currentPairingRoleLabel =
@@ -172,7 +185,7 @@ export default function SyncTabs({
           ) : (
             record.pairings.map((pairing) => {
               const tag = (
-                <Tag color="blue">
+                <Tag key={pairing.logisticsChannelPairingId} color="blue">
                   {pairing.systemWarehouseCode || '-'} ·{' '}
                   {pairing.systemChannelCode} / {pairing.systemChannelName}
                 </Tag>
@@ -235,8 +248,8 @@ export default function SyncTabs({
       dataIndex: 'status',
       width: 100,
       render: (_, record) => (
-        <Tag color={record.status === 'SUCCESS' ? 'green' : 'red'}>
-          {record.status}
+        <Tag color={requestResultColor(record.status)}>
+          {requestResultLabel(record.status)}
         </Tag>
       ),
     },

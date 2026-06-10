@@ -34,7 +34,7 @@
 - 后端激活配置：`application.yml` 当前 active profile 为 `druid`。
 - MySQL URL 来源：`application-druid.yml` 使用 `${RUOYI_DB_URL:}`，实际运行值来自 `.env.local`。
 - 本次 SQL 目标：`.env.local` 中的远端 MySQL，连接地址已脱敏记录为远端 MySQL 地址，不包含明文主机和参数。
-- Redis 来源：`.env.local`，`RUOYI_REDIS_HOST=114.132.156.75`，`RUOYI_REDIS_PORT=6379`。
+- Redis 来源：`.env.local`，目标为远端 Redis，地址已脱敏。
 - 本次影响：远端 MySQL `sys_menu` 写入/更新两条菜单记录；未写 Redis。
 
 ## SQL 执行

@@ -41,6 +41,11 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="warehouseCount"  column="warehouse_count"  />
         <result property="inventoryStatus" column="inventory_status" />
         <result property="stockUpdateTime" column="stock_update_time" />
+        <result property="latestReviewId" column="latest_review_id" />
+        <result property="latestReviewNo" column="latest_review_no" />
+        <result property="latestReviewStatus" column="latest_review_status" />
+        <result property="latestReviewFeedback" column="latest_review_feedback" />
+        <result property="latestReviewTime" column="latest_review_time" />
         <result property="createBy"        column="create_by"        />
         <result property="createTime"      column="create_time"      />
         <result property="updateBy"        column="update_by"        />
@@ -130,6 +135,11 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="warehouseCount"  column="warehouse_count"  />
         <result property="inventoryStatus" column="inventory_status" />
         <result property="stockUpdateTime" column="stock_update_time" />
+        <result property="latestReviewId" column="latest_review_id" />
+        <result property="latestReviewNo" column="latest_review_no" />
+        <result property="latestReviewStatus" column="latest_review_status" />
+        <result property="latestReviewFeedback" column="latest_review_feedback" />
+        <result property="latestReviewTime" column="latest_review_time" />
         <result property="sourceBindingId" column="source_binding_id" />
         <result property="sourceScope" column="source_scope" />
         <result property="sourceSkuGroupKey" column="source_sku_group_key" />
@@ -230,6 +240,41 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
               and b.binding_status = 'ACTIVE'
     </sql>
 
+    <sql id="latestReviewSummarySelect">
+               latest_review.review_id as latest_review_id,
+               latest_review.review_no as latest_review_no,
+               latest_review.review_status as latest_review_status,
+               latest_review.review_reason as latest_review_feedback,
+               latest_review.review_time as latest_review_time
+    </sql>
+
+    <sql id="latestReviewSummaryJoin">
+        left join (
+            select r.review_id,
+                   r.review_no,
+                   r.review_status,
+                   r.review_reason,
+                   r.review_time,
+                   r.spu_id
+            from product_review_request r
+            inner join (
+                select spu_id, max(review_id) as review_id
+                from product_review_request
+                where del_flag = '0'
+                group by spu_id
+            ) latest on latest.review_id = r.review_id
+        ) latest_review on latest_review.spu_id = p.spu_id
+    </sql>
+
+    <sql id="latestReviewStatusFilter">
+        <if test="latestReviewStatus != null and latestReviewStatus != '' and latestReviewStatus != 'NONE'">
+            and latest_review.review_status = #{latestReviewStatus}
+        </if>
+        <if test="latestReviewStatus != null and latestReviewStatus == 'NONE'">
+            and latest_review.review_id is null
+        </if>
+    </sql>
+
     <sql id="spuInventorySummarySelect">
                spu_inventory.platform_available_qty as available_stock,
                spu_inventory.warehouse_count as warehouse_count,
@@ -287,6 +332,41 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <include refid="spuInventorySummaryJoin"/>
     </sql>
 
+    <sql id="spuListAggregateSelect">
+        select p.*,
+               ifnull(s.sku_count, 0) as sku_count,
+               s.supply_price_min,
+               s.supply_price_max,
+               s.sale_price_min,
+               s.sale_price_max,
+               s.currency_summary,
+               wh.warehouse_kind_summary,
+               <include refid="spuInventorySummarySelect"/>,
+               <include refid="latestReviewSummarySelect"/>
+        from product_spu p
+        left join (
+            select spu_id,
+                   count(1) as sku_count,
+                   min(supply_price) as supply_price_min,
+                   max(supply_price) as supply_price_max,
+                   min(sale_price) as sale_price_min,
+                   max(sale_price) as sale_price_max,
+                   case when count(distinct currency_code) = 1 then min(currency_code) else 'MULTI' end as currency_summary
+            from product_sku
+            where del_flag = '0'
+              and control_status = 'NORMAL'
+            group by spu_id
+        ) s on s.spu_id = p.spu_id
+        left join (
+            select spu_id,
+                   case when count(distinct warehouse_kind) = 1 then min(warehouse_kind) else 'MIXED' end as warehouse_kind_summary
+            from product_spu_warehouse
+            group by spu_id
+        ) wh on wh.spu_id = p.spu_id
+        <include refid="spuInventorySummaryJoin"/>
+        <include refid="latestReviewSummaryJoin"/>
+    </sql>
+
     <sql id="spuOnSaleAggregateSelect">
         select p.*,
                s.sku_count,
@@ -320,7 +400,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </sql>
 
     <select id="selectProductList" parameterType="ProductSpu" resultMap="ProductSpuResult">
-        <include refid="spuAggregateSelect"/>
+        <include refid="spuListAggregateSelect"/>
         where p.del_flag = '0'
         <if test="keyword != null and keyword != ''">
             and (
@@ -355,6 +435,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <if test="categoryId != null">
             and p.category_id = #{categoryId}
         </if>
+        <if test="warehouseKindSummary != null and warehouseKindSummary != ''">
+            and wh.warehouse_kind_summary = #{warehouseKindSummary}
+        </if>
+        <include refid="latestReviewStatusFilter"/>
         <if test="spuStatus != null and spuStatus != ''">
             and p.spu_status = #{spuStatus}
         </if>
@@ -552,6 +636,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                p.control_status as spu_control_status,
                wh.warehouse_kind_summary,
                <include refid="skuInventorySummarySelect"/>,
+               <include refid="latestReviewSummarySelect"/>,
                <include refid="skuSourceBindingSelect"/>
         from product_sku sk
         inner join product_spu p on p.spu_id = sk.spu_id and p.del_flag = '0'
@@ -562,6 +647,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             group by spu_id
         ) wh on wh.spu_id = sk.spu_id
         <include refid="skuInventorySummaryJoin"/>
+        <include refid="latestReviewSummaryJoin"/>
         <include refid="skuSourceBindingJoin"/>
         where sk.del_flag = '0'
         <if test="keyword != null and keyword != ''">
@@ -598,6 +684,16 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <if test="categoryId != null">
             and p.category_id = #{categoryId}
         </if>
+        <if test="masterSku != null and masterSku != ''">
+            and b.master_sku like concat('%', #{masterSku}, '%')
+        </if>
+        <if test="warehouseKindSummary != null and warehouseKindSummary != ''">
+            and wh.warehouse_kind_summary = #{warehouseKindSummary}
+        </if>
+        <if test="inventoryStatus != null and inventoryStatus != ''">
+            and sku_inventory.inventory_status = #{inventoryStatus}
+        </if>
+        <include refid="latestReviewStatusFilter"/>
         <if test="spuStatus != null and spuStatus != ''">
             and p.spu_status = #{spuStatus}
         </if>
@@ -641,6 +737,38 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         where sk.spu_id = #{spuId}
           and sk.del_flag = '0'
         order by sort_order asc, sku_id asc
+    </select>
+
+    <select id="selectSkuListBySpuIds" resultMap="ProductSkuResult">
+        select sk.*,
+               p.system_spu_code,
+               p.seller_spu_code,
+               p.seller_name,
+               p.category_id,
+               p.category_name,
+               p.product_name,
+               p.product_name_en,
+               p.spu_status,
+               p.control_status as spu_control_status,
+               wh.warehouse_kind_summary,
+               <include refid="skuInventorySummarySelect"/>,
+               <include refid="skuSourceBindingSelect"/>
+        from product_sku sk
+        left join product_spu p on p.spu_id = sk.spu_id
+        left join (
+            select spu_id,
+                   case when count(distinct warehouse_kind) = 1 then min(warehouse_kind) else 'MIXED' end as warehouse_kind_summary
+            from product_spu_warehouse
+            group by spu_id
+        ) wh on wh.spu_id = sk.spu_id
+        <include refid="skuInventorySummaryJoin"/>
+        <include refid="skuSourceBindingJoin"/>
+        where sk.spu_id in
+        <foreach collection="spuIds" item="spuId" open="(" separator="," close=")">
+            #{spuId}
+        </foreach>
+          and sk.del_flag = '0'
+        order by sk.spu_id asc, sk.sort_order asc, sk.sku_id asc
     </select>
 
     <select id="selectSkuListBySpuIdAndSellerId" resultMap="ProductSkuResult">
@@ -702,6 +830,40 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
           and sk.control_status = 'NORMAL'
           and sk.del_flag = '0'
         order by sort_order asc, sku_id asc
+    </select>
+
+    <select id="selectOnSaleSkuListBySpuIds" resultMap="ProductSkuResult">
+        select sk.*,
+               p.system_spu_code,
+               p.seller_spu_code,
+               p.seller_name,
+               p.category_id,
+               p.category_name,
+               p.product_name,
+               p.product_name_en,
+               p.spu_status,
+               p.control_status as spu_control_status,
+               wh.warehouse_kind_summary,
+               <include refid="skuInventorySummarySelect"/>,
+               <include refid="skuSourceBindingSelect"/>
+        from product_sku sk
+        left join product_spu p on p.spu_id = sk.spu_id
+        left join (
+            select spu_id,
+                   case when count(distinct warehouse_kind) = 1 then min(warehouse_kind) else 'MIXED' end as warehouse_kind_summary
+            from product_spu_warehouse
+            group by spu_id
+        ) wh on wh.spu_id = sk.spu_id
+        <include refid="skuInventorySummaryJoin"/>
+        <include refid="skuSourceBindingJoin"/>
+        where sk.spu_id in
+        <foreach collection="spuIds" item="spuId" open="(" separator="," close=")">
+            #{spuId}
+        </foreach>
+          and sk.sku_status = 'ON_SALE'
+          and sk.control_status = 'NORMAL'
+          and sk.del_flag = '0'
+        order by sk.spu_id asc, sk.sort_order asc, sk.sku_id asc
     </select>
 
     <select id="selectSkuById" resultMap="ProductSkuResult">

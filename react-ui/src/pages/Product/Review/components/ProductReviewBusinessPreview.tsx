@@ -72,6 +72,16 @@ type CompareField = {
 
 type EditChangeScope = 'PRODUCT_INFO' | 'ADD_SKU' | 'SKU_INFO' | 'SUPPLY_PRICE';
 
+type AuditField = {
+  key: string;
+  label: string;
+  beforeRaw?: unknown;
+  afterRaw?: unknown;
+  before?: ReactNode;
+  after?: ReactNode;
+  changed: boolean;
+};
+
 const sectionStyle = {
   display: 'flex',
   flexDirection: 'column',
@@ -181,6 +191,77 @@ const skuFieldBlockStyle = {
   background: '#fff',
   boxSizing: 'border-box',
   overflowWrap: 'anywhere',
+} as const;
+
+const auditFieldGridStyle = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+  gap: 10,
+} as const;
+
+const auditFieldStyle = {
+  border: '1px solid #f0f0f0',
+  borderRadius: 6,
+  padding: '8px 10px',
+  minHeight: 58,
+  background: '#fff',
+  boxSizing: 'border-box',
+  overflowWrap: 'anywhere',
+} as const;
+
+const auditChangedFieldStyle = {
+  ...auditFieldStyle,
+  borderColor: '#b7eb8f',
+  background: '#f6ffed',
+} as const;
+
+const auditCompareLineStyle = {
+  display: 'grid',
+  gridTemplateColumns: '32px minmax(0, 1fr)',
+  gap: 6,
+  alignItems: 'start',
+  marginTop: 4,
+} as const;
+
+const auditLineListStyle = {
+  display: 'grid',
+  gap: 3,
+} as const;
+
+const auditImageGridStyle = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fill, minmax(132px, 1fr))',
+  gap: 10,
+} as const;
+
+const auditImageCardStyle = {
+  border: '1px solid #f0f0f0',
+  borderRadius: 6,
+  padding: 8,
+  background: '#fff',
+} as const;
+
+const auditChangedImageCardStyle = {
+  ...auditImageCardStyle,
+  borderColor: '#b7eb8f',
+  background: '#f6ffed',
+} as const;
+
+const auditSkuCardStyle = {
+  border: '1px solid #f0f0f0',
+  borderRadius: 8,
+  background: '#fff',
+  overflow: 'hidden',
+} as const;
+
+const auditSkuHeaderStyle = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  gap: 12,
+  alignItems: 'center',
+  padding: '10px 12px',
+  background: '#fafafa',
+  borderBottom: '1px solid #f0f0f0',
 } as const;
 
 const salesStatusColor: Record<string, string> = {
@@ -392,6 +473,23 @@ function formatSkuIdentityTitle(pair: SkuPair) {
   const systemSku = sku?.systemSkuCode || pair.item?.systemSkuCode;
   const values = [sellerSku, systemSku].filter(Boolean);
   return values.length ? values.join(' / ') : '--';
+}
+
+function renderAuditLineList(lines: Array<[string, ReactNode]>, emptyText = '--') {
+  const visibleLines = lines.filter(([, value]) => value != null && value !== '');
+  if (!visibleLines.length) {
+    return <Typography.Text type="secondary">{emptyText}</Typography.Text>;
+  }
+  return (
+    <div style={auditLineListStyle}>
+      {visibleLines.map(([label, value]) => (
+        <div key={label}>
+          <Typography.Text type="secondary">{label}：</Typography.Text>
+          {value}
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function formatMeasurementValue(value?: unknown, defaultUnit = '') {
@@ -1191,7 +1289,6 @@ function buildSkuFieldChanges(before?: API.ProductDistribution.Sku, after?: API.
 
 function getSkuInfoChangedFields(pair: SkuPair) {
   return buildSkuFieldChanges(pair.before, pair.after)
-    .filter((field) => field.key !== 'supplyPrice')
     .filter((field) => field.changed);
 }
 
@@ -1283,8 +1380,7 @@ function renderSkuComparePair(pair: SkuPair, fields: SkuFieldChange[], extra?: R
 }
 
 function renderSkuDetailCompare(pair: SkuPair, mode: 'all' | 'changed' = 'all') {
-  const fieldChanges = buildSkuFieldChanges(pair.before, pair.after)
-    .filter((field) => field.key !== 'supplyPrice');
+  const fieldChanges = buildSkuFieldChanges(pair.before, pair.after);
   const visibleFields = mode === 'all' ? fieldChanges : fieldChanges.filter((field) => field.changed);
   return renderSkuComparePair(
     pair,
@@ -1483,30 +1579,6 @@ function renderSupplyPriceChangeTags(before?: API.ProductDistribution.Sku, after
   return directionTag;
 }
 
-function PriceChangeReviewView({
-  review,
-  pairs: inputPairs,
-}: {
-  review: API.ProductReview.Review;
-  pairs?: SkuPair[];
-}) {
-  const pairs = inputPairs || getSkuPairs(review).filter(hasSupplyPriceChanged);
-
-  return (
-    <div style={stackStyle}>
-      {renderSection('SKU 供货价左右对比', (
-        <div style={stackStyle}>
-          {pairs.map((pair) => renderSkuComparePair(
-            pair,
-            buildSkuFieldChanges(pair.before, pair.after).filter((field) => field.key === 'supplyPrice'),
-            renderSupplyPriceChangeTags(pair.before, pair.after),
-          ))}
-        </div>
-      ), <Tag color="red">{pairs.length} 个SKU</Tag>)}
-    </div>
-  );
-}
-
 function getEditChangeScopes(review: API.ProductReview.Review): EditChangeScope[] {
   const beforeProduct = getBeforeProduct(review);
   const afterProduct = getAfterProduct(review);
@@ -1557,7 +1629,6 @@ function EditChangeOverviewView({
   const scopes = getEditChangeScopes(review);
   const addedPairs = pairs.filter((pair) => !pair.before && !!pair.after);
   const skuInfoPairs = pairs.filter((pair) => !!pair.before && !!pair.after && getSkuInfoChangedFields(pair).length > 0);
-  const supplyPricePairs = pairs.filter(hasSupplyPriceChanged);
   const productBasicChanged = isDifferent(productBasicCompareRaw(beforeProduct), productBasicCompareRaw(afterProduct));
   const productImagesChanged = isDifferent(productImagesCompareRaw(beforeProduct), productImagesCompareRaw(afterProduct));
   const productAttributesChanged = isDifferent(productAttributesCompareRaw(beforeProduct), productAttributesCompareRaw(afterProduct));
@@ -1586,9 +1657,473 @@ function EditChangeOverviewView({
           {(skuInfoPairs.length ? skuInfoPairs : fallbackSkuPairs).map((pair) => renderSkuDetailCompare(pair))}
         </div>
       ), <Tag color="blue">{(skuInfoPairs.length ? skuInfoPairs : fallbackSkuPairs).length} 个SKU</Tag>) : null}
-      {supplyPricePairs.length ? <PriceChangeReviewView review={review} pairs={supplyPricePairs} /> : null}
       {!scopes.length && !shouldFallbackToProduct && !fallbackSkuPairs.length ? <GenericReviewView review={review} /> : null}
     </div>
+  );
+}
+
+function buildAuditField(
+  key: string,
+  label: string,
+  beforeRaw: unknown,
+  afterRaw: unknown,
+  before?: ReactNode,
+  after?: ReactNode,
+): AuditField {
+  return {
+    key,
+    label,
+    beforeRaw,
+    afterRaw,
+    before,
+    after,
+    changed: isDifferent(beforeRaw, afterRaw),
+  };
+}
+
+function hasAuditValue(value: unknown) {
+  return normalizeText(value) !== '';
+}
+
+function filterAuditFields(fields: AuditField[]) {
+  return fields.filter((field) => field.changed || hasAuditValue(field.beforeRaw) || hasAuditValue(field.afterRaw));
+}
+
+function auditValueNode(value: ReactNode | undefined, raw: unknown) {
+  return value ?? valueText(raw as ReactNode);
+}
+
+function renderAuditField(field: AuditField) {
+  const current = field.after ?? field.before ?? valueText((field.afterRaw ?? field.beforeRaw) as ReactNode);
+  return (
+    <div key={field.key} style={field.changed ? auditChangedFieldStyle : auditFieldStyle}>
+      <div style={{ color: '#6b7280', fontSize: 12, marginBottom: 5 }}>{field.label}</div>
+      {field.changed ? (
+        <>
+          <div style={auditCompareLineStyle}>
+            <Typography.Text type="secondary">原</Typography.Text>
+            <div style={{ color: '#6b7280' }}>{auditValueNode(field.before, field.beforeRaw)}</div>
+          </div>
+          <div style={auditCompareLineStyle}>
+            <Typography.Text type="secondary">新</Typography.Text>
+            <div style={{ color: '#2f9e44', fontWeight: 600 }}>{auditValueNode(field.after, field.afterRaw)}</div>
+          </div>
+        </>
+      ) : (
+        <div style={{ fontWeight: 600 }}>{current}</div>
+      )}
+    </div>
+  );
+}
+
+function renderAuditFieldGrid(fields: AuditField[], emptyText = '没有可审核信息') {
+  const visibleFields = filterAuditFields(fields);
+  if (!visibleFields.length) {
+    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyText} />;
+  }
+  return <div style={auditFieldGridStyle}>{visibleFields.map(renderAuditField)}</div>;
+}
+
+function getProductCurrency(product?: API.ProductDistribution.Spu, review?: API.ProductReview.Review) {
+  return product?.currencySummary || product?.skus?.find((sku) => sku.currencyCode)?.currencyCode || review?.currencySummary;
+}
+
+function formatWarehouseNames(product?: API.ProductDistribution.Spu) {
+  const names = (product?.warehouses || [])
+    .map((warehouse) => warehouse.warehouseName || warehouse.warehouseCode)
+    .filter(Boolean);
+  if (names.length) {
+    return names.join(' / ');
+  }
+  return product?.outboundWarehouseCodes?.join(' / ') || '';
+}
+
+function buildAuditBasicFields(
+  before?: API.ProductDistribution.Spu,
+  after?: API.ProductDistribution.Spu,
+  review?: API.ProductReview.Review,
+) {
+  const beforeWarehouseNames = formatWarehouseNames(before);
+  const afterWarehouseNames = formatWarehouseNames(after);
+  const warehouseChanged = isDifferent(beforeWarehouseNames, afterWarehouseNames);
+  const showWarehouse = warehouseChanged || shouldShowDeliveryWarehouse(before, review) || shouldShowDeliveryWarehouse(after, review);
+  return filterAuditFields([
+    buildAuditField('productName', '商品中文标题', before?.productName || review?.productNameBefore, after?.productName || review?.productNameAfter),
+    buildAuditField('productNameEn', '商品英文标题', before?.productNameEn, after?.productNameEn),
+    buildAuditField('categoryName', '商品分类', before?.categoryName || review?.categoryName, after?.categoryName || review?.categoryName),
+    buildAuditField(
+      'warehouseKind',
+      '仓库类型',
+      normalizeWarehouseKind(getProductWarehouseKind(before, review)),
+      normalizeWarehouseKind(getProductWarehouseKind(after, review)),
+      formatWarehouseKindLabel(getProductWarehouseKind(before, review)),
+      formatWarehouseKindLabel(getProductWarehouseKind(after, review)),
+    ),
+    ...(showWarehouse ? [buildAuditField('warehouseNames', '发货仓库', beforeWarehouseNames, afterWarehouseNames)] : []),
+    buildAuditField('currency', '币种', getProductCurrency(before, review), getProductCurrency(after, review)),
+    buildAuditField('spuStatus', '商品状态', before?.spuStatus, after?.spuStatus, renderSalesStatus(before?.spuStatus), renderSalesStatus(after?.spuStatus)),
+  ]);
+}
+
+function renderAuditImage(url?: string, size = 72) {
+  return url ? renderImage(url, size) : <Typography.Text type="secondary">未上传</Typography.Text>;
+}
+
+function productGalleryImages(product?: API.ProductDistribution.Spu) {
+  return (product?.images || [])
+    .filter((item) => item.imageRole === 'GALLERY' && item.imageUrl)
+    .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+}
+
+function buildAuditImagePairs(
+  before?: API.ProductDistribution.Spu,
+  after?: API.ProductDistribution.Spu,
+  review?: API.ProductReview.Review,
+) {
+  const beforeGallery = productGalleryImages(before);
+  const afterGallery = productGalleryImages(after);
+  const maxGalleryCount = Math.max(beforeGallery.length, afterGallery.length);
+  const pairs = [{
+    key: 'main',
+    label: '主图',
+    beforeUrl: before?.mainImageUrl || review?.mainImageUrlBefore,
+    afterUrl: after?.mainImageUrl || review?.mainImageUrlAfter,
+  }];
+  for (let index = 0; index < maxGalleryCount; index += 1) {
+    pairs.push({
+      key: `gallery-${index}`,
+      label: `图库 ${index + 1}`,
+      beforeUrl: beforeGallery[index]?.imageUrl,
+      afterUrl: afterGallery[index]?.imageUrl,
+    });
+  }
+  return pairs.filter((pair) => pair.beforeUrl || pair.afterUrl);
+}
+
+function renderAuditImagePairs(
+  before?: API.ProductDistribution.Spu,
+  after?: API.ProductDistribution.Spu,
+  review?: API.ProductReview.Review,
+) {
+  const pairs = buildAuditImagePairs(before, after, review);
+  if (!pairs.length) {
+    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有商品图片" />;
+  }
+  return (
+    <div style={auditImageGridStyle}>
+      {pairs.map((pair) => {
+        const changed = isDifferent(pair.beforeUrl, pair.afterUrl);
+        return (
+          <div key={pair.key} style={changed ? auditChangedImageCardStyle : auditImageCardStyle}>
+            <div style={{ color: '#6b7280', fontSize: 12, marginBottom: 6 }}>{pair.label}</div>
+            {changed ? (
+              <div style={{ display: 'grid', gap: 6 }}>
+                <div>
+                  <Typography.Text type="secondary">原</Typography.Text>
+                  <div style={{ marginTop: 3 }}>{renderAuditImage(pair.beforeUrl, 72)}</div>
+                </div>
+                <div>
+                  <Typography.Text type="secondary">新</Typography.Text>
+                  <div style={{ marginTop: 3 }}>{renderAuditImage(pair.afterUrl, 72)}</div>
+                </div>
+              </div>
+            ) : renderAuditImage(pair.afterUrl || pair.beforeUrl, 72)}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function buildAuditAttributeFields(
+  before?: API.ProductDistribution.Spu,
+  after?: API.ProductDistribution.Spu,
+  displayMaps?: AttributeDisplayMaps,
+) {
+  const beforeMap = new Map((before?.attributeValues || []).map((item) => [attributeCompareKey(item), item]));
+  const afterMap = new Map((after?.attributeValues || []).map((item) => [attributeCompareKey(item), item]));
+  const keys = Array.from(new Set([...beforeMap.keys(), ...afterMap.keys()]));
+  return filterAuditFields(keys.map((key) => {
+    const beforeItem = beforeMap.get(key);
+    const afterItem = afterMap.get(key);
+    const beforeText = beforeItem && displayMaps ? formatAttributeValue(beforeItem, displayMaps.optionLabelMap) : undefined;
+    const afterText = afterItem && displayMaps ? formatAttributeValue(afterItem, displayMaps.optionLabelMap) : undefined;
+    return buildAuditField(
+      key,
+      attributeCompareLabel(beforeItem, afterItem, displayMaps),
+      beforeText,
+      afterText,
+    );
+  }));
+}
+
+function skuAuditPairKey(sku?: API.ProductDistribution.Sku) {
+  if (sku?.skuId != null) {
+    return `skuId:${sku.skuId}`;
+  }
+  if (sku?.sourceSkuGroupKey || sku?.sourceDimensionGroupKey) {
+    return `source:${sku.sourceSkuGroupKey || ''}:${sku.sourceDimensionGroupKey || ''}`;
+  }
+  if (sku?.systemSkuCode) {
+    return `system:${sku.systemSkuCode}`;
+  }
+  return undefined;
+}
+
+function getAuditSkuPairs(review: API.ProductReview.Review) {
+  const snapshotPairs = getSkuPairs(review);
+  if (snapshotPairs.length) {
+    return snapshotPairs;
+  }
+  const beforeSkus = getBeforeProduct(review)?.skus || [];
+  const afterSkus = getAfterProduct(review)?.skus || [];
+  const pairMap = new Map<string, SkuPair>();
+  beforeSkus.forEach((sku, index) => {
+    const key = skuAuditPairKey(sku) || `before-unmatched:${index}`;
+    pairMap.set(key, { key, before: sku });
+  });
+  afterSkus.forEach((sku, index) => {
+    const stableKey = skuAuditPairKey(sku);
+    const key = stableKey || `after-unmatched:${index}`;
+    const pair = pairMap.get(key) || { key };
+    pair.after = sku;
+    pairMap.set(key, pair);
+  });
+  return Array.from(pairMap.values());
+}
+
+function skuSpecAuditRaw(sku?: API.ProductDistribution.Sku) {
+  return JSON.stringify({
+    color: sku?.color,
+    size: sku?.size,
+    material: sku?.material,
+    style: sku?.style,
+    model: sku?.model,
+    capacity: sku?.capacity,
+  });
+}
+
+function skuDimensionAuditRaw(sku?: API.ProductDistribution.Sku) {
+  return JSON.stringify({
+    length: getSkuMeasurementRaw(sku, 'measureLengthCm', 'lengthValue', 'cm'),
+    width: getSkuMeasurementRaw(sku, 'measureWidthCm', 'widthValue', 'cm'),
+    height: getSkuMeasurementRaw(sku, 'measureHeightCm', 'heightValue', 'cm'),
+    weight: getSkuMeasurementRaw(sku, 'measureWeightKg', 'weight', 'kg'),
+  });
+}
+
+function formatAuditSkuSize(sku?: API.ProductDistribution.Sku) {
+  if (!sku) {
+    return '';
+  }
+  const measured = [sku.measureLengthCm, sku.measureWidthCm, sku.measureHeightCm]
+    .filter((item) => item != null);
+  if (measured.length) {
+    return `${measured.join(' × ')} 厘米`;
+  }
+  const legacy = [sku.lengthValue, sku.widthValue, sku.heightValue]
+    .filter((item) => item != null && item !== '');
+  return legacy.length ? legacy.join(' × ') : '';
+}
+
+function formatAuditSkuWeight(sku?: API.ProductDistribution.Sku) {
+  if (!sku) {
+    return '';
+  }
+  if (sku.measureWeightKg != null) {
+    return `${sku.measureWeightKg} 千克`;
+  }
+  return sku.weight == null ? '' : String(sku.weight);
+}
+
+function renderAuditSkuSpecs(sku?: API.ProductDistribution.Sku) {
+  return renderAuditLineList([
+    ['颜色', sku?.color],
+    ['尺码', sku?.size],
+    ['材质', sku?.material],
+    ['款式', sku?.style],
+    ['型号', sku?.model],
+    ['容量', sku?.capacity],
+  ]);
+}
+
+function renderAuditSkuDimension(sku?: API.ProductDistribution.Sku) {
+  return renderAuditLineList([
+    ['尺寸', formatAuditSkuSize(sku)],
+    ['重量', formatAuditSkuWeight(sku)],
+  ]);
+}
+
+function skuWarehouseAuditRaw(sku?: API.ProductDistribution.Sku) {
+  return sku?.sourceWarehouseNames || normalizeWarehouseKind(sku?.warehouseKindSummary);
+}
+
+function renderAuditSkuImage(sku?: API.ProductDistribution.Sku) {
+  return renderAuditImage(sku?.skuImageUrl, 44);
+}
+
+function buildAuditSkuFields(pair: SkuPair) {
+  const currency = pair.after?.currencyCode || pair.before?.currencyCode;
+  return filterAuditFields([
+    buildAuditField('skuImageUrl', 'SKU图', pair.before?.skuImageUrl, pair.after?.skuImageUrl, renderAuditSkuImage(pair.before), renderAuditSkuImage(pair.after)),
+    buildAuditField('sellerSkuCode', '客户SKU', pair.before?.sellerSkuCode, pair.after?.sellerSkuCode),
+    buildAuditField('spec', '规格', skuSpecAuditRaw(pair.before), skuSpecAuditRaw(pair.after), renderAuditSkuSpecs(pair.before), renderAuditSkuSpecs(pair.after)),
+    buildAuditField('packageQuantity', '包装数量', pair.before?.packageQuantity, pair.after?.packageQuantity),
+    buildAuditField('supplyPrice', '供货价', pair.before?.supplyPrice, pair.after?.supplyPrice, formatMoney(pair.before?.supplyPrice, currency), formatMoney(pair.after?.supplyPrice, currency)),
+    buildAuditField('dimension', '尺寸重量', skuDimensionAuditRaw(pair.before), skuDimensionAuditRaw(pair.after), renderAuditSkuDimension(pair.before), renderAuditSkuDimension(pair.after)),
+    buildAuditField('warehouse', '发货仓库', skuWarehouseAuditRaw(pair.before), skuWarehouseAuditRaw(pair.after), formatSkuWarehouseValue(pair.before), formatSkuWarehouseValue(pair.after)),
+    buildAuditField('skuStatus', '销售状态', pair.before?.skuStatus, pair.after?.skuStatus, renderSalesStatus(pair.before?.skuStatus), renderSalesStatus(pair.after?.skuStatus)),
+  ]);
+}
+
+function renderAuditSkuChangeTags(pair: SkuPair, fields: AuditField[]) {
+  const changedFields = fields.filter((field) => field.changed);
+  if (!pair.before && pair.after) {
+    return <Tag color="green">新增SKU</Tag>;
+  }
+  if (!changedFields.length) {
+    return <Tag>无资料变化</Tag>;
+  }
+  return (
+    <div style={compactTagWrapStyle}>
+      {changedFields.map((field) => (field.key === 'supplyPrice'
+        ? <span key={field.key}>{renderSupplyPriceChangeTags(pair.before, pair.after)}</span>
+        : <Tag key={field.key} color="blue">{field.label}</Tag>))}
+    </div>
+  );
+}
+
+function renderAuditSkuCard(pair: SkuPair) {
+  const fields = buildAuditSkuFields(pair);
+  const sku = pair.after || pair.before;
+  return (
+    <section key={pair.key} style={auditSkuCardStyle}>
+      <div style={auditSkuHeaderStyle}>
+        <div style={{ minWidth: 0 }}>
+          <Typography.Text strong>{formatSkuIdentityTitle(pair)}</Typography.Text>
+          <div style={{ marginTop: 3 }}>
+            <Typography.Text type="secondary">
+              系统SKU：{sku?.systemSkuCode || pair.item?.systemSkuCode || '--'}
+            </Typography.Text>
+          </div>
+        </div>
+        <div style={{ maxWidth: 300 }}>{renderAuditSkuChangeTags(pair, fields)}</div>
+      </div>
+      <div style={{ padding: 12 }}>
+        {renderAuditFieldGrid(fields, '没有 SKU 信息')}
+      </div>
+    </section>
+  );
+}
+
+function renderAuditSkuSection(review: API.ProductReview.Review) {
+  const pairs = getAuditSkuPairs(review);
+  if (!pairs.length) {
+    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有 SKU 信息" />;
+  }
+  return <div style={stackStyle}>{pairs.map(renderAuditSkuCard)}</div>;
+}
+
+function renderAuditDetailContent(before?: API.ProductDistribution.Spu, after?: API.ProductDistribution.Spu) {
+  const changed = isDifferent(before?.detailContent, after?.detailContent);
+  return (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+      gap: 12,
+    }}
+    >
+      <div style={auditFieldStyle}>
+        <div style={{ color: '#6b7280', fontSize: 12, marginBottom: 6 }}>原详情图文</div>
+        <DetailContentPreview value={before?.detailContent} />
+      </div>
+      <div style={changed ? auditChangedFieldStyle : auditFieldStyle}>
+        <div style={{ color: '#6b7280', fontSize: 12, marginBottom: 6 }}>新详情图文</div>
+        <DetailContentPreview value={after?.detailContent} />
+      </div>
+    </div>
+  );
+}
+
+function countChangedFields(fields: AuditField[]) {
+  return fields.filter((field) => field.changed).length;
+}
+
+function formatAuditChangeBadge(count: number, unit = '项', suffix = '变更') {
+  return count > 0 ? `${count} ${unit}${suffix}` : '无变化';
+}
+
+function AuditTemplateReviewView({
+  review,
+  displayMaps,
+}: {
+  review: API.ProductReview.Review;
+  displayMaps: AttributeDisplayMaps;
+}) {
+  const beforeProduct = getBeforeProduct(review);
+  const afterProduct = getAfterProduct(review);
+  const skuPairs = getAuditSkuPairs(review);
+  const basicFields = buildAuditBasicFields(beforeProduct, afterProduct, review);
+  const attributeFields = buildAuditAttributeFields(beforeProduct, afterProduct, displayMaps);
+  const imagePairs = buildAuditImagePairs(beforeProduct, afterProduct, review);
+  const basicChangedCount = countChangedFields(basicFields);
+  const attributeChangedCount = countChangedFields(attributeFields);
+  const imageChangedCount = imagePairs.filter((pair) => isDifferent(pair.beforeUrl, pair.afterUrl)).length;
+  const skuChangedCount = skuPairs.filter((pair) => buildAuditSkuFields(pair).some((field) => field.changed) || (!pair.before && !!pair.after)).length;
+  const detailChanged = isDifferent(beforeProduct?.detailContent, afterProduct?.detailContent);
+  const detailChangedCount = detailChanged ? 1 : 0;
+  const sections = [
+    {
+      key: 'basic',
+      title: '基础信息',
+      changed: basicChangedCount > 0,
+      badge: formatAuditChangeBadge(basicChangedCount),
+      children: renderAuditFieldGrid(basicFields),
+    },
+    {
+      key: 'images',
+      title: '商品图片',
+      changed: imageChangedCount > 0,
+      badge: formatAuditChangeBadge(imageChangedCount, '张', '图片变更'),
+      children: renderAuditImagePairs(beforeProduct, afterProduct, review),
+    },
+    {
+      key: 'attributes',
+      title: '类目属性',
+      changed: attributeChangedCount > 0,
+      badge: formatAuditChangeBadge(attributeChangedCount),
+      children: renderAuditFieldGrid(attributeFields, '未填写类目属性'),
+    },
+    {
+      key: 'sku',
+      title: 'SKU 信息',
+      changed: skuChangedCount > 0,
+      badge: formatAuditChangeBadge(skuChangedCount, '个 SKU', ' 变更'),
+      children: renderAuditSkuSection(review),
+    },
+    {
+      key: 'detail',
+      title: '详情图文',
+      changed: detailChanged,
+      badge: formatAuditChangeBadge(detailChangedCount, '处'),
+      children: renderAuditDetailContent(beforeProduct, afterProduct),
+    },
+  ];
+  const defaultActiveKey = sections.filter((section) => section.changed).map((section) => section.key);
+
+  return (
+    <Collapse
+      key={String(review.reviewId || review.reviewNo || review.systemSpuCode || 'product-review')}
+      defaultActiveKey={defaultActiveKey}
+      items={sections.map((section) => ({
+        key: section.key,
+        label: (
+          <Typography.Text strong>{section.title}</Typography.Text>
+        ),
+        extra: <Tag color={section.changed ? 'green' : 'default'}>{section.badge}</Tag>,
+        children: section.children,
+      }))}
+    />
   );
 }
 
@@ -1650,14 +2185,7 @@ export default function ProductReviewBusinessPreview({
         </Typography.Text>
       </div>
       <Divider style={{ margin: 0 }} />
-      {review.reviewType === 'NEW_PRODUCT' ? <NewProductReviewView review={review} displayMaps={displayMaps} /> : null}
-      {review.reviewType === 'ADD_SKU' ? <AddSkuReviewView review={review} /> : null}
-      {['EDIT_PRODUCT_INFO', 'EDIT_SKU_INFO', 'EDIT_PRICE', 'EDIT_MIXED'].includes(String(review.reviewType || '')) ? (
-        <EditChangeOverviewView review={review} displayMaps={displayMaps} />
-      ) : null}
-      {!review.reviewType || !['NEW_PRODUCT', 'ADD_SKU', 'EDIT_PRODUCT_INFO', 'EDIT_SKU_INFO', 'EDIT_PRICE', 'EDIT_MIXED'].includes(review.reviewType)
-        ? <GenericReviewView review={review} />
-        : null}
+      <AuditTemplateReviewView review={review} displayMaps={displayMaps} />
     </div>
   );
 }

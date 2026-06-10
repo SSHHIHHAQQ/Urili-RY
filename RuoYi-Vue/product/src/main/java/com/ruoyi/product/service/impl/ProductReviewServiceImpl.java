@@ -9,6 +9,7 @@ import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -22,11 +23,15 @@ import org.springframework.transaction.annotation.Transactional;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.DateUtils;
 import com.ruoyi.common.utils.SecurityUtils;
+import com.ruoyi.common.utils.file.ImageResourceUtils;
 import com.ruoyi.product.domain.ProductDistributionOperationLog;
+import com.ruoyi.product.domain.ProductImage;
 import com.ruoyi.product.domain.ProductReviewItem;
+import com.ruoyi.product.domain.ProductReviewListDisplayItem;
 import com.ruoyi.product.domain.ProductReviewOperationLog;
 import com.ruoyi.product.domain.ProductReviewRequest;
 import com.ruoyi.product.domain.ProductReviewSnapshot;
+import com.ruoyi.product.domain.ProductReviewTypeCount;
 import com.ruoyi.product.domain.ProductSku;
 import com.ruoyi.product.domain.ProductSkuSupplyPriceUpdateRequest;
 import com.ruoyi.product.domain.ProductSpu;
@@ -87,10 +92,28 @@ public class ProductReviewServiceImpl implements IProductReviewService
     public List<ProductReviewRequest> selectReviewList(ProductReviewRequest query)
     {
         List<ProductReviewRequest> reviews = productReviewMapper.selectReviewList(query);
-        reviews.forEach(review -> enrichReviewSupplyPriceRange(review,
-            productReviewMapper.selectReviewItems(review.getReviewId()),
-            productReviewMapper.selectReviewSnapshots(review.getReviewId())));
+        enrichLegacyReviewSupplyPriceRanges(reviews);
+        enrichReviewListDisplayItems(query, reviews);
         return reviews;
+    }
+
+    @Override
+    public Map<String, Long> selectPendingReviewTypeCounts()
+    {
+        Map<String, Long> counts = new LinkedHashMap<>();
+        counts.put("ALL", 0L);
+        long total = 0L;
+        for (ProductReviewTypeCount row : productReviewMapper.selectPendingReviewTypeCounts())
+        {
+            long count = row.getTotal() == null ? 0L : row.getTotal();
+            total += count;
+            if (StringUtils.isNotBlank(row.getReviewType()))
+            {
+                counts.put(row.getReviewType(), count);
+            }
+        }
+        counts.put("ALL", total);
+        return counts;
     }
 
     @Override
@@ -158,6 +181,7 @@ public class ProductReviewServiceImpl implements IProductReviewService
         {
             throw new ServiceException("商品审核前至少需要一个 SKU");
         }
+        assertProductImageResourcesStored(product);
         String activePendingKey = activePendingKey(product.getSpuId());
         if (productReviewMapper.countPendingReviewByKey(activePendingKey) > 0)
         {
@@ -196,6 +220,8 @@ public class ProductReviewServiceImpl implements IProductReviewService
         }
 
         ProductSpu after = productDistributionService.prepareReviewedProductUpdate(submittedProduct);
+        assertProductImageResourcesStored(before);
+        assertProductImageResourcesStored(after);
         String operator = currentUsername();
         ProductReviewRequest review = buildProductEditReview(before, after, operator, activePendingKey);
         productReviewMapper.insertReview(review);
@@ -245,6 +271,7 @@ public class ProductReviewServiceImpl implements IProductReviewService
         for (Map.Entry<Long, List<ProductSkuSupplyPriceUpdateRequest.Item>> entry : itemsBySpu.entrySet())
         {
             ProductSpu product = productDistributionService.selectProductById(entry.getKey());
+            assertProductImageResourcesStored(product);
             String activePendingKey = activePendingKey(product.getSpuId());
             if (productReviewMapper.countPendingReviewByKey(activePendingKey) > 0)
             {
@@ -318,6 +345,493 @@ public class ProductReviewServiceImpl implements IProductReviewService
     {
         requireReview(reviewId);
         return productReviewMapper.selectReviewOperationLogs(reviewId);
+    }
+
+    private void enrichLegacyReviewSupplyPriceRanges(List<ProductReviewRequest> reviews)
+    {
+        if (reviews == null || reviews.isEmpty())
+        {
+            return;
+        }
+        List<ProductReviewRequest> fallbackReviews = reviews.stream()
+            .filter(this::needsSupplyPriceRangeFallback)
+            .filter(review -> review.getReviewId() != null)
+            .collect(Collectors.toList());
+        if (fallbackReviews.isEmpty())
+        {
+            return;
+        }
+        List<Long> reviewIds = fallbackReviews.stream()
+            .map(ProductReviewRequest::getReviewId)
+            .distinct()
+            .collect(Collectors.toList());
+        Map<Long, List<ProductReviewItem>> itemsByReviewId = productReviewMapper.selectReviewItemsByReviewIds(reviewIds)
+            .stream()
+            .collect(Collectors.groupingBy(ProductReviewItem::getReviewId, LinkedHashMap::new, Collectors.toList()));
+        Map<Long, List<ProductReviewSnapshot>> snapshotsByReviewId =
+            productReviewMapper.selectReviewSnapshotsByReviewIds(reviewIds)
+                .stream()
+                .collect(Collectors.groupingBy(ProductReviewSnapshot::getReviewId, LinkedHashMap::new,
+                    Collectors.toList()));
+        fallbackReviews.forEach(review -> enrichReviewSupplyPriceRange(review,
+            itemsByReviewId.getOrDefault(review.getReviewId(), List.of()),
+            snapshotsByReviewId.getOrDefault(review.getReviewId(), List.of())));
+    }
+
+    private void enrichReviewListDisplayItems(ProductReviewRequest query, List<ProductReviewRequest> reviews)
+    {
+        if (!shouldEnrichReviewListDisplayItems(query) || reviews == null || reviews.isEmpty())
+        {
+            return;
+        }
+        List<Long> reviewIds = reviews.stream()
+            .map(ProductReviewRequest::getReviewId)
+            .filter(Objects::nonNull)
+            .distinct()
+            .collect(Collectors.toList());
+        if (reviewIds.isEmpty())
+        {
+            return;
+        }
+        Map<Long, List<ProductReviewItem>> itemsByReviewId = productReviewMapper.selectReviewItemsByReviewIds(reviewIds)
+            .stream()
+            .collect(Collectors.groupingBy(ProductReviewItem::getReviewId, LinkedHashMap::new, Collectors.toList()));
+        Map<Long, List<ProductReviewSnapshot>> snapshotsByReviewId =
+            productReviewMapper.selectReviewSnapshotsByReviewIds(reviewIds)
+                .stream()
+                .collect(Collectors.groupingBy(ProductReviewSnapshot::getReviewId, LinkedHashMap::new,
+                    Collectors.toList()));
+        for (ProductReviewRequest review : reviews)
+        {
+            List<ProductReviewItem> items = itemsByReviewId.getOrDefault(review.getReviewId(), List.of());
+            List<ProductReviewSnapshot> snapshots = snapshotsByReviewId.getOrDefault(review.getReviewId(), List.of());
+            List<ProductReviewListDisplayItem> displayItems = buildReviewListDisplayItems(review, items, snapshots);
+            review.setListDisplayItems(displayItems);
+            review.setListChangedModules(buildReviewListChangedModules(review, snapshots, displayItems));
+        }
+    }
+
+    private boolean shouldEnrichReviewListDisplayItems(ProductReviewRequest query)
+    {
+        if (query == null)
+        {
+            return false;
+        }
+        return StringUtils.isNotBlank(query.getReviewType()) || StringUtils.isNotBlank(query.getReviewTypes());
+    }
+
+    private List<ProductReviewListDisplayItem> buildReviewListDisplayItems(ProductReviewRequest review,
+        List<ProductReviewItem> items, List<ProductReviewSnapshot> snapshots)
+    {
+        if (review == null || items == null || items.isEmpty())
+        {
+            return List.of();
+        }
+        Map<Long, List<ProductReviewSnapshot>> snapshotsByItemId = snapshots == null ? Map.of()
+            : snapshots.stream()
+                .filter(snapshot -> snapshot.getItemId() != null)
+                .collect(Collectors.groupingBy(ProductReviewSnapshot::getItemId, LinkedHashMap::new,
+                    Collectors.toList()));
+        List<ProductReviewListDisplayItem> displayItems = new ArrayList<>();
+        for (ProductReviewItem item : items)
+        {
+            if (!ITEM_TYPE_SKU.equals(item.getItemType()))
+            {
+                continue;
+            }
+            List<ProductReviewSnapshot> itemSnapshots = snapshotsByItemId.getOrDefault(item.getItemId(), List.of());
+            ProductSku beforeSku = parseSkuSnapshotForList(itemSnapshots, SNAPSHOT_BEFORE);
+            ProductSku afterSku = parseSkuSnapshotForList(itemSnapshots, SNAPSHOT_AFTER);
+            ProductReviewListDisplayItem displayItem = buildSkuListDisplayItem(review, item, beforeSku, afterSku);
+            if (shouldIncludeListDisplayItem(review.getReviewType(), displayItem))
+            {
+                displayItems.add(displayItem);
+            }
+        }
+        return displayItems;
+    }
+
+    private ProductSku parseSkuSnapshotForList(List<ProductReviewSnapshot> snapshots, String role)
+    {
+        if (snapshots == null)
+        {
+            return null;
+        }
+        for (ProductReviewSnapshot snapshot : snapshots)
+        {
+            if (role.equals(snapshot.getSnapshotRole()) && PAYLOAD_SKU.equals(snapshot.getPayloadType())
+                && StringUtils.isNotBlank(snapshot.getPayloadJson()))
+            {
+                return parseSkuSnapshot(snapshot.getPayloadJson());
+            }
+        }
+        return null;
+    }
+
+    private ProductReviewListDisplayItem buildSkuListDisplayItem(ProductReviewRequest review, ProductReviewItem item,
+        ProductSku beforeSku, ProductSku afterSku)
+    {
+        ProductSku displaySku = afterSku != null ? afterSku : beforeSku;
+        ProductReviewListDisplayItem displayItem = new ProductReviewListDisplayItem();
+        displayItem.setItemId(item.getItemId());
+        displayItem.setSkuId(displaySku == null ? item.getSkuId() : displaySku.getSkuId());
+        displayItem.setSystemSkuCode(StringUtils.defaultIfBlank(
+            displaySku == null ? null : displaySku.getSystemSkuCode(), item.getSystemSkuCode()));
+        displayItem.setSellerSkuCode(StringUtils.defaultIfBlank(
+            displaySku == null ? null : displaySku.getSellerSkuCode(), item.getSellerSkuCode()));
+        displayItem.setSkuCode(StringUtils.defaultIfBlank(displayItem.getSellerSkuCode(),
+            StringUtils.defaultIfBlank(displayItem.getSystemSkuCode(), "--")));
+        displayItem.setChangeType(item.getChangeType());
+        displayItem.setBeforeSupplyPrice(beforeSku == null ? null : beforeSku.getSupplyPrice());
+        displayItem.setAfterSupplyPrice(afterSku == null ? null : afterSku.getSupplyPrice());
+        displayItem.setCurrencyCode(StringUtils.defaultIfBlank(
+            afterSku == null ? null : afterSku.getCurrencyCode(),
+            StringUtils.defaultIfBlank(beforeSku == null ? null : beforeSku.getCurrencyCode(),
+                StringUtils.defaultString(review.getCurrencySummary()))));
+        displayItem.setPriceDirection(resolvePriceDirection(displayItem.getBeforeSupplyPrice(),
+            displayItem.getAfterSupplyPrice()));
+        displayItem.setBeforeSpecSummary(formatSkuSpecSummary(beforeSku));
+        displayItem.setAfterSpecSummary(formatSkuSpecSummary(afterSku));
+        displayItem.setBeforeDimensionSummary(formatSkuDimensionSummary(beforeSku));
+        displayItem.setAfterDimensionSummary(formatSkuDimensionSummary(afterSku));
+        displayItem.setBeforeWarehouseSummary(formatSkuWarehouseSummary(beforeSku));
+        displayItem.setAfterWarehouseSummary(formatSkuWarehouseSummary(afterSku));
+        displayItem.setChangedFieldNames(buildSkuChangedFieldNames(item, beforeSku, afterSku));
+        displayItem.setChangeSummary(String.join("、", displayItem.getChangedFieldNames()));
+        return displayItem;
+    }
+
+    private boolean shouldIncludeListDisplayItem(String reviewType, ProductReviewListDisplayItem item)
+    {
+        if (item == null)
+        {
+            return false;
+        }
+        if (REVIEW_TYPE_NEW_PRODUCT.equals(reviewType))
+        {
+            return true;
+        }
+        if (REVIEW_TYPE_ADD_SKU.equals(reviewType))
+        {
+            return CHANGE_CREATE.equals(item.getChangeType());
+        }
+        if (REVIEW_TYPE_EDIT_PRICE.equals(reviewType))
+        {
+            return hasChangedField(item, "供货价");
+        }
+        if (REVIEW_TYPE_EDIT_SKU_INFO.equals(reviewType))
+        {
+            return hasNonPriceSkuChange(item);
+        }
+        if (REVIEW_TYPE_EDIT_MIXED.equals(reviewType))
+        {
+            return CHANGE_CREATE.equals(item.getChangeType()) || hasChangedField(item, "供货价")
+                || hasNonPriceSkuChange(item);
+        }
+        return false;
+    }
+
+    private boolean hasNonPriceSkuChange(ProductReviewListDisplayItem item)
+    {
+        return item.getChangedFieldNames() != null
+            && item.getChangedFieldNames().stream().anyMatch(field -> !"供货价".equals(field));
+    }
+
+    private boolean hasChangedField(ProductReviewListDisplayItem item, String fieldName)
+    {
+        return item.getChangedFieldNames() != null && item.getChangedFieldNames().contains(fieldName);
+    }
+
+    private List<String> buildSkuChangedFieldNames(ProductReviewItem item, ProductSku beforeSku, ProductSku afterSku)
+    {
+        LinkedHashSet<String> fields = new LinkedHashSet<>();
+        if (CHANGE_CREATE.equals(item.getChangeType()))
+        {
+            fields.add("新增SKU");
+        }
+        if (changedText(beforeSku == null ? null : beforeSku.getSellerSkuCode(),
+            afterSku == null ? null : afterSku.getSellerSkuCode()))
+        {
+            fields.add("客户SKU");
+        }
+        if (changedText(beforeSku == null ? null : beforeSku.getSkuImageUrl(),
+            afterSku == null ? null : afterSku.getSkuImageUrl()))
+        {
+            fields.add("SKU图");
+        }
+        if (changedText(formatSkuSpecSummary(beforeSku), formatSkuSpecSummary(afterSku)))
+        {
+            fields.add("规格");
+        }
+        if (changedText(beforeSku == null ? null : beforeSku.getPackageQuantity(),
+            afterSku == null ? null : afterSku.getPackageQuantity()))
+        {
+            fields.add("包装数量");
+        }
+        if (changedBigDecimal(beforeSku == null ? null : beforeSku.getSupplyPrice(),
+            afterSku == null ? null : afterSku.getSupplyPrice()))
+        {
+            fields.add("供货价");
+        }
+        if (changedText(formatSkuDimensionSummary(beforeSku), formatSkuDimensionSummary(afterSku)))
+        {
+            fields.add("尺寸重量");
+        }
+        if (changedText(formatSkuWarehouseSummary(beforeSku), formatSkuWarehouseSummary(afterSku)))
+        {
+            fields.add("发货仓库");
+        }
+        if (changedText(beforeSku == null ? null : beforeSku.getSkuStatus(),
+            afterSku == null ? null : afterSku.getSkuStatus()))
+        {
+            fields.add("销售状态");
+        }
+        return new ArrayList<>(fields);
+    }
+
+    private String resolvePriceDirection(BigDecimal beforePrice, BigDecimal afterPrice)
+    {
+        if (beforePrice == null || afterPrice == null)
+        {
+            return "";
+        }
+        int compare = afterPrice.compareTo(beforePrice);
+        if (compare > 0)
+        {
+            return "UP";
+        }
+        if (compare < 0)
+        {
+            return "DOWN";
+        }
+        return "SAME";
+    }
+
+    private String formatSkuSpecSummary(ProductSku sku)
+    {
+        if (sku == null)
+        {
+            return "";
+        }
+        return joinTextParts(
+            labelValue("颜色", sku.getColor()),
+            labelValue("尺码", sku.getSize()),
+            labelValue("材质", sku.getMaterial()),
+            labelValue("款式", sku.getStyle()),
+            labelValue("型号", sku.getModel()),
+            labelValue("容量", sku.getCapacity()));
+    }
+
+    private String formatSkuDimensionSummary(ProductSku sku)
+    {
+        if (sku == null)
+        {
+            return "";
+        }
+        String measuredSize = joinDimensionParts(sku.getMeasureLengthCm(), sku.getMeasureWidthCm(),
+            sku.getMeasureHeightCm(), "厘米");
+        String legacySize = joinDimensionParts(sku.getLengthValue(), sku.getWidthValue(), sku.getHeightValue(), "");
+        String size = StringUtils.defaultIfBlank(measuredSize, legacySize);
+        String weight = sku.getMeasureWeightKg() == null ? StringUtils.defaultString(sku.getWeight())
+            : sku.getMeasureWeightKg().stripTrailingZeros().toPlainString() + "千克";
+        return joinTextParts(
+            StringUtils.isBlank(size) ? "" : "尺寸：" + size,
+            StringUtils.isBlank(weight) ? "" : "重量：" + weight);
+    }
+
+    private String formatSkuWarehouseSummary(ProductSku sku)
+    {
+        if (sku == null)
+        {
+            return "";
+        }
+        return StringUtils.defaultIfBlank(sku.getSourceWarehouseNames(),
+            StringUtils.defaultString(sku.getWarehouseKindSummary()));
+    }
+
+    private String joinDimensionParts(BigDecimal length, BigDecimal width, BigDecimal height, String unit)
+    {
+        List<String> parts = new ArrayList<>();
+        if (length != null)
+        {
+            parts.add(length.stripTrailingZeros().toPlainString());
+        }
+        if (width != null)
+        {
+            parts.add(width.stripTrailingZeros().toPlainString());
+        }
+        if (height != null)
+        {
+            parts.add(height.stripTrailingZeros().toPlainString());
+        }
+        if (parts.isEmpty())
+        {
+            return "";
+        }
+        return String.join("×", parts) + unit;
+    }
+
+    private String joinDimensionParts(String length, String width, String height, String unit)
+    {
+        List<String> parts = new ArrayList<>();
+        if (StringUtils.isNotBlank(length))
+        {
+            parts.add(length);
+        }
+        if (StringUtils.isNotBlank(width))
+        {
+            parts.add(width);
+        }
+        if (StringUtils.isNotBlank(height))
+        {
+            parts.add(height);
+        }
+        if (parts.isEmpty())
+        {
+            return "";
+        }
+        return String.join("×", parts) + unit;
+    }
+
+    private String labelValue(String label, String value)
+    {
+        return StringUtils.isBlank(value) ? "" : label + "：" + value;
+    }
+
+    private String joinTextParts(String... parts)
+    {
+        List<String> visibleParts = new ArrayList<>();
+        for (String part : parts)
+        {
+            if (StringUtils.isNotBlank(part))
+            {
+                visibleParts.add(part);
+            }
+        }
+        return String.join("；", visibleParts);
+    }
+
+    private boolean changedText(String before, String after)
+    {
+        return !StringUtils.defaultString(before).equals(StringUtils.defaultString(after));
+    }
+
+    private boolean changedBigDecimal(BigDecimal before, BigDecimal after)
+    {
+        if (before == null || after == null)
+        {
+            return before != after;
+        }
+        return before.compareTo(after) != 0;
+    }
+
+    private List<String> buildReviewListChangedModules(ProductReviewRequest review,
+        List<ProductReviewSnapshot> snapshots, List<ProductReviewListDisplayItem> displayItems)
+    {
+        LinkedHashSet<String> modules = new LinkedHashSet<>();
+        if (review == null)
+        {
+            return List.of();
+        }
+        if (REVIEW_TYPE_NEW_PRODUCT.equals(review.getReviewType()))
+        {
+            modules.add("新增商品");
+        }
+        if (REVIEW_TYPE_ADD_SKU.equals(review.getReviewType()))
+        {
+            modules.add("新增SKU");
+        }
+        modules.addAll(buildProductSnapshotChangedModules(snapshots));
+        if (displayItems != null)
+        {
+            if (displayItems.stream().anyMatch(item -> CHANGE_CREATE.equals(item.getChangeType())))
+            {
+                modules.add("新增SKU");
+            }
+            if (displayItems.stream().anyMatch(item -> hasChangedField(item, "供货价")))
+            {
+                modules.add("供货价");
+            }
+            if (displayItems.stream().anyMatch(this::hasNonPriceSkuChange))
+            {
+                modules.add("SKU资料");
+            }
+        }
+        if (modules.isEmpty() && StringUtils.isNotBlank(review.getDiffSummary()))
+        {
+            modules.add(review.getDiffSummary());
+        }
+        return new ArrayList<>(modules);
+    }
+
+    private List<String> buildProductSnapshotChangedModules(List<ProductReviewSnapshot> snapshots)
+    {
+        ProductReviewSnapshot beforeSnapshot = findProductSnapshot(snapshots, SNAPSHOT_BEFORE);
+        ProductReviewSnapshot afterSnapshot = findProductSnapshot(snapshots, SNAPSHOT_AFTER);
+        if (beforeSnapshot == null && afterSnapshot == null)
+        {
+            return List.of();
+        }
+        ProductSpu before = beforeSnapshot == null ? null : parseProductSnapshot(beforeSnapshot.getPayloadJson());
+        ProductSpu after = afterSnapshot == null ? null : parseProductSnapshot(afterSnapshot.getPayloadJson());
+        LinkedHashSet<String> modules = new LinkedHashSet<>();
+        if (productBasicChanged(before, after))
+        {
+            modules.add("基础信息");
+        }
+        if (productImagesChanged(before, after))
+        {
+            modules.add("商品图片");
+        }
+        if (changedJson(before == null ? null : before.getAttributeValues(),
+            after == null ? null : after.getAttributeValues()))
+        {
+            modules.add("类目属性");
+        }
+        if (changedText(before == null ? null : before.getDetailContent(),
+            after == null ? null : after.getDetailContent()))
+        {
+            modules.add("详情图文");
+        }
+        return new ArrayList<>(modules);
+    }
+
+    private boolean productBasicChanged(ProductSpu before, ProductSpu after)
+    {
+        return changedText(before == null ? null : before.getProductName(), after == null ? null : after.getProductName())
+            || changedText(before == null ? null : before.getProductNameEn(),
+                after == null ? null : after.getProductNameEn())
+            || changedText(before == null ? null : before.getCategoryName(), after == null ? null : after.getCategoryName())
+            || !Objects.equals(before == null ? null : before.getCategoryId(), after == null ? null : after.getCategoryId())
+            || changedText(before == null ? null : before.getWarehouseKindSummary(),
+                after == null ? null : after.getWarehouseKindSummary())
+            || changedText(before == null ? null : before.getCurrencySummary(),
+                after == null ? null : after.getCurrencySummary());
+    }
+
+    private boolean productImagesChanged(ProductSpu before, ProductSpu after)
+    {
+        return changedText(before == null ? null : before.getMainImageUrl(), after == null ? null : after.getMainImageUrl())
+            || changedJson(before == null ? null : before.getImages(), after == null ? null : after.getImages());
+    }
+
+    private boolean changedJson(Object before, Object after)
+    {
+        return !StringUtils.defaultString(JSON.toJSONString(before)).equals(StringUtils.defaultString(JSON.toJSONString(after)));
+    }
+
+    private boolean needsSupplyPriceRangeFallback(ProductReviewRequest review)
+    {
+        if (review == null)
+        {
+            return false;
+        }
+        if (REVIEW_TYPE_NEW_PRODUCT.equals(review.getReviewType()) || REVIEW_TYPE_ADD_SKU.equals(review.getReviewType()))
+        {
+            return review.getPriceAfterMin() == null || review.getPriceAfterMax() == null;
+        }
+        return review.getPriceBeforeMin() == null || review.getPriceBeforeMax() == null
+            || review.getPriceAfterMin() == null || review.getPriceAfterMax() == null;
     }
 
     private void enrichReviewSupplyPriceRange(ProductReviewRequest review, List<ProductReviewItem> items,
@@ -1220,6 +1734,30 @@ public class ProductReviewServiceImpl implements IProductReviewService
     private String snapshotSkuFull(ProductSku sku)
     {
         return JSON.toJSONString(sku);
+    }
+
+    private void assertProductImageResourcesStored(ProductSpu product)
+    {
+        if (product == null)
+        {
+            return;
+        }
+        ImageResourceUtils.assertNotInlineImage(product.getMainImageUrl(), "SPU主图");
+        ImageResourceUtils.assertNotInlineImage(product.getDetailContent(), "详情图文图片");
+        if (product.getImages() != null)
+        {
+            for (ProductImage image : product.getImages())
+            {
+                ImageResourceUtils.assertNotInlineImage(image.getImageUrl(), "商品图片");
+            }
+        }
+        if (product.getSkus() != null)
+        {
+            for (ProductSku sku : product.getSkus())
+            {
+                ImageResourceUtils.assertNotInlineImage(sku.getSkuImageUrl(), "SKU图");
+            }
+        }
     }
 
     private ProductSpu parseProductSnapshot(String payloadJson)

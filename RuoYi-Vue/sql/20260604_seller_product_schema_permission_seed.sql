@@ -3,7 +3,7 @@
 -- 1. Ensure current active sellers have a default owner role.
 -- 2. Bind current OWNER seller accounts to the default owner role.
 -- 3. Add seller:product:schema:query as a hidden button permission.
--- 4. Grant the permission to current active seller Owner roles.
+-- 4. Do not default-grant this product permission to terminal Owner roles.
 
 set names utf8mb4;
 set @confirm_seller_product_schema_permission_seed := coalesce(@confirm_seller_product_schema_permission_seed, '');
@@ -176,22 +176,6 @@ begin
     signal sqlstate '45000' set message_text = 'seller product schema permission was not created';
   end if;
 
-  if exists (
-    select 1
-    from seller_role r
-    where r.del_flag = '0'
-      and r.status = '0'
-      and r.role_key = 'owner'
-      and not exists (
-        select 1
-        from seller_role_menu rm
-        join seller_menu m on m.seller_menu_id = rm.seller_menu_id
-        where rm.seller_role_id = r.seller_role_id
-          and m.perms = 'seller:product:schema:query'
-      )
-  ) then
-    signal sqlstate '45000' set message_text = 'seller owner roles must have product schema permission';
-  end if;
 end//
 
 delimiter ;
@@ -245,25 +229,6 @@ select
 where not exists (
     select 1 from seller_menu where perms = 'seller:product:schema:query'
 );
-
-insert into seller_role_menu (seller_role_id, seller_menu_id)
-select r.seller_role_id, m.seller_menu_id
-from seller_role r
-join seller_menu m on m.perms = 'seller:product:schema:query'
-                  and m.parent_id = 0
-                  and coalesce(m.menu_type, '') = 'F'
-                  and coalesce(m.path, '') = ''
-                  and coalesce(m.component, '') = ''
-                  and coalesce(m.route_name, '') = ''
-where r.del_flag = '0'
-  and r.status = '0'
-  and r.role_key = 'owner'
-  and not exists (
-      select 1
-      from seller_role_menu rm
-      where rm.seller_role_id = r.seller_role_id
-        and rm.seller_menu_id = m.seller_menu_id
-  );
 
 call assert_seller_product_schema_permission_seed_completed();
 commit;

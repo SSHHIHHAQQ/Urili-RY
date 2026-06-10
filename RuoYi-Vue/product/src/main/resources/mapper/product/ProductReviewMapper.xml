@@ -92,6 +92,11 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="remark"           column="remark"            />
     </resultMap>
 
+    <resultMap type="ProductReviewTypeCount" id="ProductReviewTypeCountResult">
+        <result property="reviewType" column="review_type" />
+        <result property="total"      column="total"       />
+    </resultMap>
+
     <sql id="reviewWarehouseKindSummaryJoin">
         left join (
             select spu_id,
@@ -204,6 +209,15 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         limit 1
     </select>
 
+    <select id="selectPendingReviewTypeCounts" resultMap="ProductReviewTypeCountResult">
+        select review_type,
+               count(1) as total
+        from product_review_request
+        where del_flag = '0'
+          and review_status = 'PENDING'
+        group by review_type
+    </select>
+
     <select id="selectLatestReviewsBySpuIds" resultMap="ProductReviewRequestResult">
         select r.*
         from product_review_request r
@@ -295,6 +309,16 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         order by sort_order asc, item_id asc
     </select>
 
+    <select id="selectReviewItemsByReviewIds" resultMap="ProductReviewItemResult">
+        select *
+        from product_review_item
+        where review_id in
+        <foreach collection="reviewIds" item="reviewId" open="(" separator="," close=")">
+            #{reviewId}
+        </foreach>
+        order by review_id asc, sort_order asc, item_id asc
+    </select>
+
     <update id="updateReviewItemsStatus">
         update product_review_item
         set item_status = #{itemStatus}
@@ -314,6 +338,16 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         from product_review_snapshot
         where review_id = #{reviewId}
         order by snapshot_id asc
+    </select>
+
+    <select id="selectReviewSnapshotsByReviewIds" resultMap="ProductReviewSnapshotResult">
+        select *
+        from product_review_snapshot
+        where review_id in
+        <foreach collection="reviewIds" item="reviewId" open="(" separator="," close=")">
+            #{reviewId}
+        </foreach>
+        order by review_id asc, snapshot_id asc
     </select>
 
     <insert id="insertReviewOperationLog" parameterType="ProductReviewOperationLog" useGeneratedKeys="true" keyProperty="logId">

@@ -3,6 +3,7 @@ package com.ruoyi.integration.sync;
 import java.util.ArrayList;
 import java.util.List;
 import org.apache.commons.lang3.StringUtils;
+import com.ruoyi.common.utils.file.ImageResourceUtils;
 import com.ruoyi.integration.domain.UpstreamSkuSyncItem;
 import com.ruoyi.integration.lingxing.LingxingProductSku;
 
@@ -18,7 +19,7 @@ final class LingxingSkuSyncItemMapper
         item.setApproveStatus(sku.getApproveStatus());
         item.setProductType(sku.getProductType());
         item.setProductDescription(sku.getProductDescription());
-        item.setImageUrl(sku.getImageUrl());
+        item.setImageUrl(ImageResourceUtils.normalizeExternalImageResourceOrEmpty(sku.getImageUrl()));
         item.setMainCode(sku.getMainCode());
         item.setOtherCode(sku.getOtherCode());
         item.setFnsku(sku.getFnsku());

@@ -37,7 +37,7 @@
 
 - `cd E:\Urili-Ruoyi\react-ui; node --check scripts\verify-three-terminal.mjs`：通过。
 - `cd E:\Urili-Ruoyi\react-ui; node scripts\verify-three-terminal.mjs --check-manifest`：通过。
-- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system -Dtest=SqlExecutionGuardContractTest test`：通过，55 个测试。
+- 历史快照命令：`cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system -Dtest=SqlExecutionGuardContractTest test`：当时通过，55 个测试；当前验证口径必须使用 reactor-safe 命令，例如 `mvn -pl ruoyi-system -am "-Dtest=SqlExecutionGuardContractTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`。
 - `cd E:\Urili-Ruoyi\react-ui; npm run verify:three-terminal`：通过。
   - 当时快照为 4 个前端 guard 通过；当前 manifest 已扩展为 5 个 frontend guard。
   - React typecheck 通过。

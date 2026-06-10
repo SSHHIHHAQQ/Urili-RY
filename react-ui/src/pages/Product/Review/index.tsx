@@ -15,13 +15,14 @@ import {
   Typography,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type CSSProperties, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getDictValueEnum } from '@/services/system/dict';
 import {
   approveProductReview,
   getProductReview,
   getProductReviewList,
   getProductReviewLogs,
+  getProductReviewPendingCounts,
   rejectProductReview,
 } from '@/services/product/productReview';
 import { message } from '@/utils/feedback';
@@ -59,6 +60,16 @@ type SnapshotCompareRow = {
   after?: API.ProductReview.Snapshot;
 };
 
+type ReviewListColumnContext = {
+  canQueryProductReview: boolean;
+  canApproveProductReview: boolean;
+  canRejectProductReview: boolean;
+  reviewStatusValueEnum: Record<string, ValueEnumItem>;
+  reviewTypeValueEnum: Record<string, ValueEnumItem>;
+  openDetail: (record: API.ProductReview.Review) => void;
+  openAction: (kind: ActionKind, record: API.ProductReview.Review) => void;
+};
+
 const REVIEW_TYPE_ORDER = [
   'NEW_PRODUCT',
   'ADD_SKU',
@@ -67,6 +78,29 @@ const REVIEW_TYPE_ORDER = [
   'EDIT_PRICE',
   'EDIT_MIXED',
 ];
+const DEFAULT_PRODUCT_REVIEW_LIST_STATUS = 'PENDING';
+
+const listLineStackStyle: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 4,
+};
+
+const listLineStyle: CSSProperties = {
+  minHeight: 24,
+  lineHeight: '20px',
+  whiteSpace: 'normal',
+  overflowWrap: 'anywhere',
+  wordBreak: 'break-word',
+};
+
+const listTagLineStyle: CSSProperties = {
+  minHeight: 24,
+  display: 'flex',
+  alignItems: 'center',
+  gap: 4,
+  flexWrap: 'wrap',
+};
 
 const DEFAULT_REVIEW_TYPE_ENUM: Record<string, ValueEnumItem> = {
   NEW_PRODUCT: { text: '新增商品', status: 'processing' },
@@ -82,12 +116,6 @@ const DEFAULT_REVIEW_STATUS_ENUM: Record<string, ValueEnumItem> = {
   APPROVED: { text: '已通过', status: 'success' },
   REJECTED: { text: '已驳回', status: 'error' },
   WITHDRAWN: { text: '已撤回', status: 'default' },
-};
-
-const DEFAULT_RISK_LEVEL_ENUM: Record<string, ValueEnumItem> = {
-  LOW: { text: '低风险', status: 'success' },
-  MEDIUM: { text: '中风险', status: 'warning' },
-  HIGH: { text: '高风险', status: 'error' },
 };
 
 const TERMINAL_VALUE_ENUM: Record<string, ValueEnumItem> = {
@@ -324,6 +352,185 @@ function formatMainImageChange(record: API.ProductReview.Review) {
   return before || after ? '无变化' : '--';
 }
 
+function getListDisplayItems(record: API.ProductReview.Review) {
+  return record.listDisplayItems || [];
+}
+
+function getChangedModules(record: API.ProductReview.Review) {
+  return record.listChangedModules?.length ? record.listChangedModules : [];
+}
+
+function formatListMoney(value?: number, currency?: string) {
+  if (value == null) {
+    return '--';
+  }
+  return `${value}${currency ? ` ${currency}` : ''}`;
+}
+
+function renderListLines<T>(
+  rows: T[] | undefined,
+  renderLine: (row: T, index: number) => ReactNode,
+  emptyText = '--',
+) {
+  const visibleRows = rows || [];
+  if (!visibleRows.length) {
+    return emptyText;
+  }
+  return (
+    <div style={listLineStackStyle}>
+      {visibleRows.map((row, index) => (
+        <div key={index} style={listLineStyle}>
+          {renderLine(row, index)}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function renderSummaryTextLines(value?: string) {
+  const lines = String(value || '')
+    .split(/[；;\n]+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (!lines.length) {
+    return '--';
+  }
+  return (
+    <div style={listLineStackStyle}>
+      {lines.map((line) => (
+        <span key={line} style={listLineStyle}>
+          {line}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function renderTagLines<T>(
+  rows: T[] | undefined,
+  renderTags: (row: T, index: number) => ReactNode,
+  emptyText = '--',
+) {
+  const visibleRows = rows || [];
+  if (!visibleRows.length) {
+    return emptyText;
+  }
+  return (
+    <div style={listLineStackStyle}>
+      {visibleRows.map((row, index) => (
+        <div key={index} style={listTagLineStyle}>
+          {renderTags(row, index)}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function renderSkuCodeLine(item: API.ProductReview.ListDisplayItem) {
+  return item.skuCode || item.sellerSkuCode || item.systemSkuCode || '--';
+}
+
+function renderChangedFieldTags(fields?: string[]) {
+  if (!fields?.length) {
+    return '--';
+  }
+  return fields.map((field) => (
+    <Tag key={field} color={field === '供货价' ? 'red' : 'blue'}>
+      {field}
+    </Tag>
+  ));
+}
+
+function renderPriceDirectionTag(direction?: string) {
+  if (direction === 'UP') {
+    return <Tag color="red">涨价</Tag>;
+  }
+  if (direction === 'DOWN') {
+    return <Tag color="green">降价</Tag>;
+  }
+  if (direction === 'SAME') {
+    return <Tag>无变化</Tag>;
+  }
+  return null;
+}
+
+function renderAfterSupplyPrice(item: API.ProductReview.ListDisplayItem) {
+  const color = item.priceDirection === 'UP' ? '#cf1322' : item.priceDirection === 'DOWN' ? '#389e0d' : undefined;
+  return (
+    <Space size={4}>
+      <Typography.Text style={{ color }}>
+        {formatListMoney(item.afterSupplyPrice, item.currencyCode)}
+      </Typography.Text>
+      {renderPriceDirectionTag(item.priceDirection)}
+    </Space>
+  );
+}
+
+function renderSupplyPriceTransition(item: API.ProductReview.ListDisplayItem) {
+  if (item.beforeSupplyPrice == null && item.afterSupplyPrice == null) {
+    return '--';
+  }
+  return (
+    <Space size={4}>
+      <Typography.Text type="secondary">
+        {formatListMoney(item.beforeSupplyPrice, item.currencyCode)}
+      </Typography.Text>
+      <span>→</span>
+      {renderAfterSupplyPrice(item)}
+    </Space>
+  );
+}
+
+function renderModuleTags(record: API.ProductReview.Review) {
+  const modules = getChangedModules(record);
+  if (!modules.length) {
+    return record.diffSummary || '--';
+  }
+  return (
+    <Space wrap size={[4, 4]}>
+      {modules.map((moduleName) => (
+        <Tag key={moduleName} color={moduleName === '供货价' ? 'red' : 'blue'}>
+          {moduleName}
+        </Tag>
+      ))}
+    </Space>
+  );
+}
+
+function renderCompactProduct(record: API.ProductReview.Review) {
+  return (
+    <Space orientation="vertical" size={2}>
+      <Typography.Text strong>{record.productNameAfter || '--'}</Typography.Text>
+      <Typography.Text type="secondary">{record.categoryName || '--'}</Typography.Text>
+    </Space>
+  );
+}
+
+function renderSeller(record: API.ProductReview.Review) {
+  return (
+    <Space orientation="vertical" size={2}>
+      <span>{record.sellerName || '--'}</span>
+      <Typography.Text type="secondary">{record.sellerId ?? '--'}</Typography.Text>
+    </Space>
+  );
+}
+
+function getDisplayWarehouse(record: API.ProductReview.Review) {
+  if (isOfficialWarehouseKind(record.warehouseSummary)) {
+    return '--';
+  }
+  const warehouses = Array.from(new Set(
+    getListDisplayItems(record)
+      .map((item) => item.afterWarehouseSummary || item.beforeWarehouseSummary)
+      .filter(Boolean),
+  ));
+  return warehouses.length ? warehouses.join('、') : formatWarehouseKindLabel(record.warehouseSummary);
+}
+
+function shouldShowReviewTypeColumn(reviewTypeTab: string) {
+  return reviewTypeTab === 'ALL';
+}
+
 function safeParseJson(value?: string) {
   if (!value) {
     return undefined;
@@ -378,8 +585,6 @@ function localizeSnapshotScalar(key: string, value: unknown) {
       return valueEnumText(DEFAULT_REVIEW_STATUS_ENUM, value, '未知状态');
     case 'reviewType':
       return valueEnumText(DEFAULT_REVIEW_TYPE_ENUM, value, '未知类型');
-    case 'riskLevel':
-      return valueEnumText(DEFAULT_RISK_LEVEL_ENUM, value, '未知风险');
     case 'submitTerminal':
     case 'operatorTerminal':
       return valueEnumText(TERMINAL_VALUE_ENUM, value, '未知端');
@@ -426,85 +631,16 @@ function renderPayloadPreview(snapshot?: API.ProductReview.Snapshot) {
   );
 }
 
-function renderFocusLine(label: string, value: ReactNode) {
-  return (
-    <span>
-      <Typography.Text type="secondary">{label}：</Typography.Text>
-      {value || '--'}
-    </span>
-  );
-}
-
 function renderReviewTypeTabLabel(label: string, count?: number) {
   return `${label}(${count ?? 0})`;
 }
 
-function renderReviewFocus(record: API.ProductReview.Review) {
-  switch (record.reviewType) {
-    case 'NEW_PRODUCT':
-      return (
-        <Space orientation="vertical" size={2}>
-          {renderFocusLine('新增范围', `${formatCount(record.itemCount, '个对象')} / ${formatCount(resolveReviewSkuCount(record), '个SKU')}`)}
-          {renderFocusLine('供货价区间', formatPriceRange(record))}
-          {!isOfficialWarehouseKind(record.warehouseSummary)
-            ? renderFocusLine('发货仓库', formatWarehouseKindLabel(record.warehouseSummary))
-            : null}
-          {renderFocusLine('类目', record.categoryName || '--')}
-        </Space>
-      );
-    case 'ADD_SKU':
-      return (
-        <Space orientation="vertical" size={2}>
-          {renderFocusLine('新增SKU', formatCount(resolveReviewSkuCount(record), '个SKU'))}
-          {renderFocusLine('供货价区间', formatPriceRange(record))}
-          {renderFocusLine('仓库类型', formatWarehouseKindLabel(record.warehouseSummary))}
-          {renderFocusLine('变化摘要', record.diffSummary || '--')}
-        </Space>
-      );
-    case 'EDIT_PRODUCT_INFO':
-      return (
-        <Space orientation="vertical" size={2}>
-          {renderFocusLine('标题变化', formatTitleTransition(record))}
-          {renderFocusLine('主图变化', formatMainImageChange(record))}
-          {renderFocusLine('类目', record.categoryName || '--')}
-          {renderFocusLine('变化摘要', record.diffSummary || '--')}
-        </Space>
-      );
-    case 'EDIT_SKU_INFO':
-      return (
-        <Space orientation="vertical" size={2}>
-          {renderFocusLine('影响SKU', formatCount(resolveReviewSkuCount(record), '个SKU'))}
-          {renderFocusLine('供货价区间', formatPriceRange(record))}
-          {renderFocusLine('变化摘要', record.diffSummary || '--')}
-        </Space>
-      );
-    case 'EDIT_PRICE':
-      return (
-        <Space orientation="vertical" size={2}>
-          {renderFocusLine('供货价变化', formatPriceTransition(record))}
-          {renderFocusLine('影响SKU', formatCount(resolveReviewSkuCount(record), '个SKU'))}
-          {renderFocusLine('币种', record.currencySummary || '--')}
-          {renderFocusLine('变化摘要', record.diffSummary || '--')}
-        </Space>
-      );
-    case 'EDIT_MIXED':
-      return (
-        <Space orientation="vertical" size={2}>
-          {renderFocusLine('变更类型', record.diffSummary || '综合变更')}
-          {renderFocusLine('供货价变化', formatPriceTransition(record))}
-          {renderFocusLine('影响SKU', formatCount(resolveReviewSkuCount(record), '个SKU'))}
-          {renderFocusLine('仓库类型', formatWarehouseKindLabel(record.warehouseSummary))}
-        </Space>
-      );
-    default:
-      return (
-        <Space orientation="vertical" size={2}>
-          {renderFocusLine('对象数', formatCount(record.itemCount))}
-          {renderFocusLine('供货价区间', formatPriceTransition(record))}
-          {renderFocusLine('变化摘要', record.diffSummary || '--')}
-        </Space>
-      );
-  }
+function normalizeReviewTypePendingCounts(data?: Record<string, number>) {
+  const result: Record<string, number> = {};
+  ['ALL', ...REVIEW_TYPE_ORDER].forEach((key) => {
+    result[key] = Number(data?.[key] || 0);
+  });
+  return result;
 }
 
 function renderReviewImage(url?: string) {
@@ -629,7 +765,6 @@ function renderTypeDetailPanel(review: API.ProductReview.Review) {
       <Descriptions.Item label="供货价区间">{formatPriceRange(review)}</Descriptions.Item>
       <Descriptions.Item label="供货价变化">{formatPriceTransition(review)}</Descriptions.Item>
       <Descriptions.Item label="币种">{review.currencySummary || '--'}</Descriptions.Item>
-      <Descriptions.Item label="变化摘要" span={3}>{review.diffSummary || '--'}</Descriptions.Item>
     </Descriptions>
   );
 
@@ -638,7 +773,6 @@ function renderTypeDetailPanel(review: API.ProductReview.Review) {
       return (
         <Space orientation="vertical" size={16} style={{ width: '100%' }}>
           <Descriptions size="small" bordered column={3}>
-            <Descriptions.Item label="审核重点">新增 SPU 和全部 SKU</Descriptions.Item>
             <Descriptions.Item label="新增SKU">{formatCount(resolveReviewSkuCount(review), '个SKU')}</Descriptions.Item>
             <Descriptions.Item label="供货价区间">{formatPriceRange(review)}</Descriptions.Item>
             <Descriptions.Item label="类目">{review.categoryName || '--'}</Descriptions.Item>
@@ -652,7 +786,6 @@ function renderTypeDetailPanel(review: API.ProductReview.Review) {
       return (
         <Space orientation="vertical" size={16} style={{ width: '100%' }}>
           <Descriptions size="small" bordered column={3}>
-            <Descriptions.Item label="审核重点">仅审核本次新增 SKU</Descriptions.Item>
             <Descriptions.Item label="新增SKU">{formatCount(resolveReviewSkuCount(review), '个SKU')}</Descriptions.Item>
             <Descriptions.Item label="供货价区间">{formatPriceRange(review)}</Descriptions.Item>
             <Descriptions.Item label="系统SPU">{review.systemSpuCode || '--'}</Descriptions.Item>
@@ -672,7 +805,6 @@ function renderTypeDetailPanel(review: API.ProductReview.Review) {
             <Descriptions.Item label="新主图">{renderReviewImage(review.mainImageUrlAfter)}</Descriptions.Item>
             <Descriptions.Item label="主图变化">{formatMainImageChange(review)}</Descriptions.Item>
             <Descriptions.Item label="类目">{review.categoryName || '--'}</Descriptions.Item>
-            <Descriptions.Item label="变化摘要" span={2}>{review.diffSummary || '--'}</Descriptions.Item>
           </Descriptions>
           {renderSnapshotCompareTable(review, 'SPU 资料变更对比', ['SPU'])}
         </Space>
@@ -681,10 +813,8 @@ function renderTypeDetailPanel(review: API.ProductReview.Review) {
       return (
         <Space orientation="vertical" size={16} style={{ width: '100%' }}>
           <Descriptions size="small" bordered column={3}>
-            <Descriptions.Item label="审核重点">SKU 资料变更</Descriptions.Item>
             <Descriptions.Item label="影响SKU">{formatCount(resolveReviewSkuCount(review), '个SKU')}</Descriptions.Item>
             <Descriptions.Item label="供货价区间">{formatPriceRange(review)}</Descriptions.Item>
-            <Descriptions.Item label="变化摘要" span={3}>{review.diffSummary || '--'}</Descriptions.Item>
           </Descriptions>
           {renderSnapshotCompareTable(review, 'SKU 资料变更对比', ['SKU'])}
         </Space>
@@ -693,12 +823,10 @@ function renderTypeDetailPanel(review: API.ProductReview.Review) {
       return (
         <Space orientation="vertical" size={16} style={{ width: '100%' }}>
           <Descriptions size="small" bordered column={3}>
-            <Descriptions.Item label="审核重点">供货价变更</Descriptions.Item>
             <Descriptions.Item label="原供货价区间">{formatPriceRange(review, 'before')}</Descriptions.Item>
             <Descriptions.Item label="新供货价区间">{formatPriceRange(review, 'after')}</Descriptions.Item>
             <Descriptions.Item label="影响SKU">{formatCount(resolveReviewSkuCount(review), '个SKU')}</Descriptions.Item>
             <Descriptions.Item label="币种">{review.currencySummary || '--'}</Descriptions.Item>
-            <Descriptions.Item label="变化摘要">{review.diffSummary || '--'}</Descriptions.Item>
           </Descriptions>
           {renderSnapshotCompareTable(review, '供货价变更对比', ['SKU', 'PRICE'])}
         </Space>
@@ -707,12 +835,10 @@ function renderTypeDetailPanel(review: API.ProductReview.Review) {
       return (
         <Space orientation="vertical" size={16} style={{ width: '100%' }}>
           <Descriptions size="small" bordered column={3}>
-            <Descriptions.Item label="审核重点">综合变更</Descriptions.Item>
             <Descriptions.Item label="影响SKU">{formatCount(resolveReviewSkuCount(review), '个SKU')}</Descriptions.Item>
             <Descriptions.Item label="供货价变化">{formatPriceTransition(review)}</Descriptions.Item>
             <Descriptions.Item label="仓库类型">{formatWarehouseKindLabel(review.warehouseSummary)}</Descriptions.Item>
             <Descriptions.Item label="币种">{review.currencySummary || '--'}</Descriptions.Item>
-            <Descriptions.Item label="变化摘要">{review.diffSummary || '--'}</Descriptions.Item>
           </Descriptions>
           {renderSnapshotCompareTable(review, '综合变更快照对比', ['SPU', 'SKU'])}
         </Space>
@@ -731,7 +857,6 @@ function renderReviewBasicInfo(
   review: API.ProductReview.Review,
   reviewStatusValueEnum: Record<string, ValueEnumItem>,
   reviewTypeValueEnum: Record<string, ValueEnumItem>,
-  riskLevelValueEnum: Record<string, ValueEnumItem>,
 ) {
   return (
     <Descriptions size="small" bordered column={2}>
@@ -741,9 +866,6 @@ function renderReviewBasicInfo(
       </Descriptions.Item>
       <Descriptions.Item label="审核类型">
         {renderEnumTag(reviewTypeValueEnum, review.reviewType)}
-      </Descriptions.Item>
-      <Descriptions.Item label="风险等级">
-        {renderEnumTag(riskLevelValueEnum, review.riskLevel)}
       </Descriptions.Item>
       <Descriptions.Item label="商品标题">{review.productNameAfter || '--'}</Descriptions.Item>
       <Descriptions.Item label="系统SPU">{review.systemSpuCode || '--'}</Descriptions.Item>
@@ -755,9 +877,6 @@ function renderReviewBasicInfo(
       <Descriptions.Item label="审核时间">{review.reviewTime || '--'}</Descriptions.Item>
       <Descriptions.Item label="供货价区间">{formatPriceRange(review)}</Descriptions.Item>
       <Descriptions.Item label="仓库类型">{formatWarehouseKindLabel(review.warehouseSummary)}</Descriptions.Item>
-      <Descriptions.Item label="变化摘要" span={2}>
-        {review.diffSummary || '--'}
-      </Descriptions.Item>
       <Descriptions.Item label="审核原因" span={2}>
         {review.reviewReason || '--'}
       </Descriptions.Item>
@@ -768,6 +887,385 @@ function renderReviewBasicInfo(
 function renderEnumTag(valueEnum: Record<string, ValueEnumItem>, value?: string) {
   const item = value ? valueEnum[value] : undefined;
   return <Tag color={item?.status}>{item?.text || (value ? '未知' : '--')}</Tag>;
+}
+
+function buildReviewListColumns(
+  reviewTypeTab: string,
+  context: ReviewListColumnContext,
+): ProColumns<API.ProductReview.Review>[] {
+  const {
+    canQueryProductReview,
+    canApproveProductReview,
+    canRejectProductReview,
+    reviewStatusValueEnum,
+    reviewTypeValueEnum,
+    openDetail,
+    openAction,
+  } = context;
+
+  const searchColumns: ProColumns<API.ProductReview.Review>[] = [
+    {
+      title: '关键词',
+      dataIndex: 'keyword',
+      hideInTable: true,
+      fieldProps: { placeholder: '审核单号 / 系统SPU / 标题 / 卖家' },
+    },
+    {
+      title: '提交时间',
+      dataIndex: 'submitTimeRange',
+      valueType: 'dateRange',
+      hideInTable: true,
+      search: {
+        transform: (value: string[]) => ({
+          'params[beginTime]': value?.[0],
+          'params[endTime]': value?.[1],
+        }),
+      },
+    },
+  ];
+
+  const productImageColumn: ProColumns<API.ProductReview.Review> = {
+    title: '商品图',
+    dataIndex: 'mainImageUrlAfter',
+    search: false,
+    width: 72,
+    render: (_, record) =>
+      record.mainImageUrlAfter ? (
+        <Image
+          width={44}
+          height={44}
+          src={resolveResourceUrl(record.mainImageUrlAfter)}
+          style={{ objectFit: 'cover' }}
+        />
+      ) : (
+        '--'
+      ),
+  };
+  const systemSpuColumn: ProColumns<API.ProductReview.Review> = {
+    title: '系统SPU',
+    dataIndex: 'systemSpuCode',
+    search: false,
+    width: 170,
+    render: (value) => value || '--',
+  };
+  const reviewTypeColumn: ProColumns<API.ProductReview.Review> = {
+    title: '审核类型',
+    dataIndex: 'reviewType',
+    search: false,
+    width: 120,
+    render: (_, record) => renderEnumTag(reviewTypeValueEnum, record.reviewType),
+  };
+  const productColumn: ProColumns<API.ProductReview.Review> = {
+    title: '商品',
+    dataIndex: 'productNameAfter',
+    width: 280,
+    search: false,
+    render: (_, record) => renderCompactProduct(record),
+  };
+  const categoryColumn: ProColumns<API.ProductReview.Review> = {
+    title: '类目',
+    dataIndex: 'categoryName',
+    search: false,
+    width: 140,
+    render: (_, record) => record.categoryName || '--',
+  };
+  const skuCountColumn: ProColumns<API.ProductReview.Review> = {
+    title: 'SKU数量',
+    dataIndex: 'skuCount',
+    search: false,
+    width: 90,
+    render: (_, record) => formatCount(resolveReviewSkuCount(record), '个'),
+  };
+  const supplyPriceRangeColumn: ProColumns<API.ProductReview.Review> = {
+    title: '供货价区间',
+    dataIndex: 'priceAfterMin',
+    search: false,
+    width: 150,
+    render: (_, record) => formatPriceRange(record),
+  };
+  const warehouseKindColumn: ProColumns<API.ProductReview.Review> = {
+    title: '仓库类型',
+    dataIndex: 'warehouseSummary',
+    search: false,
+    width: 110,
+    render: (_, record) => <Tag>{formatWarehouseKindLabel(record.warehouseSummary)}</Tag>,
+  };
+  const deliveryWarehouseColumn: ProColumns<API.ProductReview.Review> = {
+    title: '发货仓库',
+    dataIndex: 'listDisplayItems',
+    search: false,
+    width: 180,
+    render: (_, record) => getDisplayWarehouse(record),
+  };
+  const changedSkuColumn: ProColumns<API.ProductReview.Review> = {
+    title: reviewTypeTab === 'ADD_SKU' ? '新增SKU' : '变更SKU',
+    dataIndex: 'listDisplayItems',
+    search: false,
+    width: 170,
+    render: (_, record) => renderListLines(
+      getListDisplayItems(record),
+      renderSkuCodeLine,
+      record.reviewType === 'EDIT_PRICE' ? '未识别供货价变更' : '--',
+    ),
+  };
+  const specColumn: ProColumns<API.ProductReview.Review> = {
+    title: '规格',
+    dataIndex: 'listDisplayItems',
+    search: false,
+    width: 300,
+    render: (_, record) => renderListLines(getListDisplayItems(record), (item) => (
+      renderSummaryTextLines(item.afterSpecSummary || item.beforeSpecSummary)
+    )),
+  };
+  const skuSupplyPriceColumn: ProColumns<API.ProductReview.Review> = {
+    title: '供货价',
+    dataIndex: 'listDisplayItems',
+    search: false,
+    width: 140,
+    render: (_, record) => renderListLines(getListDisplayItems(record), (item) => (
+      formatListMoney(item.afterSupplyPrice, item.currencyCode || record.currencySummary)
+    )),
+  };
+  const beforeSupplyPriceColumn: ProColumns<API.ProductReview.Review> = {
+    title: '原供货价',
+    dataIndex: 'listDisplayItems',
+    search: false,
+    width: 140,
+    render: (_, record) => renderListLines(getListDisplayItems(record), (item) => (
+      formatListMoney(item.beforeSupplyPrice, item.currencyCode || record.currencySummary)
+    )),
+  };
+  const afterSupplyPriceColumn: ProColumns<API.ProductReview.Review> = {
+    title: '新供货价',
+    dataIndex: 'listDisplayItems',
+    search: false,
+    width: 170,
+    render: (_, record) => renderListLines(getListDisplayItems(record), (item) => renderAfterSupplyPrice({
+      ...item,
+      currencyCode: item.currencyCode || record.currencySummary,
+    })),
+  };
+  const currencyColumn: ProColumns<API.ProductReview.Review> = {
+    title: '币种',
+    dataIndex: 'currencySummary',
+    search: false,
+    width: 90,
+    render: (_, record) => renderListLines(getListDisplayItems(record), (item) => (
+      item.currencyCode || record.currencySummary || '--'
+    )),
+  };
+  const skuWarehouseColumn: ProColumns<API.ProductReview.Review> = {
+    title: '仓库',
+    dataIndex: 'listDisplayItems',
+    search: false,
+    width: 180,
+    render: (_, record) => renderListLines(getListDisplayItems(record), (item) => (
+      item.afterWarehouseSummary || item.beforeWarehouseSummary || formatWarehouseKindLabel(record.warehouseSummary)
+    )),
+  };
+  const changedFieldsColumn: ProColumns<API.ProductReview.Review> = {
+    title: '变更字段',
+    dataIndex: 'listChangedModules',
+    search: false,
+    width: 220,
+    render: (_, record) => (
+      record.reviewType === 'EDIT_PRODUCT_INFO'
+        ? renderModuleTags(record)
+        : renderTagLines(getListDisplayItems(record), (item) => renderChangedFieldTags(item.changedFieldNames))
+    ),
+  };
+  const changedModulesColumn: ProColumns<API.ProductReview.Review> = {
+    title: '变更模块',
+    dataIndex: 'listChangedModules',
+    search: false,
+    width: 180,
+    render: (_, record) => renderModuleTags(record),
+  };
+  const affectedSkuColumn: ProColumns<API.ProductReview.Review> = {
+    title: '影响SKU',
+    dataIndex: 'listDisplayItems',
+    search: false,
+    width: 170,
+    render: (_, record) => renderListLines(getListDisplayItems(record), renderSkuCodeLine),
+  };
+  const supplyPriceChangeColumn: ProColumns<API.ProductReview.Review> = {
+    title: '供货价变化',
+    dataIndex: 'listDisplayItems',
+    search: false,
+    width: 280,
+    render: (_, record) => {
+      const priceItems = getListDisplayItems(record).filter((item) => item.changedFieldNames?.includes('供货价'));
+      return renderListLines(priceItems, (item) => renderSupplyPriceTransition({
+        ...item,
+        currencyCode: item.currencyCode || record.currencySummary,
+      }));
+    },
+  };
+  const sellerColumn: ProColumns<API.ProductReview.Review> = {
+    title: '卖家',
+    dataIndex: 'sellerName',
+    width: 160,
+    search: false,
+    render: (_, record) => renderSeller(record),
+  };
+  const reviewStatusColumn: ProColumns<API.ProductReview.Review> = {
+    title: '审核状态',
+    dataIndex: 'reviewStatus',
+    valueType: 'select',
+    valueEnum: reviewStatusValueEnum,
+    fieldProps: SEARCHABLE_SELECT_PROPS,
+    width: 100,
+    render: (_, record) => renderEnumTag(reviewStatusValueEnum, record.reviewStatus),
+  };
+  const submitUserColumn: ProColumns<API.ProductReview.Review> = {
+    title: '提交人',
+    dataIndex: 'submitUserName',
+    search: false,
+    width: 110,
+  };
+  const submitTimeColumn: ProColumns<API.ProductReview.Review> = {
+    title: '提交时间',
+    dataIndex: 'submitTime',
+    search: false,
+    width: 170,
+  };
+  const reviewerColumn: ProColumns<API.ProductReview.Review> = {
+    title: '审核人',
+    dataIndex: 'reviewerName',
+    search: false,
+    width: 110,
+    render: (_, record) => record.reviewerName || '--',
+  };
+  const reviewTimeColumn: ProColumns<API.ProductReview.Review> = {
+    title: '审核时间',
+    dataIndex: 'reviewTime',
+    search: false,
+    width: 170,
+    render: (_, record) => record.reviewTime || '--',
+  };
+  const actionColumn: ProColumns<API.ProductReview.Review> = {
+    title: '操作',
+    valueType: 'option',
+    fixed: 'right',
+    width: 170,
+    render: (_, record) => {
+      const pending = record.reviewStatus === 'PENDING';
+      return [
+        <Button
+          key="detail"
+          type="link"
+          size="small"
+          hidden={!canQueryProductReview}
+          onClick={() => openDetail(record)}
+        >
+          详情
+        </Button>,
+        <Button
+          key="approve"
+          type="link"
+          size="small"
+          hidden={!pending || !canApproveProductReview}
+          onClick={() => openAction('APPROVE', record)}
+        >
+          通过
+        </Button>,
+        <Button
+          key="reject"
+          type="link"
+          danger
+          size="small"
+          hidden={!pending || !canRejectProductReview}
+          onClick={() => openAction('REJECT', record)}
+        >
+          驳回
+        </Button>,
+      ];
+    },
+  };
+
+  const baseColumns = [
+    productImageColumn,
+    systemSpuColumn,
+    ...(shouldShowReviewTypeColumn(reviewTypeTab) ? [reviewTypeColumn] : []),
+    productColumn,
+  ];
+  const commonTailColumns = [sellerColumn, reviewStatusColumn, submitUserColumn, submitTimeColumn, actionColumn];
+
+  if (reviewTypeTab === 'NEW_PRODUCT') {
+    return [
+      ...searchColumns,
+      ...baseColumns,
+      categoryColumn,
+      skuCountColumn,
+      supplyPriceRangeColumn,
+      warehouseKindColumn,
+      deliveryWarehouseColumn,
+      ...commonTailColumns,
+    ];
+  }
+  if (reviewTypeTab === 'ADD_SKU') {
+    return [
+      ...searchColumns,
+      ...baseColumns,
+      changedSkuColumn,
+      specColumn,
+      skuSupplyPriceColumn,
+      skuWarehouseColumn,
+      ...commonTailColumns,
+    ];
+  }
+  if (reviewTypeTab === 'EDIT_PRODUCT_INFO') {
+    return [
+      ...searchColumns,
+      ...baseColumns,
+      changedFieldsColumn,
+      warehouseKindColumn,
+      ...commonTailColumns,
+    ];
+  }
+  if (reviewTypeTab === 'EDIT_SKU_INFO') {
+    return [
+      ...searchColumns,
+      ...baseColumns,
+      changedSkuColumn,
+      changedFieldsColumn,
+      ...commonTailColumns,
+    ];
+  }
+  if (reviewTypeTab === 'EDIT_PRICE') {
+    return [
+      ...searchColumns,
+      ...baseColumns,
+      changedSkuColumn,
+      beforeSupplyPriceColumn,
+      afterSupplyPriceColumn,
+      currencyColumn,
+      ...commonTailColumns,
+    ];
+  }
+  if (reviewTypeTab === 'EDIT_MIXED') {
+    return [
+      ...searchColumns,
+      ...baseColumns,
+      changedModulesColumn,
+      affectedSkuColumn,
+      supplyPriceChangeColumn,
+      ...commonTailColumns,
+    ];
+  }
+
+  return [
+    ...searchColumns,
+    ...baseColumns,
+    sellerColumn,
+    warehouseKindColumn,
+    reviewStatusColumn,
+    submitUserColumn,
+    submitTimeColumn,
+    reviewerColumn,
+    reviewTimeColumn,
+    actionColumn,
+  ];
 }
 
 const ProductReviewPage = () => {
@@ -783,8 +1281,6 @@ const ProductReviewPage = () => {
     useState<Record<string, ValueEnumItem>>(DEFAULT_REVIEW_TYPE_ENUM);
   const [reviewStatusValueEnum, setReviewStatusValueEnum] =
     useState<Record<string, ValueEnumItem>>(DEFAULT_REVIEW_STATUS_ENUM);
-  const [riskLevelValueEnum, setRiskLevelValueEnum] =
-    useState<Record<string, ValueEnumItem>>(DEFAULT_RISK_LEVEL_ENUM);
   const [reviewTypePendingCounts, setReviewTypePendingCounts] = useState<Record<string, number>>({});
 
   const canListProductReview = access.hasPerms('review:productDistribution:list');
@@ -800,24 +1296,12 @@ const ProductReviewPage = () => {
       return;
     }
 
-    const countKeys = ['ALL', ...REVIEW_TYPE_ORDER];
-    const results = await Promise.all(
-      countKeys.map(async (key) => {
-        try {
-          const resp = await getProductReviewList({
-            pageNum: 1,
-            pageSize: 1,
-            reviewStatus: 'PENDING',
-            ...(key !== 'ALL' ? { reviewType: key } : {}),
-          });
-          return [key, resp.code === 200 ? resp.total || 0 : 0] as const;
-        } catch {
-          return [key, 0] as const;
-        }
-      }),
-    );
-
-    setReviewTypePendingCounts(Object.fromEntries(results));
+    try {
+      const resp = await getProductReviewPendingCounts();
+      setReviewTypePendingCounts(resp.code === 200 ? normalizeReviewTypePendingCounts(resp.data) : {});
+    } catch {
+      setReviewTypePendingCounts({});
+    }
   }, [canListProductReview]);
 
   useEffect(() => {
@@ -826,9 +1310,6 @@ const ProductReviewPage = () => {
     });
     getDictValueEnum('product_review_status').then((data) => {
       setReviewStatusValueEnum(normalizeValueEnum(data as Record<string, ValueEnumItem>, DEFAULT_REVIEW_STATUS_ENUM));
-    });
-    getDictValueEnum('product_review_risk_level').then((data) => {
-      setRiskLevelValueEnum(normalizeValueEnum(data as Record<string, ValueEnumItem>, DEFAULT_RISK_LEVEL_ENUM));
     });
   }, []);
 
@@ -872,7 +1353,30 @@ const ProductReviewPage = () => {
     }
   };
 
+  const canHandleReviewAction = (kind: ActionKind, record?: API.ProductReview.Review) => {
+    if (!record || record.reviewId == null) {
+      message.warning('缺少商品审核单');
+      return false;
+    }
+    if (record.reviewStatus !== 'PENDING') {
+      message.warning('当前审核单已处理');
+      return false;
+    }
+    if (kind === 'APPROVE' && !canApproveProductReview) {
+      message.warning('缺少商品审核通过权限');
+      return false;
+    }
+    if (kind === 'REJECT' && !canRejectProductReview) {
+      message.warning('缺少商品审核驳回权限');
+      return false;
+    }
+    return true;
+  };
+
   const openAction = (kind: ActionKind, record: API.ProductReview.Review) => {
+    if (!canHandleReviewAction(kind, record)) {
+      return;
+    }
     setActionState({ open: true, kind, review: record });
     actionForm.resetFields();
   };
@@ -883,6 +1387,9 @@ const ProductReviewPage = () => {
   };
 
   const submitAction = async () => {
+    if (!canHandleReviewAction(actionState.kind, actionState.review)) {
+      return;
+    }
     const reviewId = actionState.review?.reviewId;
     if (reviewId == null) {
       return;
@@ -898,6 +1405,8 @@ const ProductReviewPage = () => {
       );
       if (ok) {
         closeAction();
+        setDetailOpen(false);
+        setCurrentReview(undefined);
         reload();
         refreshReviewTypePendingCounts();
       }
@@ -906,191 +1415,15 @@ const ProductReviewPage = () => {
     }
   };
 
-  const columns: ProColumns<API.ProductReview.Review>[] = [
-    {
-      title: '关键词',
-      dataIndex: 'keyword',
-      hideInTable: true,
-      fieldProps: { placeholder: '审核单号 / SPU / 标题 / 卖家' },
-    },
-    {
-      title: '审核状态',
-      dataIndex: 'reviewStatus',
-      valueType: 'select',
-      valueEnum: reviewStatusValueEnum,
-      fieldProps: SEARCHABLE_SELECT_PROPS,
-      width: 100,
-      render: (_, record) => renderEnumTag(reviewStatusValueEnum, record.reviewStatus),
-    },
-    {
-      title: '提交端',
-      dataIndex: 'submitTerminal',
-      valueType: 'select',
-      valueEnum: TERMINAL_VALUE_ENUM,
-      fieldProps: SEARCHABLE_SELECT_PROPS,
-      width: 100,
-      render: (_, record) => valueEnumText(TERMINAL_VALUE_ENUM, record.submitTerminal),
-    },
-    {
-      title: '提交时间',
-      dataIndex: 'submitTimeRange',
-      valueType: 'dateRange',
-      hideInTable: true,
-      search: {
-        transform: (value: string[]) => ({
-          'params[beginTime]': value?.[0],
-          'params[endTime]': value?.[1],
-        }),
-      },
-    },
-    {
-      title: '商品图',
-      dataIndex: 'mainImageUrlAfter',
-      search: false,
-      width: 72,
-      render: (_, record) =>
-        record.mainImageUrlAfter ? (
-          <Image
-            width={44}
-            height={44}
-            src={resolveResourceUrl(record.mainImageUrlAfter)}
-            style={{ objectFit: 'cover' }}
-          />
-        ) : (
-          '--'
-        ),
-    },
-    {
-      title: '审核类型',
-      dataIndex: 'reviewType',
-      search: false,
-      width: 120,
-      render: (_, record) => renderEnumTag(reviewTypeValueEnum, record.reviewType),
-    },
-    {
-      title: '商品',
-      dataIndex: 'productNameAfter',
-      width: 320,
-      search: false,
-      render: (_, record) => (
-        <Space orientation="vertical" size={2}>
-          <Typography.Text strong>{record.productNameAfter || '--'}</Typography.Text>
-          <Typography.Text type="secondary">{record.systemSpuCode || '--'}</Typography.Text>
-          <Typography.Text type="secondary">{record.categoryName || '--'}</Typography.Text>
-        </Space>
-      ),
-    },
-    {
-      title: '卖家',
-      dataIndex: 'sellerName',
-      width: 180,
-      search: false,
-      render: (_, record) => (
-        <Space orientation="vertical" size={2}>
-          <span>{record.sellerName || '--'}</span>
-          <Typography.Text type="secondary">{record.sellerId ?? '--'}</Typography.Text>
-        </Space>
-      ),
-    },
-    {
-      title: '仓库类型',
-      dataIndex: 'warehouseSummary',
-      search: false,
-      width: 110,
-      render: (_, record) => <Tag>{formatWarehouseKindLabel(record.warehouseSummary)}</Tag>,
-    },
-    {
-      title: '审核重点',
-      dataIndex: 'reviewType',
-      search: false,
-      width: 330,
-      render: (_, record) => renderReviewFocus(record),
-    },
-    {
-      title: '风险',
-      dataIndex: 'riskLevel',
-      search: false,
-      width: 150,
-      render: (_, record) => (
-        <Space orientation="vertical" size={2}>
-          {renderEnumTag(riskLevelValueEnum, record.riskLevel)}
-          {record.riskSummary ? <Typography.Text type="secondary">{record.riskSummary}</Typography.Text> : null}
-        </Space>
-      ),
-    },
-    {
-      title: '变化摘要',
-      dataIndex: 'diffSummary',
-      search: false,
-      ellipsis: true,
-      width: 240,
-    },
-    {
-      title: '提交人',
-      dataIndex: 'submitUserName',
-      search: false,
-      width: 120,
-    },
-    {
-      title: '提交时间',
-      dataIndex: 'submitTime',
-      search: false,
-      width: 170,
-    },
-    {
-      title: '审核人',
-      dataIndex: 'reviewerName',
-      search: false,
-      width: 120,
-      render: (_, record) => record.reviewerName || '--',
-    },
-    {
-      title: '审核时间',
-      dataIndex: 'reviewTime',
-      search: false,
-      width: 170,
-      render: (_, record) => record.reviewTime || '--',
-    },
-    {
-      title: '操作',
-      valueType: 'option',
-      fixed: 'right',
-      width: 170,
-      render: (_, record) => {
-        const pending = record.reviewStatus === 'PENDING';
-        return [
-          <Button
-            key="detail"
-            type="link"
-            size="small"
-            hidden={!canQueryProductReview}
-            onClick={() => openDetail(record)}
-          >
-            详情
-          </Button>,
-          <Button
-            key="approve"
-            type="link"
-            size="small"
-            hidden={!pending || !canApproveProductReview}
-            onClick={() => openAction('APPROVE', record)}
-          >
-            通过
-          </Button>,
-          <Button
-            key="reject"
-            type="link"
-            danger
-            size="small"
-            hidden={!pending || !canRejectProductReview}
-            onClick={() => openAction('REJECT', record)}
-          >
-            驳回
-          </Button>,
-        ];
-      },
-    },
-  ];
+  const columns = buildReviewListColumns(reviewTypeTab, {
+    canQueryProductReview,
+    canApproveProductReview,
+    canRejectProductReview,
+    reviewStatusValueEnum,
+    reviewTypeValueEnum,
+    openDetail,
+    openAction,
+  });
 
   const itemColumns: ColumnsType<API.ProductReview.Item> = [
     {
@@ -1162,7 +1495,6 @@ const ProductReviewPage = () => {
             currentReview,
             reviewStatusValueEnum,
             reviewTypeValueEnum,
-            riskLevelValueEnum,
           )
         : null,
     },
@@ -1231,8 +1563,15 @@ const ProductReviewPage = () => {
         scroll={getProTableScroll(TABLE_SCROLL_X)}
         tableLayout="fixed"
         search={getPersistedProTableSearch({ labelWidth: 90, fieldCount: 4 }, 'product-review')}
+        form={{
+          initialValues: { reviewStatus: DEFAULT_PRODUCT_REVIEW_LIST_STATUS },
+        }}
         pagination={getProTablePagination(20)}
         params={{ reviewTypeTab }}
+        beforeSearchSubmit={(params) => ({
+          ...params,
+          reviewStatus: params.reviewStatus || DEFAULT_PRODUCT_REVIEW_LIST_STATUS,
+        })}
         request={async ({ current, pageSize, ...params }) => {
           if (!canListProductReview) {
             return { data: [], total: 0, success: false };
@@ -1241,6 +1580,8 @@ const ProductReviewPage = () => {
           delete (queryParams as Record<string, unknown>).reviewType;
           const resp = await getProductReviewList({
             ...queryParams,
+            reviewStatus:
+              (queryParams as Record<string, unknown>).reviewStatus || DEFAULT_PRODUCT_REVIEW_LIST_STATUS,
             ...(activeReviewTypeTab && activeReviewTypeTab !== 'ALL'
               ? { reviewType: activeReviewTypeTab }
               : {}),
@@ -1261,6 +1602,25 @@ const ProductReviewPage = () => {
         open={detailOpen}
         size={1280}
         onClose={() => setDetailOpen(false)}
+        footer={currentReview?.reviewStatus === 'PENDING' ? (
+          <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
+            <Button onClick={() => setDetailOpen(false)}>关闭</Button>
+            <Button
+              hidden={!canRejectProductReview}
+              danger
+              onClick={() => openAction('REJECT', currentReview)}
+            >
+              驳回
+            </Button>
+            <Button
+              hidden={!canApproveProductReview}
+              type="primary"
+              onClick={() => openAction('APPROVE', currentReview)}
+            >
+              通过审核
+            </Button>
+          </Space>
+        ) : null}
       >
         {currentReview ? (
           <Tabs items={detailTabs} />

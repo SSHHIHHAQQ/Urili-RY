@@ -38,6 +38,13 @@ public class AdminProductReviewController extends BaseController
         return getDataTable(list);
     }
 
+    @PreAuthorize("@ss.hasPermi('review:productDistribution:list')")
+    @GetMapping("/pending-counts")
+    public AjaxResult pendingCounts()
+    {
+        return success(productReviewService.selectPendingReviewTypeCounts());
+    }
+
     @PreAuthorize("@ss.hasPermi('review:productDistribution:query')")
     @GetMapping("/{reviewId}")
     public AjaxResult get(@PathVariable("reviewId") Long reviewId)

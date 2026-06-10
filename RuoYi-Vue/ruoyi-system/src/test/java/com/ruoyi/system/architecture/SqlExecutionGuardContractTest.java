@@ -189,9 +189,18 @@ public class SqlExecutionGuardContractTest
         assertGuard(backendRoot, "sql/20260609_product_code_pool_job.sql",
                 "@confirm_product_code_pool_job",
                 "APPLY_PRODUCT_CODE_POOL_JOB", violations);
+        assertGuard(backendRoot, "sql/20260610_terminal_portal_home_menu_seed.sql",
+                "@confirm_terminal_portal_home_menu_seed",
+                "APPLY_TERMINAL_PORTAL_HOME_MENU_SEED", violations);
+        assertGuard(backendRoot, "sql/20260610_terminal_owner_product_permission_cleanup.sql",
+                "@confirm_terminal_owner_product_permission_cleanup",
+                "CLEAN_TERMINAL_OWNER_PRODUCT_PERMISSION_GRANTS", violations);
         assertGuard(backendRoot, "sql/20260608_overseas_channel_carrier_menu_restructure.sql",
                 "@confirm_overseas_channel_carrier_menu_restructure",
                 "APPLY_OVERSEAS_CHANNEL_CARRIER_MENU_RESTRUCTURE", violations);
+        assertGuard(backendRoot, "sql/20260610_customer_logistics_channel_management.sql",
+                "@confirm_customer_logistics_channel_management",
+                "APPLY_CUSTOMER_LOGISTICS_CHANNEL_MANAGEMENT", violations);
         assertGuard(backendRoot, "sql/seller_buyer_management_seed.sql",
                 "@confirm_seller_buyer_management_seed",
                 "APPLY_SELLER_BUYER_MANAGEMENT_SEED", violations);
@@ -2117,12 +2126,12 @@ public class SqlExecutionGuardContractTest
         assertTerminalPermissionSeedMenuGuard(backendRoot.resolve("sql/20260604_portal_dept_role_list_permission_seed.sql"),
                 new String[] {"seller:dept:list", "seller:role:list"},
                 new String[] {"buyer:dept:list", "buyer:role:list"}, violations);
-        assertTerminalPermissionSeedMenuGuard(backendRoot.resolve("sql/20260604_portal_product_category_permission_seed.sql"),
+        assertTerminalPermissionSeedMenuOnlyGuard(backendRoot.resolve("sql/20260604_portal_product_category_permission_seed.sql"),
                 new String[] {"seller:product:category:list"},
                 new String[] {"buyer:product:category:list"}, violations);
-        assertTerminalPermissionSeedMenuGuard(backendRoot.resolve("sql/20260604_seller_product_schema_permission_seed.sql"),
+        assertTerminalPermissionSeedMenuOnlyGuard(backendRoot.resolve("sql/20260604_seller_product_schema_permission_seed.sql"),
                 new String[] {"seller:product:schema:query"}, new String[0], violations);
-        assertTerminalPermissionSeedMenuGuard(backendRoot.resolve("sql/20260604_buyer_product_schema_permission_seed.sql"),
+        assertTerminalPermissionSeedMenuOnlyGuard(backendRoot.resolve("sql/20260604_buyer_product_schema_permission_seed.sql"),
                 new String[0], new String[] {"buyer:product:schema:query"}, violations);
         assertTerminalPermissionSeedMenuGuard(backendRoot.resolve("sql/20260607_portal_self_audit_permission_seed.sql"),
                 new String[] {
@@ -2168,6 +2177,9 @@ public class SqlExecutionGuardContractTest
         assertSplitTerminalPermissionSeedPreflight(
                 backendRoot.resolve("sql/20260607_portal_self_audit_permission_seed.sql"),
                 true, true, violations);
+        assertSplitTerminalPermissionSeedPreflight(
+                backendRoot.resolve("sql/20260610_terminal_portal_home_menu_seed.sql"),
+                true, true, violations);
 
         if (!violations.isEmpty())
         {
@@ -2207,6 +2219,10 @@ public class SqlExecutionGuardContractTest
                 backendRoot.resolve("sql/20260607_portal_self_audit_permission_seed.sql"),
                 "assert_portal_self_audit_permission_seed_completed",
                 "insert into seller_menu", violations);
+        assertSplitTerminalPermissionSeedTransaction(
+                backendRoot.resolve("sql/20260610_terminal_portal_home_menu_seed.sql"),
+                "assert_terminal_portal_home_menu_seed_completed",
+                "insert into seller_menu", violations);
         String portalSelfAuditSource = Files.readString(
                 backendRoot.resolve("sql/20260607_portal_self_audit_permission_seed.sql"),
                 StandardCharsets.UTF_8);
@@ -2214,10 +2230,136 @@ public class SqlExecutionGuardContractTest
                 "seller owner roles self audit permission exact grant count mismatch");
         requireContains(violations, "20260607_portal_self_audit_permission_seed.sql", portalSelfAuditSource,
                 "buyer owner roles self audit permission exact grant count mismatch");
+        String portalHomeSource = Files.readString(
+                backendRoot.resolve("sql/20260610_terminal_portal_home_menu_seed.sql"),
+                StandardCharsets.UTF_8);
+        requireContains(violations, "20260610_terminal_portal_home_menu_seed.sql", portalHomeSource,
+                "seller owner roles portal home page menu exact grant count mismatch");
+        requireContains(violations, "20260610_terminal_portal_home_menu_seed.sql", portalHomeSource,
+                "buyer owner roles portal home page menu exact grant count mismatch");
 
         if (!violations.isEmpty())
         {
             fail("split terminal permission seeds must wrap DML and verify completion before commit:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    @Test
+    public void terminalPortalHomeMenuSeedMustGuardPageMenuSignaturesAndOwnerGrants()
+            throws IOException
+    {
+        Path backendRoot = findWorkspaceRoot().resolve("RuoYi-Vue");
+        Path seedSql = backendRoot.resolve("sql/20260610_terminal_portal_home_menu_seed.sql");
+        String source = Files.readString(seedSql, StandardCharsets.UTF_8);
+        String fileName = seedSql.getFileName().toString();
+        List<String> violations = new ArrayList<>();
+
+        for (String expected : new String[] {
+                "call assert_seller_menu_permission_slot('seller:portal:home', 0, 'C', '/seller/portal', 'Seller/Portal/index', 'SellerPortalHome'",
+                "call assert_buyer_menu_permission_slot('buyer:portal:home', 0, 'C', '/buyer/portal', 'Buyer/Portal/index', 'BuyerPortalHome'",
+                "seller:portal:home menu slot is occupied by another signature",
+                "buyer:portal:home menu slot is occupied by another signature",
+                "seller portal home page menu was not created with expected signature",
+                "buyer portal home page menu was not created with expected signature",
+                "seller owner roles must have portal home page menu",
+                "buyer owner roles must have portal home page menu",
+                "seller owner roles portal home page menu exact grant count mismatch",
+                "buyer owner roles portal home page menu exact grant count mismatch",
+                "and m.parent_id = 0",
+                "and coalesce(m.menu_type, '') = 'C'",
+                "and coalesce(m.path, '') = '/seller/portal'",
+                "and coalesce(m.component, '') = 'Seller/Portal/index'",
+                "and coalesce(m.route_name, '') = 'SellerPortalHome'",
+                "and coalesce(m.path, '') = '/buyer/portal'",
+                "and coalesce(m.component, '') = 'Buyer/Portal/index'",
+                "and coalesce(m.route_name, '') = 'BuyerPortalHome'"
+        })
+        {
+            requireContains(violations, fileName, source, expected);
+        }
+
+        assertAppearsBefore(violations, fileName, source,
+                "call assert_seller_menu_permission_slot('seller:portal:home'", "insert into seller_menu");
+        assertAppearsBefore(violations, fileName, source,
+                "call assert_buyer_menu_permission_slot('buyer:portal:home'", "insert into buyer_menu");
+        assertAppearsBefore(violations, fileName, source,
+                "insert into seller_menu", "insert into seller_role_menu");
+        assertAppearsBefore(violations, fileName, source,
+                "insert into buyer_menu", "insert into buyer_role_menu");
+        assertAppearsBefore(violations, fileName, source,
+                "call assert_terminal_portal_home_menu_seed_completed();", "commit;");
+
+        if (!violations.isEmpty())
+        {
+            fail("terminal portal home menu seed must guard C page signatures and exact owner grants:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    @Test
+    public void terminalOwnerProductPermissionCleanupMustLockExactRoleMenuTargetsAndKeepMenus()
+            throws IOException
+    {
+        Path backendRoot = findWorkspaceRoot().resolve("RuoYi-Vue");
+        Path cleanupSql = backendRoot.resolve("sql/20260610_terminal_owner_product_permission_cleanup.sql");
+        String source = Files.readString(cleanupSql, StandardCharsets.UTF_8);
+        String fileName = cleanupSql.getFileName().toString();
+        List<String> violations = new ArrayList<>();
+
+        for (String expected : new String[] {
+                "@terminal_owner_product_cleanup_expected_seller_count",
+                "@terminal_owner_product_cleanup_expected_seller_signature",
+                "@terminal_owner_product_cleanup_expected_buyer_count",
+                "@terminal_owner_product_cleanup_expected_buyer_signature",
+                "set @terminal_owner_product_cleanup_expected_seller_count after previewing exact seller owner product grants",
+                "set @terminal_owner_product_cleanup_expected_seller_signature after previewing exact seller owner product grants",
+                "set @terminal_owner_product_cleanup_expected_buyer_count after previewing exact buyer owner product grants",
+                "set @terminal_owner_product_cleanup_expected_buyer_signature after previewing exact buyer owner product grants",
+                "create procedure assert_seller_owner_product_permission_cleanup_targets",
+                "create procedure assert_buyer_owner_product_permission_cleanup_targets",
+                "seller owner product grant exact target count mismatch",
+                "seller owner product grant exact target signature mismatch",
+                "buyer owner product grant exact target count mismatch",
+                "buyer owner product grant exact target signature mismatch",
+                "seller owner product grants cleanup has remaining rows",
+                "buyer owner product grants cleanup has remaining rows",
+                "seller product permission menu definitions must remain after cleanup",
+                "buyer product permission menu definitions must remain after cleanup",
+                "delete rm\nfrom seller_role_menu rm",
+                "delete rm\nfrom buyer_role_menu rm",
+                "m.perms like 'seller:product:%'",
+                "m.perms like 'buyer:product:%'",
+                "r.role_key = 'owner'",
+                "r.status = '0'",
+                "r.del_flag = '0'",
+                "sha2(coalesce(group_concat(",
+                "call assert_terminal_owner_product_permission_cleanup_confirmed();",
+                "call assert_terminal_owner_product_permission_cleanup_completed();"
+        })
+        {
+            requireContains(violations, fileName, source, expected);
+        }
+
+        requireNotContains(violations, fileName, source, "delete from seller_menu");
+        requireNotContains(violations, fileName, source, "delete from buyer_menu");
+        assertAppearsBefore(violations, fileName, source,
+                "call assert_seller_owner_product_permission_cleanup_targets();", "start transaction;");
+        assertAppearsBefore(violations, fileName, source,
+                "call assert_buyer_owner_product_permission_cleanup_targets();", "start transaction;");
+        assertAppearsBefore(violations, fileName, source,
+                "start transaction;", "delete rm\nfrom seller_role_menu rm");
+        assertAppearsBefore(violations, fileName, source,
+                "start transaction;", "delete rm\nfrom buyer_role_menu rm");
+        assertAppearsBefore(violations, fileName, source,
+                "delete rm\nfrom buyer_role_menu rm",
+                "call assert_terminal_owner_product_permission_cleanup_completed();");
+        assertAppearsBefore(violations, fileName, source,
+                "call assert_terminal_owner_product_permission_cleanup_completed();", "commit;");
+
+        if (!violations.isEmpty())
+        {
+            fail("terminal owner product permission cleanup must lock exact role_menu targets and keep menus:\n"
                     + String.join("\n", violations));
         }
     }
@@ -5350,6 +5492,22 @@ public class SqlExecutionGuardContractTest
         }
     }
 
+    private void assertTerminalPermissionSeedMenuOnlyGuard(Path sqlFile, String[] sellerPerms, String[] buyerPerms,
+            List<String> violations) throws IOException
+    {
+        String source = Files.readString(sqlFile, StandardCharsets.UTF_8);
+        String fileName = sqlFile.getFileName().toString();
+
+        if (sellerPerms.length > 0)
+        {
+            assertTerminalPermissionSeedMenuOnlyGuard(source, fileName, "seller", sellerPerms, violations);
+        }
+        if (buyerPerms.length > 0)
+        {
+            assertTerminalPermissionSeedMenuOnlyGuard(source, fileName, "buyer", buyerPerms, violations);
+        }
+    }
+
     private void assertSplitTerminalPermissionSeedPreflight(Path sqlFile, boolean expectSeller, boolean expectBuyer,
             List<String> violations) throws IOException
     {
@@ -5383,8 +5541,16 @@ public class SqlExecutionGuardContractTest
         {
             requireContains(violations, fileName, source, expected);
         }
-        assertAppearsBefore(violations, fileName, source,
-                "call assert_terminal_menu_range_ready();", "insert into " + roleMenuTable);
+        if (source.contains("insert into " + roleMenuTable))
+        {
+            assertAppearsBefore(violations, fileName, source,
+                    "call assert_terminal_menu_range_ready();", "insert into " + roleMenuTable);
+        }
+        else
+        {
+            assertAppearsBefore(violations, fileName, source,
+                    "call assert_terminal_menu_range_ready();", "insert into " + menuTable);
+        }
     }
 
     private void assertSplitTerminalPermissionSeedTransaction(Path sqlFile, String completedProcedure,
@@ -5481,6 +5647,28 @@ public class SqlExecutionGuardContractTest
                 "call " + assertProcedure + "('" + perms[0] + "'", "insert into " + menuTable);
         assertAppearsBefore(violations, fileName, source,
                 "call " + assertProcedure + "('" + perms[0] + "'", "insert into " + roleMenuTable);
+    }
+
+    private void assertTerminalPermissionSeedMenuOnlyGuard(String source, String fileName, String terminal,
+            String[] perms, List<String> violations)
+    {
+        String menuTable = terminal + "_menu";
+        String roleMenuTable = terminal + "_role_menu";
+        String assertProcedure = "assert_" + terminal + "_menu_permission_slot";
+
+        requireContains(violations, fileName, source, "create procedure " + assertProcedure);
+        for (String perm : perms)
+        {
+            requireContains(violations, fileName, source,
+                    "call " + assertProcedure + "('" + perm + "', 0, 'F', '', null, ''");
+            requireContains(violations, fileName, source, perm + " menu slot is occupied by another signature");
+        }
+        requireContains(violations, fileName, source, "insert into " + menuTable);
+        requireNotContains(violations, fileName, source, "insert into " + roleMenuTable);
+        requireNotContains(violations, fileName, source, "owner roles must have product");
+        requireContains(violations, fileName, source, "Do not default-grant");
+        assertAppearsBefore(violations, fileName, source,
+                "call " + assertProcedure + "('" + perms[0] + "'", "insert into " + menuTable);
     }
 
     private void assertAutoDiscoveredTerminalMenuSeed(String source, String fileName, String terminal,

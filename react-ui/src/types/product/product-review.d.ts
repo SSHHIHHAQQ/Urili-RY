@@ -43,6 +43,27 @@ declare namespace API.ProductReview {
     remark?: string;
   }
 
+  export interface ListDisplayItem {
+    itemId?: number;
+    skuId?: number;
+    systemSkuCode?: string;
+    sellerSkuCode?: string;
+    skuCode?: string;
+    changeType?: string;
+    beforeSupplyPrice?: number;
+    afterSupplyPrice?: number;
+    currencyCode?: string;
+    priceDirection?: string;
+    beforeSpecSummary?: string;
+    afterSpecSummary?: string;
+    beforeDimensionSummary?: string;
+    afterDimensionSummary?: string;
+    beforeWarehouseSummary?: string;
+    afterWarehouseSummary?: string;
+    changedFieldNames?: string[];
+    changeSummary?: string;
+  }
+
   export interface Review {
     reviewId?: number;
     reviewNo?: string;
@@ -87,6 +108,8 @@ declare namespace API.ProductReview {
     items?: Item[];
     snapshots?: Snapshot[];
     logs?: OperationLog[];
+    listDisplayItems?: ListDisplayItem[];
+    listChangedModules?: string[];
     createBy?: string;
     createTime?: string;
     updateBy?: string;
@@ -105,6 +128,12 @@ declare namespace API.ProductReview {
     code: number;
     msg: string;
     data: Review;
+  }
+
+  export interface PendingCountResult {
+    code: number;
+    msg: string;
+    data: Record<string, number>;
   }
 
   export interface LogListResult {

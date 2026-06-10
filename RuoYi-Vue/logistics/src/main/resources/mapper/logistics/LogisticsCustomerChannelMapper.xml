@@ -1,0 +1,241 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.logistics.mapper.LogisticsCustomerChannelMapper">
+
+    <resultMap type="LogisticsCustomerChannel" id="CustomerChannelResult">
+        <id     property="customerChannelCode"           column="customer_channel_code"            />
+        <result property="customerChannelName"           column="customer_channel_name"            />
+        <result property="channelType"                   column="channel_type"                     />
+        <result property="standardCarrierCode"           column="standard_carrier_code"            />
+        <result property="signatureServices"             column="signature_services"               />
+        <result property="labelUploadRequired"           column="label_upload_required"            />
+        <result property="platformLabelFetch"            column="platform_label_fetch"             />
+        <result property="customerLabelUploadSupported"  column="customer_label_upload_supported"  />
+        <result property="buyerScopeMode"                column="buyer_scope_mode"                 />
+        <result property="status"                        column="status"                           />
+        <result property="displayOrder"                  column="display_order"                    />
+        <result property="systemMappingCount"            column="system_mapping_count"             />
+        <result property="buyerScopeCount"               column="buyer_scope_count"                />
+        <result property="systemChannelSummary"          column="system_channel_summary"           />
+        <result property="buyerScopeSummary"             column="buyer_scope_summary"              />
+        <result property="createBy"                      column="create_by"                        />
+        <result property="createTime"                    column="create_time"                      />
+        <result property="updateBy"                      column="update_by"                        />
+        <result property="updateTime"                    column="update_time"                      />
+        <result property="remark"                        column="remark"                           />
+    </resultMap>
+
+    <resultMap type="LogisticsCustomerChannelSystemMapping" id="SystemMappingResult">
+        <id     property="mappingId"                    column="mapping_id"                      />
+        <result property="customerChannelCode"          column="customer_channel_code"           />
+        <result property="systemChannelCode"            column="system_channel_code"             />
+        <result property="systemChannelNameSnapshot"    column="system_channel_name_snapshot"    />
+        <result property="standardCarrierCodeSnapshot"  column="standard_carrier_code_snapshot"  />
+        <result property="signatureServicesSnapshot"    column="signature_services_snapshot"     />
+        <result property="status"                       column="status"                          />
+        <result property="displayOrder"                 column="display_order"                   />
+        <result property="createBy"                     column="create_by"                       />
+        <result property="createTime"                   column="create_time"                     />
+        <result property="updateBy"                     column="update_by"                       />
+        <result property="updateTime"                   column="update_time"                     />
+        <result property="remark"                       column="remark"                          />
+    </resultMap>
+
+    <resultMap type="LogisticsCustomerChannelBuyerScope" id="BuyerScopeResult">
+        <id     property="scopeId"                 column="scope_id"                   />
+        <result property="customerChannelCode"     column="customer_channel_code"      />
+        <result property="buyerId"                 column="buyer_id"                   />
+        <result property="buyerCodeSnapshot"       column="buyer_code_snapshot"        />
+        <result property="buyerNameSnapshot"       column="buyer_name_snapshot"        />
+        <result property="buyerShortNameSnapshot"  column="buyer_short_name_snapshot"  />
+        <result property="createBy"                column="create_by"                  />
+        <result property="createTime"              column="create_time"                />
+        <result property="remark"                  column="remark"                     />
+    </resultMap>
+
+    <sql id="CustomerChannelSummarySelect">
+        select cc.*,
+               coalesce(sm.system_mapping_count, 0) as system_mapping_count,
+               coalesce(bs.buyer_scope_count, 0) as buyer_scope_count,
+               coalesce(sm.system_channel_summary, '') as system_channel_summary,
+               case
+                 when cc.buyer_scope_mode = 'ALL' then '全部买家'
+                 when cc.buyer_scope_mode = 'INCLUDE' then concat('可用名单：', coalesce(bs.buyer_scope_summary, ''))
+                 when cc.buyer_scope_mode = 'EXCLUDE' then concat('不可用名单：', coalesce(bs.buyer_scope_summary, ''))
+                 else ''
+               end as buyer_scope_summary
+        from logistics_customer_channel cc
+        left join (
+          select customer_channel_code,
+                 count(1) as system_mapping_count,
+                 group_concat(system_channel_name_snapshot order by display_order asc, system_channel_name_snapshot separator '、') as system_channel_summary
+          from logistics_customer_channel_system_mapping
+          group by customer_channel_code
+        ) sm on sm.customer_channel_code = cc.customer_channel_code
+        left join (
+          select customer_channel_code,
+                 count(1) as buyer_scope_count,
+                 group_concat(buyer_name_snapshot order by buyer_name_snapshot separator '、') as buyer_scope_summary
+          from logistics_customer_channel_buyer_scope
+          group by customer_channel_code
+        ) bs on bs.customer_channel_code = cc.customer_channel_code
+    </sql>
+
+    <select id="selectCustomerChannelList" parameterType="LogisticsCustomerChannel" resultMap="CustomerChannelResult">
+        <include refid="CustomerChannelSummarySelect" />
+        where 1 = 1
+        <if test="customerChannelCode != null and customerChannelCode != ''">
+            and cc.customer_channel_code like concat('%', #{customerChannelCode}, '%')
+        </if>
+        <if test="customerChannelName != null and customerChannelName != ''">
+            and cc.customer_channel_name like concat('%', #{customerChannelName}, '%')
+        </if>
+        <if test="channelType != null and channelType != ''">
+            and cc.channel_type = #{channelType}
+        </if>
+        <if test="standardCarrierCode != null and standardCarrierCode != ''">
+            and cc.standard_carrier_code = #{standardCarrierCode}
+        </if>
+        <if test="status != null and status != ''">
+            and cc.status = #{status}
+        </if>
+        order by cc.display_order asc, cc.customer_channel_code asc
+    </select>
+
+    <select id="selectCustomerChannelByCode" resultMap="CustomerChannelResult">
+        <include refid="CustomerChannelSummarySelect" />
+        where cc.customer_channel_code = #{customerChannelCode}
+        limit 1
+    </select>
+
+    <select id="selectMaxDisplayOrder" resultType="int">
+        select max(display_order)
+        from logistics_customer_channel
+    </select>
+
+    <select id="selectMaxSystemMappingDisplayOrder" resultType="int">
+        select max(display_order)
+        from logistics_customer_channel_system_mapping
+        where customer_channel_code = #{customerChannelCode}
+    </select>
+
+    <insert id="insertCustomerChannel" parameterType="LogisticsCustomerChannel">
+        insert into logistics_customer_channel(
+            customer_channel_code, customer_channel_name, channel_type, standard_carrier_code, signature_services,
+            label_upload_required, platform_label_fetch, customer_label_upload_supported, buyer_scope_mode, status,
+            display_order, create_by, create_time, update_by, update_time, remark
+        ) values (
+            #{customerChannelCode}, #{customerChannelName}, #{channelType}, #{standardCarrierCode}, #{signatureServices},
+            #{labelUploadRequired}, #{platformLabelFetch}, #{customerLabelUploadSupported}, #{buyerScopeMode}, #{status},
+            #{displayOrder}, #{createBy}, sysdate(), #{updateBy}, sysdate(), #{remark}
+        )
+    </insert>
+
+    <update id="updateCustomerChannel" parameterType="LogisticsCustomerChannel">
+        update logistics_customer_channel
+        set customer_channel_name = #{customerChannelName},
+            channel_type = #{channelType},
+            standard_carrier_code = #{standardCarrierCode},
+            signature_services = #{signatureServices},
+            label_upload_required = #{labelUploadRequired},
+            platform_label_fetch = #{platformLabelFetch},
+            customer_label_upload_supported = #{customerLabelUploadSupported},
+            status = #{status},
+            display_order = #{displayOrder},
+            update_by = #{updateBy},
+            update_time = sysdate(),
+            remark = #{remark}
+        where customer_channel_code = #{customerChannelCode}
+    </update>
+
+    <update id="updateCustomerChannelStatus">
+        update logistics_customer_channel
+        set status = #{status},
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where customer_channel_code = #{customerChannelCode}
+    </update>
+
+    <update id="updateBuyerScopeMode">
+        update logistics_customer_channel
+        set buyer_scope_mode = #{buyerScopeMode},
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where customer_channel_code = #{customerChannelCode}
+    </update>
+
+    <select id="selectSystemMappingList" resultMap="SystemMappingResult">
+        select *
+        from logistics_customer_channel_system_mapping
+        where customer_channel_code = #{customerChannelCode}
+        order by display_order asc, mapping_id desc
+    </select>
+
+    <select id="selectSystemMappingById" resultMap="SystemMappingResult">
+        select *
+        from logistics_customer_channel_system_mapping
+        where customer_channel_code = #{customerChannelCode}
+          and mapping_id = #{mappingId}
+        limit 1
+    </select>
+
+    <insert id="insertSystemMapping" parameterType="LogisticsCustomerChannelSystemMapping" useGeneratedKeys="true"
+            keyProperty="mappingId" keyColumn="mapping_id">
+        insert into logistics_customer_channel_system_mapping(
+            customer_channel_code, system_channel_code, system_channel_name_snapshot,
+            standard_carrier_code_snapshot, signature_services_snapshot, status, display_order,
+            create_by, create_time, remark
+        ) values (
+            #{customerChannelCode}, #{systemChannelCode}, #{systemChannelNameSnapshot},
+            #{standardCarrierCodeSnapshot}, #{signatureServicesSnapshot}, #{status}, #{displayOrder},
+            #{createBy}, sysdate(), #{remark}
+        )
+    </insert>
+
+    <update id="updateSystemMapping" parameterType="LogisticsCustomerChannelSystemMapping">
+        update logistics_customer_channel_system_mapping
+        set system_channel_code = #{systemChannelCode},
+            system_channel_name_snapshot = #{systemChannelNameSnapshot},
+            standard_carrier_code_snapshot = #{standardCarrierCodeSnapshot},
+            signature_services_snapshot = #{signatureServicesSnapshot},
+            status = #{status},
+            display_order = #{displayOrder},
+            update_by = #{updateBy},
+            update_time = sysdate(),
+            remark = #{remark}
+        where customer_channel_code = #{customerChannelCode}
+          and mapping_id = #{mappingId}
+    </update>
+
+    <delete id="deleteSystemMapping">
+        delete from logistics_customer_channel_system_mapping
+        where customer_channel_code = #{customerChannelCode}
+          and mapping_id = #{mappingId}
+    </delete>
+
+    <select id="selectBuyerScopeList" resultMap="BuyerScopeResult">
+        select *
+        from logistics_customer_channel_buyer_scope
+        where customer_channel_code = #{customerChannelCode}
+        order by buyer_name_snapshot asc, scope_id desc
+    </select>
+
+    <delete id="deleteBuyerScope">
+        delete from logistics_customer_channel_buyer_scope
+        where customer_channel_code = #{customerChannelCode}
+    </delete>
+
+    <insert id="insertBuyerScope" parameterType="LogisticsCustomerChannelBuyerScope" useGeneratedKeys="true"
+            keyProperty="scopeId" keyColumn="scope_id">
+        insert into logistics_customer_channel_buyer_scope(
+            customer_channel_code, buyer_id, buyer_code_snapshot, buyer_name_snapshot, buyer_short_name_snapshot,
+            create_by, create_time, remark
+        ) values (
+            #{customerChannelCode}, #{buyerId}, #{buyerCodeSnapshot}, #{buyerNameSnapshot}, #{buyerShortNameSnapshot},
+            #{createBy}, sysdate(), #{remark}
+        )
+    </insert>
+
+</mapper>

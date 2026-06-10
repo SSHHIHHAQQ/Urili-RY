@@ -51,15 +51,37 @@ describe('portal product schema preview terminal binding', () => {
     );
   });
 
-  it('passes query permissions into portal product detail actions', () => {
+  it('keeps portal home scoped to the minimal account/dept/role frame', () => {
     const homeSource = read('src/pages/Portal/Home/index.tsx');
+
+    for (const forbiddenToken of [
+      "import SellerProductSchemaPreview from './SellerProductSchemaPreview';",
+      "import BuyerProductSchemaPreview from './BuyerProductSchemaPreview';",
+      "import SellerOwnDistributionProductList from './SellerOwnDistributionProductList';",
+      "import BuyerDistributionProductList from './BuyerDistributionProductList';",
+      '<SellerProductSchemaPreview',
+      '<BuyerProductSchemaPreview',
+      '<SellerOwnDistributionProductList',
+      '<BuyerDistributionProductList',
+      'canViewProductSchema',
+      'canViewDistributionProducts',
+      'canQueryDistributionProducts',
+      "portalPermission(terminal, 'product:category:list')",
+      "portalPermission(terminal, 'product:schema:query')",
+      "portalPermission(terminal, 'product:distribution:list')",
+      "portalPermission(terminal, 'product:distribution:query')",
+    ]) {
+      expect(homeSource).not.toContain(forbiddenToken);
+    }
+
+    expect(homeSource).toContain("portalPermission(terminal, 'account:list')");
+    expect(homeSource).toContain("portalPermission(terminal, 'dept:list')");
+    expect(homeSource).toContain("portalPermission(terminal, 'role:list')");
+  });
+
+  it('keeps portal product detail actions fail-closed in detached reuse widgets', () => {
     const sellerSource = read('src/pages/Portal/Home/SellerOwnDistributionProductList.tsx');
     const buyerSource = read('src/pages/Portal/Home/BuyerDistributionProductList.tsx');
-
-    expect(homeSource).toContain('canQueryDistributionProducts');
-    expect(homeSource).toContain("portalPermission(terminal, 'product:distribution:query')");
-    expect(homeSource).toContain('<SellerOwnDistributionProductList canQuery={canQueryDistributionProducts} />');
-    expect(homeSource).toContain('<BuyerDistributionProductList canQuery={canQueryDistributionProducts} />');
 
     for (const source of [sellerSource, buyerSource]) {
       expect(source).toContain('canQuery?: boolean');
@@ -87,24 +109,4 @@ describe('portal product schema preview terminal binding', () => {
     expect(buyerTypeBlock).not.toMatch(/\bsupplyPrice\w*\b/);
   });
 
-  it('renders schema previews only in their matching portal terminal branches', () => {
-    const source = read('src/pages/Portal/Home/index.tsx');
-    const sellerIndex = source.indexOf('<SellerProductSchemaPreview');
-    const buyerIndex = source.indexOf('<BuyerProductSchemaPreview');
-
-    expect(source).toContain("import SellerProductSchemaPreview from './SellerProductSchemaPreview';");
-    expect(source).toContain("import BuyerProductSchemaPreview from './BuyerProductSchemaPreview';");
-    expect(sellerIndex).toBeGreaterThanOrEqual(0);
-    expect(buyerIndex).toBeGreaterThanOrEqual(0);
-
-    const sellerBranchIndex = source.lastIndexOf("terminal === 'seller'", sellerIndex);
-    const sellerBeforeBuyerBranchIndex = source.lastIndexOf("terminal === 'buyer'", sellerIndex);
-    expect(sellerBranchIndex).toBeGreaterThanOrEqual(0);
-    expect(sellerBeforeBuyerBranchIndex).toBeLessThan(sellerBranchIndex);
-
-    const buyerBranchIndex = source.lastIndexOf("terminal === 'buyer'", buyerIndex);
-    const buyerBeforeSellerBranchIndex = source.lastIndexOf("terminal === 'seller'", buyerIndex);
-    expect(buyerBranchIndex).toBeGreaterThanOrEqual(0);
-    expect(buyerBeforeSellerBranchIndex).toBeLessThan(buyerBranchIndex);
-  });
 });

@@ -21,10 +21,10 @@ export const statusTag = (value?: string) => {
       : value === 'SYNCING'
         ? 'blue'
         : value === 'FAILED' || value === 'INVALID'
-          ? 'red'
-          : value === 'MISSING' || value === 'PARTIAL'
-            ? 'orange'
-            : 'default';
+        ? 'red'
+        : value === 'MISSING' || value === 'PARTIAL' || value === 'PENDING'
+          ? 'orange'
+          : 'default';
   return (
     <Tag color={color}>
       {connectionStatusText[value || ''] ||

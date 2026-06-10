@@ -105,3 +105,10 @@ export const requestOperationText: Record<string, string> = {
   TASK_SKU_DIMENSION_SYNC: 'SKU仓库尺寸重量同步任务',
   TASK_INVENTORY_SYNC: 'SKU库存同步任务',
 };
+
+export const requestResultText: Record<string, string> = {
+  SUCCESS: '成功',
+  FAILURE: '失败',
+  FAILED: '失败',
+  ERROR: '异常',
+};

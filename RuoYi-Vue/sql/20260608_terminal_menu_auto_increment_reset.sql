@@ -3,7 +3,7 @@
 -- Run after 20260607_terminal_menu_id_range_isolation.sql has moved low IDs into final terminal ranges.
 
 set names utf8mb4;
-set session group_concat_max_len = greatest(@@session.group_concat_max_len, 1048576);
+set session group_concat_max_len = 1048576;
 set @confirm_terminal_menu_auto_increment_reset := coalesce(@confirm_terminal_menu_auto_increment_reset, '');
 set @terminal_menu_auto_increment_seller_expected_count :=
     coalesce(@terminal_menu_auto_increment_seller_expected_count, '');
@@ -291,7 +291,15 @@ begin
   where table_schema = database()
     and table_name = p_table;
 
-  if v_actual is null or v_actual <> v_expected then
+  if v_actual is null or v_actual >= p_ceiling_exclusive then
+    set @terminal_menu_auto_increment_error = concat(
+      p_table,
+      ' auto_increment metadata is outside reserved terminal menu ID range'
+    );
+    signal sqlstate '45000' set message_text = @terminal_menu_auto_increment_error;
+  end if;
+
+  if v_actual > v_expected then
     set @terminal_menu_auto_increment_error = concat(
       p_table,
       ' auto_increment post-assert mismatch'

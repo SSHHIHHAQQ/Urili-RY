@@ -19,8 +19,14 @@ public class RouterVoPermissionContractTest
         Path routerVoFile = backendRoot.resolve("ruoyi-system/src/main/java/com/ruoyi/system/domain/vo/RouterVo.java");
         Path sysMenuServiceFile = backendRoot.resolve(
                 "ruoyi-system/src/main/java/com/ruoyi/system/service/impl/SysMenuServiceImpl.java");
+        Path sellerPortalControllerFile = backendRoot.resolve(
+                "seller/src/main/java/com/ruoyi/seller/controller/SellerPortalController.java");
+        Path buyerPortalControllerFile = backendRoot.resolve(
+                "buyer/src/main/java/com/ruoyi/buyer/controller/BuyerPortalController.java");
         String routerVoSource = Files.readString(routerVoFile, StandardCharsets.UTF_8);
         String sysMenuServiceSource = Files.readString(sysMenuServiceFile, StandardCharsets.UTF_8);
+        String sellerPortalControllerSource = Files.readString(sellerPortalControllerFile, StandardCharsets.UTF_8);
+        String buyerPortalControllerSource = Files.readString(buyerPortalControllerFile, StandardCharsets.UTF_8);
         List<String> violations = new ArrayList<>();
 
         requireContains(violations, routerVoFile, routerVoSource, "private String perms;");
@@ -34,6 +40,10 @@ public class RouterVoPermissionContractTest
             violations.add(backendRoot.relativize(sysMenuServiceFile)
                     + " must copy menu perms into both frame and inner-link child routes");
         }
+        requireContains(violations, sellerPortalControllerFile, sellerPortalControllerSource,
+                "PortalPermissionSupport.buildRouters(permissionService.selectPortalMenuTree(session))");
+        requireContains(violations, buyerPortalControllerFile, buyerPortalControllerSource,
+                "PortalPermissionSupport.buildRouters(permissionService.selectPortalMenuTree(session))");
 
         if (!violations.isEmpty())
         {

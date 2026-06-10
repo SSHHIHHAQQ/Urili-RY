@@ -10,9 +10,10 @@
 - P1：发现 4 个待修复点，均为会话查询链路里“仅凭 URL 端路径 ID 查询未做前置归属存在性校验”。
 
 ## 编译风险（P0/P1）
-- 运行验证：`mvn -pl seller -DskipTests compile -q`、`mvn -pl buyer -DskipTests compile -q`
+- 历史当轮运行验证：`mvn -pl seller -DskipTests compile -q`、`mvn -pl buyer -DskipTests compile -q`
   - 结果：两条命令均返回成功（exit 0）
   - 结论：当前切片内未见编译阻断风险。
+- 当前可复用验证命令必须带 reactor 依赖：`mvn -pl seller,buyer -am -DskipTests compile -q`。
 
 ## P1：接口缺失（P1）
 - P1 级问题未发现：
@@ -63,9 +64,11 @@
 - 结论：本切片内未见管理端以 `sys_*` 复用到 `seller/buyer` 账号、角色、部门、菜单、日志、会话体系。
 
 ## 关键命令与范围
-- 编译命令（仅验证编译风险）：
+- 历史编译命令（仅记录当轮事实，不作为当前可复用门禁）：
   - `cd RuoYi-Vue; mvn -pl seller -DskipTests compile -q`
   - `cd RuoYi-Vue; mvn -pl buyer -DskipTests compile -q`
+- 当前可复用编译门禁：
+  - `cd RuoYi-Vue; mvn -pl seller,buyer -am -DskipTests compile -q`
 - 文件范围（本报告仅读）：
   - `RuoYi-Vue/seller/src/main/java/com/ruoyi/seller/controller/AdminSellerController.java`
   - `RuoYi-Vue/seller/src/main/java/com/ruoyi/seller/service/impl/SellerServiceImpl.java`

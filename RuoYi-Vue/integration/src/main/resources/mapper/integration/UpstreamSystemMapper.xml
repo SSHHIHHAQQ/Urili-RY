@@ -482,6 +482,15 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         where connection_code = #{connectionCode}
     </update>
 
+    <update id="updateConnectionCredentialStatus" parameterType="UpstreamSystemConnection">
+        update upstream_system_connection
+        set credential_status = #{credentialStatus},
+            last_authorized_time = #{lastAuthorizedTime},
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where connection_code = #{connectionCode}
+    </update>
+
     <update id="updateConnectionStatus">
         update upstream_system_connection
         set status = #{status},

@@ -20,6 +20,7 @@ import com.ruoyi.common.utils.ip.IpUtils;
 import com.ruoyi.buyer.domain.Buyer;
 import com.ruoyi.buyer.domain.BuyerAccount;
 import com.ruoyi.buyer.mapper.BuyerMapper;
+import com.ruoyi.buyer.mapper.BuyerPortalPermissionMapper;
 import com.ruoyi.buyer.mapper.BuyerPortalDeptMapper;
 import com.ruoyi.buyer.service.IBuyerService;
 import com.ruoyi.system.domain.PortalDept;
@@ -35,6 +36,7 @@ import com.ruoyi.system.domain.PortalOwnLoginLogProfile;
 import com.ruoyi.system.domain.PortalOwnOperLogProfile;
 import com.ruoyi.system.domain.PortalOwnSessionProfile;
 import com.ruoyi.system.domain.PortalPasswordChangeRequest;
+import com.ruoyi.system.domain.PortalRole;
 import com.ruoyi.system.domain.PortalSessionProfile;
 import com.ruoyi.system.mapper.PortalDirectLoginTicketMapper;
 import com.ruoyi.system.service.ISysConfigService;
@@ -51,10 +53,25 @@ public class BuyerServiceImpl implements IBuyerService
 {
     private static final String BUYER_NO_PREFIX = "B";
 
+    private static final String OWNER_ROLE_KEY = "owner";
+
+    private static final String[] DEFAULT_OWNER_PERMS = {
+        "buyer:account:list",
+        "buyer:account:loginLog:list",
+        "buyer:account:operLog:list",
+        "buyer:account:session:list",
+        "buyer:dept:list",
+        "buyer:role:list",
+        "buyer:portal:home"
+    };
+
     private static final String LOGIN_BLACK_IP_CONFIG_KEY = "sys.login.blackIPList";
 
     @Autowired
     private BuyerMapper buyerMapper;
+
+    @Autowired
+    private BuyerPortalPermissionMapper permissionMapper;
 
     @Autowired
     private BuyerPortalDeptMapper deptMapper;
@@ -175,7 +192,9 @@ public class BuyerServiceImpl implements IBuyerService
             throw new ServiceException("登录账号已存在");
         }
         account.setPassword(SecurityUtils.encryptPassword(account.getPassword()));
-        return buyerMapper.insertBuyerAccount(account);
+        int rows = buyerMapper.insertBuyerAccount(account);
+        bindOwnerRoleIfNeeded(buyerId, account);
+        return rows;
     }
 
     @Override
@@ -878,6 +897,7 @@ public class BuyerServiceImpl implements IBuyerService
         owner.setUpdateBy(SecurityUtils.getUsername());
         owner.setRemark("买家主账号");
         buyerMapper.updateBuyerAccount(owner);
+        bindOwnerRoleIfNeeded(buyer.getBuyerId(), owner);
     }
 
     private void normalizeBuyerAccount(BuyerAccount account, boolean requirePassword)
@@ -921,6 +941,41 @@ public class BuyerServiceImpl implements IBuyerService
         {
             throw new ServiceException("买家主账号已存在");
         }
+    }
+
+    private void bindOwnerRoleIfNeeded(Long buyerId, BuyerAccount account)
+    {
+        if (!PartnerSupport.ACCOUNT_ROLE_OWNER.equals(account.getAccountRole()))
+        {
+            return;
+        }
+        Long buyerAccountId = account.getBuyerAccountId() != null ? account.getBuyerAccountId() : account.getAccountId();
+        if (buyerAccountId == null)
+        {
+            throw new ServiceException("买家主账号ID不能为空");
+        }
+        PortalRole ownerRole = ensureOwnerRoleReady(buyerId);
+        permissionMapper.insertBuyerOwnerAccountRoleIfMissing(buyerId, buyerAccountId);
+        if (!permissionMapper.selectBuyerAccountRoleIds(buyerId, buyerAccountId).contains(ownerRole.getRoleId()))
+        {
+            throw new ServiceException("买家主账号绑定 owner 角色失败");
+        }
+    }
+
+    private PortalRole ensureOwnerRoleReady(Long buyerId)
+    {
+        permissionMapper.insertBuyerOwnerRoleIfMissing(buyerId, SecurityUtils.getUsername());
+        PortalRole ownerRole = permissionMapper.checkBuyerRoleKeyUnique(buyerId, OWNER_ROLE_KEY);
+        if (ownerRole == null || !PartnerSupport.STATUS_NORMAL.equals(ownerRole.getStatus()))
+        {
+            throw new ServiceException("买家端 owner 角色不存在或已停用");
+        }
+        permissionMapper.insertBuyerOwnerRoleMenusIfMissing(buyerId, DEFAULT_OWNER_PERMS);
+        if (permissionMapper.countBuyerOwnerRoleMenuGrants(buyerId, DEFAULT_OWNER_PERMS) != DEFAULT_OWNER_PERMS.length)
+        {
+            throw new ServiceException("买家端 owner 默认菜单权限不完整");
+        }
+        return ownerRole;
     }
 
     private int forceLogoutBuyerSessionScope(Long buyerId, Long buyerAccountId)

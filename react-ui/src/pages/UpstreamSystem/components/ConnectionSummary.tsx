@@ -10,7 +10,7 @@ import {
 } from '@ant-design/icons';
 import { Button, Popconfirm, Tooltip, Typography } from 'antd';
 import { type ReactNode, useEffect, useState } from 'react';
-import { settlementTypeText, systemKindText } from '../constants';
+import { settlementTypeDisplayText, systemKindText } from '../constants';
 import { statusTag } from '../helpers';
 import styles from '../style.module.css';
 
@@ -23,9 +23,6 @@ type ConnectionSummaryProps = {
   onSync: () => void;
   onToggleStatus: () => void;
 };
-
-const settlementText = (value?: string) =>
-  settlementTypeText[value || ''] || value || '-';
 
 const manualSyncEntryPermissions = [
   'integration:upstream:sync',
@@ -179,7 +176,7 @@ export default function ConnectionSummary({
           />
           <SummaryItem
             label="结算类型"
-            value={settlementText(connection.settlementType)}
+            value={settlementTypeDisplayText(connection.settlementType)}
           />
           <SummaryItem label="Key" value={connection.appKeyMask || '-'} />
           <SummaryItem label="备注" value={connection.remark || '-'} wide />

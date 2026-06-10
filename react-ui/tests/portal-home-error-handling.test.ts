@@ -22,6 +22,27 @@ describe('portal home error handling contract', () => {
     expect(source).toContain("'Portal depts loading failed'");
     expect(source).toContain("'Portal roles loading failed'");
     expect(source).toContain("'Portal sessions loading failed'");
-    expect(source).not.toContain('setSessionRows([]);');
+  });
+
+  it('loads the protected session list only when the terminal account has session permission', () => {
+    expect(source).toContain("portalPermission(terminal, 'account:session:list')");
+    expect(source).toContain('const canViewSessions = hasPortalPermission');
+    expect(source).toContain('if (hasPortalPermission(permissions, portalPermission(terminal, \'account:session:list\'))) {');
+    expect(source).toContain('loadSessions(terminal);');
+    expect(source).toContain('{canViewSessions ? (');
+  });
+
+  it('does not refresh the protected session list without session permission', () => {
+    expect(source).toContain('const clearSessions = useCallback');
+    expect(source).toContain('const handleRefresh = () => {');
+    expect(source).toContain('clearSessions();');
+    expect(source).toContain('loadData(terminal);');
+    expect(source).toContain('onClick={handleRefresh}');
+    expect(source).not.toContain('loadData(terminal);\n              loadSessions(terminal);');
+    const handleRefreshBody = source.slice(
+      source.indexOf('const handleRefresh = () => {'),
+      source.indexOf('return ('),
+    );
+    expect(handleRefreshBody).not.toContain('loadSessions(terminal)');
   });
 });

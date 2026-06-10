@@ -8,6 +8,7 @@ import com.ruoyi.common.constant.Constants;
 import com.ruoyi.common.constant.UserConstants;
 import com.ruoyi.common.core.domain.entity.SysDictData;
 import com.ruoyi.common.exception.ServiceException;
+import com.ruoyi.common.utils.file.ImageResourceUtils;
 import com.ruoyi.system.domain.PartnerProfile;
 import com.ruoyi.system.domain.PartnerProfile.Attachment;
 
@@ -274,12 +275,8 @@ public class PartnerSupport
 
     private static void validateAttachmentFileUrl(String fileUrl, String unchangedLegacyAttachmentUrl)
     {
+        ImageResourceUtils.assertNotInlineImage(fileUrl, "附件");
         if (StringUtils.startsWith(fileUrl, MANAGED_ATTACHMENT_PREFIX))
-        {
-            return;
-        }
-
-        if (StringUtils.equals(fileUrl, unchangedLegacyAttachmentUrl) && StringUtils.startsWithIgnoreCase(fileUrl, "data:"))
         {
             return;
         }

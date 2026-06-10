@@ -54,11 +54,14 @@ const STATIC_ROUTE_REQUIREMENTS: Record<string, StaticRouteRequirement> = {
   },
 };
 
-const PUBLIC_PORTAL_ROUTE_PATHS = new Set([
+const PUBLIC_PORTAL_EXACT_ROUTE_PATHS = new Set([
   '/seller/login',
   '/buyer/login',
   '/seller/direct-login',
   '/buyer/direct-login',
+]);
+
+const PUBLIC_PORTAL_PREFIX_ROUTE_PATHS = new Set([
   '/seller/portal',
   '/buyer/portal',
 ]);
@@ -73,9 +76,10 @@ function normalizePathname(pathname: string) {
 
 function getStaticRouteRequirement(pathname: string): StaticRouteRequirement | undefined {
   const normalizedPathname = normalizePathname(pathname);
-  const isPublicPortalPath = [...PUBLIC_PORTAL_ROUTE_PATHS].some(
-    (path) => normalizedPathname === path || normalizedPathname.startsWith(`${path}/`),
-  );
+  const isPublicPortalPath = PUBLIC_PORTAL_EXACT_ROUTE_PATHS.has(normalizedPathname)
+    || [...PUBLIC_PORTAL_PREFIX_ROUTE_PATHS].some(
+      (path) => normalizedPathname === path || normalizedPathname.startsWith(`${path}/`),
+    );
   if (isPublicPortalPath) {
     return undefined;
   }

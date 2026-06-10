@@ -108,7 +108,6 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
         }
         String appKey = trimRequired(request.getAppKey(), "appKey不能为空");
         String appSecret = trimRequired(request.getAppSecret(), "appSecret不能为空");
-        checkCredentials(connectionCode, appKey, appSecret);
 
         UpstreamSystemConnection connection = new UpstreamSystemConnection();
         connection.setConnectionCode(connectionCode);
@@ -121,11 +120,10 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
         connection.setAppSecretCiphertext(secretCipherSupport.encrypt(appSecret));
         connection.setCredentialKeyId(secretCipherSupport.getEncryptionKeyId());
         connection.setStatus(UpstreamSystemConstants.STATUS_ENABLED);
-        connection.setCredentialStatus(UpstreamSystemConstants.CREDENTIAL_STATUS_CONFIGURED);
+        connection.setCredentialStatus(UpstreamSystemConstants.CREDENTIAL_STATUS_PENDING);
         connection.setEnabledCapabilities(UpstreamSystemConstants.DEFAULT_CAPABILITIES);
         Integer maxOrder = upstreamSystemMapper.selectMaxDisplayOrder();
         connection.setDisplayOrder(maxOrder == null ? 1 : maxOrder + 1);
-        connection.setLastAuthorizedTime(new Date());
         connection.setRequestLogCount(0);
         connection.setCreateBy(SecurityUtils.getUsername());
         connection.setRemark(trimOptional(request.getRemark()));
@@ -158,7 +156,6 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
         selectConnectionByCode(connectionCode);
         String appKey = trimRequired(request.getAppKey(), "appKey不能为空");
         String appSecret = trimRequired(request.getAppSecret(), "appSecret不能为空");
-        checkCredentials(connectionCode, appKey, appSecret);
 
         UpstreamSystemConnection connection = new UpstreamSystemConnection();
         connection.setConnectionCode(connectionCode);
@@ -167,8 +164,8 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
         connection.setAppKeyCiphertext(secretCipherSupport.encrypt(appKey));
         connection.setAppSecretCiphertext(secretCipherSupport.encrypt(appSecret));
         connection.setCredentialKeyId(secretCipherSupport.getEncryptionKeyId());
-        connection.setCredentialStatus(UpstreamSystemConstants.CREDENTIAL_STATUS_CONFIGURED);
-        connection.setLastAuthorizedTime(new Date());
+        connection.setCredentialStatus(UpstreamSystemConstants.CREDENTIAL_STATUS_PENDING);
+        connection.setLastAuthorizedTime(null);
         connection.setUpdateBy(SecurityUtils.getUsername());
         return upstreamSystemMapper.updateConnectionCredentials(connection);
     }
@@ -226,7 +223,10 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
         }
         catch (RuntimeException ex)
         {
-            upstreamSystemMapper.updateConnectionStatus(connectionCode, connection.getStatus(), SecurityUtils.getUsername());
+            connection.setCredentialStatus(UpstreamSystemConstants.CREDENTIAL_STATUS_INVALID);
+            connection.setLastAuthorizedTime(null);
+            connection.setUpdateBy(SecurityUtils.getUsername());
+            upstreamSystemMapper.updateConnectionCredentialStatus(connection);
             throw lingxingClientFactory.toServiceException(ex);
         }
     }
@@ -730,11 +730,6 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
             return "领星WMS";
         }
         return StringUtils.defaultIfBlank(systemKind, "未知来源");
-    }
-
-    private void checkCredentials(String connectionCode, String appKey, String appSecret)
-    {
-        lingxingClientFactory.checkWarehouseAccess(connectionCode, appKey, appSecret);
     }
 
     private void insertSkuAudit(String eventType, UpstreamSkuPairing reference, UpstreamSkuPairing before,

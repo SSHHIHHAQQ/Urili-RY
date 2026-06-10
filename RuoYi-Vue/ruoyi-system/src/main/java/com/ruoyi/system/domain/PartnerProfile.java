@@ -399,14 +399,5 @@ public abstract class PartnerProfile extends BaseEntity
             this.fileUrl = fileUrl;
         }
 
-        public String getDataUrl()
-        {
-            return fileUrl;
-        }
-
-        public void setDataUrl(String dataUrl)
-        {
-            this.fileUrl = dataUrl;
-        }
     }
 }

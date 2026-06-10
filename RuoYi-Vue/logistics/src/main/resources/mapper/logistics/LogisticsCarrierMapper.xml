@@ -1,0 +1,513 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.logistics.mapper.LogisticsCarrierMapper">
+
+    <resultMap type="LogisticsCarrierConnection" id="ConnectionResult">
+        <id     property="carrierAccountId"     column="carrier_account_id"     />
+        <result property="connectionCode"       column="connection_code"        />
+        <result property="providerKind"         column="provider_kind"          />
+        <result property="carrierName"          column="connection_name"        />
+        <result property="apiBaseUrl"           column="api_base_url"           />
+        <result property="status"               column="status"                 />
+        <result property="credentialStatus"     column="credential_status"      />
+        <result property="lastAuthorizedTime"   column="last_authorized_time"   />
+        <result property="lastChannelSyncTime"  column="last_channel_sync_time" />
+        <result property="displayOrder"         column="display_order"          />
+        <result property="createBy"             column="create_by"              />
+        <result property="createTime"           column="create_time"            />
+        <result property="updateBy"             column="update_by"              />
+        <result property="updateTime"           column="update_time"            />
+        <result property="remark"               column="remark"                 />
+    </resultMap>
+
+    <resultMap type="LogisticsAgg56Connection" id="Agg56ConnectionResult">
+        <id     property="carrierAccountId"        column="carrier_account_id"        />
+        <result property="connectionCode"          column="connection_code"           />
+        <result property="appTokenMask"            column="app_token_mask"            />
+        <result property="appKeyMask"              column="app_key_mask"              />
+        <result property="appTokenCiphertext"      column="app_token_ciphertext"      />
+        <result property="appKeyCiphertext"        column="app_key_ciphertext"        />
+        <result property="credentialKeyId"         column="credential_key_id"         />
+        <result property="agg56UserId"             column="agg56_user_id"             />
+        <result property="agg56UserAccountMask"    column="agg56_user_account_mask"   />
+        <result property="agg56CustomerCode"       column="agg56_customer_code"       />
+        <result property="createTime"              column="create_time"               />
+        <result property="updateTime"              column="update_time"               />
+    </resultMap>
+
+    <resultMap type="LogisticsCarrierChannelCandidate" id="ChannelCandidateResult">
+        <id     property="carrierAccountId"     column="carrier_account_id"     />
+        <id     property="externalChannelCode"  column="external_channel_code"  />
+        <result property="connectionCode"       column="connection_code"        />
+        <result property="externalChannelName"  column="external_channel_name"  />
+        <result property="rawFinalCarrierText"  column="raw_final_carrier_text" />
+        <result property="status"               column="status"                 />
+        <result property="syncBatchId"          column="sync_batch_id"          />
+        <result property="sourcePayloadJson"    column="source_payload_json"    />
+        <result property="sourcePayloadHash"    column="source_payload_hash"    />
+        <result property="firstSeenTime"        column="first_seen_time"        />
+        <result property="lastSeenTime"         column="last_seen_time"         />
+        <result property="updateTime"           column="update_time"            />
+    </resultMap>
+
+    <resultMap type="LogisticsSystemChannel" id="SystemChannelResult">
+        <id     property="systemChannelCode"    column="system_channel_code"    />
+        <result property="systemChannelName"    column="system_channel_name"    />
+        <result property="standardCarrierCode"  column="standard_carrier_code"  />
+        <result property="status"               column="status"                 />
+        <result property="displayOrder"         column="display_order"          />
+        <result property="createBy"             column="create_by"              />
+        <result property="createTime"           column="create_time"            />
+        <result property="updateBy"             column="update_by"              />
+        <result property="updateTime"           column="update_time"            />
+        <result property="remark"               column="remark"                 />
+    </resultMap>
+
+    <resultMap type="LogisticsCarrierChannelMapping" id="ChannelMappingResult">
+        <id     property="mappingId"                    column="mapping_id"                    />
+        <result property="carrierAccountId"             column="carrier_account_id"             />
+        <result property="connectionCode"               column="connection_code"               />
+        <result property="externalChannelCode"          column="external_channel_code"          />
+        <result property="externalChannelNameSnapshot"  column="external_channel_name_snapshot" />
+        <result property="systemChannelCode"            column="system_channel_code"            />
+        <result property="systemChannelNameSnapshot"    column="system_channel_name_snapshot"   />
+        <result property="standardCarrierCode"          column="standard_carrier_code"          />
+        <result property="status"                       column="status"                         />
+        <result property="createBy"                     column="create_by"                      />
+        <result property="createTime"                   column="create_time"                    />
+        <result property="updateBy"                     column="update_by"                      />
+        <result property="updateTime"                   column="update_time"                    />
+        <result property="remark"                       column="remark"                         />
+    </resultMap>
+
+    <resultMap type="LogisticsLabelOrder" id="LabelOrderResult">
+        <id     property="labelOrderId"      column="label_order_id"      />
+        <result property="businessOrderNo"   column="business_order_no"   />
+        <result property="carrierAccountId"  column="carrier_account_id"  />
+        <result property="connectionCode"    column="connection_code"     />
+        <result property="providerKind"      column="provider_kind"       />
+        <result property="systemChannelCode" column="system_channel_code" />
+        <result property="externalChannelCode" column="external_channel_code" />
+        <result property="providerOrderNo"   column="provider_order_no"   />
+        <result property="status"            column="status"              />
+        <result property="labelFileTypes"    column="label_file_types"    />
+        <result property="zoneCode"          column="zone_code"           />
+        <result property="chargeWeight"      column="charge_weight"       />
+        <result property="logisticsError"    column="logistics_error"     />
+        <result property="createPayloadJson" column="create_payload_json" />
+        <result property="providerResultJson" column="provider_result_json" />
+        <result property="createdTime"       column="created_time"        />
+        <result property="lastFetchedTime"   column="last_fetched_time"   />
+        <result property="createBy"          column="create_by"           />
+        <result property="createTime"        column="create_time"         />
+        <result property="updateBy"          column="update_by"           />
+        <result property="updateTime"        column="update_time"         />
+        <result property="remark"            column="remark"              />
+    </resultMap>
+
+    <resultMap type="LogisticsLabelPackage" id="LabelPackageResult">
+        <id     property="labelPackageId"  column="label_package_id" />
+        <result property="labelOrderId"    column="label_order_id"   />
+        <result property="providerPackageNo" column="provider_package_no" />
+        <result property="trackingNumber"  column="tracking_number"  />
+        <result property="labelUrl"        column="label_url"        />
+        <result property="fileType"        column="file_type"        />
+        <result property="status"          column="status"           />
+        <result property="sourcePayloadJson" column="source_payload_json" />
+        <result property="createTime"      column="create_time"      />
+        <result property="updateTime"      column="update_time"      />
+    </resultMap>
+
+    <resultMap type="LogisticsCarrierRequestLog" id="RequestLogResult">
+        <id     property="requestLogId"             column="request_log_id"             />
+        <result property="carrierAccountId"         column="carrier_account_id"         />
+        <result property="connectionCode"           column="connection_code"            />
+        <result property="providerKind"             column="provider_kind"              />
+        <result property="traceId"                  column="trace_id"                   />
+        <result property="operation"                column="operation"                  />
+        <result property="endpoint"                 column="endpoint"                   />
+        <result property="httpMethod"               column="http_method"                />
+        <result property="businessOrderNo"          column="business_order_no"          />
+        <result property="providerOrderNo"          column="provider_order_no"          />
+        <result property="requestTime"              column="request_time"               />
+        <result property="responseTime"             column="response_time"              />
+        <result property="durationMs"               column="duration_ms"                />
+        <result property="httpStatus"               column="http_status"                />
+        <result property="providerCode"             column="provider_code"              />
+        <result property="providerMessage"          column="provider_message"           />
+        <result property="status"                   column="status"                     />
+        <result property="requestPayloadRedacted"   column="request_payload_redacted"   />
+        <result property="responsePayloadRedacted"  column="response_payload_redacted"  />
+    </resultMap>
+
+    <select id="selectConnectionList" parameterType="LogisticsCarrierConnection" resultMap="ConnectionResult">
+        select *
+        from logistics_carrier_connection
+        where 1 = 1
+        <if test="carrierAccountId != null">
+            and carrier_account_id = #{carrierAccountId}
+        </if>
+        <if test="providerKind != null and providerKind != ''">
+            and provider_kind = #{providerKind}
+        </if>
+        <if test="carrierName != null and carrierName != ''">
+            and connection_name like concat('%', #{carrierName}, '%')
+        </if>
+        <if test="status != null and status != ''">
+            and status = #{status}
+        </if>
+        order by display_order asc, create_time desc, carrier_account_id desc
+    </select>
+
+    <select id="selectConnectionByAccountId" resultMap="ConnectionResult">
+        select *
+        from logistics_carrier_connection
+        where carrier_account_id = #{carrierAccountId}
+        limit 1
+    </select>
+
+    <select id="selectConnectionByCode" resultMap="ConnectionResult">
+        select *
+        from logistics_carrier_connection
+        where connection_code = #{connectionCode}
+        limit 1
+    </select>
+
+    <select id="selectAgg56ConnectionByAccountId" resultMap="Agg56ConnectionResult">
+        select *
+        from logistics_agg56_connection
+        where carrier_account_id = #{carrierAccountId}
+        limit 1
+    </select>
+
+    <select id="selectMaxConnectionDisplayOrder" resultType="int">
+        select max(display_order)
+        from logistics_carrier_connection
+    </select>
+
+    <insert id="insertConnection" parameterType="LogisticsCarrierConnection" useGeneratedKeys="true"
+            keyProperty="carrierAccountId" keyColumn="carrier_account_id">
+        insert into logistics_carrier_connection(
+            connection_code, provider_kind, connection_name, api_base_url, status, credential_status,
+            display_order, create_by, create_time, remark
+        ) values (
+            #{connectionCode}, #{providerKind}, #{carrierName}, #{apiBaseUrl}, #{status}, #{credentialStatus},
+            #{displayOrder}, #{createBy}, sysdate(), #{remark}
+        )
+    </insert>
+
+    <update id="updateConnectionInfo" parameterType="LogisticsCarrierConnection">
+        update logistics_carrier_connection
+        set connection_name = #{carrierName},
+            api_base_url = #{apiBaseUrl},
+            update_by = #{updateBy},
+            update_time = sysdate(),
+            remark = #{remark}
+        where carrier_account_id = #{carrierAccountId}
+    </update>
+
+    <update id="updateConnectionStatus">
+        update logistics_carrier_connection
+        set status = #{status},
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where carrier_account_id = #{carrierAccountId}
+    </update>
+
+    <update id="updateConnectionDisplayOrder">
+        update logistics_carrier_connection
+        set display_order = #{displayOrder},
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where carrier_account_id = #{carrierAccountId}
+    </update>
+
+    <update id="updateConnectionAuthorizeSummary">
+        update logistics_carrier_connection
+        set credential_status = #{credentialStatus},
+            last_authorized_time = case when #{credentialStatus} = 'CONFIGURED' then sysdate() else last_authorized_time end,
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where carrier_account_id = #{carrierAccountId}
+    </update>
+
+    <update id="updateConnectionChannelSyncTime">
+        update logistics_carrier_connection
+        set last_channel_sync_time = sysdate(),
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where carrier_account_id = #{carrierAccountId}
+    </update>
+
+    <insert id="upsertAgg56Connection" parameterType="LogisticsAgg56Connection">
+        insert into logistics_agg56_connection(
+            carrier_account_id, connection_code, app_token_mask, app_key_mask, app_token_ciphertext, app_key_ciphertext,
+            credential_key_id, agg56_user_id, agg56_user_account_mask, agg56_customer_code,
+            create_time, update_time
+        ) values (
+            #{carrierAccountId}, #{connectionCode}, #{appTokenMask}, #{appKeyMask}, #{appTokenCiphertext}, #{appKeyCiphertext},
+            #{credentialKeyId}, #{agg56UserId}, #{agg56UserAccountMask}, #{agg56CustomerCode},
+            sysdate(), sysdate()
+        )
+        on duplicate key update
+            app_token_mask = values(app_token_mask),
+            app_key_mask = values(app_key_mask),
+            app_token_ciphertext = values(app_token_ciphertext),
+            app_key_ciphertext = values(app_key_ciphertext),
+            credential_key_id = values(credential_key_id),
+            agg56_user_id = values(agg56_user_id),
+            agg56_user_account_mask = values(agg56_user_account_mask),
+            agg56_customer_code = values(agg56_customer_code),
+            update_time = sysdate()
+    </insert>
+
+    <insert id="upsertChannelCandidate" parameterType="LogisticsCarrierChannelCandidate">
+        insert into logistics_carrier_channel_candidate(
+            carrier_account_id, connection_code, external_channel_code, external_channel_name, raw_final_carrier_text,
+            status, sync_batch_id, source_payload_json, source_payload_hash,
+            first_seen_time, last_seen_time, update_time
+        ) values (
+            #{carrierAccountId}, #{connectionCode}, #{externalChannelCode}, #{externalChannelName}, #{rawFinalCarrierText},
+            #{status}, #{syncBatchId}, #{sourcePayloadJson}, #{sourcePayloadHash},
+            sysdate(), sysdate(), sysdate()
+        )
+        on duplicate key update
+            external_channel_name = values(external_channel_name),
+            raw_final_carrier_text = values(raw_final_carrier_text),
+            status = values(status),
+            sync_batch_id = values(sync_batch_id),
+            source_payload_json = values(source_payload_json),
+            source_payload_hash = values(source_payload_hash),
+            last_seen_time = sysdate(),
+            update_time = sysdate()
+    </insert>
+
+    <update id="markMissingChannelCandidates">
+        update logistics_carrier_channel_candidate
+        set status = 'MISSING',
+            update_time = sysdate()
+        where carrier_account_id = #{carrierAccountId}
+          and sync_batch_id &lt;&gt; #{syncBatchId}
+    </update>
+
+    <select id="selectChannelCandidateList" resultMap="ChannelCandidateResult">
+        select *
+        from logistics_carrier_channel_candidate
+        where carrier_account_id = #{carrierAccountId}
+        <if test="status != null and status != ''">
+            and status = #{status}
+        </if>
+        order by status asc, external_channel_name asc, external_channel_code asc
+    </select>
+
+    <select id="selectChannelCandidate" resultMap="ChannelCandidateResult">
+        select *
+        from logistics_carrier_channel_candidate
+        where carrier_account_id = #{carrierAccountId}
+          and external_channel_code = #{externalChannelCode}
+        limit 1
+    </select>
+
+    <select id="selectSystemChannelList" parameterType="LogisticsSystemChannel" resultMap="SystemChannelResult">
+        select *
+        from logistics_system_channel
+        where 1 = 1
+        <if test="systemChannelCode != null and systemChannelCode != ''">
+            and system_channel_code like concat('%', #{systemChannelCode}, '%')
+        </if>
+        <if test="systemChannelName != null and systemChannelName != ''">
+            and system_channel_name like concat('%', #{systemChannelName}, '%')
+        </if>
+        <if test="standardCarrierCode != null and standardCarrierCode != ''">
+            and standard_carrier_code = #{standardCarrierCode}
+        </if>
+        <if test="status != null and status != ''">
+            and status = #{status}
+        </if>
+        order by display_order asc, system_channel_code asc
+    </select>
+
+    <select id="selectSystemChannelByCode" resultMap="SystemChannelResult">
+        select *
+        from logistics_system_channel
+        where system_channel_code = #{systemChannelCode}
+        limit 1
+    </select>
+
+    <insert id="insertSystemChannel" parameterType="LogisticsSystemChannel">
+        insert into logistics_system_channel(
+            system_channel_code, system_channel_name, standard_carrier_code, status,
+            display_order, create_by, create_time, remark
+        ) values (
+            #{systemChannelCode}, #{systemChannelName}, #{standardCarrierCode}, #{status},
+            #{displayOrder}, #{createBy}, sysdate(), #{remark}
+        )
+    </insert>
+
+    <update id="updateSystemChannel" parameterType="LogisticsSystemChannel">
+        update logistics_system_channel
+        set system_channel_name = #{systemChannelName},
+            standard_carrier_code = #{standardCarrierCode},
+            status = #{status},
+            update_by = #{updateBy},
+            update_time = sysdate(),
+            remark = #{remark}
+        where system_channel_code = #{systemChannelCode}
+    </update>
+
+    <select id="selectChannelMappingList" resultMap="ChannelMappingResult">
+        select *
+        from logistics_carrier_channel_mapping
+        where carrier_account_id = #{carrierAccountId}
+        order by create_time desc, mapping_id desc
+    </select>
+
+    <select id="selectActiveChannelMapping" resultMap="ChannelMappingResult">
+        select *
+        from logistics_carrier_channel_mapping
+        where carrier_account_id = #{carrierAccountId}
+          and system_channel_code = #{systemChannelCode}
+          and status = 'ENABLED'
+        order by mapping_id desc
+        limit 1
+    </select>
+
+    <select id="selectChannelMappingById" resultMap="ChannelMappingResult">
+        select *
+        from logistics_carrier_channel_mapping
+        where carrier_account_id = #{carrierAccountId}
+          and mapping_id = #{mappingId}
+        limit 1
+    </select>
+
+    <insert id="insertChannelMapping" parameterType="LogisticsCarrierChannelMapping" useGeneratedKeys="true" keyProperty="mappingId">
+        insert into logistics_carrier_channel_mapping(
+            carrier_account_id, connection_code, external_channel_code, external_channel_name_snapshot,
+            system_channel_code, system_channel_name_snapshot, standard_carrier_code,
+            status, create_by, create_time, remark
+        ) values (
+            #{carrierAccountId}, #{connectionCode}, #{externalChannelCode}, #{externalChannelNameSnapshot},
+            #{systemChannelCode}, #{systemChannelNameSnapshot}, #{standardCarrierCode},
+            #{status}, #{createBy}, sysdate(), #{remark}
+        )
+    </insert>
+
+    <delete id="deleteChannelMapping">
+        delete from logistics_carrier_channel_mapping
+        where carrier_account_id = #{carrierAccountId}
+          and mapping_id = #{mappingId}
+    </delete>
+
+    <insert id="insertLabelOrder" parameterType="LogisticsLabelOrder" useGeneratedKeys="true" keyProperty="labelOrderId">
+        insert into logistics_label_order(
+            business_order_no, carrier_account_id, connection_code, provider_kind, system_channel_code, external_channel_code,
+            provider_order_no, status, create_payload_json, provider_result_json,
+            created_time, create_by, create_time, remark
+        ) values (
+            #{businessOrderNo}, #{carrierAccountId}, #{connectionCode}, #{providerKind}, #{systemChannelCode}, #{externalChannelCode},
+            #{providerOrderNo}, #{status}, #{createPayloadJson}, #{providerResultJson},
+            sysdate(), #{createBy}, sysdate(), #{remark}
+        )
+    </insert>
+
+    <update id="updateLabelOrderFromProvider" parameterType="LogisticsLabelOrder">
+        update logistics_label_order
+        set provider_order_no = #{providerOrderNo},
+            status = #{status},
+            label_file_types = #{labelFileTypes},
+            zone_code = #{zoneCode},
+            charge_weight = #{chargeWeight},
+            logistics_error = #{logisticsError},
+            provider_result_json = #{providerResultJson},
+            last_fetched_time = sysdate(),
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where label_order_id = #{labelOrderId}
+    </update>
+
+    <update id="updateLabelOrderStatus">
+        update logistics_label_order
+        set status = #{status},
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where label_order_id = #{labelOrderId}
+    </update>
+
+    <select id="selectLabelOrderByBusinessNo" resultMap="LabelOrderResult">
+        select *
+        from logistics_label_order
+        where business_order_no = #{businessOrderNo}
+        limit 1
+    </select>
+
+    <select id="selectLabelOrderByProviderOrderNo" resultMap="LabelOrderResult">
+        select *
+        from logistics_label_order
+        where carrier_account_id = #{carrierAccountId}
+          and provider_order_no = #{providerOrderNo}
+        limit 1
+    </select>
+
+    <select id="selectLabelOrderList" parameterType="LogisticsLabelOrder" resultMap="LabelOrderResult">
+        select *
+        from logistics_label_order
+        where 1 = 1
+        <if test="businessOrderNo != null and businessOrderNo != ''">
+            and business_order_no like concat('%', #{businessOrderNo}, '%')
+        </if>
+        <if test="carrierAccountId != null">
+            and carrier_account_id = #{carrierAccountId}
+        </if>
+        <if test="providerOrderNo != null and providerOrderNo != ''">
+            and provider_order_no = #{providerOrderNo}
+        </if>
+        <if test="status != null and status != ''">
+            and status = #{status}
+        </if>
+        order by create_time desc, label_order_id desc
+    </select>
+
+    <delete id="deleteLabelPackages">
+        delete from logistics_label_package
+        where label_order_id = #{labelOrderId}
+    </delete>
+
+    <insert id="insertLabelPackage" parameterType="LogisticsLabelPackage" useGeneratedKeys="true" keyProperty="labelPackageId">
+        insert into logistics_label_package(
+            label_order_id, provider_package_no, tracking_number, label_url, file_type,
+            status, source_payload_json, create_time
+        ) values (
+            #{labelOrderId}, #{providerPackageNo}, #{trackingNumber}, #{labelUrl}, #{fileType},
+            #{status}, #{sourcePayloadJson}, sysdate()
+        )
+    </insert>
+
+    <select id="selectLabelPackages" resultMap="LabelPackageResult">
+        select *
+        from logistics_label_package
+        where label_order_id = #{labelOrderId}
+        order by label_package_id asc
+    </select>
+
+    <insert id="insertRequestLog" parameterType="LogisticsCarrierRequestLog" useGeneratedKeys="true" keyProperty="requestLogId">
+        insert into logistics_carrier_request_log(
+            carrier_account_id, connection_code, provider_kind, trace_id, operation, endpoint, http_method,
+            business_order_no, provider_order_no, request_time, response_time, duration_ms, http_status,
+            provider_code, provider_message, status, request_payload_redacted, response_payload_redacted
+        ) values (
+            #{carrierAccountId}, #{connectionCode}, #{providerKind}, #{traceId}, #{operation}, #{endpoint}, #{httpMethod},
+            #{businessOrderNo}, #{providerOrderNo}, #{requestTime}, #{responseTime}, #{durationMs}, #{httpStatus},
+            #{providerCode}, #{providerMessage}, #{status}, #{requestPayloadRedacted}, #{responsePayloadRedacted}
+        )
+    </insert>
+
+    <select id="selectRequestLogList" resultMap="RequestLogResult">
+        select *
+        from logistics_carrier_request_log
+        where carrier_account_id = #{carrierAccountId}
+        order by request_time desc, request_log_id desc
+    </select>
+
+</mapper>

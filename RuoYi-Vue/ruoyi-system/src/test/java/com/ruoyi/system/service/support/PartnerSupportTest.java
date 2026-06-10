@@ -5,6 +5,8 @@ import java.util.List;
 import org.junit.Test;
 import com.ruoyi.common.core.domain.entity.SysDictData;
 import com.ruoyi.common.exception.ServiceException;
+import com.ruoyi.system.domain.PartnerProfile;
+import com.ruoyi.system.domain.PartnerProfile.Attachment;
 
 public class PartnerSupportTest
 {
@@ -78,10 +80,36 @@ public class PartnerSupportTest
         PartnerSupport.assertCountryRegionCode("CN", List.of());
     }
 
+    @Test(expected = ServiceException.class)
+    public void normalizeCommonProfileRejectsAttachmentDataUrl()
+    {
+        PartnerProfile profile = validProfile();
+        Attachment attachment = new Attachment();
+        attachment.setFileName("license.png");
+        attachment.setMimeType("image/png");
+        attachment.setSizeBytes(128L);
+        attachment.setFileUrl("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ");
+        profile.setAttachment(attachment);
+
+        PartnerSupport.normalizeCommonProfile(profile, attachment.getFileUrl());
+    }
+
     private SysDictData dict(String value)
     {
         SysDictData data = new SysDictData();
         data.setDictValue(value);
         return data;
+    }
+
+    private PartnerProfile validProfile()
+    {
+        PartnerProfile profile = new PartnerProfile() {};
+        profile.setCountryCode("CN");
+        profile.setCity("深圳");
+        profile.setPostalCode("518000");
+        profile.setAddressLine1("科技园");
+        profile.setContactName("张三");
+        profile.setContactPhone("13800000000");
+        return profile;
     }
 }

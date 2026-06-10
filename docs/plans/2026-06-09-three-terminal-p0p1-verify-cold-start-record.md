@@ -89,6 +89,8 @@ npm run verify:three-terminal
 
 结果：
 
+注意：以下测试数量是 2026-06-09 冷启动当时快照，后续检查点已扩大到前端 24 suites / 193 tests、product 62 tests。当前口径以最新 `three-terminal-six-hour-review-log.md` 和本文件之后的检查点为准。
+
 - 通过。
 - 5 个 frontend guard 均通过。
 - 新增 `umi test setup` 步骤通过，并重新生成 `src/.umi-test/exports.ts`。

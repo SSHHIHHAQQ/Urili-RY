@@ -312,77 +312,26 @@ function checkHomeSource(source, relativePath) {
   if (source.includes("export { default } from './index.tsx';")) {
     return;
   }
-  if (
-    !source.includes(
-      "import BuyerDistributionProductList from './BuyerDistributionProductList';",
-    )
-  ) {
-    violations.push(`${relativePath} must import BuyerDistributionProductList`);
-  }
-  if (!source.includes("import BuyerProductSchemaPreview from './BuyerProductSchemaPreview';")) {
-    violations.push(`${relativePath} must import BuyerProductSchemaPreview`);
-  }
-  const schemaPreviewIndex = source.indexOf('<BuyerProductSchemaPreview');
-  if (schemaPreviewIndex < 0) {
-    violations.push(`${relativePath} must render BuyerProductSchemaPreview`);
-  } else {
-    const buyerBranchIndex = source.lastIndexOf(
-      "terminal === 'buyer'",
-      schemaPreviewIndex,
-    );
-    const sellerBranchIndex = source.lastIndexOf(
-      "terminal === 'seller'",
-      schemaPreviewIndex,
-    );
-    if (buyerBranchIndex < 0 || (sellerBranchIndex >= 0 && sellerBranchIndex > buyerBranchIndex)) {
-      violations.push(
-        `${relativePath} must render BuyerProductSchemaPreview only in buyer branch`,
-      );
-    }
-  }
-  const componentIndex = source.indexOf('<BuyerDistributionProductList');
-  if (componentIndex < 0) {
-    violations.push(`${relativePath} must render BuyerDistributionProductList`);
-  } else {
-    const buyerBranchIndex = source.lastIndexOf(
-      "terminal === 'buyer'",
-      componentIndex,
-    );
-    const sellerBranchIndex = source.lastIndexOf(
-      "terminal === 'seller'",
-      componentIndex,
-    );
-    if (buyerBranchIndex < 0 || sellerBranchIndex > buyerBranchIndex) {
-      violations.push(
-        `${relativePath} must render BuyerDistributionProductList only in buyer branch`,
-      );
-    }
-  }
-  if (!source.includes('canQueryDistributionProducts')) {
-    violations.push(`${relativePath} must compute distribution query permission`);
-  }
-  if (!source.includes("portalPermission(terminal, 'product:distribution:query')")) {
-    violations.push(`${relativePath} must check product:distribution:query before wiring detail actions`);
-  }
-  if (!source.includes('<BuyerDistributionProductList canQuery={canQueryDistributionProducts} />')) {
-    violations.push(`${relativePath} must pass query permission into BuyerDistributionProductList`);
-  }
-
-  const sellerComponentIndex = source.indexOf(
+  for (const forbiddenToken of [
+    "import BuyerDistributionProductList from './BuyerDistributionProductList';",
+    "import BuyerProductSchemaPreview from './BuyerProductSchemaPreview';",
+    "import SellerOwnDistributionProductList from './SellerOwnDistributionProductList';",
+    "import SellerProductSchemaPreview from './SellerProductSchemaPreview';",
+    '<BuyerProductSchemaPreview',
+    '<BuyerDistributionProductList',
+    '<SellerProductSchemaPreview',
     '<SellerOwnDistributionProductList',
-  );
-  if (sellerComponentIndex >= 0) {
-    const sellerBranchIndex = source.lastIndexOf(
-      "terminal === 'seller'",
-      sellerComponentIndex,
-    );
-    const buyerBranchIndex = source.lastIndexOf(
-      "terminal === 'buyer'",
-      sellerComponentIndex,
-    );
-    if (sellerBranchIndex < 0 || buyerBranchIndex > sellerBranchIndex) {
+    'canViewProductSchema',
+    'canViewDistributionProducts',
+    'canQueryDistributionProducts',
+    "portalPermission(terminal, 'product:category:list')",
+    "portalPermission(terminal, 'product:schema:query')",
+    "portalPermission(terminal, 'product:distribution:list')",
+    "portalPermission(terminal, 'product:distribution:query')",
+  ]) {
+    if (source.includes(forbiddenToken)) {
       violations.push(
-        `${relativePath} must keep SellerOwnDistributionProductList only in seller branch`,
+        `${relativePath} must keep buyer portal product widgets detached from the minimal portal home`,
       );
     }
   }

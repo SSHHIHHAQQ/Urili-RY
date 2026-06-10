@@ -35,6 +35,7 @@ import com.ruoyi.system.domain.PortalPasswordChangeRequest;
 import com.ruoyi.system.domain.PortalRole;
 import com.ruoyi.system.domain.PortalRoleProfile;
 import com.ruoyi.system.domain.PortalSubjectProfile;
+import com.ruoyi.system.service.support.PortalPermissionSupport;
 import com.ruoyi.system.service.support.PortalSessionContext;
 
 /**
@@ -72,7 +73,7 @@ public class SellerPortalController extends BaseController
     public AjaxResult getRouters()
     {
         PortalLoginSession session = PortalSessionContext.requireSession("seller");
-        return success(permissionService.selectPortalMenuTree(session));
+        return success(PortalPermissionSupport.buildRouters(permissionService.selectPortalMenuTree(session)));
     }
 
     @PostMapping("/logout")

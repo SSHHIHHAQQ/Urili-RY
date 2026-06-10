@@ -191,6 +191,30 @@ function assertMatches(source, relativePath, pattern, description) {
   }
 }
 
+function extractBlockAfter(source, marker) {
+  const start = source.indexOf(marker);
+  if (start < 0) {
+    return '';
+  }
+  const bodyStart = source.indexOf('{', start);
+  if (bodyStart < 0) {
+    return '';
+  }
+  let depth = 0;
+  for (let index = bodyStart; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === '{') {
+      depth += 1;
+    } else if (char === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return source.slice(bodyStart, index + 1);
+      }
+    }
+  }
+  return '';
+}
+
 for (const file of sourceRoots.flatMap(walk)) {
   const relativePath = path.relative(root, file).replaceAll(path.sep, '/');
   const source = read(file);
@@ -376,7 +400,8 @@ for (const remoteMenuRouteGuardFile of remoteMenuRouteGuardFiles) {
     "'/seller': { authority: ['seller:admin:list'] }",
     "'/buyer': { authority: ['buyer:admin:list'] }",
     "authorityMode: 'all'",
-    'PUBLIC_PORTAL_ROUTE_PATHS',
+    'PUBLIC_PORTAL_EXACT_ROUTE_PATHS',
+    'PUBLIC_PORTAL_PREFIX_ROUTE_PATHS',
     '/seller/login',
     '/buyer/login',
     '/seller/direct-login',
@@ -537,6 +562,34 @@ if (portalHomePage) {
     'history.replace(PORTAL_META[currentTerminal].loginPath)',
     'not overwrite request-layer portal redirect from loadData failures',
   );
+  const handleRefreshBody = extractBlockAfter(
+    portalHomePage.source,
+    'const handleRefresh = () =>',
+  );
+  if (!handleRefreshBody) {
+    violations.push(
+      `${portalHomePage.relativePath} must define handleRefresh for permission-gated portal refresh`,
+    );
+  } else {
+    assertIncludes(
+      handleRefreshBody,
+      portalHomePage.relativePath,
+      'clearSessions();',
+      'clear stale protected sessions before portal refresh',
+    );
+    assertIncludes(
+      handleRefreshBody,
+      portalHomePage.relativePath,
+      'loadData(terminal);',
+      'refresh portal profile and permissions before protected session reload',
+    );
+    assertDoesNotInclude(
+      handleRefreshBody,
+      portalHomePage.relativePath,
+      'loadSessions(terminal)',
+      'not directly request protected sessions from the refresh handler',
+    );
+  }
 }
 
 const portalHomePageJs = assertFileExists(portalHomePageJsFile);

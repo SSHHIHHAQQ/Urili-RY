@@ -10,8 +10,8 @@
 
 - 执行日期：2026-06-07
 - 数据库配置来源：`RuoYi-Vue/ruoyi-admin/src/main/resources/application.yml` 激活 `druid`，`application-druid.yml` 从 `.env.local` 读取 `RUOYI_DB_URL`、`RUOYI_DB_USERNAME`、`RUOYI_DB_PASSWORD`
-- 目标库：`fenxiao`
-- 目标地址：`gz-cynosdbmysql-grp-lucf5kyf.sql.tencentcdb.com:28634`
+- 目标库：远端运行库，名称已脱敏
+- 目标地址：远端运行库，地址已脱敏
 - 是否本地 Docker 库：否
 - 敏感信息处理：未在记录中输出数据库密码、Redis 密码或 token secret
 
@@ -29,13 +29,16 @@
 - 执行前在同一数据库 session 中设置确认变量：
   - `@confirm_upstream_pairing_role_binding = 'APPLY_UPSTREAM_PAIRING_ROLE_BINDING'`
   - `@confirm_product_sku_source_binding = 'APPLY_PRODUCT_SKU_SOURCE_BINDING'`
+- 用户确认来源：用户已在当前任务链路中确认允许把官方来源 SKU 绑定 SQL 执行到当前远端运行库。
+- 影响范围：新增或补齐官方来源配对角色字段、创建 `product_sku_source_binding` 及唯一约束，不自动回填历史商品绑定关系。
+- 回滚方式：未自动执行回滚；如需回滚，需先确认没有正式绑定数据依赖，再人工删除绑定表/约束并评估是否回退配对角色字段。
 
 ## 执行结果
 
 执行输出摘要：
 
 ```text
-DB=fenxiao
+DB=远端运行库，名称已脱敏
 before.pairing_role=1; before.binding_table=0
 executed.upstream_statements=50; executed.product_statements=24
 after.warehouse_pairing_role=1; after.logistics_pairing_role=1; after.binding_table=1

@@ -16,8 +16,8 @@ import {
   updateUpstreamStatus,
 } from '@/services/integration/upstreamSystem';
 import { getOfficialWarehouseList } from '@/services/warehouse/warehouse';
-import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 import { message } from '@/utils/feedback';
+import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
 import ConnectionModal, {
   type ConnectionModalMode,
 } from './components/ConnectionModal';
@@ -25,7 +25,11 @@ import ConnectionSidebar from './components/ConnectionSidebar';
 import ConnectionSummary from './components/ConnectionSummary';
 import PairingModal from './components/PairingModal';
 import SyncTabs from './components/SyncTabs';
-import { pairingRoleText, syncTypeText } from './constants';
+import {
+  normalizeSettlementTypeValue,
+  pairingRoleText,
+  syncTypeText,
+} from './constants';
 import { resultOk } from './helpers';
 import './style.css';
 import styles from './style.module.css';
@@ -208,7 +212,8 @@ export default function UpstreamSystemPage() {
 
   const selectedCode = selectedConnection?.connectionCode || '';
   const selectedPairingRole =
-    selectedConnection?.settlementType === 'self-operated-receivable'
+    normalizeSettlementTypeValue(selectedConnection?.settlementType) ===
+    'self-operated-receivable'
       ? 'QUOTE'
       : 'FULFILLMENT';
   const selectedPairingRoleLabel =

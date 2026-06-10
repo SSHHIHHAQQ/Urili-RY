@@ -65,6 +65,16 @@ public interface SellerPortalPermissionMapper
     public int batchSellerAccountRoles(@Param("sellerId") Long sellerId, @Param("accountId") Long accountId,
             @Param("roleIds") Long[] roleIds);
 
+    public int insertSellerOwnerRoleIfMissing(@Param("sellerId") Long sellerId, @Param("createBy") String createBy);
+
+    public int insertSellerOwnerRoleMenusIfMissing(@Param("sellerId") Long sellerId,
+            @Param("perms") String[] perms);
+
+    public int countSellerOwnerRoleMenuGrants(@Param("sellerId") Long sellerId, @Param("perms") String[] perms);
+
+    public int insertSellerOwnerAccountRoleIfMissing(@Param("sellerId") Long sellerId,
+            @Param("accountId") Long accountId);
+
     public int deleteSellerRoleMenuByRoleId(@Param("sellerId") Long sellerId, @Param("roleId") Long roleId);
 
     public int batchSellerRoleMenu(@Param("sellerId") Long sellerId, @Param("roleId") Long roleId,

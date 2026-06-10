@@ -35,6 +35,14 @@ export const controlStatusValueEnum: ProSchemaValueEnumObj = {
   DISABLED: { text: '停用', status: 'Error' },
 };
 
+export const reviewStatusValueEnum: ProSchemaValueEnumObj = {
+  PENDING: { text: '待审核', status: 'Processing' },
+  APPROVED: { text: '已通过', status: 'Success' },
+  REJECTED: { text: '已驳回', status: 'Error' },
+  WITHDRAWN: { text: '已撤回', status: 'Default' },
+  NONE: { text: '无审核记录', status: 'Default' },
+};
+
 export const productOperationTypeText: Record<string, string> = {
   SALES_STATUS_CHANGE: '销售状态调整',
   CONTROL_DISABLE: '停用',
@@ -61,6 +69,12 @@ export const warehouseKindText: Record<string, string> = {
   MIXED: '混合',
 };
 
+export const warehouseKindValueEnum: ProSchemaValueEnumObj = {
+  official: { text: '官方仓', status: 'Processing' },
+  third_party: { text: '三方仓', status: 'Default' },
+  MIXED: { text: '混合', status: 'Error' },
+};
+
 export const inventoryStatusText: Record<string, string> = {
   IN_STOCK: '有货',
   OUT_OF_STOCK: '缺货',
@@ -69,6 +83,16 @@ export const inventoryStatusText: Record<string, string> = {
   NO_SOURCE: '无来源库存',
   SOURCE_ONLY_IN_TRANSIT: '仅来源在途',
   DISABLED: '停用',
+};
+
+export const inventoryStatusValueEnum: ProSchemaValueEnumObj = {
+  IN_STOCK: { text: '有货', status: 'Success' },
+  OUT_OF_STOCK: { text: '缺货', status: 'Default' },
+  NO_WAREHOUSE: { text: '仓库未配置', status: 'Error' },
+  SOURCE_UNBOUND: { text: '来源SKU未绑定', status: 'Warning' },
+  NO_SOURCE: { text: '无来源库存', status: 'Warning' },
+  SOURCE_ONLY_IN_TRANSIT: { text: '仅来源在途', status: 'Processing' },
+  DISABLED: { text: '停用', status: 'Error' },
 };
 
 export const inventoryStatusColor: Record<string, string> = {

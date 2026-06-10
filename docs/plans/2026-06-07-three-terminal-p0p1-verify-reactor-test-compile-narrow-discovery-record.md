@@ -36,7 +36,7 @@
 
 - `cd E:\Urili-Ruoyi\react-ui; node --check scripts\verify-three-terminal.mjs`：通过。
 - `cd E:\Urili-Ruoyi\react-ui; npm run verify:three-terminal`：通过。
-- 前端 guard：portal token、partner management、seller portal product、buyer portal product 均通过。
+- 历史快照：前端 guard 当时为 portal token、partner management、seller portal product、buyer portal product 共 4 个通过；当前 `frontendGuardScripts` 已扩展为 5 个，以 `react-ui/tests/three-terminal.manifest.json` 当前清单为准。
 - React typecheck：通过。
 - 前端 Jest：6 个 suite / 30 个测试通过。
 - 后端 reactor 编译门历史快照：`mvn -pl ruoyi-admin -am -DskipTests test-compile` 通过，覆盖 `ruoyi-admin` 及其依赖链；当前 gate 已改为动态模块口径。
@@ -55,4 +55,4 @@
 
 ## 结论
 
-当前三端快速验证入口已从“全项目测试发现”收口为“后端全 reactor 编译门 + 三端关键测试显式清单 + 前端关键目录收窄发现”。旧记录中的“扫描所有后端测试源码 / 扫描整个 react-ui 测试文件”的口径不再代表当前规则。
+当前三端快速验证入口已从“全项目测试发现”收口为“后端全 reactor 编译门 + 三端关键测试显式清单 + 前端仓库级关键测试发现”。旧记录中的“扫描所有后端测试源码 / 扫描整个 react-ui 测试文件 / 前端关键目录收窄发现”的口径不再代表当前规则。

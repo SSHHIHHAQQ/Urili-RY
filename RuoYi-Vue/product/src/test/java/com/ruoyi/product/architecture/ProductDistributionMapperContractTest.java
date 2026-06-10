@@ -262,8 +262,10 @@ public class ProductDistributionMapperContractTest
         String[] skuStatements = {
                 "selectSkuPageList",
                 "selectSkuListBySpuId",
+                "selectSkuListBySpuIds",
                 "selectSkuListBySpuIdAndSellerId",
                 "selectOnSaleSkuListBySpuId",
+                "selectOnSaleSkuListBySpuIds",
                 "selectSkuById"
         };
 
@@ -527,7 +529,8 @@ public class ProductDistributionMapperContractTest
     {
         Map<String, List<String>> allowlist = new LinkedHashMap<>();
         allowlist.put("selectProductList", Arrays.asList(
-                "inventory_overview_spu_read_model"));
+                "inventory_overview_spu_read_model",
+                "product_review_request"));
         allowlist.put("selectOnSaleProductList", Arrays.asList(
                 "inventory_overview_spu_read_model"));
         allowlist.put("selectProductById", Arrays.asList(
@@ -537,12 +540,17 @@ public class ProductDistributionMapperContractTest
         allowlist.put("selectOnSaleProductById", Arrays.asList(
                 "inventory_overview_spu_read_model"));
         allowlist.put("selectSkuPageList", Arrays.asList(
-                "inventory_overview_sku_read_model"));
+                "inventory_overview_sku_read_model",
+                "product_review_request"));
         allowlist.put("selectSkuListBySpuId", Arrays.asList(
+                "inventory_overview_sku_read_model"));
+        allowlist.put("selectSkuListBySpuIds", Arrays.asList(
                 "inventory_overview_sku_read_model"));
         allowlist.put("selectSkuListBySpuIdAndSellerId", Arrays.asList(
                 "inventory_overview_sku_read_model"));
         allowlist.put("selectOnSaleSkuListBySpuId", Arrays.asList(
+                "inventory_overview_sku_read_model"));
+        allowlist.put("selectOnSaleSkuListBySpuIds", Arrays.asList(
                 "inventory_overview_sku_read_model"));
         allowlist.put("selectSkuById", Arrays.asList(
                 "inventory_overview_sku_read_model"));

@@ -2,7 +2,7 @@
 
 日期：2026-06-05
 
-状态：已执行到当前远端 `fenxiao` 运行库，并完成后端、前端和浏览器路径验证。
+状态：已执行到当前远端运行库，并完成后端、前端和浏览器路径验证。
 
 ## 1. 执行目标
 
@@ -16,10 +16,14 @@
 
 ## 2. 目标环境
 
-- 目标 MySQL：远端腾讯云 MySQL，主机 `gz-cynosdbmysql-grp-lucf5kyf.sql.tencentcdb.com`，端口 `28634`，数据库 `fenxiao`。
-- 目标 Redis：远端 Redis，主机 `114.132.156.75`，端口 `6379`，数据库索引 `0`。
+- 目标 MySQL：远端运行库，连接来源为本机 `.env.local`，地址已脱敏。
+- 目标 Redis：远端 Redis，连接来源为本机 `.env.local`，地址已脱敏。
 - 连接来源：后端激活配置读取 `.env.local` 中的 `RUOYI_DB_URL`、`RUOYI_DB_USERNAME`、`RUOYI_DB_PASSWORD`；执行记录不保存密码或密钥。
 - 本次未读取或写入本地 Docker MySQL / Redis。
+- 用户确认来源：用户已在当前任务链路中确认允许把该商品编辑页样例数据 SQL 执行到当前远端运行库。
+- 确认 token：该样例数据脚本为一次性演示数据写入记录，未设置独立 SQL session token；后续新增或重放同类远端 DDL/DML 必须补独立确认 token 后再执行。
+- 影响范围：仅影响 `product_spu`、`product_sku`、`product_image`、`product_attribute_value` 相关商品演示数据和字段，不涉及卖家、买家、订单、库存、财务、上游系统事实数据。
+- 回滚方式：未自动执行回滚；如需回滚，需按演示 SPU/SKU 编码精确删除样例商品、图片和类目属性值，并人工评估是否回退新增字段。
 
 ## 3. 执行内容
 

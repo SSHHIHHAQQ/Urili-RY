@@ -10,10 +10,17 @@
 
 - 工作区：`E:\Urili-Ruoyi`
 - 配置来源：`RuoYi-Vue/ruoyi-admin/src/main/resources/application.yml`、`application-druid.yml` 和本机 `.env.local`
-- MySQL：从 `.env.local` 的 `RUOYI_DB_URL` 读取，目标库为远端 `gz-cynosdbmysql-grp-lucf5kyf.sql.tencentcdb.com:28634/fenxiao`
-- Redis：从 `.env.local` 的 `RUOYI_REDIS_*` 读取，目标为远端 `114.132.156.75:6379`，本轮未读写 Redis
+- MySQL：从 `.env.local` 的 `RUOYI_DB_URL` 读取，目标为远端运行库，地址已脱敏
+- Redis：从 `.env.local` 的 `RUOYI_REDIS_*` 读取，目标为远端 Redis，地址已脱敏；本轮未读写 Redis
 - 本轮不使用本地 Docker MySQL / Redis
 - 本记录不输出数据库密码、Redis 密码、token secret 或任何明文密钥
+
+## 用户确认与执行边界
+
+- 用户确认来源：当前三端隔离快速推进目标中已明确“远程数据库 DDL/DML 已确认可以执行”。
+- 本确认仅适用于本记录列明的 `seller_session` / `buyer_session` 免密代入会话审计字段补齐；不得作为后续无确认重放依据。
+- 本次不写 Redis，不修改账号、密码、菜单、角色或业务数据。
+- 本次属于远端运行库结构补列 DDL，执行前后均需记录只读核验结果。
 
 ## 执行前只读核验
 
@@ -46,8 +53,15 @@
 | `acting_admin_name` | `varchar(64)` | `''` | 执行代入的管理端账号名 |
 | `direct_login_reason` | `varchar(255)` | `''` | 免密代入原因 |
 
+## 回滚方式
+
+- 默认不建议回滚：当前代码侧 session insert/select 已依赖这些字段，直接删除列会重新引入运行态字段缺失风险。
+- 如确需回滚，必须先部署不再读写这些字段的代码版本，再对 `seller_session` / `buyer_session` 分别执行受控 `ALTER TABLE ... DROP COLUMN`，并在执行前生成新的 Markdown 方案、只读预览和用户确认。
+- 回滚不应删除历史会话行；只允许回滚本次新增列。
+
 ## 执行方式
 
+- 执行前确认：见上方“用户确认与执行边界”；本次只执行本记录列明的会话审计字段补齐，不得作为后续无确认重放依据
 - 使用本机 Maven 缓存的 `mysql-connector-j` JDBC 驱动和 `jshell`
 - 每个字段先查 `information_schema.columns`，仅在字段不存在时执行 `ALTER TABLE ... ADD COLUMN`
 - 不删除表、不删除行、不更新账号、密码、菜单、角色或业务数据
@@ -61,7 +75,7 @@
 
 执行目标：
 
-- 远端 MySQL：`gz-cynosdbmysql-grp-lucf5kyf.sql.tencentcdb.com:28634/fenxiao`
+- 远端 MySQL：连接来源为 `.env.local` 的 `RUOYI_DB_URL`，目标地址已脱敏
 - Redis：未读写
 
 执行过程：
@@ -89,7 +103,7 @@ RESULT|session_direct_login_audit_columns|OK
 执行后只读复核：
 
 ```text
-CHECK|database|fenxiao
+CHECK|database|<redacted-database>
 CHECK|seller_session_missing_direct_login_audit_columns|-
 CHECK|buyer_session_missing_direct_login_audit_columns|-
 COL|seller_session|direct_login|tinyint||NO|0

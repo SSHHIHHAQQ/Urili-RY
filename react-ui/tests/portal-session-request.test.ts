@@ -144,8 +144,14 @@ const portalAuthenticatedRequestCases: PortalRequestCase[] = [
     terminal: 'seller',
     url: '/api/seller/account/sessions',
     method: 'GET',
-    params: { ipaddr: '127.0.0.1' },
-    call: () => getPortalSessions('seller', { accountId: 99, ipaddr: '127.0.0.1' }),
+    params: { pageNum: 1, pageSize: 5 },
+    call: () =>
+      getPortalSessions('seller', {
+        pageNum: 1,
+        pageSize: 5,
+        accountId: 99,
+        ipaddr: '127.0.0.1',
+      } as any),
   },
   {
     name: 'seller product categories',
@@ -284,7 +290,11 @@ describe('portal request isolation', () => {
 
   it('applies scope stripping consistently to portal audit and product list requests', async () => {
     await getPortalOperLogs('buyer', { pageNum: 2, buyerId: 12, operName: 'edit' });
-    await getPortalSessions('buyer', { pageNum: 3, accountId: 99, ipaddr: '127.0.0.1' });
+    await getPortalSessions('buyer', {
+      pageNum: 3,
+      accountId: 99,
+      ipaddr: '127.0.0.1',
+    } as any);
     await getSellerPortalDistributionProducts({ sellerId: 11, spuName: 'sku' });
     await getBuyerPortalDistributionProducts({ buyerId: 12, spuName: 'sku' });
 
@@ -296,7 +306,7 @@ describe('portal request isolation', () => {
     expect(mockedRequest).toHaveBeenNthCalledWith(2, '/api/buyer/account/sessions', {
       method: 'GET',
       headers: { Authorization: 'Bearer buyer-token', isToken: false },
-      params: { pageNum: 3, ipaddr: '127.0.0.1' },
+      params: { pageNum: 3 },
     });
     expect(mockedRequest).toHaveBeenNthCalledWith(
       3,

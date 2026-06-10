@@ -1,11 +1,12 @@
 export {
   inventoryPairingStatusOptions,
+  inventoryScopeSearchOptions as inventoryScopeOptions,
+  inventoryScopeText,
   pairingRoleTagColor,
   pairingRoleText,
   pairingStatusText,
-  inventoryScopeSearchOptions as inventoryScopeOptions,
-  inventoryScopeText,
   requestOperationText,
+  requestResultText,
   skuPairingStatusSearchOptions as skuPairingStatusOptions,
   skuSyncItemStatusSearchOptions as skuSyncItemStatusOptions,
   syncItemStatusText,
@@ -21,6 +22,7 @@ export const connectionStatusText: Record<string, string> = {
 
 export const credentialStatusText: Record<string, string> = {
   CONFIGURED: '已授权',
+  PENDING: '待校验',
   INVALID: '授权异常',
 };
 
@@ -41,19 +43,45 @@ export const settlementTypeText: Record<string, string> = {
   'self-operated-receivable': '自营仓（应收）',
   UPSTREAM_PAYABLE: '上游仓（应付）',
   PLATFORM_ADVANCE: '自营仓（应收）',
+  SELF_OPERATED_RECEIVABLE: '自营仓（应收）',
 };
 
 export const normalizeSystemKindValue = (value?: string) =>
   value === 'LINGXING_WMS' ? 'lingxing-wms' : value || 'lingxing-wms';
 
 export const normalizeSettlementTypeValue = (value?: string) => {
-  if (value === 'UPSTREAM_PAYABLE') {
+  const rawValue = value?.trim();
+  if (!rawValue) {
     return 'upstream-payable';
   }
-  if (value === 'PLATFORM_ADVANCE') {
+  const normalizedValue = rawValue.toLowerCase();
+  if (normalizedValue === 'upstream-payable') {
+    return 'upstream-payable';
+  }
+  if (normalizedValue === 'self-operated-receivable') {
     return 'self-operated-receivable';
   }
-  return value || 'upstream-payable';
+  const legacyValue = rawValue.toUpperCase();
+  if (legacyValue === 'UPSTREAM_PAYABLE') {
+    return 'upstream-payable';
+  }
+  if (
+    legacyValue === 'PLATFORM_ADVANCE' ||
+    legacyValue === 'SELF_OPERATED_RECEIVABLE'
+  ) {
+    return 'self-operated-receivable';
+  }
+  return rawValue;
+};
+
+export const settlementTypeDisplayText = (value?: string) => {
+  const normalizedValue = normalizeSettlementTypeValue(value);
+  return (
+    settlementTypeText[normalizedValue] ||
+    settlementTypeText[value || ''] ||
+    value ||
+    '-'
+  );
 };
 
 export const skuSearchFieldOptions = [

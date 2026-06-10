@@ -64,12 +64,14 @@ describe('verify-three-terminal backend gate', () => {
     expect(source).toContain('product[\\\\/]src[\\\\/]test[\\\\/]java');
     expect(source).toContain('warehouse[\\\\/]src[\\\\/]test[\\\\/]java');
     expect(source).toContain('finance[\\\\/]src[\\\\/]test[\\\\/]java');
+    expect(source).toContain('logistics[\\\\/]src[\\\\/]test[\\\\/]java');
     expect(source).toMatch(/Finance\|Currency/);
     expect(source).toContain('criticalBackendTestPathPattern');
     expect(source).toContain('critical backend test classes are not included in three-terminal manifest');
     expect(source).toMatch(/source-warehouse\|warehouse\|finance/);
     expect(source).toMatch(/system-user-service/);
     expect(source).toMatch(/inventory-adjustment-review/);
+    expect(source).toMatch(/product-review/);
   });
 
   it('keeps backend reactor modules and maven command wiring dynamic', () => {
@@ -180,6 +182,8 @@ describe('verify-three-terminal backend gate', () => {
       path.resolve(uiRoot, '..', 'RuoYi-Vue', 'ruoyi-admin', 'src', 'main', 'resources', 'application.yml'),
       'utf8',
     );
+    const envExample = fs.readFileSync(path.resolve(uiRoot, '..', '.env.example'), 'utf8');
+    const agents = fs.readFileSync(path.resolve(uiRoot, '..', 'AGENTS.md'), 'utf8');
     const secretCipherSupport = fs.readFileSync(
       path.resolve(uiRoot, '..', 'RuoYi-Vue', 'ruoyi-system', 'src', 'main', 'java', 'com', 'ruoyi', 'system', 'service', 'support', 'SecretCipherSupport.java'),
       'utf8',
@@ -188,8 +192,11 @@ describe('verify-three-terminal backend gate', () => {
     expect(applicationYml).toContain('encryption-key: ${URILI_SECRET_ENCRYPTION_KEY:}');
     expect(applicationYml).toContain('encryption-key-id: ${URILI_SECRET_ENCRYPTION_KEY_ID:local-v1}');
     expect(applicationYml).toContain('secret: ${RUOYI_TOKEN_SECRET:}');
+    expect(envExample).toContain('URILI_SECRET_ENCRYPTION_KEY=');
+    expect(envExample).toContain('URILI_SECRET_ENCRYPTION_KEY_ID=local-v1');
+    expect(agents).toContain('URILI_SECRET_ENCRYPTION_KEY');
     expect(secretCipherSupport).toContain('@Value("${urili.secret.encryption-key:}")');
-    expect(secretCipherSupport).toContain('@Value("${urili.secret.encryption-key-id:default}")');
+    expect(secretCipherSupport).toContain('@Value("${urili.secret.encryption-key-id:local-v1}")');
     expect(secretCipherSupport).toContain('缺少 URILI_SECRET_ENCRYPTION_KEY');
   });
 
@@ -256,6 +263,7 @@ describe('verify-three-terminal backend gate', () => {
       'SellerAdminPermissionContractTest',
       'BuyerAdminPermissionContractTest',
       'StandalonePartnerSeedMenuContractTest',
+      'SecretCipherSupportTest',
     ].forEach((testClass) => {
       expect(critical.has(testClass)).toBe(true);
     });
@@ -267,6 +275,7 @@ describe('verify-three-terminal backend gate', () => {
     'SellerAdminPermissionContractTest',
     'BuyerAdminPermissionContractTest',
     'StandalonePartnerSeedMenuContractTest',
+    'SecretCipherSupportTest',
   ])('rejects critical backend test removed from the three-terminal manifest: %s', (criticalTestClass) => {
     withMutatedJsonFile('tests/three-terminal.manifest.json', (manifest) => {
       manifest.backendTestClasses = manifest.backendTestClasses.filter(
@@ -316,5 +325,75 @@ describe('verify-three-terminal backend gate', () => {
         'frontend guard scripts are not included in three-terminal manifest',
       );
     });
+  });
+
+  it('rejects newly added product review guard tests that are missing from the manifest', () => {
+    const tempTest = path.join(uiRoot, 'tests', 'product-review-drift.test.ts');
+
+    try {
+      fs.writeFileSync(
+        tempTest,
+        "test('product review drift guard', () => expect(true).toBe(true));\n",
+        'utf8',
+      );
+
+      const result = runManifestCheck();
+
+      expect(result.status).not.toBe(0);
+      expect(`${result.stdout}${result.stderr}`).toContain(
+        'critical frontend test files are not included in three-terminal manifest',
+      );
+      expect(`${result.stdout}${result.stderr}`.replaceAll('\\', '/')).toContain(
+        'tests/product-review-drift.test.ts',
+      );
+    } finally {
+      fs.rmSync(tempTest, { force: true });
+    }
+  });
+
+  it('rejects newly added logistics backend tests that are missing from the manifest', () => {
+    const tempTest = path.resolve(
+      uiRoot,
+      '..',
+      'RuoYi-Vue',
+      'logistics',
+      'src',
+      'test',
+      'java',
+      'com',
+      'ruoyi',
+      'logistics',
+      'LogisticsDriftGuardTest.java',
+    );
+
+    try {
+      fs.mkdirSync(path.dirname(tempTest), { recursive: true });
+      fs.writeFileSync(
+        tempTest,
+        [
+          'package com.ruoyi.logistics;',
+          '',
+          'import org.junit.jupiter.api.Test;',
+          '',
+          'class LogisticsDriftGuardTest {',
+          '    @Test',
+          '    void detectsManifestDrift() {',
+          '    }',
+          '}',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+
+      const result = runManifestCheck();
+
+      expect(result.status).not.toBe(0);
+      expect(`${result.stdout}${result.stderr}`).toContain(
+        'critical backend test classes are not included in three-terminal manifest',
+      );
+      expect(`${result.stdout}${result.stderr}`).toContain('LogisticsDriftGuardTest');
+    } finally {
+      fs.rmSync(tempTest, { force: true });
+    }
   });
 });

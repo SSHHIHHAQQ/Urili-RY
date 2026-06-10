@@ -108,7 +108,8 @@ public class AdminCurrencyController extends BaseController
     }
 
     @PreAuthorize("@ss.hasPermi('finance:currency:syncConfig')")
-    @Log(title = "币种汇率同步设置", businessType = BusinessType.UPDATE)
+    @Log(title = "币种汇率同步设置", businessType = BusinessType.UPDATE,
+            excludeParamNames = { "credential", "credentialCiphertext" })
     @PutMapping("/currency-sync-config")
     public AjaxResult saveSyncConfig(@Validated @RequestBody FinanceCurrencySyncConfig config)
     {
@@ -116,7 +117,8 @@ public class AdminCurrencyController extends BaseController
     }
 
     @PreAuthorize("@ss.hasPermi('finance:currency:sync')")
-    @Log(title = "币种汇率测试连接", businessType = BusinessType.OTHER)
+    @Log(title = "币种汇率测试连接", businessType = BusinessType.OTHER,
+            excludeParamNames = { "credential", "credentialCiphertext" })
     @PostMapping("/currency-sync-config/test")
     public AjaxResult testSyncConfig(@RequestBody(required = false) FinanceCurrencySyncConfig config)
     {

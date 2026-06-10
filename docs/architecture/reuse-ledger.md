@@ -1,5 +1,20 @@
 # 复用台账
 
+## ImageResourceUtils 图片资源字段规范化
+
+- 位置：
+  - `RuoYi-Vue/ruoyi-common/src/main/java/com/ruoyi/common/utils/file/ImageResourceUtils.java`
+  - `RuoYi-Vue/product/src/test/java/com/ruoyi/product/service/impl/ImageResourceUtilsTest.java`
+- 当前用途：
+  - 商品 SPU 主图、商品图库、SKU 图、详情图文图片统一保存资源路径或外部 URL，不保存 `data:image` / base64 内容。
+  - `/api/profile/...` 和带域名的 `/profile/...?...` 会规范为稳定 `/profile/...`，避免把临时签名 URL 存入业务表。
+  - 管理端和端内操作日志入库前复用 `redactInlineImagePayloads(...)` 脱敏 inline base64，防止请求日志继续污染数据库。
+  - 主体附件、来源商品同步等非商品主流程也复用同一判断，保持图片/附件资源边界一致。
+- 复用规则：
+  - 新增任何图片、附件、富文本图片、来源图片字段时，保存前必须复用 `normalizeStoredImageResource(...)` 或 `assertNotInlineImage(...)`。
+  - 来源系统图片如果不是平台文件服务资源，且无法保证可长期访问，可以保存外部 URL；但 inline base64 必须丢弃或拒绝，不能落库。
+  - 操作日志、端内日志、外部日志如果会序列化请求/响应体，入库前必须调用 `redactInlineImagePayloads(...)`。
+
 ## ProductCenter 买家可见商品列表模板
 
 - 位置：
@@ -254,6 +269,7 @@
   - 固定 `20260605_order_after_sale_menu_seed.sql` 的 `tmp_order_after_sale_sys_menu_guard` 同 ID 校验必须纳入 `parent_id/menu_type`，避免历史 `2412` 菜单挂错订单父级或类型错误时被静默改写。
   - 固定 `2054` 物流商管理菜单只由 `20260608_overseas_channel_carrier_menu_restructure.sql` 持有；该脚本同时负责把 `2041/2042` 系统渠道/客户渠道从历史 `2040` 渠道管理目录迁入 `2030` 海外仓服务设置，并删除迁空后的 `2040` 顶级目录。
   - 固定 `20260608_overseas_channel_carrier_menu_restructure.sql` 的 `tmp_overseas_channel_menu_guard` 同 ID 校验必须纳入 `parent_id/menu_type`；`2041/2042` 只允许历史父级 `2040` 或最终父级 `2030` 两种签名，`2054` 必须保持 `parent_id=2030`、`menu_type=C`。
+  - 固定 `20260610_logistics_carrier_management.sql` 只允许将 `2054` 从已知占位组件 `Common/PlannedPage/index` 迁移到正式组件 `Logistics/Carrier/index`，并只在 `2054` 下写入 `2510-2517` 物流商管理按钮权限；脚本必须先校验 `2054` 页面签名和按钮权限 slot。
   - 固定 `2010` 主体管理顶级目录唯一写入 owner 为 `top_menu_seed.sql`；`seller_buyer_management_seed.sql` 和 `20260606_admin_partner_page_direct_login_seed.sql` 只能在写入 `2011/2012` 及按钮前断言 `2010` 已存在且保持 `parent_id=0/menu_type=M/path=partner/route_name=PartnerManagement/perms=''`，不得再 upsert `2010`。
   - 固定 `20260605_seller_account_lock_control.sql` / `20260605_buyer_account_lock_control.sql` 的账号锁定按钮菜单 slot guard 必须纳入 `parent_id/menu_type`；`2322` 必须保持 `parent_id=2011`、`menu_type=F`，`2323` 必须保持 `parent_id=2012`、`menu_type=F`。
   - 固定 `top_menu_seed.sql` 在复用若依原生 `108/3` 以及调整顶级目录前先做 slot/signature guard；其同 ID 校验必须纳入 `parent_id/menu_type`，允许 `108` 从若依原生日志目录迁移到日志中心，但不允许历史菜单挂错父级或菜单类型时被静默改写。
@@ -2726,3 +2742,79 @@
   - 后续在商品列表、卖家端或其它库存页面增加库存同步方式入口时，优先复用 `InventorySyncPolicyButton` 或抽取其稳定子组件，不要复制预览/确认表单逻辑。
   - 后续新增同步方式 code 时，必须同时更新 SQL 字典、后端策略服务、前端展示映射、合同测试和库存流水操作类型。
   - 后续来源库存刷新、SKU配对变化、仓库配对变化影响平台库存时，必须通过 `IInventoryStockSyncPolicyService` 的公开入口触发策略重算，不要在其它模块直接写库存策略字段。
+
+## Partner Admin Session 分页参数过滤模板
+
+- 位置：
+  - `react-ui/src/services/seller-buyer/sessionParams.ts`
+  - `react-ui/src/services/seller/seller.ts`
+  - `react-ui/src/services/buyer/buyer.ts`
+  - `react-ui/src/components/PartnerManagement/PartnerManagementPage.tsx`
+  - `react-ui/tests/partner-management-contract.test.ts`
+- 当前用途：
+  - 固定管理端查看 seller/buyer 端在线会话列表时，前端 service 只接受并只转发 `pageNum/pageSize`。
+  - 避免 admin 侧会话列表接口被未来调用方透传 `subjectId`、`accountId`、`ipaddr` 等身份范围或审计筛选字段，保持主体和账号范围只来自 URL path。
+  - `partner-management-contract.test.ts` 同时覆盖静态类型合同和运行时请求参数剥离，即调用方强行 `as any` 传入身份范围字段时，请求仍只携带分页参数。
+- 复用规则：
+  - 后续新增 seller/buyer 管理端会话列表、会话弹窗或同构 portal 管理 service 时，必须复用 `sanitizePartnerSessionPageParams(...)`，不要重新使用 `Record<string, any>` 作为会话分页参数。
+  - 如果后端未来确认支持新的只读筛选字段，必须先扩展 `API.Partner.PartnerSessionPageParams`、同步更新 seller/buyer service、合同测试和后端接收语义，不能临时透传任意对象。
+
+## 系统物流渠道管理
+
+- 位置：
+  - `RuoYi-Vue/logistics/src/main/java/com/ruoyi/logistics/service/ILogisticsSystemChannelService.java`
+  - `RuoYi-Vue/logistics/src/main/java/com/ruoyi/logistics/service/impl/LogisticsSystemChannelServiceImpl.java`
+  - `RuoYi-Vue/logistics/src/main/resources/mapper/logistics/LogisticsSystemChannelMapper.xml`
+  - `RuoYi-Vue/ruoyi-admin/src/main/java/com/ruoyi/web/controller/logistics/AdminLogisticsSystemChannelController.java`
+  - `RuoYi-Vue/sql/20260610_system_logistics_channel_management.sql`
+  - `react-ui/src/services/logistics/systemChannel.ts`
+  - `react-ui/src/pages/Channel/System/index.tsx`
+  - `react-ui/tests/logistics-system-channel-contract.test.ts`
+- 当前用途：
+  - 固定管理端系统物流渠道菜单使用 `/logistics/admin/system-channels` 和 `logistics:systemChannel:*` 权限点。
+  - 固定系统渠道可绑定多个同等级物流商账号/物流商渠道映射，不区分主备；映射事实源复用 `logistics_carrier_channel_mapping`。
+  - 固定发货地址覆写按“系统渠道 + 仓库”维度落 `logistics_system_channel_warehouse`；未配置覆写时使用仓库主数据地址，配置 `external_shipper_code` 时允许详细地址为空。
+  - 固定系统渠道不维护买家范围和平台渠道映射；买家可见范围后续归客户渠道管理。
+- 复用规则：
+  - 后续发货地址传给物流商时必须先按“渠道 + 仓库”查覆写：`EXTERNAL_CODE` 优先传外部编码，`OVERRIDE` 传覆写地址，`WAREHOUSE` 或无绑定使用仓库地址。
+  - 后续新增平台类型、下单规则字段、签名/保险等能力时，必须同步 SQL 字典、DTO、Service 校验、前端控件和契约测试。
+  - 不要把系统渠道配置重新塞回物流商管理页面；物流商管理只维护物流商账号、同步清单和物流商渠道映射入口。
+
+## 客户渠道管理
+
+- 位置：
+  - `RuoYi-Vue/logistics/src/main/java/com/ruoyi/logistics/service/ILogisticsCustomerChannelService.java`
+  - `RuoYi-Vue/logistics/src/main/java/com/ruoyi/logistics/service/impl/LogisticsCustomerChannelServiceImpl.java`
+  - `RuoYi-Vue/logistics/src/main/resources/mapper/logistics/LogisticsCustomerChannelMapper.xml`
+  - `RuoYi-Vue/ruoyi-admin/src/main/java/com/ruoyi/web/controller/logistics/AdminLogisticsCustomerChannelController.java`
+  - `RuoYi-Vue/sql/20260610_customer_logistics_channel_management.sql`
+  - `react-ui/src/services/logistics/customerChannel.ts`
+  - `react-ui/src/pages/Channel/Customer/index.tsx`
+  - `react-ui/tests/logistics-customer-channel-contract.test.ts`
+- 当前用途：
+  - 固定管理端客户渠道菜单使用 `/logistics/admin/customer-channels` 和 `logistics:customerChannel:*` 权限点。
+  - 固定客户渠道是买家实际看到和选择的渠道；客户渠道通过 `logistics_customer_channel_system_mapping` 绑定一个或多个系统渠道。
+  - 固定买家范围只绑定买家主体，`ALL` 不落明细，`INCLUDE`/`EXCLUDE` 通过 `logistics_customer_channel_buyer_scope` 保存选中买家集合。
+  - 固定仓库面单隐藏第三方面单字段，并保存 `NOT_REQUIRED` / `NOT_FETCH` / `UNSUPPORTED` 默认值。
+  - 固定第三方面单且需要上传物流面单时，平台面单获取和客户上传面单至少开启一个。
+- 复用规则：
+  - 后续下单、报价、buyer 端渠道可见性不得重新实现买家范围判断，应复用客户渠道服务或从客户渠道表建立只读查询入口。
+  - 后续平台渠道映射归客户渠道管理，不得重新放回系统渠道管理。
+  - 后续新增客户渠道下单规则、平台映射或客户侧面单流程时，必须同步 SQL 字典、DTO、Service 校验、前端控件和契约测试。
+
+## 管理端与端内操作日志凭证字段脱敏模板
+
+- 位置：
+  - `RuoYi-Vue/ruoyi-framework/src/main/java/com/ruoyi/framework/aspectj/LogAspect.java`
+  - `RuoYi-Vue/ruoyi-framework/src/main/java/com/ruoyi/framework/aspectj/PortalLogAspect.java`
+  - `RuoYi-Vue/ruoyi-framework/src/test/java/com/ruoyi/framework/aspectj/LogAspectSensitiveFieldFilterTest.java`
+  - `RuoYi-Vue/integration/src/main/java/com/ruoyi/integration/controller/AdminUpstreamSystemController.java`
+  - `RuoYi-Vue/finance/src/main/java/com/ruoyi/finance/controller/AdminCurrencyController.java`
+- 当前用途：
+  - 固定 `appKey`、`appSecret`、`credential`、`credentialCiphertext`、`appKeyCiphertext`、`appSecretCiphertext` 不得进入管理端 `sys_oper_log` 或端内 `*_oper_log` 的请求/响应 JSON。
+  - 固定 request body 和 query/form 参数 map 都要按同一敏感字段名单过滤，避免外部系统凭证因 `@Log` 自动记录而明文落库。
+  - 对上游系统接入/重新授权、币种汇率同步设置/测试连接等已知凭证接口，在 `@Log.excludeParamNames` 上显式声明凭证字段，作为全局过滤之外的第二层约束。
+- 复用规则：
+  - 后续新增外部系统、支付、物流、ERP、WMS 或任何含密钥/凭证的管理端接口时，必须优先检查 `LogAspect.EXCLUDE_PROPERTIES` / `PortalLogAspect.EXCLUDE_PROPERTIES` 是否已覆盖字段名。
+  - 只要接口请求 DTO 中出现新的 secret、key、token、credential、ciphertext 类字段，必须同步更新日志脱敏名单、接口 `@Log.excludeParamNames` 和 `LogAspectSensitiveFieldFilterTest`。
+  - 不允许只依赖 Jackson `WRITE_ONLY` 或前端隐藏字段来保护操作日志；操作日志走 Fastjson2 过滤链，必须有日志层合同。

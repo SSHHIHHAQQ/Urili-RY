@@ -27,10 +27,6 @@ import {
   PORTAL_SERVICE,
   type PortalTerminal,
 } from '../terminal';
-import BuyerDistributionProductList from './BuyerDistributionProductList';
-import BuyerProductSchemaPreview from './BuyerProductSchemaPreview';
-import SellerOwnDistributionProductList from './SellerOwnDistributionProductList';
-import SellerProductSchemaPreview from './SellerProductSchemaPreview';
 
 type PortalHomeData = {
   info?: API.Partner.PortalPermissionInfo;
@@ -158,6 +154,12 @@ const PortalHomePage: React.FC = () => {
   const [passwordForm] = Form.useForm<PasswordFormValues>();
   const sessionRequestSeq = useRef(0);
 
+  const clearSessions = useCallback(() => {
+    sessionRequestSeq.current += 1;
+    setSessionRows([]);
+    setSessionLoading(false);
+  }, []);
+
   const loadData = useCallback(async (currentTerminal: PortalTerminal) => {
     setLoading(true);
     try {
@@ -245,8 +247,22 @@ const PortalHomePage: React.FC = () => {
       return;
     }
     loadData(terminal);
-    loadSessions(terminal);
-  }, [loadData, loadSessions, terminal]);
+  }, [loadData, terminal]);
+
+  useEffect(() => {
+    if (!terminal || !getTerminalAccessToken(terminal)) {
+      return;
+    }
+    const permissions = data.info?.permissions;
+    if (!permissions) {
+      return;
+    }
+    if (hasPortalPermission(permissions, portalPermission(terminal, 'account:session:list'))) {
+      loadSessions(terminal);
+      return;
+    }
+    clearSessions();
+  }, [clearSessions, data.info?.permissions, loadSessions, terminal]);
 
   const handleLogout = async () => {
     if (!terminal) {
@@ -291,16 +307,7 @@ const PortalHomePage: React.FC = () => {
   const canViewAccounts = hasPortalPermission(permissions, portalPermission(terminal, 'account:list'));
   const canViewDepts = hasPortalPermission(permissions, portalPermission(terminal, 'dept:list'));
   const canViewRoles = hasPortalPermission(permissions, portalPermission(terminal, 'role:list'));
-  const canViewProductSchema = hasPortalPermission(permissions, portalPermission(terminal, 'product:category:list'))
-    && hasPortalPermission(permissions, portalPermission(terminal, 'product:schema:query'));
-  const canViewDistributionProducts = hasPortalPermission(
-    permissions,
-    portalPermission(terminal, 'product:distribution:list'),
-  );
-  const canQueryDistributionProducts = hasPortalPermission(
-    permissions,
-    portalPermission(terminal, 'product:distribution:query'),
-  );
+  const canViewSessions = hasPortalPermission(permissions, portalPermission(terminal, 'account:session:list'));
   const gridColumns = screens.lg ? 3 : screens.sm ? 2 : 1;
   const contentGridStyle: React.CSSProperties = {
     ...gridStyle,
@@ -357,6 +364,11 @@ const PortalHomePage: React.FC = () => {
     },
   ];
 
+  const handleRefresh = () => {
+    clearSessions();
+    loadData(terminal);
+  };
+
   return (
     <div style={pageStyle}>
       <div style={headerStyle}>
@@ -371,10 +383,7 @@ const PortalHomePage: React.FC = () => {
         <Space wrap>
           <Button
             icon={<ReloadOutlined />}
-            onClick={() => {
-              loadData(terminal);
-              loadSessions(terminal);
-            }}
+            onClick={handleRefresh}
           >
             刷新
           </Button>
@@ -426,38 +435,20 @@ const PortalHomePage: React.FC = () => {
             </Card>
           ) : null}
 
-          {canViewProductSchema && terminal === 'seller' ? (
-            <div style={fullGridStyle}>
-              <SellerProductSchemaPreview />
-            </div>
-          ) : canViewProductSchema && terminal === 'buyer' ? (
-            <div style={fullGridStyle}>
-              <BuyerProductSchemaPreview />
-            </div>
+          {canViewSessions ? (
+            <Card title="当前账号会话" variant="borderless" style={fullGridStyle}>
+              <Table<PortalSessionRow>
+                size="small"
+                rowKey="uiRowKey"
+                loading={sessionLoading}
+                pagination={false}
+                columns={sessionColumns}
+                dataSource={sessionRows}
+                scroll={{ x: 780 }}
+                locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
+              />
+            </Card>
           ) : null}
-
-          {canViewDistributionProducts && terminal === 'seller' ? (
-            <div style={fullGridStyle}>
-              <SellerOwnDistributionProductList canQuery={canQueryDistributionProducts} />
-            </div>
-          ) : canViewDistributionProducts && terminal === 'buyer' ? (
-            <div style={fullGridStyle}>
-              <BuyerDistributionProductList canQuery={canQueryDistributionProducts} />
-            </div>
-          ) : null}
-
-          <Card title="当前账号会话" variant="borderless" style={fullGridStyle}>
-            <Table<PortalSessionRow>
-              size="small"
-              rowKey="uiRowKey"
-              loading={sessionLoading}
-              pagination={false}
-              columns={sessionColumns}
-              dataSource={sessionRows}
-              scroll={{ x: 780 }}
-              locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
-            />
-          </Card>
 
           <Card title="权限标识" variant="borderless" style={fullGridStyle}>
             {renderTags(permissions)}

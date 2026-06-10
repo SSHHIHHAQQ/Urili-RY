@@ -28,6 +28,7 @@ import com.ruoyi.buyer.domain.Buyer;
 import com.ruoyi.buyer.domain.BuyerAccount;
 import com.ruoyi.buyer.mapper.BuyerMapper;
 import com.ruoyi.buyer.mapper.BuyerPortalDeptMapper;
+import com.ruoyi.buyer.mapper.BuyerPortalPermissionMapper;
 import com.ruoyi.system.domain.PortalDept;
 import com.ruoyi.system.domain.PortalAccount;
 import com.ruoyi.system.domain.PortalDirectLoginTicket;
@@ -42,6 +43,7 @@ import com.ruoyi.system.domain.PortalOwnLoginLogProfile;
 import com.ruoyi.system.domain.PortalOwnOperLogProfile;
 import com.ruoyi.system.domain.PortalOwnSessionProfile;
 import com.ruoyi.system.domain.PortalPasswordChangeRequest;
+import com.ruoyi.system.domain.PortalRole;
 import com.ruoyi.system.domain.PortalSessionProfile;
 import com.ruoyi.system.mapper.PortalDirectLoginTicketMapper;
 import com.ruoyi.system.service.ISysDictTypeService;
@@ -105,6 +107,29 @@ public class BuyerServiceImplTest
     }
 
     @Test
+    public void insertBuyerCreatesOwnerRoleMenuGrantAndBindsOwnerAccount()
+    {
+        authenticateAdmin();
+        Buyer buyer = buyerProfile("CN");
+        RecordingBuyerMapper mapper = recordingMapper(buyer);
+        RecordingBuyerPortalPermissionMapper permissionMapper = permissionMapper();
+        BuyerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper().proxy(),
+            new RecordingPortalTokenSupport(), permissionMapper.proxy());
+
+        int rows = service.insertBuyer(buyer);
+
+        assertEquals(1, rows);
+        assertEquals(Long.valueOf(11L), mapper.insertedAccount.getBuyerId());
+        assertEquals("buyer-owner", mapper.insertedAccount.getUserName());
+        assertEquals(PartnerSupport.ACCOUNT_ROLE_OWNER, mapper.insertedAccount.getAccountRole());
+        assertEquals(Long.valueOf(11L), permissionMapper.ownerRoleBuyerId);
+        assertEquals(Long.valueOf(11L), permissionMapper.ownerMenuBuyerId);
+        assertEquals(Long.valueOf(11L), permissionMapper.assignedBuyerId);
+        assertEquals(mapper.insertedAccount.getBuyerAccountId(), permissionMapper.assignedAccountId);
+        assertEquals(List.of(permissionMapper.ownerRole.getRoleId()), permissionMapper.assignedRoleIds);
+    }
+
+    @Test
     public void insertBuyerAccountRejectsDeptOutsideBuyer()
     {
         authenticateAdmin();
@@ -156,6 +181,29 @@ public class BuyerServiceImplTest
             return;
         }
         throw new AssertionError("Expected ServiceException");
+    }
+
+    @Test
+    public void insertBuyerAccountOwnerBindsOwnerRole()
+    {
+        authenticateAdmin();
+        Buyer buyer = buyer(11L, "BAA010001", PartnerSupport.STATUS_NORMAL);
+        BuyerAccount account = account(null, 11L, "buyer-owner", PartnerSupport.STATUS_NORMAL);
+        account.setNickName("Buyer Owner");
+        account.setPassword("U12346");
+        account.setAccountRole(PartnerSupport.ACCOUNT_ROLE_OWNER);
+        RecordingBuyerMapper mapper = recordingMapper(buyer);
+        RecordingBuyerPortalPermissionMapper permissionMapper =
+            permissionMapper().withOwnerRole(role(101L, 11L, "owner"));
+        BuyerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper().proxy(),
+            new RecordingPortalTokenSupport(), permissionMapper.proxy());
+
+        int rows = service.insertBuyerAccount(11L, account);
+
+        assertEquals(1, rows);
+        assertEquals(Long.valueOf(11L), permissionMapper.assignedBuyerId);
+        assertEquals(mapper.insertedAccount.getBuyerAccountId(), permissionMapper.assignedAccountId);
+        assertEquals(List.of(101L), permissionMapper.assignedRoleIds);
     }
 
     @Test
@@ -295,6 +343,52 @@ public class BuyerServiceImplTest
     }
 
     @Test
+    public void updateBuyerStatusDisablingSubjectSyncsOwnerAndForcesAllBuyerSessionsOut()
+    {
+        authenticateAdmin();
+        Buyer buyer = buyer(11L, "BAA010001", PartnerSupport.STATUS_NORMAL);
+        BuyerAccount owner = account(21L, 11L, "buyer-owner", PartnerSupport.STATUS_NORMAL);
+        owner.setAccountRole(PartnerSupport.ACCOUNT_ROLE_OWNER);
+        RecordingBuyerMapper mapper = recordingMapper(buyer, owner);
+        mapper.onlineSessions.add(onlineSession(11L, 21L, "buyer-owner", "token-a", false));
+        PortalLoginSession directLoginSession = onlineSession(11L, 22L, "buyer-staff", "token-b", true);
+        directLoginSession.setActingAdminId(99L);
+        directLoginSession.setActingAdminName("issuer-admin");
+        mapper.onlineSessions.add(directLoginSession);
+        RecordingPortalTokenSupport tokenSupport = new RecordingPortalTokenSupport();
+        BuyerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper().proxy(),
+            tokenSupport);
+        Buyer update = new Buyer();
+        update.setBuyerId(11L);
+        update.setStatus("1");
+
+        int rows = service.updateBuyerStatus(update);
+
+        assertEquals(1, rows);
+        assertEquals(Long.valueOf(11L), mapper.updatedBuyerStatusBuyerId);
+        assertEquals("1", mapper.updatedBuyerStatusValue);
+        assertEquals("admin", mapper.updatedBuyerStatusBy);
+        assertEquals(Long.valueOf(21L), mapper.updatedAccount.getBuyerAccountId());
+        assertEquals("1", mapper.updatedAccount.getStatus());
+        assertEquals("admin", mapper.updatedAccount.getUpdateBy());
+        assertEquals(Long.valueOf(11L), mapper.forceLogoutBuyerId);
+        assertEquals(null, mapper.forceLogoutAccountId);
+        assertEquals(2, mapper.insertedLoginLogs.size());
+        assertEquals(Boolean.FALSE, mapper.insertedLoginLogs.get(0).getDirectLogin());
+        assertEquals(Constants.SUCCESS, mapper.insertedLoginLogs.get(0).getStatus());
+        assertEquals("FORCE_LOGOUT", mapper.insertedLoginLogs.get(0).getMsg());
+        assertEquals(Long.valueOf(11L), mapper.insertedLoginLogs.get(0).getSubjectId());
+        assertEquals(Long.valueOf(21L), mapper.insertedLoginLogs.get(0).getAccountId());
+        assertCurrentAdminAudit(mapper.insertedLoginLogs.get(0));
+        assertEquals(Boolean.TRUE, mapper.insertedLoginLogs.get(1).getDirectLogin());
+        assertEquals(Long.valueOf(100L), mapper.insertedLoginLogs.get(1).getDirectLoginTicketId());
+        assertCurrentAdminAudit(mapper.insertedLoginLogs.get(1));
+        assertEquals("buyer", tokenSupport.deletedTerminal);
+        assertEquals(List.of("token-a", "token-b"), tokenSupport.deletedTokenIds);
+        assertEquals(1, tokenSupport.deleteLoginTokensCallCount);
+    }
+
+    @Test
     public void updateBuyerAccountDisablingAccountForcesOnlyThatAccountSessionsOut()
     {
         authenticateAdmin();
@@ -302,8 +396,11 @@ public class BuyerServiceImplTest
         BuyerAccount current = account(22L, 11L, "buyer-staff", PartnerSupport.STATUS_NORMAL);
         current.setNickName("Buyer Staff");
         RecordingBuyerMapper mapper = recordingMapper(buyer, current);
-        mapper.onlineTokenIds.add("token-a");
-        mapper.onlineTokenIds.add("token-b");
+        mapper.onlineSessions.add(onlineSession(11L, 22L, "buyer-staff", "token-a", false));
+        PortalLoginSession directLoginSession = onlineSession(11L, 22L, "buyer-staff", "token-b", true);
+        directLoginSession.setActingAdminId(99L);
+        directLoginSession.setActingAdminName("issuer-admin");
+        mapper.onlineSessions.add(directLoginSession);
         RecordingPortalTokenSupport tokenSupport = new RecordingPortalTokenSupport();
         BuyerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper().proxy(),
             tokenSupport);
@@ -320,8 +417,20 @@ public class BuyerServiceImplTest
         assertEquals("1", mapper.updatedAccount.getStatus());
         assertEquals(Long.valueOf(11L), mapper.forceLogoutBuyerId);
         assertEquals(Long.valueOf(22L), mapper.forceLogoutAccountId);
+        assertEquals(2, mapper.insertedLoginLogs.size());
+        assertEquals(Boolean.FALSE, mapper.insertedLoginLogs.get(0).getDirectLogin());
+        assertEquals(Constants.SUCCESS, mapper.insertedLoginLogs.get(0).getStatus());
+        assertEquals("FORCE_LOGOUT", mapper.insertedLoginLogs.get(0).getMsg());
+        assertEquals(Long.valueOf(11L), mapper.insertedLoginLogs.get(0).getSubjectId());
+        assertEquals(Long.valueOf(22L), mapper.insertedLoginLogs.get(0).getAccountId());
+        assertCurrentAdminAudit(mapper.insertedLoginLogs.get(0));
+        assertEquals(Boolean.TRUE, mapper.insertedLoginLogs.get(1).getDirectLogin());
+        assertEquals(Long.valueOf(100L), mapper.insertedLoginLogs.get(1).getDirectLoginTicketId());
+        assertEquals("support check", mapper.insertedLoginLogs.get(1).getDirectLoginReason());
+        assertCurrentAdminAudit(mapper.insertedLoginLogs.get(1));
         assertEquals("buyer", tokenSupport.deletedTerminal);
-        assertEquals(mapper.onlineTokenIds, tokenSupport.deletedTokenIds);
+        assertEquals(List.of("token-a", "token-b"), tokenSupport.deletedTokenIds);
+        assertEquals(1, tokenSupport.deleteLoginTokensCallCount);
     }
 
     @Test
@@ -358,8 +467,11 @@ public class BuyerServiceImplTest
         Buyer buyer = buyer(11L, "BAA010001", PartnerSupport.STATUS_NORMAL);
         BuyerAccount current = account(22L, 11L, "buyer-staff", PartnerSupport.STATUS_NORMAL);
         RecordingBuyerMapper mapper = recordingMapper(buyer, current);
-        mapper.onlineTokenIds.add("token-a");
-        mapper.onlineTokenIds.add("token-b");
+        mapper.onlineSessions.add(onlineSession(11L, 22L, "buyer-staff", "token-a", false));
+        PortalLoginSession directLoginSession = onlineSession(11L, 22L, "buyer-staff", "token-b", true);
+        directLoginSession.setActingAdminId(99L);
+        directLoginSession.setActingAdminName("issuer-admin");
+        mapper.onlineSessions.add(directLoginSession);
         RecordingPortalTokenSupport tokenSupport = new RecordingPortalTokenSupport();
         BuyerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper().proxy(),
             tokenSupport);
@@ -374,14 +486,20 @@ public class BuyerServiceImplTest
         assertEquals("risk review", mapper.lockReasonValue);
         assertEquals(Long.valueOf(11L), mapper.forceLogoutBuyerId);
         assertEquals(Long.valueOf(22L), mapper.forceLogoutAccountId);
-        assertEquals(Constants.SUCCESS, mapper.insertedLoginLog.getStatus());
-        assertEquals("FORCE_LOGOUT", mapper.insertedLoginLog.getMsg());
-        assertEquals(Long.valueOf(11L), mapper.insertedLoginLog.getSubjectId());
-        assertEquals(Long.valueOf(22L), mapper.insertedLoginLog.getAccountId());
-        assertEquals("buyer-staff", mapper.insertedLoginLog.getUserName());
-        assertCurrentAdminAudit(mapper.insertedLoginLog);
+        assertEquals(2, mapper.insertedLoginLogs.size());
+        assertEquals(Boolean.FALSE, mapper.insertedLoginLogs.get(0).getDirectLogin());
+        assertEquals(Constants.SUCCESS, mapper.insertedLoginLogs.get(0).getStatus());
+        assertEquals("FORCE_LOGOUT", mapper.insertedLoginLogs.get(0).getMsg());
+        assertEquals(Long.valueOf(11L), mapper.insertedLoginLogs.get(0).getSubjectId());
+        assertEquals(Long.valueOf(22L), mapper.insertedLoginLogs.get(0).getAccountId());
+        assertEquals("buyer-staff", mapper.insertedLoginLogs.get(0).getUserName());
+        assertCurrentAdminAudit(mapper.insertedLoginLogs.get(0));
+        assertEquals(Boolean.TRUE, mapper.insertedLoginLogs.get(1).getDirectLogin());
+        assertEquals(Long.valueOf(100L), mapper.insertedLoginLogs.get(1).getDirectLoginTicketId());
+        assertEquals("support check", mapper.insertedLoginLogs.get(1).getDirectLoginReason());
+        assertCurrentAdminAudit(mapper.insertedLoginLogs.get(1));
         assertEquals("buyer", tokenSupport.deletedTerminal);
-        assertEquals(mapper.onlineTokenIds, tokenSupport.deletedTokenIds);
+        assertEquals(List.of("token-a", "token-b"), tokenSupport.deletedTokenIds);
         assertEquals(1, tokenSupport.deleteLoginTokensCallCount);
     }
 
@@ -585,6 +703,39 @@ public class BuyerServiceImplTest
         assertSame(tokenSupport.createdSession, mapper.insertedSession);
         assertEquals(Constants.SUCCESS, mapper.insertedLoginLog.getStatus());
         assertEquals("登录成功", mapper.insertedLoginLog.getMsg());
+    }
+
+    @Test
+    public void loginBuyerRejectsDisabledBuyerAndWritesFailureLog()
+    {
+        Buyer buyer = buyer(11L, "BAA010001", "1");
+        BuyerAccount account = account(22L, 11L, "buyer-staff", PartnerSupport.STATUS_NORMAL);
+        account.setPassword(SecurityUtils.encryptPassword("secret"));
+        RecordingBuyerMapper mapper = recordingMapper(buyer, account);
+        RecordingPortalTokenSupport tokenSupport = new RecordingPortalTokenSupport();
+        BuyerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper().proxy(),
+            tokenSupport);
+        LoginBody loginBody = new LoginBody();
+        loginBody.setUsername("buyer-staff");
+        loginBody.setPassword("secret");
+
+        try
+        {
+            service.loginBuyer(loginBody);
+        }
+        catch (ServiceException e)
+        {
+            assertEquals("买家已停用", e.getMessage());
+            assertEquals(0, tokenSupport.createLoginCount);
+            assertEquals(null, mapper.loginInfoAccountId);
+            assertEquals(null, mapper.insertedSession);
+            assertEquals(Constants.FAIL, mapper.insertedLoginLog.getStatus());
+            assertEquals("买家已停用", mapper.insertedLoginLog.getMsg());
+            assertEquals(Long.valueOf(11L), mapper.insertedLoginLog.getSubjectId());
+            assertEquals(Long.valueOf(22L), mapper.insertedLoginLog.getAccountId());
+            return;
+        }
+        throw new AssertionError("Expected ServiceException");
     }
 
     @Test
@@ -896,6 +1047,98 @@ public class BuyerServiceImplTest
     }
 
     @Test
+    public void createBuyerDirectLoginUsesOwnerBuyerAccount()
+    {
+        Buyer buyer = buyer(11L, "BAA010001", PartnerSupport.STATUS_NORMAL);
+        BuyerAccount staff = account(22L, 11L, "buyer-staff", PartnerSupport.STATUS_NORMAL);
+        staff.setAccountRole(PartnerSupport.ACCOUNT_ROLE_STAFF);
+        BuyerAccount owner = account(21L, 11L, "buyer-owner", PartnerSupport.STATUS_NORMAL);
+        owner.setAccountRole(PartnerSupport.ACCOUNT_ROLE_OWNER);
+        RecordingDirectLoginSupport directLoginSupport = new RecordingDirectLoginSupport();
+        BuyerServiceImpl service = service(mapper(buyer, staff, owner), directLoginSupport);
+
+        PortalDirectLoginResult result = service.createBuyerDirectLogin(11L, "support check");
+
+        assertEquals(Long.valueOf(21L), result.getAccountId());
+        assertEquals("buyer-owner", result.getUsername());
+        assertEquals(1, directLoginSupport.callCount);
+        assertEquals("buyer", directLoginSupport.portalType);
+        assertEquals(Long.valueOf(11L), directLoginSupport.partnerId);
+        assertEquals("BAA010001", directLoginSupport.partnerNo);
+        assertSame(owner, directLoginSupport.account);
+        assertEquals("support check", directLoginSupport.reason);
+        assertEquals(PortalDirectLoginSupport.BUYER_WEB_URL_CONFIG_KEY, directLoginSupport.webUrlConfigKey);
+        assertEquals(null, directLoginSupport.fallbackWebUrl);
+    }
+
+    @Test
+    public void createBuyerDirectLoginRejectsMissingOwnerBeforeCreatingToken()
+    {
+        Buyer buyer = buyer(11L, "BAA010001", PartnerSupport.STATUS_NORMAL);
+        BuyerAccount staff = account(22L, 11L, "buyer-staff", PartnerSupport.STATUS_NORMAL);
+        staff.setAccountRole(PartnerSupport.ACCOUNT_ROLE_STAFF);
+        RecordingDirectLoginSupport directLoginSupport = new RecordingDirectLoginSupport();
+        BuyerServiceImpl service = service(mapper(buyer, staff), directLoginSupport);
+
+        try
+        {
+            service.createBuyerDirectLogin(11L, "support check");
+        }
+        catch (ServiceException e)
+        {
+            assertEquals("买家主账号不存在", e.getMessage());
+            assertEquals(0, directLoginSupport.callCount);
+            return;
+        }
+        throw new AssertionError("Expected ServiceException");
+    }
+
+    @Test
+    public void createBuyerDirectLoginRejectsDisabledOwnerBeforeCreatingToken()
+    {
+        Buyer buyer = buyer(11L, "BAA010001", PartnerSupport.STATUS_NORMAL);
+        BuyerAccount owner = account(21L, 11L, "buyer-owner", "1");
+        owner.setAccountRole(PartnerSupport.ACCOUNT_ROLE_OWNER);
+        RecordingDirectLoginSupport directLoginSupport = new RecordingDirectLoginSupport();
+        BuyerServiceImpl service = service(mapper(buyer, owner), directLoginSupport);
+
+        try
+        {
+            service.createBuyerDirectLogin(11L, "support check");
+        }
+        catch (ServiceException e)
+        {
+            assertEquals("买家账号已停用，不能免密登录", e.getMessage());
+            assertEquals(0, directLoginSupport.callCount);
+            return;
+        }
+        throw new AssertionError("Expected ServiceException");
+    }
+
+    @Test
+    public void createBuyerDirectLoginRejectsLockedOwnerBeforeCreatingToken()
+    {
+        Buyer buyer = buyer(11L, "BAA010001", PartnerSupport.STATUS_NORMAL);
+        BuyerAccount owner = account(21L, 11L, "buyer-owner", PartnerSupport.STATUS_NORMAL);
+        owner.setAccountRole(PartnerSupport.ACCOUNT_ROLE_OWNER);
+        owner.setLockStatus(PartnerSupport.ACCOUNT_LOCK_STATUS_LOCKED);
+        RecordingDirectLoginSupport directLoginSupport = new RecordingDirectLoginSupport();
+        BuyerServiceImpl service = service(mapper(buyer, owner), directLoginSupport);
+
+        try
+        {
+            service.createBuyerDirectLogin(11L, "support check");
+        }
+        catch (ServiceException e)
+        {
+            assertEquals("买家账号已锁定，不能免密登录", e.getMessage());
+            assertEquals(0, directLoginSupport.callCount);
+            return;
+        }
+        throw new AssertionError("Expected ServiceException");
+    }
+
+    @Test
     public void directLoginBuyerUsesCurrentBuyerAndAccountState()
     {
         Buyer buyer = buyer(11L, "BAA010001", PartnerSupport.STATUS_NORMAL);
@@ -1014,6 +1257,36 @@ public class BuyerServiceImplTest
             assertEquals(null, mapper.insertedLoginLog.getAccountId());
             assertEquals(null, mapper.insertedLoginLog.getUserName());
             assertNoDirectLoginAudit(mapper.insertedLoginLog);
+            return;
+        }
+        throw new AssertionError("Expected ServiceException");
+    }
+
+    @Test
+    public void directLoginBuyerRejectsMissingBuyerAfterTicketIssued()
+    {
+        BuyerAccount account = account(22L, 11L, "buyer-staff", PartnerSupport.STATUS_NORMAL);
+        RecordingBuyerMapper mapper = recordingMapper(null, account);
+        RecordingDirectLoginSupport directLoginSupport = new RecordingDirectLoginSupport();
+        directLoginSupport.tokenToConsume = directLoginToken("buyer", 11L, "BAA010001", 22L, "buyer-staff");
+        RecordingPortalTokenSupport tokenSupport = new RecordingPortalTokenSupport();
+        BuyerServiceImpl service = service(mapper.proxy(), directLoginSupport, deptMapper().proxy(), tokenSupport);
+
+        try
+        {
+            service.directLoginBuyer("issued-token");
+        }
+        catch (ServiceException e)
+        {
+            assertEquals("买家主体不存在", e.getMessage());
+            assertEquals(1, directLoginSupport.consumeCount);
+            assertEquals(0, tokenSupport.createLoginCount);
+            assertEquals(null, mapper.insertedSession);
+            assertEquals(Constants.FAIL, mapper.insertedLoginLog.getStatus());
+            assertEquals("买家主体不存在", mapper.insertedLoginLog.getMsg());
+            assertEquals(Long.valueOf(11L), mapper.insertedLoginLog.getSubjectId());
+            assertEquals(Long.valueOf(22L), mapper.insertedLoginLog.getAccountId());
+            assertDirectLoginAudit(mapper.insertedLoginLog);
             return;
         }
         throw new AssertionError("Expected ServiceException");
@@ -1520,8 +1793,11 @@ public class BuyerServiceImplTest
         BuyerAccount account = account(22L, 11L, "buyer-staff", PartnerSupport.STATUS_NORMAL);
         account.setPassword(SecurityUtils.encryptPassword("old-secret"));
         RecordingBuyerMapper mapper = recordingMapper(buyer, account);
-        mapper.onlineTokenIds.add("buyer-token-a");
-        mapper.onlineTokenIds.add("buyer-token-b");
+        mapper.onlineSessions.add(onlineSession(11L, 22L, "buyer-staff", "buyer-token-a", false));
+        PortalLoginSession directLoginSession = onlineSession(11L, 22L, "buyer-staff", "buyer-token-b", true);
+        directLoginSession.setActingAdminId(99L);
+        directLoginSession.setActingAdminName("issuer-admin");
+        mapper.onlineSessions.add(directLoginSession);
         RecordingPortalTokenSupport tokenSupport = new RecordingPortalTokenSupport();
         BuyerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper().proxy(),
             tokenSupport);
@@ -1539,16 +1815,22 @@ public class BuyerServiceImplTest
         assertEquals(Long.valueOf(11L), mapper.forceLogoutBuyerId);
         assertEquals(Long.valueOf(22L), mapper.forceLogoutAccountId);
         assertEquals("buyer", tokenSupport.deletedTerminal);
-        assertEquals(mapper.onlineTokenIds, tokenSupport.deletedTokenIds);
+        assertEquals(List.of("buyer-token-a", "buyer-token-b"), tokenSupport.deletedTokenIds);
         assertEquals(1, tokenSupport.deleteLoginTokensCallCount);
         assertEquals(2, mapper.insertedLoginLogs.size());
+        assertEquals(Boolean.FALSE, mapper.insertedLoginLogs.get(0).getDirectLogin());
         assertNoAdminAudit(mapper.insertedLoginLogs.get(0));
-        assertNoAdminAudit(mapper.insertedLoginLogs.get(1));
+        assertEquals(Boolean.TRUE, mapper.insertedLoginLogs.get(1).getDirectLogin());
+        assertEquals(Long.valueOf(100L), mapper.insertedLoginLogs.get(1).getDirectLoginTicketId());
+        assertEquals(Long.valueOf(99L), mapper.insertedLoginLogs.get(1).getActingAdminId());
+        assertEquals("issuer-admin", mapper.insertedLoginLogs.get(1).getActingAdminName());
+        assertEquals("support check", mapper.insertedLoginLogs.get(1).getDirectLoginReason());
     }
 
     private BuyerServiceImpl service(BuyerMapper mapper, PortalDirectLoginSupport directLoginSupport)
     {
-        return service(mapper, directLoginSupport, deptMapper().proxy(), new RecordingPortalTokenSupport());
+        return service(mapper, directLoginSupport, deptMapper().proxy(), new RecordingPortalTokenSupport(),
+            permissionMapper().proxy());
     }
 
     private BuyerServiceImpl service(BuyerMapper mapper, PortalDirectLoginSupport directLoginSupport,
@@ -1562,9 +1844,17 @@ public class BuyerServiceImplTest
     private BuyerServiceImpl service(BuyerMapper mapper, PortalDirectLoginSupport directLoginSupport,
             BuyerPortalDeptMapper deptMapper, PortalTokenSupport portalTokenSupport)
     {
+        return service(mapper, directLoginSupport, deptMapper, portalTokenSupport, permissionMapper().proxy());
+    }
+
+    private BuyerServiceImpl service(BuyerMapper mapper, PortalDirectLoginSupport directLoginSupport,
+            BuyerPortalDeptMapper deptMapper, PortalTokenSupport portalTokenSupport,
+            BuyerPortalPermissionMapper permissionMapper)
+    {
         BuyerServiceImpl service = new BuyerServiceImpl();
         setField(service, "buyerMapper", mapper);
         setField(service, "deptMapper", deptMapper);
+        setField(service, "permissionMapper", permissionMapper);
         setField(service, "directLoginSupport", directLoginSupport);
         setField(service, "portalTokenSupport", portalTokenSupport);
         setField(service, "ticketMapper", new RecordingTicketMapper().proxy());
@@ -1608,6 +1898,16 @@ public class BuyerServiceImplTest
         account.setNickName(userName);
         account.setStatus(status);
         return account;
+    }
+
+    private PortalRole role(Long roleId, Long buyerId, String roleKey)
+    {
+        PortalRole role = new PortalRole();
+        role.setRoleId(roleId);
+        role.setSubjectId(buyerId);
+        role.setRoleKey(roleKey);
+        role.setStatus(PartnerSupport.STATUS_NORMAL);
+        return role;
     }
 
     private PortalDept dept(Long buyerId, Long deptId)
@@ -1721,6 +2021,11 @@ public class BuyerServiceImplTest
         return new RecordingBuyerDeptMapper(depts);
     }
 
+    private RecordingBuyerPortalPermissionMapper permissionMapper()
+    {
+        return new RecordingBuyerPortalPermissionMapper();
+    }
+
     private void authenticateAdmin()
     {
         SysUser user = new SysUser();
@@ -1736,6 +2041,8 @@ public class BuyerServiceImplTest
 
         private final Map<Long, BuyerAccount> accountById = new HashMap<>();
 
+        private long nextGeneratedAccountId = 1000L;
+
         private List<PortalLoginLog> loginLogResult = new ArrayList<>();
 
         private List<PortalOperLog> operLogResult = new ArrayList<>();
@@ -1749,6 +2056,12 @@ public class BuyerServiceImplTest
         private Buyer insertedBuyer;
 
         private BuyerAccount updatedAccount;
+
+        private Long updatedBuyerStatusBuyerId;
+
+        private String updatedBuyerStatusValue;
+
+        private String updatedBuyerStatusBy;
 
         private Long resetPasswordAccountId;
 
@@ -1832,7 +2145,8 @@ public class BuyerServiceImplTest
             }
             if ("selectBuyerByCode".equals(methodName))
             {
-                return buyer != null && buyer.getBuyerCode().equals(args[0]) ? buyer : null;
+                return buyer != null && buyer.getBuyerId() != null && buyer.getBuyerCode().equals(args[0])
+                    ? buyer : null;
             }
             if ("insertBuyer".equals(methodName))
             {
@@ -1842,6 +2156,19 @@ public class BuyerServiceImplTest
                     insertedBuyer.setBuyerId(11L);
                 }
                 return 1;
+            }
+            if ("updateBuyerStatus".equals(methodName))
+            {
+                updatedBuyerStatusBuyerId = (Long) args[0];
+                updatedBuyerStatusValue = (String) args[1];
+                updatedBuyerStatusBy = (String) args[2];
+                if (buyer != null && updatedBuyerStatusBuyerId.equals(buyer.getBuyerId()))
+                {
+                    buyer.setStatus(updatedBuyerStatusValue);
+                    buyer.setUpdateBy(updatedBuyerStatusBy);
+                    return 1;
+                }
+                return 0;
             }
             if ("selectBuyerAccountByIdAndBuyerId".equals(methodName))
             {
@@ -1878,6 +2205,12 @@ public class BuyerServiceImplTest
             if ("insertBuyerAccount".equals(methodName))
             {
                 insertedAccount = (BuyerAccount) args[0];
+                if (insertedAccount.getBuyerAccountId() == null)
+                {
+                    insertedAccount.setBuyerAccountId(nextGeneratedAccountId++);
+                }
+                insertedAccount.setAccountId(insertedAccount.getBuyerAccountId());
+                accountById.put(insertedAccount.getBuyerAccountId(), insertedAccount);
                 return 1;
             }
             if ("updateBuyerAccount".equals(methodName))
@@ -1983,7 +2316,10 @@ public class BuyerServiceImplTest
         {
             if (!onlineSessions.isEmpty())
             {
-                return onlineSessions;
+                return onlineSessions.stream()
+                    .filter(session -> buyerId == null || buyerId.equals(session.getSubjectId()))
+                    .filter(session -> buyerAccountId == null || buyerAccountId.equals(session.getAccountId()))
+                    .toList();
             }
             List<PortalLoginSession> sessions = new ArrayList<>();
             BuyerAccount account = buyerAccountId == null ? null : accountById.get(buyerAccountId);
@@ -1999,6 +2335,95 @@ public class BuyerServiceImplTest
                 sessions.add(session);
             }
             return sessions;
+        }
+    }
+
+    private class RecordingBuyerPortalPermissionMapper implements InvocationHandler
+    {
+        private PortalRole ownerRole;
+
+        private Long ownerRoleBuyerId;
+
+        private Long ownerMenuBuyerId;
+
+        private int ownerMenuGrantCount;
+
+        private Long assignedBuyerId;
+
+        private Long assignedAccountId;
+
+        private List<Long> assignedRoleIds = new ArrayList<>();
+
+        private long nextGeneratedRoleId = 101L;
+
+        private RecordingBuyerPortalPermissionMapper withOwnerRole(PortalRole ownerRole)
+        {
+            this.ownerRole = ownerRole;
+            return this;
+        }
+
+        private BuyerPortalPermissionMapper proxy()
+        {
+            return (BuyerPortalPermissionMapper) Proxy.newProxyInstance(
+                BuyerPortalPermissionMapper.class.getClassLoader(),
+                new Class<?>[] { BuyerPortalPermissionMapper.class }, this);
+        }
+
+        @Override
+        public Object invoke(Object proxy, Method method, Object[] args)
+        {
+            String methodName = method.getName();
+            if ("insertBuyerOwnerRoleIfMissing".equals(methodName))
+            {
+                ownerRoleBuyerId = (Long) args[0];
+                if (ownerRole == null)
+                {
+                    ownerRole = role(nextGeneratedRoleId++, ownerRoleBuyerId, "owner");
+                }
+                return 1;
+            }
+            if ("checkBuyerRoleKeyUnique".equals(methodName))
+            {
+                Long buyerId = (Long) args[0];
+                return ownerRole != null && buyerId.equals(ownerRole.getSubjectId()) ? ownerRole : null;
+            }
+            if ("insertBuyerOwnerRoleMenusIfMissing".equals(methodName))
+            {
+                ownerMenuBuyerId = (Long) args[0];
+                ownerMenuGrantCount = ((String[]) args[1]).length;
+                return ownerMenuGrantCount;
+            }
+            if ("countBuyerOwnerRoleMenuGrants".equals(methodName))
+            {
+                return ownerMenuGrantCount;
+            }
+            if ("insertBuyerOwnerAccountRoleIfMissing".equals(methodName))
+            {
+                assignedBuyerId = (Long) args[0];
+                assignedAccountId = (Long) args[1];
+                assignedRoleIds = ownerRole == null ? new ArrayList<>() : List.of(ownerRole.getRoleId());
+                return assignedRoleIds.size();
+            }
+            if ("selectBuyerAccountRoleIds".equals(methodName))
+            {
+                Long buyerId = (Long) args[0];
+                Long accountId = (Long) args[1];
+                return buyerId.equals(assignedBuyerId) && accountId.equals(assignedAccountId)
+                    ? assignedRoleIds : new ArrayList<Long>();
+            }
+            if ("toString".equals(methodName))
+            {
+                return "BuyerServiceImplTestPermissionMapper";
+            }
+            if ("hashCode".equals(methodName))
+            {
+                return System.identityHashCode(proxy);
+            }
+            if ("equals".equals(methodName))
+            {
+                return proxy == args[0];
+            }
+            return defaultValue(method.getReturnType());
         }
     }
 

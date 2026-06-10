@@ -219,6 +219,12 @@
                 <version>${ruoyi.version}</version>
             </dependency>
 
+            <dependency>
+                <groupId>com.ruoyi</groupId>
+                <artifactId>logistics</artifactId>
+                <version>${ruoyi.version}</version>
+            </dependency>
+
             <!-- 通用工具-->
             <dependency>
                 <groupId>com.ruoyi</groupId>
@@ -240,6 +246,7 @@
         <module>product</module>
         <module>inventory</module>
         <module>warehouse</module>
+        <module>logistics</module>
         <module>ruoyi-quartz</module>
         <module>ruoyi-generator</module>
         <module>ruoyi-common</module>

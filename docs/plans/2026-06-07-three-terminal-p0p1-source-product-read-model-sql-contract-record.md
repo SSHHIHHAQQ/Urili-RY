@@ -9,7 +9,8 @@
 
 ## 子 Agent 使用
 
-- `gpt-5.3-codex-spark` 当前因额度限制不可用，本轮按用户规则降级使用 `gpt-5.4`。
+- 历史记录（已过期口径）：当轮 `gpt-5.3-codex-spark` 因额度限制不可用，随后按当时用户规则回退使用 `gpt-5.4`。
+- 当前现行规则以 `AGENTS.md` 为准：子 Agent 默认且只能使用 `gpt-5.4`，不得再使用 GPT-5.3 Codex；本段仅保留 2026-06-07 当轮工具事实，不作为后续模型选择依据。
 - 本切片启动 2 个 `gpt-5.4` 只读子 Agent，分别检查：
   - `20260607_source_product_read_model.sql` replay-safe 风险。
   - 相关 Markdown 残留记录。
@@ -41,8 +42,8 @@
 
 ## 验证
 
-- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system "-Dtest=SqlExecutionGuardContractTest" test`：通过，`SqlExecutionGuardContractTest` 31 个测试通过。
-- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn clean -pl ruoyi-system "-Dtest=SqlExecutionGuardContractTest" test`：通过，`SqlExecutionGuardContractTest` 31 个测试通过，确认没有吃旧 `target` 测试产物。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn -pl ruoyi-system -am "-Dtest=SqlExecutionGuardContractTest" test`：通过，`SqlExecutionGuardContractTest` 31 个测试通过。
+- `cd E:\Urili-Ruoyi\RuoYi-Vue; mvn clean -pl ruoyi-system -am "-Dtest=SqlExecutionGuardContractTest" test`：通过，`SqlExecutionGuardContractTest` 31 个测试通过，确认没有吃旧 `target` 测试产物。
 - `cd E:\Urili-Ruoyi; git diff --check -- RuoYi-Vue\sql\20260607_source_product_read_model.sql RuoYi-Vue\sql\20260607_source_warehouse_stock_read_model.sql RuoYi-Vue\ruoyi-system\src\test\java\com\ruoyi\system\architecture\SqlExecutionGuardContractTest.java docs\architecture\reuse-ledger.md docs\plans\2026-06-04-three-terminal-isolation-goal-tracker.md docs\plans\2026-06-07-source-product-library-read-model-implementation-record.md docs\plans\2026-06-07-three-terminal-p0p1-source-product-read-model-sql-contract-record.md docs\plans\2026-06-07-source-warehouse-stock-read-model-implementation-record.md docs\plans\2026-06-07-three-terminal-p0p1-source-warehouse-stock-read-model-sql-contract-record.md`：通过，仅有 LF/CRLF 归一化提示。
 - `cd E:\Urili-Ruoyi; codegraph sync .`：通过，`Synced 1 changed files`，`Modified: 1 - 62 nodes in 948ms`。
 

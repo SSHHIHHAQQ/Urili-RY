@@ -91,8 +91,8 @@ type PartnerService = {
   resetAccountPassword: (id: number, accountId: number, password: string) => Promise<API.Result>;
   lockAccount?: (id: number, accountId: number, lockReason: string) => Promise<API.Result>;
   unlockAccount?: (id: number, accountId: number) => Promise<API.Result>;
-  listSubjectSessions?: (id: number, params?: Record<string, any>) => Promise<API.Partner.PortalAuditPageResult<API.Partner.PortalSessionProfile>>;
-  listAccountSessions?: (id: number, accountId: number, params?: Record<string, any>) => Promise<API.Partner.PortalAuditPageResult<API.Partner.PortalSessionProfile>>;
+  listSubjectSessions?: (id: number, params?: API.Partner.PartnerSessionPageParams) => Promise<API.Partner.PortalAuditPageResult<API.Partner.PortalSessionProfile>>;
+  listAccountSessions?: (id: number, accountId: number, params?: API.Partner.PartnerSessionPageParams) => Promise<API.Partner.PortalAuditPageResult<API.Partner.PortalSessionProfile>>;
   forceLogoutSubject: (id: number) => Promise<API.Result>;
   forceLogoutAccount: (id: number, accountId: number) => Promise<API.Result>;
   getAccountRoles: (id: number, accountId: number) => Promise<API.Partner.PortalAccountRoleResult>;
@@ -321,15 +321,11 @@ function getValue(record: PartnerRecord | undefined, field: string) {
 }
 
 function getAttachmentUrl(attachment?: API.Partner.PartyAttachment | null) {
-  return attachment?.fileUrl || attachment?.dataUrl || '';
+  return attachment?.fileUrl || '';
 }
 
 function isManagedAttachmentUrl(url?: string) {
   return !!url && url.startsWith('/profile/');
-}
-
-function isLegacyDataUrl(url?: string) {
-  return !!url && url.toLowerCase().startsWith('data:');
 }
 
 function getAttachmentFromPartner(partner?: PartnerRecord): API.Partner.PartyAttachment | undefined {
@@ -369,7 +365,7 @@ function attachmentToUploadFile(attachment: API.Partner.PartyAttachment): Attach
 async function uploadFileToAttachment(file: AttachmentUploadFile): Promise<API.Partner.PartyAttachment> {
   if (file.response?.fileUrl) {
     const fileUrl = getAttachmentUrl(file.response);
-    if (isManagedAttachmentUrl(fileUrl) || isLegacyDataUrl(fileUrl)) {
+    if (isManagedAttachmentUrl(fileUrl)) {
       return { ...file.response, fileUrl };
     }
     throw new Error('UNSUPPORTED_ATTACHMENT_URL');

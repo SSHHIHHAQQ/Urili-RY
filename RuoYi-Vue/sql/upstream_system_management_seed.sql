@@ -147,7 +147,7 @@ create table if not exists upstream_system_connection (
   app_secret_ciphertext  text          not null                  comment '加密后的appSecret',
   credential_key_id      varchar(64)   not null default 'default' comment '加密密钥版本',
   status                 varchar(16)   not null default 'ENABLED' comment '接入状态',
-  credential_status      varchar(16)   not null default 'CONFIGURED' comment '凭证状态',
+  credential_status      varchar(16)   not null default 'PENDING' comment '凭证状态',
   enabled_capabilities   varchar(500)  not null default ''       comment '启用能力JSON',
   display_order          int           not null default 0        comment '显示排序',
   last_authorized_time   datetime                                comment '最近授权成功时间',

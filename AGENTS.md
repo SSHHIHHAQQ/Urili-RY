@@ -40,8 +40,8 @@ E:\Urili-Ruoyi\
 ## 本机后端启动方式
 
 - 本机后端默认通过 `start-backend-local.ps1` 启动或重启。
-- `start-backend-local.ps1` 从 `.env.local` 读取 `RUOYI_*` 运行变量，再启动 `RuoYi-Vue/ruoyi-admin/target/ruoyi-admin.jar`。
-- `.env.local` 保存远程 MySQL/Redis 连接信息和 token secret，只允许本机使用，禁止提交、复制到报告或在聊天中明文输出。
+- `start-backend-local.ps1` 从 `.env.local` 读取 `RUOYI_*`、`URILI_*` 等运行变量，再启动 `RuoYi-Vue/ruoyi-admin/target/ruoyi-admin.jar`。
+- `.env.local` 保存远程 MySQL/Redis 连接信息、token secret 和 `URILI_SECRET_ENCRYPTION_KEY` 等本机密钥，只允许本机使用，禁止提交、复制到报告或在聊天中明文输出。
 - `.env.local` 和 `start-backend-local.ps1` 已被 `.gitignore` 忽略；如果新对话看不到文件，先检查是否被本地清理或工作区未同步。
 - 后端停止或 jar 重新打包后，优先使用：
 
@@ -51,7 +51,7 @@ cd E:\Urili-Ruoyi
 ```
 
 - 如果 8080 已经监听但不确定是否为当前 jar，也使用 `-Restart`。
-- 不要直接运行 `java -jar .\ruoyi-admin\target\ruoyi-admin.jar`，除非当前 shell 已确认包含完整 `RUOYI_DB_*`、`RUOYI_REDIS_*` 和 `RUOYI_TOKEN_SECRET` 环境变量。
+- 不要直接运行 `java -jar .\ruoyi-admin\target\ruoyi-admin.jar`，除非当前 shell 已确认包含完整 `RUOYI_DB_*`、`RUOYI_REDIS_*` 和 `RUOYI_TOKEN_SECRET` 环境变量；涉及外部系统凭证保存或调用前，还必须确认 `URILI_SECRET_ENCRYPTION_KEY` 已配置。
 
 ## 数据源确认规则
 
@@ -241,7 +241,7 @@ cd E:\Urili-Ruoyi
 
 总原则：非平凡任务优先谨慎和可验证，不盲目追求速度。简单任务可以快速处理；复杂任务必须先读上下文、明确成功标准、分步验证。
 
-- 需要使用子 Agent 时，默认且只能使用 `gpt-5.4`；不得再使用 GPT-5.3 Codex。子 Agent 完成、失败或不再需要后必须关闭，并在 Markdown 检查点记录实际模型、数量和结论处理。
+- 需要使用子 Agent 时，按任务类型选择模型：只读检查、审查、探索类子 Agent 使用 `GPT-5.3-Codex-Spark`；代码编辑、实现、修复类子 Agent 使用 `gpt5.4`。如工具只接受模型 id，对应使用 `gpt-5.3-codex-spark` / `gpt-5.4`。子 Agent 完成、失败或不再需要后必须关闭，并在 Markdown 检查点记录任务类型、实际模型、数量和结论处理。
 - 当用户明确进入快速推进模式时，只修 P0/P1：编译、guard、接口、权限、串端、service/字段缺失。浏览器、截图、DOM 检测和 UI 细调默认跳过；P2 记录到 Markdown，不阻塞当前推进。已确认的同构管理端 UI 必须先做一套标准模板，代码级通过后再机械复制另一端，只替换配置、文案、路由、权限标识、字段和 service。
 
 ### 规则 1：先想清楚，再写代码
@@ -336,8 +336,8 @@ cd E:\Urili-Ruoyi
 
 ### 子 Agent 使用规则
 
-- 需要并行检查或大型任务拆分时，子 Agent 模型默认且只能使用 `gpt-5.4`；不得再使用 GPT-5.3 Codex。
-- 如果用户明确要求其他模型但平台不可用、额度限制或上下文失败，必须在阶段记录或最终回复中写明不可用原因、实际使用的模型和子 Agent 数量。
+- 需要并行检查或大型任务拆分时，先区分子 Agent 任务类型：只读检查、审查、探索类使用 `GPT-5.3-Codex-Spark`；代码编辑、实现、修复类使用 `gpt5.4`。如工具只接受模型 id，对应使用 `gpt-5.3-codex-spark` / `gpt-5.4`。
+- 如果指定模型平台不可用、额度限制或上下文失败，必须在阶段记录或最终回复中写明不可用原因、实际使用的模型、任务类型和子 Agent 数量。
 - 子 Agent 的读写范围必须由主 Agent 明确；用完必须关闭，主 Agent 负责合并结论、复核冲突和执行最终验证。
 
 ## 代码审查交付清单

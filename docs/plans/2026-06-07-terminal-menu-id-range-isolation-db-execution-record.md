@@ -7,7 +7,7 @@
 ## 目标环境
 
 - 配置来源：`spring.profiles.active=druid`，主库 URL 使用 `${RUOYI_DB_URL}`。
-- 目标 MySQL：`gz-cynosdbmysql-grp-lucf5kyf.sql.tencentcdb.com:28634/fenxiao`。
+- 目标 MySQL：远端运行库，连接来源为本机 `.env.local`，地址已脱敏。
 - 目标库确认：`database() = fenxiao`。
 - MySQL 版本：`8.0.30-cynos-3.1.16.003`。
 - Redis：本轮不读写 Redis。

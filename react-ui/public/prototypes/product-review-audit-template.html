@@ -1,0 +1,793 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>商品审核详情模板</title>
+  <style>
+    :root {
+      --bg: #f5f6f8;
+      --panel: #fff;
+      --line: #e8eaf0;
+      --line-soft: #f0f2f5;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --muted-2: #9ca3af;
+      --blue: #1677ff;
+      --green: #2f9e44;
+      --green-bg: #f0fdf4;
+      --green-line: #b7eb8f;
+      --yellow-bg: #fffbe6;
+      --yellow-line: #ffe58f;
+      --shadow: 0 10px 28px rgba(15, 23, 42, .08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: 168px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    .side {
+      background: #fff;
+      border-right: 1px solid var(--line);
+      padding: 14px 12px;
+    }
+
+    .brand {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      font-weight: 700;
+      margin-bottom: 24px;
+    }
+
+    .brand-mark {
+      width: 18px;
+      height: 18px;
+      border-radius: 4px;
+      background: linear-gradient(135deg, #1677ff 0%, #52c41a 100%);
+    }
+
+    .nav-item {
+      height: 36px;
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      color: #4b5563;
+      border-radius: 6px;
+      margin-bottom: 4px;
+    }
+
+    .nav-item.active {
+      color: var(--blue);
+      background: #eef5ff;
+      font-weight: 600;
+    }
+
+    .main {
+      min-width: 0;
+      padding: 20px 28px 36px;
+    }
+
+    .crumb {
+      color: var(--muted);
+      margin-bottom: 12px;
+      font-size: 13px;
+    }
+
+    .page-head {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px 18px;
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      box-shadow: var(--shadow);
+      margin-bottom: 12px;
+    }
+
+    .page-title {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .page-subtitle {
+      color: var(--muted);
+      margin-top: 4px;
+      font-size: 13px;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .btn {
+      border: 1px solid var(--line);
+      background: #fff;
+      height: 32px;
+      padding: 0 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      color: #374151;
+    }
+
+    .btn.primary {
+      background: var(--blue);
+      border-color: var(--blue);
+      color: #fff;
+    }
+
+    .summary-bar {
+      background: #f7fbff;
+      border: 1px solid #d6e8ff;
+      border-radius: 8px;
+      padding: 10px 14px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      color: #4b5563;
+      margin-bottom: 12px;
+    }
+
+    .summary-bar b {
+      color: #111827;
+      margin-right: 4px;
+    }
+
+    .audit-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    details.audit-section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 4px 14px rgba(15, 23, 42, .04);
+    }
+
+    details.audit-section[open] {
+      border-color: #d6e8ff;
+    }
+
+    summary.section-title {
+      list-style: none;
+      cursor: pointer;
+      padding: 13px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #fff;
+      border-bottom: 1px solid transparent;
+    }
+
+    details[open] summary.section-title {
+      border-bottom-color: var(--line-soft);
+    }
+
+    summary.section-title::-webkit-details-marker {
+      display: none;
+    }
+
+    .section-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .chevron {
+      width: 18px;
+      color: var(--muted);
+      transition: transform .18s ease;
+    }
+
+    details[open] .chevron {
+      transform: rotate(90deg);
+    }
+
+    .section-name {
+      font-weight: 700;
+    }
+
+    .section-note {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      height: 22px;
+      padding: 0 8px;
+      border-radius: 4px;
+      background: #f3f4f6;
+      color: #4b5563;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .pill.changed {
+      background: var(--green-bg);
+      color: var(--green);
+      border: 1px solid var(--green-line);
+    }
+
+    .section-body {
+      padding: 14px 16px 16px;
+    }
+
+    .field-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .field {
+      border: 1px solid var(--line-soft);
+      border-radius: 6px;
+      padding: 9px 10px;
+      background: #fff;
+      min-width: 0;
+    }
+
+    .field.changed {
+      border-color: var(--green-line);
+      background: var(--green-bg);
+    }
+
+    .field-label {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 5px;
+    }
+
+    .field-value {
+      font-weight: 600;
+      word-break: break-word;
+    }
+
+    .compare-line {
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr);
+      gap: 6px;
+      align-items: start;
+      margin-top: 4px;
+    }
+
+    .compare-line:first-of-type {
+      margin-top: 0;
+    }
+
+    .compare-label {
+      color: var(--muted-2);
+      font-size: 12px;
+    }
+
+    .compare-line.before .compare-value {
+      color: #6b7280;
+      text-decoration: line-through;
+      text-decoration-color: #cbd5e1;
+    }
+
+    .compare-line.after .compare-value {
+      color: var(--green);
+      font-weight: 700;
+    }
+
+    .image-compare {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+      gap: 10px;
+    }
+
+    .image-card {
+      border: 1px solid var(--line-soft);
+      border-radius: 6px;
+      padding: 8px;
+      background: #fff;
+    }
+
+    .image-card.changed {
+      border-color: var(--green-line);
+      background: var(--green-bg);
+    }
+
+    .image-pair {
+      display: grid;
+      gap: 6px;
+    }
+
+    .thumb {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      object-fit: cover;
+      border-radius: 4px;
+      border: 1px solid var(--line-soft);
+      background: #f9fafb;
+    }
+
+    .thumb-label {
+      display: flex;
+      justify-content: space-between;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 3px;
+    }
+
+    .sku-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .sku-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .sku-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      padding: 10px 12px;
+      background: #fafafa;
+      border-bottom: 1px solid var(--line-soft);
+    }
+
+    .sku-code {
+      font-weight: 700;
+      margin-bottom: 3px;
+    }
+
+    .sku-meta {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .sku-body {
+      padding: 12px;
+    }
+
+    .sku-field-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 8px;
+    }
+
+    .sku-field-grid .field {
+      padding: 7px 8px;
+    }
+
+    .sku-image-field {
+      max-width: 104px;
+    }
+
+    .sku-thumb-link {
+      display: inline-flex;
+      width: 52px;
+      height: 52px;
+      border-radius: 4px;
+      border: 1px solid var(--line-soft);
+      overflow: hidden;
+      background: #f9fafb;
+      cursor: zoom-in;
+      vertical-align: top;
+    }
+
+    .sku-thumb {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .rich-preview {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 12px;
+    }
+
+    .rich-card {
+      border: 1px solid var(--line-soft);
+      border-radius: 6px;
+      padding: 10px;
+      background: #fff;
+      min-height: 108px;
+    }
+
+    .rich-card.changed {
+      border-color: var(--green-line);
+      background: var(--green-bg);
+    }
+
+    .rich-title {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    .detail-image-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+      flex-wrap: wrap;
+    }
+
+    .detail-image-row img {
+      width: 86px;
+      height: 86px;
+      border-radius: 4px;
+      object-fit: cover;
+      border: 1px solid var(--line);
+    }
+
+    .audit-footer {
+      position: sticky;
+      bottom: 0;
+      background: rgba(255, 255, 255, .96);
+      border-top: 1px solid var(--line);
+      padding: 12px 0 0;
+      margin-top: 4px;
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    @media (max-width: 1200px) {
+      .field-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 860px) {
+      .app {
+        grid-template-columns: 1fr;
+      }
+
+      .side {
+        display: none;
+      }
+
+      .main {
+        padding: 14px;
+      }
+
+      .page-head {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .field-grid,
+      .rich-preview {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="side">
+      <div class="brand"><span class="brand-mark"></span>Ant Design Pro</div>
+      <div class="nav-item">主体管理</div>
+      <div class="nav-item active">审核中心</div>
+      <div class="nav-item">商品管理</div>
+      <div class="nav-item">订单管理</div>
+      <div class="nav-item">库存管理</div>
+    </aside>
+
+    <main class="main">
+      <div class="crumb">审核中心 / 商品审核 / 详情模板预览</div>
+
+      <section class="page-head">
+        <div>
+          <h1 class="page-title">商品审核详情模板</h1>
+          <div class="page-subtitle">模板数据为假数据，只用于确认审核详情布局和字段取舍。</div>
+        </div>
+        <div class="actions">
+          <button class="btn" type="button" data-collapse="changed">只展开变更板块</button>
+          <button class="btn" type="button" data-collapse="all">全部展开</button>
+          <button class="btn" type="button">驳回</button>
+          <button class="btn primary" type="button">通过</button>
+        </div>
+      </section>
+
+      <div class="summary-bar">
+        <span><b>审核类型</b>综合变更</span>
+        <span><b>系统 SPU</b>SPU202606090009</span>
+        <span><b>商品</b>男士轻薄冲锋衣</span>
+        <span><b>SKU</b>3 个</span>
+        <span><b>变更板块</b>基础信息、商品图片、类目属性、SKU 信息</span>
+      </div>
+
+      <div class="audit-stack">
+        <details class="audit-section" open data-changed="true">
+          <summary class="section-title">
+            <span class="section-left">
+              <span class="chevron">›</span>
+              <span>
+                <span class="section-name">基础信息</span>
+                <span class="section-note">只展示审核需要判断的商品核心信息</span>
+              </span>
+            </span>
+            <span class="pill changed">3 项变更</span>
+          </summary>
+          <div class="section-body">
+            <div class="field-grid">
+              <div class="field changed">
+                <div class="field-label">商品中文标题</div>
+                <div class="compare-line before"><span class="compare-label">原</span><span class="compare-value">男士户外夹克</span></div>
+                <div class="compare-line after"><span class="compare-label">新</span><span class="compare-value">男士轻薄冲锋衣</span></div>
+              </div>
+              <div class="field">
+                <div class="field-label">商品英文标题</div>
+                <div class="field-value">Lightweight Outdoor Jacket</div>
+              </div>
+              <div class="field">
+                <div class="field-label">商品分类</div>
+                <div class="field-value">男装 / 外套 / 冲锋衣</div>
+              </div>
+              <div class="field changed">
+                <div class="field-label">仓库类型</div>
+                <div class="compare-line before"><span class="compare-label">原</span><span class="compare-value">官方仓</span></div>
+                <div class="compare-line after"><span class="compare-label">新</span><span class="compare-value">三方仓</span></div>
+              </div>
+              <div class="field changed">
+                <div class="field-label">发货仓库</div>
+                <div class="compare-line before"><span class="compare-label">原</span><span class="compare-value">--</span></div>
+                <div class="compare-line after"><span class="compare-label">新</span><span class="compare-value">美国仓 CAC002 / USD</span></div>
+              </div>
+              <div class="field">
+                <div class="field-label">币种</div>
+                <div class="field-value">USD</div>
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <details class="audit-section" open data-changed="true">
+          <summary class="section-title">
+            <span class="section-left">
+              <span class="chevron">›</span>
+              <span>
+                <span class="section-name">商品图片</span>
+                <span class="section-note">主图和审核相关图库，不展示空槽位</span>
+              </span>
+            </span>
+            <span class="pill changed">1 项变更</span>
+          </summary>
+          <div class="section-body">
+            <div class="image-compare">
+              <div class="image-card changed">
+                <div class="field-label">主图</div>
+                <div class="image-pair">
+                  <div>
+                    <div class="thumb-label"><span>原</span><span>旧主图</span></div>
+                    <img class="thumb" src="/demo-products/20260608/outdoor-jacket/01-main.jpg" alt="旧主图">
+                  </div>
+                  <div>
+                    <div class="thumb-label"><span>新</span><span>新主图</span></div>
+                    <img class="thumb" src="/demo-products/20260608/outdoor-jacket/05-lifestyle.jpg" alt="新主图">
+                  </div>
+                </div>
+              </div>
+              <div class="image-card">
+                <div class="field-label">尺码图</div>
+                <img class="thumb" src="/demo-products/20260608/outdoor-jacket/02-size-guide.jpg" alt="尺码图">
+              </div>
+              <div class="image-card">
+                <div class="field-label">材质图</div>
+                <img class="thumb" src="/demo-products/20260608/outdoor-jacket/03-material.jpg" alt="材质图">
+              </div>
+              <div class="image-card">
+                <div class="field-label">细节图</div>
+                <img class="thumb" src="/demo-products/20260608/outdoor-jacket/04-detail.jpg" alt="细节图">
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <details class="audit-section" open data-changed="true">
+          <summary class="section-title">
+            <span class="section-left">
+              <span class="chevron">›</span>
+              <span>
+                <span class="section-name">类目属性</span>
+                <span class="section-note">仅展示类目审核关键属性，内部系统字段不展示</span>
+              </span>
+            </span>
+            <span class="pill changed">2 项变更</span>
+          </summary>
+          <div class="section-body">
+            <div class="field-grid">
+              <div class="field changed">
+                <div class="field-label">适用季节</div>
+                <div class="compare-line before"><span class="compare-label">原</span><span class="compare-value">春季</span></div>
+                <div class="compare-line after"><span class="compare-label">新</span><span class="compare-value">春秋</span></div>
+              </div>
+              <div class="field">
+                <div class="field-label">适用性别</div>
+                <div class="field-value">男</div>
+              </div>
+              <div class="field">
+                <div class="field-label">主材质</div>
+                <div class="field-value">聚酯纤维混纺</div>
+              </div>
+              <div class="field changed">
+                <div class="field-label">功能特性</div>
+                <div class="compare-line before"><span class="compare-label">原</span><span class="compare-value">防风</span></div>
+                <div class="compare-line after"><span class="compare-label">新</span><span class="compare-value">防风、防水</span></div>
+              </div>
+              <div class="field">
+                <div class="field-label">厚薄</div>
+                <div class="field-value">薄款</div>
+              </div>
+              <div class="field">
+                <div class="field-label">销售单位</div>
+                <div class="field-value">件</div>
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <details class="audit-section" open data-changed="true">
+          <summary class="section-title">
+            <span class="section-left">
+              <span class="chevron">›</span>
+              <span>
+                <span class="section-name">SKU 信息</span>
+                <span class="section-note">供货价属于 SKU 信息，在同一块内展示</span>
+              </span>
+            </span>
+            <span class="pill changed">3 个 SKU 有变更</span>
+          </summary>
+          <div class="section-body">
+            <div class="sku-list">
+              <article class="sku-card">
+                <div class="sku-head">
+                  <div>
+                    <div class="sku-code">KX-OXF-WHT-M / SKU202606090001</div>
+                    <div class="sku-meta">白色 / M / 商务休闲</div>
+                  </div>
+                  <span class="pill changed">供货价上涨</span>
+                </div>
+                <div class="sku-body">
+                  <div class="sku-field-grid">
+                    <div class="field sku-image-field"><div class="field-label">SKU 图</div><a class="sku-thumb-link" href="/demo-products/20260608/outdoor-jacket/06-variants.jpg" target="_blank" rel="noopener" title="点击查看大图"><img class="sku-thumb" src="/demo-products/20260608/outdoor-jacket/06-variants.jpg" alt="SKU图"></a></div>
+                    <div class="field"><div class="field-label">客户 SKU</div><div class="field-value">KX-OXF-WHT-M</div></div>
+                    <div class="field"><div class="field-label">规格</div><div class="field-value">白色 / M / 聚酯纤维</div></div>
+                    <div class="field changed"><div class="field-label">供货价</div><div class="compare-line before"><span class="compare-label">原</span><span class="compare-value">42 USD</span></div><div class="compare-line after"><span class="compare-label">新</span><span class="compare-value">45 USD</span></div></div>
+                    <div class="field"><div class="field-label">尺寸重量</div><div class="field-value">29 x 21 x 3 cm / 0.22 kg</div></div>
+                    <div class="field"><div class="field-label">发货仓库</div><div class="field-value">美国仓 CAC002</div></div>
+                    <div class="field"><div class="field-label">销售状态</div><div class="field-value">待上架</div></div>
+                  </div>
+                </div>
+              </article>
+
+              <article class="sku-card">
+                <div class="sku-head">
+                  <div>
+                    <div class="sku-code">KX-OXF-BLU-L / SKU202606090002</div>
+                    <div class="sku-meta">浅蓝 / L / 商务休闲</div>
+                  </div>
+                  <span class="pill changed">规格、尺寸变更</span>
+                </div>
+                <div class="sku-body">
+                  <div class="sku-field-grid">
+                    <div class="field sku-image-field"><div class="field-label">SKU 图</div><a class="sku-thumb-link" href="/demo-products/20260608/outdoor-jacket/06-variants.jpg" target="_blank" rel="noopener" title="点击查看大图"><img class="sku-thumb" src="/demo-products/20260608/outdoor-jacket/06-variants.jpg" alt="SKU图"></a></div>
+                    <div class="field"><div class="field-label">客户 SKU</div><div class="field-value">KX-OXF-BLU-L</div></div>
+                    <div class="field changed"><div class="field-label">规格</div><div class="compare-line before"><span class="compare-label">原</span><span class="compare-value">浅蓝 / M / 聚酯纤维</span></div><div class="compare-line after"><span class="compare-label">新</span><span class="compare-value">浅蓝 / L / 聚酯纤维</span></div></div>
+                    <div class="field"><div class="field-label">供货价</div><div class="field-value">45 USD</div></div>
+                    <div class="field changed"><div class="field-label">尺寸重量</div><div class="compare-line before"><span class="compare-label">原</span><span class="compare-value">30 x 22 x 3 cm / 0.23 kg</span></div><div class="compare-line after"><span class="compare-label">新</span><span class="compare-value">31 x 23 x 3 cm / 0.24 kg</span></div></div>
+                    <div class="field"><div class="field-label">发货仓库</div><div class="field-value">美国仓 CAC002</div></div>
+                    <div class="field"><div class="field-label">销售状态</div><div class="field-value">待上架</div></div>
+                  </div>
+                </div>
+              </article>
+
+              <article class="sku-card">
+                <div class="sku-head">
+                  <div>
+                    <div class="sku-code">KX-OXF-NVY-XL / SKU202606090003</div>
+                    <div class="sku-meta">海军蓝 / XL / 商务休闲</div>
+                  </div>
+                  <span class="pill">无资料变化</span>
+                </div>
+                <div class="sku-body">
+                  <div class="sku-field-grid">
+                    <div class="field sku-image-field"><div class="field-label">SKU 图</div><a class="sku-thumb-link" href="/demo-products/20260608/outdoor-jacket/06-variants.jpg" target="_blank" rel="noopener" title="点击查看大图"><img class="sku-thumb" src="/demo-products/20260608/outdoor-jacket/06-variants.jpg" alt="SKU图"></a></div>
+                    <div class="field"><div class="field-label">客户 SKU</div><div class="field-value">KX-OXF-NVY-XL</div></div>
+                    <div class="field"><div class="field-label">规格</div><div class="field-value">海军蓝 / XL / 聚酯纤维</div></div>
+                    <div class="field"><div class="field-label">供货价</div><div class="field-value">48 USD</div></div>
+                    <div class="field"><div class="field-label">尺寸重量</div><div class="field-value">32 x 24 x 3 cm / 0.25 kg</div></div>
+                    <div class="field"><div class="field-label">发货仓库</div><div class="field-value">美国仓 CAC002</div></div>
+                    <div class="field"><div class="field-label">销售状态</div><div class="field-value">待上架</div></div>
+                  </div>
+                </div>
+              </article>
+            </div>
+          </div>
+        </details>
+
+        <details class="audit-section" data-changed="false">
+          <summary class="section-title">
+            <span class="section-left">
+              <span class="chevron">›</span>
+              <span>
+                <span class="section-name">详情图文</span>
+                <span class="section-note">占空间较大，放在最后；无变更时默认收起</span>
+              </span>
+            </span>
+            <span class="pill">无变化</span>
+          </summary>
+          <div class="section-body">
+            <div class="rich-preview">
+              <div class="rich-card">
+                <div class="rich-title">原详情图文</div>
+                <div>轻薄外套，适合春季通勤和户外场景。</div>
+                <div class="detail-image-row">
+                  <img src="/demo-products/20260608/outdoor-jacket/03-material.jpg" alt="材质">
+                  <img src="/demo-products/20260608/outdoor-jacket/04-detail.jpg" alt="细节">
+                </div>
+              </div>
+              <div class="rich-card">
+                <div class="rich-title">新详情图文</div>
+                <div>轻薄外套，适合春季通勤和户外场景。</div>
+                <div class="detail-image-row">
+                  <img src="/demo-products/20260608/outdoor-jacket/03-material.jpg" alt="材质">
+                  <img src="/demo-products/20260608/outdoor-jacket/04-detail.jpg" alt="细节">
+                </div>
+              </div>
+            </div>
+          </div>
+        </details>
+      </div>
+
+      <div class="audit-footer">
+        <button class="btn" type="button">关闭</button>
+        <button class="btn" type="button">驳回</button>
+        <button class="btn primary" type="button">通过审核</button>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const sections = Array.from(document.querySelectorAll('.audit-section'));
+    document.querySelector('[data-collapse="changed"]').addEventListener('click', () => {
+      sections.forEach((section) => {
+        section.open = section.dataset.changed === 'true';
+      });
+    });
+    document.querySelector('[data-collapse="all"]').addEventListener('click', () => {
+      sections.forEach((section) => {
+        section.open = true;
+      });
+    });
+  </script>
+</body>
+</html>

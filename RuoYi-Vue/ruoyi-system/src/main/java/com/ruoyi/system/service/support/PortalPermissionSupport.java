@@ -12,6 +12,8 @@ import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.system.domain.PortalMenu;
 import com.ruoyi.system.domain.PortalRole;
 import com.ruoyi.system.domain.PortalTreeSelect;
+import com.ruoyi.system.domain.vo.MetaVo;
+import com.ruoyi.system.domain.vo.RouterVo;
 
 /**
  * Shared validation and tree helpers for seller/buyer terminal permissions.
@@ -232,6 +234,43 @@ public class PortalPermissionSupport
         return buildMenuTree(menus).stream().map(PortalTreeSelect::new).collect(Collectors.toList());
     }
 
+    public static List<RouterVo> buildRouters(List<PortalMenu> menus)
+    {
+        List<RouterVo> routers = new ArrayList<>();
+        if (menus == null)
+        {
+            return routers;
+        }
+        for (PortalMenu menu : menus)
+        {
+            if (UserConstants.TYPE_BUTTON.equals(menu.getMenuType()))
+            {
+                continue;
+            }
+            RouterVo router = new RouterVo();
+            router.setHidden(UserConstants.EXCEPTION.equals(menu.getVisible()));
+            router.setName(getRouterName(menu));
+            router.setPath(getRouterPath(menu));
+            router.setComponent(getRouterComponent(menu));
+            router.setQuery(menu.getQuery());
+            router.setPerms(menu.getPerms());
+            router.setMeta(new MetaVo(menu.getMenuName(), menu.getIcon(),
+                    StringUtils.equals("1", menu.getIsCache()), menu.getPath()));
+            List<PortalMenu> children = menu.getChildren();
+            if (StringUtils.isNotEmpty(children))
+            {
+                if (UserConstants.TYPE_DIR.equals(menu.getMenuType()))
+                {
+                    router.setAlwaysShow(true);
+                    router.setRedirect("noRedirect");
+                }
+                router.setChildren(buildRouters(children));
+            }
+            routers.add(router);
+        }
+        return routers;
+    }
+
     public static boolean hasAllPermissions(Set<String> permissions, String[] requiredPermissions)
     {
         if (requiredPermissions == null || requiredPermissions.length == 0)
@@ -275,6 +314,36 @@ public class PortalPermissionSupport
     private static boolean hasPermission(Set<String> permissions, String permission)
     {
         return permissions.contains(StringUtils.trim(permission));
+    }
+
+    private static String getRouterName(PortalMenu menu)
+    {
+        String routerName = StringUtils.isNotEmpty(menu.getRouteName()) ? menu.getRouteName() : menu.getPath();
+        return StringUtils.capitalize(routerName);
+    }
+
+    private static String getRouterPath(PortalMenu menu)
+    {
+        String routerPath = StringUtils.trimToEmpty(menu.getPath());
+        if (MENU_ROOT_ID.equals(menu.getParentId()) && UserConstants.TYPE_DIR.equals(menu.getMenuType())
+                && StringUtils.isNotEmpty(routerPath) && !routerPath.startsWith("/"))
+        {
+            return "/" + routerPath;
+        }
+        return routerPath;
+    }
+
+    private static String getRouterComponent(PortalMenu menu)
+    {
+        if (StringUtils.isNotEmpty(menu.getComponent()))
+        {
+            return menu.getComponent();
+        }
+        if (UserConstants.TYPE_DIR.equals(menu.getMenuType()) && !MENU_ROOT_ID.equals(menu.getParentId()))
+        {
+            return UserConstants.PARENT_VIEW;
+        }
+        return UserConstants.LAYOUT;
     }
 
     private static String normalizeMenuTarget(String value)

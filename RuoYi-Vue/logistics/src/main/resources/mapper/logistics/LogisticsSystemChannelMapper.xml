@@ -1,0 +1,300 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.logistics.mapper.LogisticsSystemChannelMapper">
+
+    <resultMap type="LogisticsSystemChannel" id="SystemChannelResult">
+        <id     property="systemChannelCode"      column="system_channel_code"      />
+        <result property="systemChannelName"      column="system_channel_name"      />
+        <result property="fulfillmentMode"   column="fulfillment_mode"   />
+        <result property="standardCarrierCode"    column="standard_carrier_code"    />
+        <result property="signatureServices"      column="signature_services"       />
+        <result property="status"                 column="status"                   />
+        <result property="displayOrder"           column="display_order"            />
+        <result property="carrierMappingCount"    column="carrier_mapping_count"    />
+        <result property="warehouseCount"         column="warehouse_count"           />
+        <result property="carrierAccountSummary"  column="carrier_account_summary"  />
+        <result property="warehouseSummary"       column="warehouse_summary"         />
+        <result property="orderRuleSummary"       column="order_rule_summary"       />
+        <result property="createBy"               column="create_by"                />
+        <result property="createTime"             column="create_time"              />
+        <result property="updateBy"               column="update_by"                />
+        <result property="updateTime"             column="update_time"              />
+        <result property="remark"                 column="remark"                   />
+    </resultMap>
+
+    <resultMap type="LogisticsCarrierChannelMapping" id="CarrierMappingResult">
+        <id     property="mappingId"                    column="mapping_id"                    />
+        <result property="carrierAccountId"             column="carrier_account_id"             />
+        <result property="connectionCode"               column="connection_code"               />
+        <result property="providerKind"                 column="provider_kind"                 />
+        <result property="carrierName"                  column="connection_name"               />
+        <result property="externalChannelCode"          column="external_channel_code"          />
+        <result property="externalChannelNameSnapshot"  column="external_channel_name_snapshot" />
+        <result property="systemChannelCode"            column="system_channel_code"            />
+        <result property="systemChannelNameSnapshot"    column="system_channel_name_snapshot"   />
+        <result property="standardCarrierCode"          column="standard_carrier_code"          />
+        <result property="status"                       column="status"                         />
+        <result property="createBy"                     column="create_by"                      />
+        <result property="createTime"                   column="create_time"                    />
+        <result property="updateBy"                     column="update_by"                      />
+        <result property="updateTime"                   column="update_time"                    />
+        <result property="remark"                       column="remark"                         />
+    </resultMap>
+
+    <resultMap type="LogisticsSystemChannelWarehouse" id="WarehouseBindingResult">
+        <id     property="bindingId"             column="binding_id"              />
+        <result property="systemChannelCode"     column="system_channel_code"     />
+        <result property="warehouseId"           column="warehouse_id"            />
+        <result property="warehouseCode"         column="warehouse_code"          />
+        <result property="warehouseName"         column="warehouse_name"          />
+        <result property="warehouseKind"         column="warehouse_kind"          />
+        <result property="status"                column="status"                  />
+        <result property="shipperAddressMode"    column="shipper_address_mode"    />
+        <result property="externalShipperCode"   column="external_shipper_code"   />
+        <result property="shipperCompanyName"    column="shipper_company_name"    />
+        <result property="shipperContactName"    column="shipper_contact_name"    />
+        <result property="shipperContactPhone"   column="shipper_contact_phone"   />
+        <result property="shipperContactEmail"   column="shipper_contact_email"   />
+        <result property="shipperCountryCode"    column="shipper_country_code"    />
+        <result property="shipperStateProvince"  column="shipper_state_province"  />
+        <result property="shipperCity"           column="shipper_city"            />
+        <result property="shipperPostalCode"     column="shipper_postal_code"     />
+        <result property="shipperAddressLine1"   column="shipper_address_line1"   />
+        <result property="shipperAddressLine2"   column="shipper_address_line2"   />
+        <result property="createBy"              column="create_by"               />
+        <result property="createTime"            column="create_time"             />
+        <result property="updateBy"              column="update_by"               />
+        <result property="updateTime"            column="update_time"             />
+        <result property="remark"                column="remark"                  />
+    </resultMap>
+
+    <resultMap type="LogisticsSystemChannelOrderSetting" id="OrderSettingResult">
+        <id     property="settingId"              column="setting_id"              />
+        <result property="systemChannelCode"      column="system_channel_code"     />
+        <result property="destinationCountries"   column="destination_countries"   />
+        <result property="minWeight"              column="min_weight"              />
+        <result property="maxWeight"              column="max_weight"              />
+        <result property="maxLength"              column="max_length"              />
+        <result property="maxWidth"               column="max_width"               />
+        <result property="maxHeight"              column="max_height"              />
+        <result property="maxGirth"               column="max_girth"               />
+        <result property="signatureService"       column="signature_service"       />
+        <result property="validationMode"         column="validation_mode"         />
+        <result property="createBy"               column="create_by"               />
+        <result property="createTime"             column="create_time"             />
+        <result property="updateBy"               column="update_by"               />
+        <result property="updateTime"             column="update_time"             />
+        <result property="remark"                 column="remark"                  />
+    </resultMap>
+
+    <sql id="SystemChannelSummarySelect">
+        select sc.*,
+               coalesce(cm.carrier_mapping_count, 0) as carrier_mapping_count,
+               coalesce(wb.warehouse_count, 0) as warehouse_count,
+               coalesce(cm.carrier_account_summary, '') as carrier_account_summary,
+               coalesce(wb.warehouse_summary, '') as warehouse_summary,
+               case when os.setting_id is null then '未配置' else '已配置' end as order_rule_summary
+        from logistics_system_channel sc
+        left join (
+          select m.system_channel_code,
+                 count(1) as carrier_mapping_count,
+                 group_concat(distinct c.connection_name order by c.connection_name separator '、') as carrier_account_summary
+          from logistics_carrier_channel_mapping m
+          join logistics_carrier_connection c on c.carrier_account_id = m.carrier_account_id
+          group by m.system_channel_code
+        ) cm on cm.system_channel_code = sc.system_channel_code
+        left join (
+          select system_channel_code,
+                 count(1) as warehouse_count,
+                 group_concat(warehouse_name order by warehouse_name separator '、') as warehouse_summary
+          from logistics_system_channel_warehouse
+          group by system_channel_code
+        ) wb on wb.system_channel_code = sc.system_channel_code
+        left join logistics_system_channel_order_setting os on os.system_channel_code = sc.system_channel_code
+    </sql>
+
+    <select id="selectSystemChannelList" parameterType="LogisticsSystemChannel" resultMap="SystemChannelResult">
+        <include refid="SystemChannelSummarySelect" />
+        where 1 = 1
+        <if test="systemChannelCode != null and systemChannelCode != ''">
+            and sc.system_channel_code like concat('%', #{systemChannelCode}, '%')
+        </if>
+        <if test="systemChannelName != null and systemChannelName != ''">
+            and sc.system_channel_name like concat('%', #{systemChannelName}, '%')
+        </if>
+        <if test="fulfillmentMode != null and fulfillmentMode != ''">
+            and sc.fulfillment_mode = #{fulfillmentMode}
+        </if>
+        <if test="standardCarrierCode != null and standardCarrierCode != ''">
+            and sc.standard_carrier_code = #{standardCarrierCode}
+        </if>
+        <if test="status != null and status != ''">
+            and sc.status = #{status}
+        </if>
+        order by sc.display_order asc, sc.system_channel_code asc
+    </select>
+
+    <select id="selectSystemChannelByCode" resultMap="SystemChannelResult">
+        <include refid="SystemChannelSummarySelect" />
+        where sc.system_channel_code = #{systemChannelCode}
+        limit 1
+    </select>
+
+    <select id="selectMaxDisplayOrder" resultType="int">
+        select max(display_order)
+        from logistics_system_channel
+    </select>
+
+    <insert id="insertSystemChannel" parameterType="LogisticsSystemChannel">
+        insert into logistics_system_channel(
+            system_channel_code, system_channel_name, fulfillment_mode, standard_carrier_code, signature_services, status,
+            display_order, create_by, create_time, update_by, update_time, remark
+        ) values (
+            #{systemChannelCode}, #{systemChannelName}, #{fulfillmentMode}, #{standardCarrierCode}, #{signatureServices}, #{status},
+            #{displayOrder}, #{createBy}, sysdate(), #{updateBy}, sysdate(), #{remark}
+        )
+    </insert>
+
+    <update id="updateSystemChannel" parameterType="LogisticsSystemChannel">
+        update logistics_system_channel
+        set system_channel_name = #{systemChannelName},
+            fulfillment_mode = #{fulfillmentMode},
+            standard_carrier_code = #{standardCarrierCode},
+            signature_services = #{signatureServices},
+            status = #{status},
+            update_by = #{updateBy},
+            update_time = sysdate(),
+            remark = #{remark}
+        where system_channel_code = #{systemChannelCode}
+    </update>
+
+    <update id="updateSystemChannelStatus">
+        update logistics_system_channel
+        set status = #{status},
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where system_channel_code = #{systemChannelCode}
+    </update>
+
+    <select id="selectCarrierMappingList" resultMap="CarrierMappingResult">
+        select m.*, c.provider_kind, c.connection_name
+        from logistics_carrier_channel_mapping m
+        join logistics_carrier_connection c on c.carrier_account_id = m.carrier_account_id
+        where m.system_channel_code = #{systemChannelCode}
+        order by c.connection_name asc, m.external_channel_name_snapshot asc, m.mapping_id desc
+    </select>
+
+    <select id="selectCarrierMappingById" resultMap="CarrierMappingResult">
+        select m.*, c.provider_kind, c.connection_name
+        from logistics_carrier_channel_mapping m
+        join logistics_carrier_connection c on c.carrier_account_id = m.carrier_account_id
+        where m.system_channel_code = #{systemChannelCode}
+          and m.mapping_id = #{mappingId}
+        limit 1
+    </select>
+
+    <delete id="deleteCarrierMapping">
+        delete from logistics_carrier_channel_mapping
+        where system_channel_code = #{systemChannelCode}
+          and mapping_id = #{mappingId}
+    </delete>
+
+    <select id="selectWarehouseBindingList" resultMap="WarehouseBindingResult">
+        select *
+        from logistics_system_channel_warehouse
+        where system_channel_code = #{systemChannelCode}
+        order by warehouse_name asc, binding_id desc
+    </select>
+
+    <select id="selectWarehouseBindingById" resultMap="WarehouseBindingResult">
+        select *
+        from logistics_system_channel_warehouse
+        where system_channel_code = #{systemChannelCode}
+          and binding_id = #{bindingId}
+        limit 1
+    </select>
+
+    <insert id="insertWarehouseBinding" parameterType="LogisticsSystemChannelWarehouse" useGeneratedKeys="true"
+            keyProperty="bindingId" keyColumn="binding_id">
+        insert into logistics_system_channel_warehouse(
+            system_channel_code, warehouse_id, warehouse_code, warehouse_name, warehouse_kind, status,
+            shipper_address_mode, external_shipper_code, shipper_company_name, shipper_contact_name,
+            shipper_contact_phone, shipper_contact_email, shipper_country_code, shipper_state_province,
+            shipper_city, shipper_postal_code, shipper_address_line1, shipper_address_line2,
+            create_by, create_time, remark
+        ) values (
+            #{systemChannelCode}, #{warehouseId}, #{warehouseCode}, #{warehouseName}, #{warehouseKind}, #{status},
+            #{shipperAddressMode}, #{externalShipperCode}, #{shipperCompanyName}, #{shipperContactName},
+            #{shipperContactPhone}, #{shipperContactEmail}, #{shipperCountryCode}, #{shipperStateProvince},
+            #{shipperCity}, #{shipperPostalCode}, #{shipperAddressLine1}, #{shipperAddressLine2},
+            #{createBy}, sysdate(), #{remark}
+        )
+    </insert>
+
+    <update id="updateWarehouseBinding" parameterType="LogisticsSystemChannelWarehouse">
+        update logistics_system_channel_warehouse
+        set warehouse_code = #{warehouseCode},
+            warehouse_name = #{warehouseName},
+            warehouse_kind = #{warehouseKind},
+            status = #{status},
+            shipper_address_mode = #{shipperAddressMode},
+            external_shipper_code = #{externalShipperCode},
+            shipper_company_name = #{shipperCompanyName},
+            shipper_contact_name = #{shipperContactName},
+            shipper_contact_phone = #{shipperContactPhone},
+            shipper_contact_email = #{shipperContactEmail},
+            shipper_country_code = #{shipperCountryCode},
+            shipper_state_province = #{shipperStateProvince},
+            shipper_city = #{shipperCity},
+            shipper_postal_code = #{shipperPostalCode},
+            shipper_address_line1 = #{shipperAddressLine1},
+            shipper_address_line2 = #{shipperAddressLine2},
+            update_by = #{updateBy},
+            update_time = sysdate(),
+            remark = #{remark}
+        where system_channel_code = #{systemChannelCode}
+          and binding_id = #{bindingId}
+    </update>
+
+    <delete id="deleteWarehouseBinding">
+        delete from logistics_system_channel_warehouse
+        where system_channel_code = #{systemChannelCode}
+          and binding_id = #{bindingId}
+    </delete>
+
+    <select id="selectOrderSetting" resultMap="OrderSettingResult">
+        select *
+        from logistics_system_channel_order_setting
+        where system_channel_code = #{systemChannelCode}
+        limit 1
+    </select>
+
+    <insert id="upsertOrderSetting" parameterType="LogisticsSystemChannelOrderSetting" useGeneratedKeys="true"
+            keyProperty="settingId" keyColumn="setting_id">
+        insert into logistics_system_channel_order_setting(
+            system_channel_code, destination_countries, min_weight, max_weight, max_length, max_width,
+            max_height, max_girth, signature_service, validation_mode,
+            create_by, create_time, update_by, update_time, remark
+        ) values (
+            #{systemChannelCode}, #{destinationCountries}, #{minWeight}, #{maxWeight}, #{maxLength}, #{maxWidth},
+            #{maxHeight}, #{maxGirth}, #{signatureService}, #{validationMode},
+            #{createBy}, sysdate(), #{updateBy}, sysdate(), #{remark}
+        )
+        on duplicate key update
+            destination_countries = values(destination_countries),
+            min_weight = values(min_weight),
+            max_weight = values(max_weight),
+            max_length = values(max_length),
+            max_width = values(max_width),
+            max_height = values(max_height),
+            max_girth = values(max_girth),
+            signature_service = values(signature_service),
+            validation_mode = values(validation_mode),
+            update_by = values(update_by),
+            update_time = sysdate(),
+            remark = values(remark)
+    </insert>
+
+</mapper>

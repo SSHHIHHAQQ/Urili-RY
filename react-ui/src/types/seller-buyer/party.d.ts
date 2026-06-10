@@ -6,7 +6,6 @@ declare namespace API.Partner {
     mimeType: string;
     sizeBytes: number;
     fileUrl: string;
-    dataUrl?: string;
   }
 
   export interface PortalAccountBase {
@@ -295,6 +294,11 @@ declare namespace API.Partner {
     msg: string;
     total: number;
     rows: T[];
+  }
+
+  export interface PartnerSessionPageParams {
+    pageNum?: number;
+    pageSize?: number;
   }
 
   export interface PortalLoginLog {

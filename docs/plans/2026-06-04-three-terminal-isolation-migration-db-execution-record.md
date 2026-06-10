@@ -26,7 +26,7 @@
 
 历史目标追踪记录显示，本次执行使用本机 `.env.local` 中的 `RUOYI_DB_*` 连接远程 MySQL；记录未输出数据库密码、Redis 密码或 token secret。
 
-后续只读核验记录确认当前三端隔离核验目标为远程 MySQL `gz-cynosdbmysql-grp-lucf5kyf.sql.tencentcdb.com:28634/fenxiao`。本补记只引用主机、端口和库名，不记录任何凭证。
+后续只读核验记录确认当前三端隔离核验目标为远程 MySQL，连接来源为本机 `.env.local`，目标地址已脱敏。本补记不记录任何连接地址或凭证。
 
 ## 执行脚本
 

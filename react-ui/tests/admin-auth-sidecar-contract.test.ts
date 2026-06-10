@@ -116,6 +116,16 @@ const sidecars = [
     expected: "export { default } from './index.tsx';\n",
   },
   {
+    file: 'src/pages/Seller/Portal/index.js',
+    source: 'src/pages/Seller/Portal/index.tsx',
+    expected: "export { default } from './index.tsx';\n",
+  },
+  {
+    file: 'src/pages/Buyer/Portal/index.js',
+    source: 'src/pages/Buyer/Portal/index.tsx',
+    expected: "export { default } from './index.tsx';\n",
+  },
+  {
     file: 'src/pages/Portal/Login/index.js',
     source: 'src/pages/Portal/Login/index.tsx',
     expected: "export { default } from './index.tsx';\n",
@@ -175,10 +185,19 @@ const sidecars = [
 const readSource = (file: string) =>
   fs.readFileSync(path.join(process.cwd(), file), 'utf8').replace(/\r\n/g, '\n');
 
+const terminalPortalWrappers = [
+  'src/pages/Seller/Portal/index.tsx',
+  'src/pages/Buyer/Portal/index.tsx',
+];
+
 describe('admin auth runtime sidecars', () => {
   it.each(sidecars)('$file delegates to $source', ({ file, source, expected }) => {
     expect(fs.existsSync(path.join(process.cwd(), source))).toBe(true);
     expect(readSource(file)).toBe(expected);
+  });
+
+  it.each(terminalPortalWrappers)('$file delegates terminal page menus to the shared portal home', (file) => {
+    expect(readSource(file)).toBe("export { default } from '@/pages/Portal/Home';\n");
   });
 
   it('uses RuoYi admin login endpoints instead of legacy Ant Design Pro mock auth', () => {

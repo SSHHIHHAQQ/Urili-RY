@@ -8,9 +8,16 @@
 
 - 执行日期：2026-06-09
 - 连接来源：仓库根目录 `.env.local`
-- MySQL：`gz-cynosdbmysql-grp-lucf5kyf.sql.tencentcdb.com:28634/fenxiao`
+- MySQL：远端运行库，连接来源为本机 `.env.local`，地址已脱敏
 - Redis：本次未写入 Redis，仅确认后端运行变量来自 `.env.local`
 - 执行方式：本机 Python `pymysql` 读取 `.env.local` 后连接 MySQL，未在命令和记录中输出数据库密码
+
+## 用户确认与执行边界
+
+- 用户确认来源：用户在当前任务中下达“执行”授权，并且三端快速推进目标已明确远程数据库 DDL/DML 可以执行。
+- 本确认仅适用于 `RuoYi-Vue/sql/20260609_inventory_auto_wms_stock_sync_policy.sql` 在本记录列明范围内的一次执行；不得作为后续无确认重放依据。
+- 本次不写 Redis，不改写已有库存数量、订单、履约或财务事实数据。
+- 本次包含远端运行库 DDL 和菜单/字典 DML，执行前已预览目标 count/signature，脚本内不匹配会 `45000` fail-closed。
 
 ## 执行脚本
 
@@ -31,7 +38,28 @@ dict_data_signature=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852
 
 ```sql
 set @confirm_inventory_auto_wms_stock_sync_policy = 'APPLY_INVENTORY_AUTO_WMS_STOCK_SYNC_POLICY';
+set @inventory_auto_wms_menu_expected_count = '0';
+set @inventory_auto_wms_menu_expected_signature = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+set @inventory_auto_wms_dict_type_expected_count = '0';
+set @inventory_auto_wms_dict_type_expected_signature = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+set @inventory_auto_wms_dict_data_expected_count = '0';
+set @inventory_auto_wms_dict_data_expected_signature = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
 ```
+
+## 影响范围
+
+- 新增或确认存在 `inventory_stock_sync_policy`。
+- 扩展库存行同步策略字段、库存流水策略快照字段、SKU/SPU 读模型同步方式摘要字段。
+- 新增按钮权限 `inventory:overview:syncPolicy`。
+- 新增字典 `inventory_stock_sync_mode` 和库存流水类型 `AUTO_SOURCE_SYNC`。
+- 不直接调整库存数量，不触发 WMS 外部库存动作，不写 Redis 编码池或会话数据。
+
+## 回滚方式
+
+- 默认不自动回滚：页面、接口和后端策略已依赖新增表/字段/字典。
+- 如需回滚，必须先停止使用自动同步策略入口并部署不再读写新增字段的代码版本。
+- 受控回滚顺序应为：禁用/移除按钮权限和字典项，确认无策略行被业务引用后处理 `inventory_stock_sync_policy`，最后再按字段级方案移除新增列；每一步都需要新的只读预览、确认 token 或精确目标签名。
+- 已产生的库存流水或业务事实不得直接删除；如未来策略已被使用，应按业务冲销/作废方案处理。
 
 ## 脚本修复
 

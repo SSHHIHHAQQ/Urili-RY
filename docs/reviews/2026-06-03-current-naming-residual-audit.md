@@ -26,7 +26,7 @@
 
 ## 远端库检查结果
 
-目标库：`fenxiao`
+目标库：远端运行库，名称已脱敏
 
 ### schema 命名
 
@@ -298,7 +298,7 @@ rg --files . -g "!**/node_modules/**" -g "!**/target/**" -g "!**/.git/**" | rg -
 rg -l -i "urili" RuoYi-Vue react-ui README.md docker-compose.yml AGENTS.md -g "!**/target/**" -g "!**/node_modules/**"
 rg -n -i "urili" react-ui\src\pages react-ui\src\services react-ui\src\types react-ui\src\components react-ui\src\utils -g "!**/node_modules/**"
 rg -n -i "urili" RuoYi-Vue\ruoyi-admin\src\main\java RuoYi-Vue\ruoyi-system\src\main\java RuoYi-Vue\ruoyi-system\src\main\resources\mapper -g "!**/target/**"
-docker run --rm --env "MYSQL_PWD=<masked>" mysql:8.4 mysql --host="<remote-host>" --port="<remote-port>" --user="<user>" --database="fenxiao" -N --default-character-set=utf8mb4 --execute="<urili residual scan sql>"
+docker run --rm --env "MYSQL_PWD=<masked>" mysql:8.4 mysql --host="<remote-host>" --port="<remote-port>" --user="<user>" --database="<redacted-database>" -N --default-character-set=utf8mb4 --execute="<urili residual scan sql>"
 ```
 
 ## 未验证原因

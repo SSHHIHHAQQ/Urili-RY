@@ -2,6 +2,10 @@ import { getTerminalAccessToken } from '@/access';
 import { request } from '@umijs/max';
 
 type PortalTerminal = API.Partner.PortalTerminal;
+type PortalSessionPageParams = {
+  pageNum?: number;
+  pageSize?: number;
+};
 
 const TERMINAL_PATH: Record<PortalTerminal, string> = {
   seller: 'seller',
@@ -33,6 +37,20 @@ function sanitizePortalQueryParams(params?: Record<string, any>) {
   return Object.fromEntries(
     Object.entries(params).filter(([key]) => !PORTAL_SCOPE_PARAM_KEYS.has(key)),
   );
+}
+
+function sanitizePortalSessionPageParams(params?: PortalSessionPageParams) {
+  if (!params) {
+    return undefined;
+  }
+  const result: PortalSessionPageParams = {};
+  if (params.pageNum != null) {
+    result.pageNum = params.pageNum;
+  }
+  if (params.pageSize != null) {
+    result.pageSize = params.pageSize;
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
 }
 
 export async function portalLogin(terminal: PortalTerminal, data: API.Partner.PortalLoginParams) {
@@ -143,13 +161,13 @@ export async function getPortalOperLogs(terminal: PortalTerminal, params?: Recor
   );
 }
 
-export async function getPortalSessions(terminal: PortalTerminal, params?: Record<string, any>) {
+export async function getPortalSessions(terminal: PortalTerminal, params?: PortalSessionPageParams) {
   return request<API.Partner.PortalAuditPageResult<API.Partner.PortalOwnSessionProfile>>(
     buildPortalUrl(terminal, '/account/sessions'),
     {
       method: 'GET',
       headers: { ...buildPortalAuthHeaders(terminal), isToken: false },
-      params: sanitizePortalQueryParams(params),
+      params: sanitizePortalSessionPageParams(params),
     },
   );
 }
@@ -270,7 +288,7 @@ export const sellerPortalSessionService = {
   getRoles: () => getPortalRoles('seller'),
   getLoginLogs: (params?: Record<string, any>) => getPortalLoginLogs('seller', params),
   getOperLogs: (params?: Record<string, any>) => getPortalOperLogs('seller', params),
-  getSessions: (params?: Record<string, any>) => getPortalSessions('seller', params),
+  getSessions: (params?: PortalSessionPageParams) => getPortalSessions('seller', params),
 };
 
 export const buyerPortalSessionService = {
@@ -287,5 +305,5 @@ export const buyerPortalSessionService = {
   getRoles: () => getPortalRoles('buyer'),
   getLoginLogs: (params?: Record<string, any>) => getPortalLoginLogs('buyer', params),
   getOperLogs: (params?: Record<string, any>) => getPortalOperLogs('buyer', params),
-  getSessions: (params?: Record<string, any>) => getPortalSessions('buyer', params),
+  getSessions: (params?: PortalSessionPageParams) => getPortalSessions('buyer', params),
 };

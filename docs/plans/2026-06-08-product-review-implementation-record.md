@@ -268,3 +268,132 @@
   - `npm run tsc -- --pretty false`：通过。
   - `npm run verify:three-terminal`：通过，前端 24 suites / 192 tests；后端 product 53 tests、seller 100 tests、buyer 101 tests。
   - 本轮未执行远程 MySQL DDL/DML，未写入 Redis。
+
+### 2026-06-09 模板式真实审核详情落地
+
+- 本段为最新结论，覆盖上方“供货价变化恢复独立 `SKU 供货价左右对比` 区域”的过期口径。
+- 调整依据：用户已确认 `react-ui/public/prototypes/product-review-audit-template.html` 的审核模板方向，真实页面需要按商品编辑页习惯拆成审核板块，而不是继续使用旧的类型专用详情结构。
+- 真实详情页统一渲染 `AuditTemplateReviewView`，所有审核类型都按同一套板块展示：
+  - `基础信息`
+  - `商品图片`
+  - `类目属性`
+  - `SKU 信息`
+  - `详情图文`
+- 每个板块使用可折叠区域；有变更的板块默认展开，无变更的板块默认收起。
+- 字段展示采用同一字段内上下两行对比：`原` 在上、`新` 在下；发生变化的新值使用绿色背景和绿色文字突出，不再使用输入框样式。
+- SKU 审核信息改为每个 SKU 一张卡片，字段横向网格排列；SKU 图缩小为 44px 预览，点击仍可通过 Ant Design 图片预览查看大图。
+- 供货价属于 SKU 信息的一部分，已经回到 `SKU 信息` 板块内展示和高亮；不再单独渲染 `SKU 供货价左右对比`。
+- SKU 信息只展示审核需要看的字段：SKU 图、客户 SKU、规格、包装数量、供货价、尺寸重量、发货仓库、销售状态；不展示来源维度组、来源 SKU 组、Master SKU 等内部字段。
+- 详情抽屉底部增加待审核状态下的 `关闭 / 驳回 / 通过审核` 操作，复用现有审核权限和审核弹窗。
+- 验证结果：
+  - `npm run tsc -- --pretty false`：通过。
+  - `npx jest --config jest.config.ts tests/product-distribution-permission-guard.test.ts --runInBand`：通过，1 suite / 10 tests。
+  - Playwright CLI 使用临时 admin storage state 打开 `http://127.0.0.1:8001/review-center/product-distribution` 并生成截图 `react-ui/output/playwright/product-review-real-page.png`，确认真实商品审核列表页可加载；当前临时 Playwright 包无法在 spec 内解析 `playwright` / `@playwright/test`，未完成脚本化点击详情抽屉。
+  - 本轮未执行远程 MySQL DDL/DML，未读取或写入 Redis。
+
+### 2026-06-09 商品审核风险字段展示删除
+
+- 调整原因：商品审核只做商品资料、SKU 信息和供货价等信息审核；高风险问题应在新增商品或编辑商品提交阶段直接拦截，不需要在审核列表里再展示一个不具备业务判断价值的风险字段。
+- 调整范围：
+  - 商品审核主列表删除 `风险` 列。
+  - 审核详情的 `审核基础信息` 删除 `风险等级`。
+  - 前端删除 `product_review_risk_level` 字典加载和默认风险枚举。
+  - 契约测试增加禁止断言，防止重新出现 `风险` 列、`riskLevelValueEnum`、`product_review_risk_level` 和 `风险等级`。
+- 边界说明：本次不删除数据库 `risk_level` / `risk_summary` 列，不修改后端表结构；如未来确需物理删列，需要单独按数据库变更规则出 Markdown 方案并确认。
+
+### 2026-06-09 商品审核主列表字段精简
+
+- 调整原因：`审核重点` 和 `变化摘要` 当前只是把后端摘要文本重复展示，不能帮助审核员更快判断要看什么，先从主列表删除。
+- 调整范围：
+  - 商品审核主列表删除 `审核重点` 列。
+  - 商品审核主列表删除 `变化摘要` 列。
+  - `审核状态` 从列表最左侧移到 `提交人` 前面。
+  - `审核基础信息` 删除 `变化摘要`，避免详情基础信息继续展示低价值摘要。
+  - 清理前端只服务旧 `审核重点` 列的 `renderReviewFocus` / `renderFocusLine`。
+- 契约测试增加列表列顺序断言：`审核状态` 必须在 `仓库类型` 之后、`提交人` 之前，并禁止 `审核重点` / `变化摘要` 重新出现在主列表列配置里。
+
+### 2026-06-09 审核详情变更角标与 SKU 展示统一
+
+- 调整原因：审核详情折叠板块的变更角标原先混用 `0 项变更`、`无变化`、`有变更` 等文案，审核体验不统一；SKU 规格和尺寸重量使用斜杠拼接，长规格不利于快速扫读。
+- 调整范围：
+  - 折叠板块角标统一走 `formatAuditChangeBadge`，无变更统一显示 `无变化`，有变更显示数量。
+  - SKU 规格改为逐行展示：颜色、尺码、材质、款式、型号、容量各自一行。
+  - SKU 尺寸重量改为逐行展示：尺寸一行、重量一行；尺寸使用 `×` 连接长宽高，单位显示为 `厘米`，重量显示为 `千克`。
+  - SKU 卡片头部删除 `系统SKU / 规格` 的斜杠拼接，规格统一在 `规格` 字段里逐行查看。
+  - 仅改审核详情专用展示函数，不影响普通 SKU 表格的 `formatSkuSpecs` / `formatDimension`。
+- 契约测试增加断言，固定 `renderAuditSkuSpecs`、`renderAuditSkuDimension` 和统一角标规则。
+
+### 2026-06-09 商品审核主列表提交端删除与系统 SPU 独立展示
+
+- 调整原因：商品审核主列表里的 `提交端` 对审核员判断商品内容没有价值，且作为筛选项也不常用；系统 SPU 是定位商品和跨页面核对更高频的信息，需要从商品列副文本提升为独立字段。
+- 调整范围：
+  - 删除商品审核主列表 `提交端` 列。
+  - 删除 `提交端` 对应筛选项。
+  - 新增 `系统SPU` 独立列，放在 `商品图` 后、`审核类型` 前。
+  - 商品标题列不再重复展示系统 SPU，只保留商品标题和类目。
+  - 关键词筛选占位文案调整为 `审核单号 / 系统SPU / 标题 / 卖家`，继续支持通过系统 SPU 搜索。
+- 边界说明：本次不删除接口返回的 `submitTerminal` 字段，也不改后端查询参数；审计快照内部本地化仍保留端类型 code 到中文的转换，避免历史快照显示英文。
+
+### 2026-06-09 商品审核主列表按审核类型动态列
+
+- 调整原因：不同审核类型的主列表审核重点不同，固定列会导致审核员在列表页看不到最关键的信息。供货价变更尤其需要以 SKU 为维度逐行对齐展示原供货价和新供货价。
+- 后端调整：
+  - 新增 `ProductReviewListDisplayItem` 作为商品审核主列表轻量展示项，不落库。
+  - `ProductReviewRequest` 新增 `listDisplayItems` 和 `listChangedModules` 返回字段。
+  - 列表接口在查询具体审核类型 Tab 时批量读取现有 `product_review_item` / `product_review_snapshot`，构建主列表展示项。
+  - `EDIT_PRICE` 只返回供货价实际变化的 SKU；未变价 SKU 不进入 `listDisplayItems`。
+  - `EDIT_MIXED` 同时标记 `供货价`、`SKU资料`、`新增SKU`、`基础信息`、`商品图片`、`类目属性`、`详情图文` 等变更模块。
+- 前端调整：
+  - `全部` Tab 保持通用列，并继续显示 `审核类型`。
+  - `新增商品` Tab 展示 `类目`、`SKU数量`、`供货价区间`、`仓库类型`、`发货仓库`。
+  - `新增SKU` Tab 展示 `新增SKU`、`规格`、`供货价`、`仓库`。
+  - `商品资料变更` Tab 展示 `变更字段`、`关键变更`、`仓库类型`。
+  - `SKU资料变更` Tab 展示 `变更SKU`、`变更字段`、`关键变更`。
+  - `供货价变更` Tab 展示 `变更SKU`、`原供货价`、`新供货价`、`币种`，其中 SKU 和价格按同一行序逐行对应，新供货价附带涨价/降价标签。
+  - `综合变更` Tab 展示 `变更模块`、`影响SKU`、`供货价变化`、`关键变更`。
+- 边界说明：
+  - 本次不新增表、不改表结构、不执行 DDL/DML。
+  - `全部` Tab 不额外加载快照展示项，避免列表默认视图拉取大字段；只有具体审核类型 Tab 需要展示细节时才补轻量展示项。
+  - 当前历史夹具里存在旧口径 `EDIT_PRICE` 但实际只改 `salePrice` 的审核单；按新业务规则不会展示为供货价变更 SKU，前端用 `未识别供货价变更` 做显式兜底，避免误导审核员。
+- 验证结果：
+  - `mvn -pl product -am "-Dtest=ProductReviewServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，19 tests。
+  - `npm run tsc -- --pretty false`：通过。
+  - `npx jest --config jest.config.ts tests/product-distribution-permission-guard.test.ts --runInBand`：通过，10 tests。
+  - `mvn -pl ruoyi-admin -am "-DskipTests" package`：通过，并重新生成 `ruoyi-admin.jar`。
+  - `.\start-backend-local.ps1 -Restart`：8080 后端已重启。
+  - `DISABLE_MFSU=1 npm run start:dev -- --port 8001`：8001 前端已启动；普通 MFSU 启动遇到本地缓存冲突，已清缓存并用禁用 MFSU 方式验证。
+  - 浏览器验证 `http://127.0.0.1:8001/review-center/product-distribution`：`全部`、`新增商品`、`新增SKU`、`商品资料变更`、`SKU资料变更`、`供货价变更`、`综合变更` 表头均按类型切换；供货价 Tab 显示 `变更SKU / 原供货价 / 新供货价 / 币种`。
+
+### 2026-06-09 商品审核默认待审核筛选
+
+- 调整原因：审核员进入商品审核菜单后的核心工作是处理待审核单据，默认混入已通过、已驳回、已撤回记录会降低列表处理效率。
+- 前端调整：
+  - 商品审核 ProTable 搜索表单默认设置 `reviewStatus=PENDING`，筛选框初始显示 `待审核`。
+  - 查询提交前对空审核状态做兜底，默认仍按 `PENDING` 查询。
+  - 列表请求层再次兜底 `reviewStatus=PENDING`，避免首次加载或重置时退回全部状态。
+- 边界说明：
+  - 本次只调整管理端商品审核列表默认查询条件，不修改后端接口、不改表结构、不执行 DDL/DML。
+  - 用户仍可通过审核状态筛选手动选择已通过、已驳回或已撤回。
+- 验证结果：
+  - `npm run tsc -- --pretty false`：通过。
+  - `npx jest --config jest.config.ts tests/product-distribution-permission-guard.test.ts --runInBand`：通过，10 tests。
+  - 浏览器验证 `http://127.0.0.1:8001/review-center/product-distribution`：筛选区显示 `审核状态待审核`，表格首屏审核状态均为 `待审核`。
+
+### 2026-06-09 商品审核主列表规格折行与重复列清理
+
+- 调整原因：
+  - `新增SKU` Tab 的 `规格` 字段内容较长，原列表行强制不换行，导致视觉上串到后面的供货价、仓库等字段。
+  - `变更字段` 和 `关键变更` 在商品资料变更、SKU 资料变更、综合变更等 Tab 中信息重复，保留两个列会降低审核员扫读效率。
+- 前端调整：
+  - 商品审核列表行取消 `whiteSpace: nowrap`，长文本在当前单元格内自动折行，并使用 `overflowWrap: anywhere` 防止长 SKU 或长型号撑破列宽。
+  - `规格` 字段按中文分号拆分为多行展示，例如颜色、尺码、材质、款式、型号各自独立成行。
+  - 删除主列表 `关键变更` 列，变更类 Tab 只保留 `变更字段`。
+  - `商品资料变更`、`SKU资料变更`、`综合变更` 三类 Tab 的列配置同步精简。
+- 多 SKU 展示规则：
+  - 列表继续以 `listDisplayItems` 顺序逐个 SKU 纵向排列。
+  - SKU 编码、规格、供货价、仓库等字段在各自列内按同一顺序展示；规格内容较长时只在规格单元格内部折行，不再横向挤压后续字段。
+- 验证结果：
+  - `npm run tsc -- --pretty false`：通过。
+  - `npx jest --config jest.config.ts tests/product-distribution-permission-guard.test.ts --runInBand`：通过，10 tests。
+  - 浏览器验证 `新增SKU(5)`：规格单元格无横向溢出，首行规格拆为 5 个展示片段。
+  - 浏览器验证 `商品资料变更(5)`、`SKU资料变更(5)`、`供货价变更(5)`、`综合变更(0)`：表头不再出现 `关键变更`，未检测到表格单元格横向溢出。

@@ -784,10 +784,6 @@ begin
       union all select 'seller:account:session:list'
       union all select 'seller:dept:list'
       union all select 'seller:role:list'
-      union all select 'seller:product:category:list'
-      union all select 'seller:product:schema:query'
-      union all select 'seller:product:distribution:list'
-      union all select 'seller:product:distribution:query'
     ) expected
     join seller_menu m on m.perms = expected.perms
                       and m.parent_id = 0
@@ -819,10 +815,6 @@ begin
       union all select 'seller:account:session:list'
       union all select 'seller:dept:list'
       union all select 'seller:role:list'
-      union all select 'seller:product:category:list'
-      union all select 'seller:product:schema:query'
-      union all select 'seller:product:distribution:list'
-      union all select 'seller:product:distribution:query'
     ) expected on expected.perms = m.perms
     where r.role_key = 'owner'
       and r.status = '0'
@@ -830,9 +822,6 @@ begin
       and (
         m.perms like 'seller:account:%'
         or m.perms in ('seller:dept:list', 'seller:role:list')
-        or m.perms like 'seller:product:category:%'
-        or m.perms like 'seller:product:schema:%'
-        or m.perms like 'seller:product:distribution:%'
       )
       and expected.perms is null
   ) then
@@ -851,10 +840,6 @@ begin
       union all select 'buyer:account:session:list'
       union all select 'buyer:dept:list'
       union all select 'buyer:role:list'
-      union all select 'buyer:product:category:list'
-      union all select 'buyer:product:schema:query'
-      union all select 'buyer:product:distribution:list'
-      union all select 'buyer:product:distribution:query'
     ) expected
     join buyer_menu m on m.perms = expected.perms
                      and m.parent_id = 0
@@ -886,10 +871,6 @@ begin
       union all select 'buyer:account:session:list'
       union all select 'buyer:dept:list'
       union all select 'buyer:role:list'
-      union all select 'buyer:product:category:list'
-      union all select 'buyer:product:schema:query'
-      union all select 'buyer:product:distribution:list'
-      union all select 'buyer:product:distribution:query'
     ) expected on expected.perms = m.perms
     where r.role_key = 'owner'
       and r.status = '0'
@@ -897,9 +878,6 @@ begin
       and (
         m.perms like 'buyer:account:%'
         or m.perms in ('buyer:dept:list', 'buyer:role:list')
-        or m.perms like 'buyer:product:category:%'
-        or m.perms like 'buyer:product:schema:%'
-        or m.perms like 'buyer:product:distribution:%'
       )
       and expected.perms is null
   ) then
@@ -2014,11 +1992,7 @@ join seller_menu m on m.perms in (
     'seller:account:operLog:list',
     'seller:account:session:list',
     'seller:dept:list',
-    'seller:role:list',
-    'seller:product:category:list',
-    'seller:product:schema:query',
-    'seller:product:distribution:list',
-    'seller:product:distribution:query'
+    'seller:role:list'
 )
                   and m.parent_id = 0
                   and coalesce(m.menu_type, '') = 'F'
@@ -2044,11 +2018,7 @@ join buyer_menu m on m.perms in (
     'buyer:account:operLog:list',
     'buyer:account:session:list',
     'buyer:dept:list',
-    'buyer:role:list',
-    'buyer:product:category:list',
-    'buyer:product:schema:query',
-    'buyer:product:distribution:list',
-    'buyer:product:distribution:query'
+    'buyer:role:list'
 )
                  and m.parent_id = 0
                  and coalesce(m.menu_type, '') = 'F'

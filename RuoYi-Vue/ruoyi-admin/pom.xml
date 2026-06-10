@@ -95,6 +95,12 @@
             <artifactId>warehouse</artifactId>
         </dependency>
 
+        <!-- 物流商模块-->
+        <dependency>
+            <groupId>com.ruoyi</groupId>
+            <artifactId>logistics</artifactId>
+        </dependency>
+
     </dependencies>
 
     <build>
