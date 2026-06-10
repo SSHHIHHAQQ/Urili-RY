@@ -428,6 +428,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <if test="status != null and status != ''">
             and status = #{status}
         </if>
+        <if test="credentialStatus != null and credentialStatus != ''">
+            and credential_status = #{credentialStatus}
+        </if>
         order by display_order asc, last_authorized_time desc, create_time desc
     </select>
 
@@ -927,8 +930,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         select *
         from upstream_system_logistics_channel_candidate
         where connection_code = #{connectionCode}
-          and warehouse_code = #{warehouseCode}
           and channel_code = #{channelCode}
+        order by case when status = 'ACTIVE' then 0 else 1 end asc, warehouse_code asc
         limit 1
     </select>
 
@@ -936,7 +939,16 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         select *
         from upstream_system_logistics_channel_pairing
         where connection_code = #{connectionCode}
-        order by upstream_warehouse_code asc, upstream_channel_code asc, create_time desc
+        order by upstream_channel_code asc, system_channel_code asc, create_time desc
+    </select>
+
+    <select id="selectLogisticsChannelPairingBySystemChannel" resultMap="LogisticsChannelPairingResult">
+        select *
+        from upstream_system_logistics_channel_pairing
+        where system_channel_code = #{systemChannelCode}
+          and pairing_role = #{pairingRole}
+        order by logistics_channel_pairing_id desc
+        limit 1
     </select>
 
     <insert id="insertLogisticsChannelPairing" parameterType="UpstreamLogisticsChannelPairing" useGeneratedKeys="true" keyProperty="logisticsChannelPairingId">

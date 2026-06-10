@@ -57,6 +57,8 @@ public final class UpstreamSystemConstants
 
     public static final String SYNC_MODE_SELECTED = "SELECTED";
 
+    public static final int SKU_DIMENSION_FULL_RATE_LIMIT_MS = 2000;
+
     public static final String OP_AUTH_CHECK = "AUTH_CHECK";
 
     public static final String OP_WAREHOUSE_SYNC = "WAREHOUSE_SYNC";

@@ -17,6 +17,7 @@ import styles from '../style.module.css';
 type ConnectionSummaryProps = {
   access: { hasPerms: (permission: string) => boolean };
   connection: API.Integration.UpstreamConnection;
+  syncing?: boolean;
   onAuthorize: () => void;
   onCredential: () => void;
   onEdit: () => void;
@@ -52,6 +53,7 @@ function SummaryItem({ label, value, wide }: SummaryItemProps) {
 export default function ConnectionSummary({
   access,
   connection,
+  syncing = false,
   onAuthorize,
   onCredential,
   onEdit,
@@ -105,10 +107,12 @@ export default function ConnectionSummary({
           <Tooltip title="选择同步内容">
             <Button
               icon={<SyncOutlined />}
+              disabled={syncing}
               hidden={!canOpenSync}
+              loading={syncing}
               onClick={onSync}
             >
-              同步
+              {syncing ? '正在同步' : '同步'}
             </Button>
           </Tooltip>
           <Tooltip title="校验当前授权是否可用">

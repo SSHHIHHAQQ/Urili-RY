@@ -192,7 +192,6 @@ public class PortalPermissionSupport
         role.setStatus(StringUtils.defaultIfBlank(role.getStatus(), UserConstants.NORMAL));
         role.setRemark(StringUtils.trimToEmpty(role.getRemark()));
         assertNormalOrException(role.getStatus(), "角色状态参数不正确");
-        role.setMenuIds(sanitizeIds(role.getMenuIds()));
     }
 
     public static Long[] sanitizeIds(Long[] ids)

@@ -8,10 +8,10 @@ import com.ruoyi.buyer.mapper.BuyerPortalDeptMapper;
 import com.ruoyi.buyer.service.IBuyerPortalDeptService;
 import com.ruoyi.buyer.service.IBuyerService;
 import com.ruoyi.common.exception.ServiceException;
-import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.system.domain.PortalDept;
 import com.ruoyi.system.domain.PortalTreeSelect;
+import com.ruoyi.system.service.support.PortalActorSupport;
 import com.ruoyi.system.service.support.PortalDeptSupport;
 
 /**
@@ -83,7 +83,7 @@ public class BuyerPortalDeptServiceImpl implements IBuyerPortalDeptService
         {
             throw new ServiceException("新增买家端部门失败，部门名称已存在");
         }
-        dept.setCreateBy(SecurityUtils.getUsername());
+        dept.setCreateBy(PortalActorSupport.currentActorName());
         return deptMapper.insertBuyerDept(dept);
     }
 
@@ -99,12 +99,12 @@ public class BuyerPortalDeptServiceImpl implements IBuyerPortalDeptService
         {
             throw new ServiceException("修改买家端部门失败，部门名称已存在");
         }
-        dept.setUpdateBy(SecurityUtils.getUsername());
+        dept.setUpdateBy(PortalActorSupport.currentActorName());
         int rows = deptMapper.updateBuyerDept(dept);
         if (!StringUtils.equals(oldDept.getAncestors(), dept.getAncestors()))
         {
             deptMapper.updateBuyerDeptAncestors(buyerId, oldDept.getAncestors() + "," + oldDept.getDeptId(),
-                    dept.getAncestors() + "," + dept.getDeptId(), SecurityUtils.getUsername());
+                    dept.getAncestors() + "," + dept.getDeptId(), PortalActorSupport.currentActorName());
         }
         return rows;
     }
@@ -121,7 +121,7 @@ public class BuyerPortalDeptServiceImpl implements IBuyerPortalDeptService
         {
             throw new ServiceException("部门存在账号，不允许删除");
         }
-        return deptMapper.deleteBuyerDeptById(buyerId, deptId, SecurityUtils.getUsername());
+        return deptMapper.deleteBuyerDeptById(buyerId, deptId, PortalActorSupport.currentActorName());
     }
 
     private void setAncestors(Long buyerId, PortalDept dept)

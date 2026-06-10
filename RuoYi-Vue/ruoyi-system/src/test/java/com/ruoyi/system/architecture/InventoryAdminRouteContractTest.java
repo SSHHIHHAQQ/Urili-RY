@@ -56,6 +56,12 @@ public class InventoryAdminRouteContractTest
                 "react-ui/src/components/InventorySyncPolicy/InventorySyncPolicyButton.tsx"), StandardCharsets.UTF_8);
         String sharedInventorySyncPolicyButtonJs = Files.readString(repoRoot.resolve(
                 "react-ui/src/components/InventorySyncPolicy/InventorySyncPolicyButton.js"), StandardCharsets.UTF_8);
+        String sharedInventorySyncPolicyTargetPicker = Files.readString(repoRoot.resolve(
+                "react-ui/src/components/InventorySyncPolicy/InventorySyncPolicyTargetPicker.tsx"),
+                StandardCharsets.UTF_8);
+        String sharedInventorySyncPolicyTargetPickerJs = Files.readString(repoRoot.resolve(
+                "react-ui/src/components/InventorySyncPolicy/InventorySyncPolicyTargetPicker.js"),
+                StandardCharsets.UTF_8);
         String helpers = Files.readString(repoRoot.resolve(
                 "react-ui/src/pages/Inventory/Overview/helpers.tsx"), StandardCharsets.UTF_8);
         String helpersJs = Files.readString(repoRoot.resolve(
@@ -367,18 +373,32 @@ public class InventoryAdminRouteContractTest
                 "InventorySyncPolicyButton must use the confirmed seller-facing action label", violations);
         assertContains(sharedInventorySyncPolicyButton, "卖家维度",
                 "InventorySyncPolicyButton must use seller dimension wording", violations);
+        assertContains(sharedInventorySyncPolicyButton, "buttonStyle=\"solid\"",
+                "InventorySyncPolicyButton must use the same solid radio-button style as inventory overview view switch",
+                violations);
         assertContains(sharedInventorySyncPolicyButton, "mode=\"multiple\"",
                 "InventorySyncPolicyButton warehouse scope must support selecting multiple official warehouses",
                 violations);
-        assertContains(sharedInventorySyncPolicyButton, "getInventoryOverviewSpuList",
-                "InventorySyncPolicyButton must use searchable SPU selector instead of raw id input", violations);
-        assertContains(sharedInventorySyncPolicyButton, "getInventoryOverviewSkuList",
-                "InventorySyncPolicyButton must use searchable SKU selector instead of raw id input", violations);
-        assertContains(sharedInventorySyncPolicyButton, "getInventoryOverviewWarehouseList",
-                "InventorySyncPolicyButton must use searchable stock-row selector instead of raw id input", violations);
+        assertContains(sharedInventorySyncPolicyButton, "InventorySyncPolicyTargetPicker",
+                "InventorySyncPolicyButton must delegate large target selection to the table picker", violations);
+        assertContains(sharedInventorySyncPolicyTargetPicker, "ProTable",
+                "InventorySyncPolicyTargetPicker must use table selection for large SPU/SKU/stock-row targets",
+                violations);
+        assertContains(sharedInventorySyncPolicyTargetPicker, "type: 'radio'",
+                "InventorySyncPolicyTargetPicker must keep the current single-target backend contract explicit",
+                violations);
+        assertContains(sharedInventorySyncPolicyTargetPicker, "getInventoryOverviewSpuList",
+                "InventorySyncPolicyTargetPicker must use the real SPU list endpoint", violations);
+        assertContains(sharedInventorySyncPolicyTargetPicker, "getInventoryOverviewSkuList",
+                "InventorySyncPolicyTargetPicker must use the real SKU list endpoint", violations);
+        assertContains(sharedInventorySyncPolicyTargetPicker, "getInventoryOverviewWarehouseList",
+                "InventorySyncPolicyTargetPicker must use the real stock-row list endpoint", violations);
         assertExactSource(sharedInventorySyncPolicyButtonJs,
                 "export { default, InventorySyncPolicyModal } from './InventorySyncPolicyButton.tsx';",
                 "shared InventorySyncPolicyButton JS mirror must forward to TSX only", violations);
+        assertExactSource(sharedInventorySyncPolicyTargetPickerJs,
+                "export { default } from './InventorySyncPolicyTargetPicker.tsx';",
+                "shared InventorySyncPolicyTargetPicker JS mirror must forward to TSX only", violations);
         assertExactSource(skuWarehouseTableJs,
                 "export { default, WarehouseStockTable } from './SkuWarehouseTable.tsx';",
                 "SkuWarehouseTable JS mirror must forward to TSX only", violations);

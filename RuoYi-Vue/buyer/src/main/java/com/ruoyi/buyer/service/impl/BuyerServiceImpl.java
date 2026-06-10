@@ -41,6 +41,7 @@ import com.ruoyi.system.domain.PortalSessionProfile;
 import com.ruoyi.system.mapper.PortalDirectLoginTicketMapper;
 import com.ruoyi.system.service.ISysConfigService;
 import com.ruoyi.system.service.ISysDictTypeService;
+import com.ruoyi.system.service.support.PortalActorSupport;
 import com.ruoyi.system.service.support.PartnerSupport;
 import com.ruoyi.system.service.support.PortalDirectLoginSupport;
 import com.ruoyi.system.service.support.PortalTokenSupport;
@@ -56,13 +57,25 @@ public class BuyerServiceImpl implements IBuyerService
     private static final String OWNER_ROLE_KEY = "owner";
 
     private static final String[] DEFAULT_OWNER_PERMS = {
+        "buyer:portal:home",
         "buyer:account:list",
+        "buyer:account:add",
+        "buyer:account:edit",
+        "buyer:account:role:query",
+        "buyer:account:role:edit",
         "buyer:account:loginLog:list",
         "buyer:account:operLog:list",
         "buyer:account:session:list",
         "buyer:dept:list",
+        "buyer:dept:query",
+        "buyer:dept:add",
+        "buyer:dept:edit",
+        "buyer:dept:remove",
         "buyer:role:list",
-        "buyer:portal:home"
+        "buyer:role:query",
+        "buyer:role:add",
+        "buyer:role:edit",
+        "buyer:role:remove"
     };
 
     private static final String LOGIN_BLACK_IP_CONFIG_KEY = "sys.login.blackIPList";
@@ -114,7 +127,7 @@ public class BuyerServiceImpl implements IBuyerService
     {
         normalizeBuyer(buyer);
         buyer.setBuyerNo(PartnerSupport.generateNo(BUYER_NO_PREFIX, buyerMapper::selectMaxBuyerNoByPrefix));
-        buyer.setCreateBy(SecurityUtils.getUsername());
+        buyer.setCreateBy(PortalActorSupport.currentActorName());
         checkBuyerCodeUnique(buyer);
 
         int rows = buyerMapper.insertBuyer(buyer);
@@ -129,7 +142,7 @@ public class BuyerServiceImpl implements IBuyerService
         Buyer current = selectBuyerById(buyer.getBuyerId());
         buyer.setBuyerNo(current.getBuyerNo());
         normalizeBuyer(buyer, current.getAttachmentFileUrl());
-        buyer.setUpdateBy(SecurityUtils.getUsername());
+        buyer.setUpdateBy(PortalActorSupport.currentActorName());
         checkBuyerCodeUnique(buyer);
 
         int rows = buyerMapper.updateBuyer(buyer);
@@ -143,12 +156,12 @@ public class BuyerServiceImpl implements IBuyerService
     {
         selectBuyerById(buyer.getBuyerId());
         PartnerSupport.assertStatus(buyer.getStatus());
-        int rows = buyerMapper.updateBuyerStatus(buyer.getBuyerId(), buyer.getStatus(), SecurityUtils.getUsername());
+        int rows = buyerMapper.updateBuyerStatus(buyer.getBuyerId(), buyer.getStatus(), PortalActorSupport.currentActorName());
         BuyerAccount owner = buyerMapper.selectOwnerBuyerAccountByBuyerId(buyer.getBuyerId());
         if (owner != null)
         {
             owner.setStatus(buyer.getStatus());
-            owner.setUpdateBy(SecurityUtils.getUsername());
+            owner.setUpdateBy(PortalActorSupport.currentActorName());
             buyerMapper.updateBuyerAccount(owner);
         }
         if (!PartnerSupport.STATUS_NORMAL.equals(buyer.getStatus()))
@@ -184,7 +197,7 @@ public class BuyerServiceImpl implements IBuyerService
         selectBuyerById(buyerId);
         normalizeBuyerAccount(account, true);
         account.setBuyerId(buyerId);
-        account.setCreateBy(SecurityUtils.getUsername());
+        account.setCreateBy(PortalActorSupport.currentActorName());
         validateBuyerAccountDept(buyerId, account.getDeptId());
         assertSingleBuyerOwner(buyerId, account);
         if (buyerMapper.selectBuyerAccountByUserName(account.getUserName()) != null)
@@ -216,7 +229,7 @@ public class BuyerServiceImpl implements IBuyerService
         account.setLockReason(current.getLockReason());
         normalizeBuyerAccount(account, false);
         validateBuyerAccountDept(buyerId, account.getDeptId());
-        account.setUpdateBy(SecurityUtils.getUsername());
+        account.setUpdateBy(PortalActorSupport.currentActorName());
         int rows = buyerMapper.updateBuyerAccount(account);
         if (!PartnerSupport.STATUS_NORMAL.equals(account.getStatus()))
         {
@@ -240,7 +253,7 @@ public class BuyerServiceImpl implements IBuyerService
             throw new ServiceException("锁定原因不能超过500个字符");
         }
         int rows = buyerMapper.updateBuyerAccountLockStatus(buyerId, account.getBuyerAccountId(),
-            PartnerSupport.ACCOUNT_LOCK_STATUS_LOCKED, reason, SecurityUtils.getUsername());
+            PartnerSupport.ACCOUNT_LOCK_STATUS_LOCKED, reason, PortalActorSupport.currentActorName());
         forceLogoutBuyerSessionScope(buyerId, account.getBuyerAccountId());
         return rows;
     }
@@ -251,7 +264,7 @@ public class BuyerServiceImpl implements IBuyerService
     {
         BuyerAccount account = selectBuyerAccountById(buyerId, buyerAccountId);
         return buyerMapper.updateBuyerAccountLockStatus(buyerId, account.getBuyerAccountId(),
-            PartnerSupport.ACCOUNT_LOCK_STATUS_UNLOCKED, "", SecurityUtils.getUsername());
+            PartnerSupport.ACCOUNT_LOCK_STATUS_UNLOCKED, "", PortalActorSupport.currentActorName());
     }
 
     @Override
@@ -261,7 +274,7 @@ public class BuyerServiceImpl implements IBuyerService
         String normalizedPassword = PartnerSupport.normalizeTemporaryPassword(password);
         BuyerAccount current = selectBuyerAccountById(buyerId, buyerAccountId);
         int rows = buyerMapper.resetBuyerAccountPassword(current.getBuyerId(), current.getBuyerAccountId(),
-            SecurityUtils.encryptPassword(normalizedPassword), SecurityUtils.getUsername());
+            SecurityUtils.encryptPassword(normalizedPassword), PortalActorSupport.currentActorName());
         forceLogoutBuyerAccountSessionsAfterPasswordReset(rows, current.getBuyerId(), current.getBuyerAccountId());
         return rows;
     }
@@ -894,7 +907,7 @@ public class BuyerServiceImpl implements IBuyerService
 
         owner.setNickName(PartnerSupport.buildOwnerNickName(buyer.getBuyerName(), buyer.getBuyerShortName(), buyer.getContactName()));
         owner.setStatus(buyer.getStatus());
-        owner.setUpdateBy(SecurityUtils.getUsername());
+        owner.setUpdateBy(PortalActorSupport.currentActorName());
         owner.setRemark("买家主账号");
         buyerMapper.updateBuyerAccount(owner);
         bindOwnerRoleIfNeeded(buyer.getBuyerId(), owner);
@@ -964,7 +977,7 @@ public class BuyerServiceImpl implements IBuyerService
 
     private PortalRole ensureOwnerRoleReady(Long buyerId)
     {
-        permissionMapper.insertBuyerOwnerRoleIfMissing(buyerId, SecurityUtils.getUsername());
+        permissionMapper.insertBuyerOwnerRoleIfMissing(buyerId, PortalActorSupport.currentActorName());
         PortalRole ownerRole = permissionMapper.checkBuyerRoleKeyUnique(buyerId, OWNER_ROLE_KEY);
         if (ownerRole == null || !PartnerSupport.STATUS_NORMAL.equals(ownerRole.getStatus()))
         {

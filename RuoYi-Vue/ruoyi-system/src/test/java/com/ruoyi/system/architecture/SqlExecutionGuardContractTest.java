@@ -192,6 +192,9 @@ public class SqlExecutionGuardContractTest
         assertGuard(backendRoot, "sql/20260610_terminal_portal_home_menu_seed.sql",
                 "@confirm_terminal_portal_home_menu_seed",
                 "APPLY_TERMINAL_PORTAL_HOME_MENU_SEED", violations);
+        assertGuard(backendRoot, "sql/20260610_portal_self_management_permission_seed.sql",
+                "@confirm_portal_self_management_permission_seed",
+                "APPLY_PORTAL_SELF_MANAGEMENT_PERMISSION_SEED", violations);
         assertGuard(backendRoot, "sql/20260610_terminal_owner_product_permission_cleanup.sql",
                 "@confirm_terminal_owner_product_permission_cleanup",
                 "CLEAN_TERMINAL_OWNER_PRODUCT_PERMISSION_GRANTS", violations);
@@ -201,6 +204,15 @@ public class SqlExecutionGuardContractTest
         assertGuard(backendRoot, "sql/20260610_customer_logistics_channel_management.sql",
                 "@confirm_customer_logistics_channel_management",
                 "APPLY_CUSTOMER_LOGISTICS_CHANNEL_MANAGEMENT", violations);
+        assertGuard(backendRoot, "sql/20260611_customer_channel_quote_mapping.sql",
+                "@confirm_customer_channel_quote_mapping",
+                "APPLY_CUSTOMER_CHANNEL_QUOTE_MAPPING", violations);
+        assertGuard(backendRoot, "sql/20260611_quote_scheme_value_fee_rule.sql",
+                "@confirm_quote_scheme_value_fee_rule",
+                "APPLY_QUOTE_SCHEME_VALUE_FEE_RULE", violations);
+        assertGuard(backendRoot, "sql/20260610_system_channel_main_channel_pairing_scope.sql",
+                "@confirm_system_channel_main_channel_pairing_scope",
+                "APPLY_SYSTEM_CHANNEL_MAIN_CHANNEL_PAIRING_SCOPE", violations);
         assertGuard(backendRoot, "sql/seller_buyer_management_seed.sql",
                 "@confirm_seller_buyer_management_seed",
                 "APPLY_SELLER_BUYER_MANAGEMENT_SEED", violations);
@@ -2096,11 +2108,23 @@ public class SqlExecutionGuardContractTest
         List<String> violations = new ArrayList<>();
         String[] sellerBaselinePerms = new String[] {
                 "seller:account:list",
+                "seller:account:add",
+                "seller:account:edit",
+                "seller:account:role:query",
+                "seller:account:role:edit",
                 "seller:account:loginLog:list",
                 "seller:account:operLog:list",
                 "seller:account:session:list",
                 "seller:dept:list",
+                "seller:dept:query",
+                "seller:dept:add",
+                "seller:dept:edit",
+                "seller:dept:remove",
                 "seller:role:list",
+                "seller:role:query",
+                "seller:role:add",
+                "seller:role:edit",
+                "seller:role:remove",
                 "seller:product:category:list",
                 "seller:product:schema:query",
                 "seller:product:distribution:list",
@@ -2108,11 +2132,23 @@ public class SqlExecutionGuardContractTest
         };
         String[] buyerBaselinePerms = new String[] {
                 "buyer:account:list",
+                "buyer:account:add",
+                "buyer:account:edit",
+                "buyer:account:role:query",
+                "buyer:account:role:edit",
                 "buyer:account:loginLog:list",
                 "buyer:account:operLog:list",
                 "buyer:account:session:list",
                 "buyer:dept:list",
+                "buyer:dept:query",
+                "buyer:dept:add",
+                "buyer:dept:edit",
+                "buyer:dept:remove",
                 "buyer:role:list",
+                "buyer:role:query",
+                "buyer:role:add",
+                "buyer:role:edit",
+                "buyer:role:remove",
                 "buyer:product:category:list",
                 "buyer:product:schema:query",
                 "buyer:product:distribution:list",
@@ -2143,6 +2179,35 @@ public class SqlExecutionGuardContractTest
                         "buyer:account:loginLog:list",
                         "buyer:account:operLog:list",
                         "buyer:account:session:list"
+                }, violations);
+        assertTerminalPermissionSeedMenuGuard(backendRoot.resolve("sql/20260610_portal_self_management_permission_seed.sql"),
+                new String[] {
+                        "seller:account:add",
+                        "seller:account:edit",
+                        "seller:account:role:query",
+                        "seller:account:role:edit",
+                        "seller:dept:query",
+                        "seller:dept:add",
+                        "seller:dept:edit",
+                        "seller:dept:remove",
+                        "seller:role:query",
+                        "seller:role:add",
+                        "seller:role:edit",
+                        "seller:role:remove"
+                },
+                new String[] {
+                        "buyer:account:add",
+                        "buyer:account:edit",
+                        "buyer:account:role:query",
+                        "buyer:account:role:edit",
+                        "buyer:dept:query",
+                        "buyer:dept:add",
+                        "buyer:dept:edit",
+                        "buyer:dept:remove",
+                        "buyer:role:query",
+                        "buyer:role:add",
+                        "buyer:role:edit",
+                        "buyer:role:remove"
                 }, violations);
 
         if (!violations.isEmpty())
@@ -2179,6 +2244,9 @@ public class SqlExecutionGuardContractTest
                 true, true, violations);
         assertSplitTerminalPermissionSeedPreflight(
                 backendRoot.resolve("sql/20260610_terminal_portal_home_menu_seed.sql"),
+                true, true, violations);
+        assertSplitTerminalPermissionSeedPreflight(
+                backendRoot.resolve("sql/20260610_portal_self_management_permission_seed.sql"),
                 true, true, violations);
 
         if (!violations.isEmpty())
@@ -2223,6 +2291,10 @@ public class SqlExecutionGuardContractTest
                 backendRoot.resolve("sql/20260610_terminal_portal_home_menu_seed.sql"),
                 "assert_terminal_portal_home_menu_seed_completed",
                 "insert into seller_menu", violations);
+        assertSplitTerminalPermissionSeedTransaction(
+                backendRoot.resolve("sql/20260610_portal_self_management_permission_seed.sql"),
+                "assert_portal_self_management_permission_seed_completed",
+                "insert into seller_menu", violations);
         String portalSelfAuditSource = Files.readString(
                 backendRoot.resolve("sql/20260607_portal_self_audit_permission_seed.sql"),
                 StandardCharsets.UTF_8);
@@ -2237,10 +2309,66 @@ public class SqlExecutionGuardContractTest
                 "seller owner roles portal home page menu exact grant count mismatch");
         requireContains(violations, "20260610_terminal_portal_home_menu_seed.sql", portalHomeSource,
                 "buyer owner roles portal home page menu exact grant count mismatch");
+        String portalSelfManagementSource = Files.readString(
+                backendRoot.resolve("sql/20260610_portal_self_management_permission_seed.sql"),
+                StandardCharsets.UTF_8);
+        requireContains(violations, "20260610_portal_self_management_permission_seed.sql", portalSelfManagementSource,
+                "seller owner roles self-management permission exact grant count mismatch");
+        requireContains(violations, "20260610_portal_self_management_permission_seed.sql", portalSelfManagementSource,
+                "buyer owner roles self-management permission exact grant count mismatch");
+        requireContains(violations, "20260610_portal_self_management_permission_seed.sql", portalSelfManagementSource,
+                "v_owner_role_count * 19");
+        requireContains(violations, "20260610_portal_self_management_permission_seed.sql", portalSelfManagementSource,
+                "coalesce(perms, '') like '%*%'");
+        requireContains(violations, "20260610_portal_self_management_permission_seed.sql", portalSelfManagementSource,
+                "seller owner role menu contains non self-management permission grants");
+        requireContains(violations, "20260610_portal_self_management_permission_seed.sql", portalSelfManagementSource,
+                "buyer owner role menu contains non self-management permission grants");
+        requireContains(violations, "20260610_portal_self_management_permission_seed.sql", portalSelfManagementSource,
+                "delete rm\nfrom seller_role_menu rm\njoin seller_role r on r.seller_role_id = rm.seller_role_id");
+        requireContains(violations, "20260610_portal_self_management_permission_seed.sql", portalSelfManagementSource,
+                "delete rm\nfrom buyer_role_menu rm\njoin buyer_role r on r.buyer_role_id = rm.buyer_role_id");
+        requireContains(violations, "20260610_portal_self_management_permission_seed.sql", portalSelfManagementSource,
+                "where r.del_flag = '0'\n  and r.status = '0'\n  and r.role_key = 'owner'\n  and expected.perms is null;");
 
         if (!violations.isEmpty())
         {
             fail("split terminal permission seeds must wrap DML and verify completion before commit:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    @Test
+    public void portalSelfManagementSeedMustGrantPortalHomeAsPageMenu()
+            throws IOException
+    {
+        Path backendRoot = findWorkspaceRoot().resolve("RuoYi-Vue");
+        Path seedSql = backendRoot.resolve("sql/20260610_portal_self_management_permission_seed.sql");
+        String source = Files.readString(seedSql, StandardCharsets.UTF_8);
+        String fileName = seedSql.getFileName().toString();
+        List<String> violations = new ArrayList<>();
+
+        for (String expected : new String[] {
+                "join seller_menu m on m.perms = 'seller:portal:home'",
+                "and coalesce(m.menu_type, '') = 'C'",
+                "and coalesce(m.path, '') = '/seller/portal'",
+                "and coalesce(m.component, '') = 'Seller/Portal/index'",
+                "and coalesce(m.route_name, '') = 'SellerPortalHome'",
+                "join buyer_menu m on m.perms = 'buyer:portal:home'",
+                "and coalesce(m.path, '') = '/buyer/portal'",
+                "and coalesce(m.component, '') = 'Buyer/Portal/index'",
+                "and coalesce(m.route_name, '') = 'BuyerPortalHome'"
+        })
+        {
+            requireContains(violations, fileName, source, expected);
+        }
+
+        assertSelfManagementRootButtonGrantExcludesPortalHome(source, fileName, "seller", violations);
+        assertSelfManagementRootButtonGrantExcludesPortalHome(source, fileName, "buyer", violations);
+
+        if (!violations.isEmpty())
+        {
+            fail("portal self-management seed must grant portal home as C page menu and keep root F grants separate:\n"
                     + String.join("\n", violations));
         }
     }
@@ -5669,6 +5797,45 @@ public class SqlExecutionGuardContractTest
         requireContains(violations, fileName, source, "Do not default-grant");
         assertAppearsBefore(violations, fileName, source,
                 "call " + assertProcedure + "('" + perms[0] + "'", "insert into " + menuTable);
+    }
+
+    private void assertSelfManagementRootButtonGrantExcludesPortalHome(String source, String fileName, String terminal,
+            List<String> violations)
+    {
+        String roleTable = terminal + "_role";
+        String menuTable = terminal + "_menu";
+        String prefix = "from " + roleTable + " r\njoin " + menuTable + " m on m.perms in (";
+        int searchStart = 0;
+        while (searchStart < source.length())
+        {
+            int startIndex = source.indexOf(prefix, searchStart);
+            if (startIndex < 0)
+            {
+                break;
+            }
+            int endIndex = source.indexOf("where r.del_flag", startIndex);
+            if (endIndex < 0)
+            {
+                violations.add(fileName + " has unterminated " + terminal + " root F owner grant block");
+                return;
+            }
+            String block = source.substring(startIndex, endIndex);
+            if (block.contains("'" + terminal + ":account:") || block.contains("'" + terminal + ":dept:")
+                    || block.contains("'" + terminal + ":role:"))
+            {
+                requireNotContains(violations, fileName + " " + terminal + " root F owner grant", block,
+                        "'" + terminal + ":portal:home'");
+                requireContains(violations, fileName + " " + terminal + " root F owner grant", block,
+                        "and m.parent_id = 0");
+                requireContains(violations, fileName + " " + terminal + " root F owner grant", block,
+                        "and coalesce(m.menu_type, '') = 'F'");
+                return;
+            }
+            searchStart = endIndex;
+        }
+
+        violations.add(fileName + " must keep a separate root F owner grant block for " + terminal
+                + " self-management button/list permissions");
     }
 
     private void assertAutoDiscoveredTerminalMenuSeed(String source, String fileName, String terminal,

@@ -148,6 +148,25 @@ create table if not exists logistics_customer_channel_system_mapping (
   key idx_logistics_customer_channel_system_order (customer_channel_code, display_order)
 ) engine=innodb comment='客户渠道与系统渠道绑定表';
 
+create table if not exists logistics_customer_channel_quote_mapping (
+  mapping_id                        bigint(20)   not null auto_increment   comment 'mapping id',
+  customer_channel_code             varchar(64)  not null                  comment 'customer channel code',
+  connection_code                   varchar(64)  not null                  comment 'quote master connection code',
+  master_warehouse_name_snapshot    varchar(200) not null                  comment 'quote master warehouse name snapshot',
+  upstream_channel_code             varchar(100) not null                  comment 'upstream channel code',
+  upstream_channel_name             varchar(200) not null                  comment 'upstream channel name snapshot',
+  pairing_role                      varchar(32)  not null default 'QUOTE'  comment 'pairing role: quote',
+  status                            varchar(16)  not null default 'ENABLED' comment 'status',
+  create_by                         varchar(64)  default ''                comment 'created by',
+  create_time                       datetime                                comment 'created time',
+  update_by                         varchar(64)  default ''                comment 'updated by',
+  update_time                       datetime                                comment 'updated time',
+  remark                            varchar(500) default ''                comment 'remark',
+  primary key (mapping_id),
+  unique key uk_logistics_customer_quote_channel (customer_channel_code, pairing_role),
+  key idx_logistics_customer_quote_upstream (connection_code, upstream_channel_code, pairing_role)
+) engine=innodb comment='customer channel quote upstream channel mapping';
+
 create table if not exists logistics_customer_channel_buyer_scope (
   scope_id                   bigint(20)   not null auto_increment comment '范围明细ID',
   customer_channel_code      varchar(64)  not null                comment '客户渠道代码',

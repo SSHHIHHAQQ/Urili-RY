@@ -132,7 +132,7 @@ public class AdminUpstreamSystemController extends BaseController
         @RequestBody(required = false) UpstreamSyncRequest request)
     {
         checkSyncPermissions(request);
-        return success(upstreamSyncService.syncSelected(connectionCode, request));
+        return success(upstreamSyncService.submitSelected(connectionCode, request));
     }
 
     @PreAuthorize("@ss.hasPermi('integration:upstream:sync')")
@@ -140,7 +140,7 @@ public class AdminUpstreamSystemController extends BaseController
     @PostMapping("/{connectionCode}/skus/sync")
     public AjaxResult syncSkus(@PathVariable("connectionCode") String connectionCode)
     {
-        return success(upstreamSyncService.syncSkusOnly(connectionCode));
+        return success(upstreamSyncService.submitSkusOnly(connectionCode));
     }
 
     @PreAuthorize("@ss.hasPermi('integration:upstream:dimensionSync')")
@@ -148,7 +148,7 @@ public class AdminUpstreamSystemController extends BaseController
     @PostMapping("/{connectionCode}/sku-dimensions/sync")
     public AjaxResult syncSkuDimensions(@PathVariable("connectionCode") String connectionCode)
     {
-        return success(upstreamSyncService.syncSkuDimensionsOnly(connectionCode));
+        return success(upstreamSyncService.submitSkuDimensionsOnly(connectionCode));
     }
 
     @PreAuthorize("@ss.hasPermi('integration:upstream:dimensionSync')")
@@ -157,7 +157,7 @@ public class AdminUpstreamSystemController extends BaseController
     public AjaxResult syncSelectedSkuDimensions(@PathVariable("connectionCode") String connectionCode,
         @RequestBody SkuDimensionSelectedSyncRequest request)
     {
-        return success(upstreamSyncService.syncSkuDimensionsBySkuList(connectionCode, request));
+        return success(upstreamSyncService.submitSkuDimensionsBySkuList(connectionCode, request));
     }
 
     @PreAuthorize("@ss.hasPermi('integration:upstream:inventorySync')")
@@ -165,7 +165,7 @@ public class AdminUpstreamSystemController extends BaseController
     @PostMapping("/{connectionCode}/inventory/sync")
     public AjaxResult syncInventory(@PathVariable("connectionCode") String connectionCode)
     {
-        return success(upstreamSyncService.syncWarehouseStocksOnly(connectionCode));
+        return success(upstreamSyncService.submitWarehouseStocksOnly(connectionCode));
     }
 
     @PreAuthorize("@ss.hasPermi('integration:upstream:inventoryQuery')")

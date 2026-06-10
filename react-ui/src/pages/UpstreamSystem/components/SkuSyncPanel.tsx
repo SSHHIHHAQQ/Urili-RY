@@ -72,6 +72,25 @@ export default function SkuSyncPanel({
     loadSyncState();
   }, [selectedCode, canQueryUpstream]);
 
+  const isSyncing = syncing || syncState?.status === 'SYNCING';
+
+  useEffect(() => {
+    if (!isSyncing || !selectedCode) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      loadSyncState();
+      actionRef.current?.reload();
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [isSyncing, selectedCode]);
+
+  useEffect(() => {
+    if (syncState?.status && syncState.status !== 'SYNCING') {
+      setSyncing(false);
+    }
+  }, [syncState?.status]);
+
   const skuColumns: ProColumns<API.Integration.SkuSyncItem>[] = [
     {
       title: '领星 masterSku',
@@ -157,16 +176,27 @@ export default function SkuSyncPanel({
 
   const triggerSkuSync = async () => {
     setSyncing(true);
-    const hide = message.loading('正在同步SKU');
-    const resp = await syncUpstreamSku(selectedCode);
-    hide();
-    setSyncing(false);
+    const hide = message.loading('正在提交SKU同步任务');
+    let resp: (API.Result & { data: API.Integration.SyncResult }) | undefined;
+    try {
+      resp = await syncUpstreamSku(selectedCode);
+    } catch {
+      setSyncing(false);
+      return;
+    } finally {
+      hide();
+    }
+    if (!resp) {
+      setSyncing(false);
+      return;
+    }
     if (resp.code === 200) {
-      message.success(`SKU同步完成：${resp.data?.skuCount || 0}`);
+      message.success('SKU同步已开始，可继续操作');
       await loadSyncState();
       actionRef.current?.reload();
       onSynced?.();
     } else {
+      setSyncing(false);
       message.error(resp.msg);
       await loadSyncState();
     }
@@ -193,11 +223,12 @@ export default function SkuSyncPanel({
         <Button
           type="primary"
           icon={<SyncOutlined />}
-          loading={syncing}
+          disabled={isSyncing}
+          loading={isSyncing}
           hidden={!access.hasPerms('integration:upstream:sync')}
           onClick={triggerSkuSync}
         >
-          同步SKU
+          {isSyncing ? '正在同步' : '同步SKU'}
         </Button>
       </div>
       <div className={styles.skuFilters}>

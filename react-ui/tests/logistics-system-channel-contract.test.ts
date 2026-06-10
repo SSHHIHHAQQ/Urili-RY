@@ -53,7 +53,7 @@ describe('system logistics channel admin contract', () => {
     expect(page).not.toContain('logistics:systemChannel:platformMapping');
   });
 
-  it('keeps system channel editor scoped to carrier mappings, warehouses, and order rule placeholder', () => {
+  it('keeps system channel editor scoped to carrier mappings, main warehouse channel, warehouses, and order rule placeholder', () => {
     const page = readUiSource('src/pages/Channel/System/index.tsx');
     const mainFormStart = page.indexOf('<ProForm<SystemChannel>');
     const mainFormEnd = page.indexOf('<ProFormTextArea name="remark"', mainFormStart);
@@ -62,10 +62,32 @@ describe('system logistics channel admin contract', () => {
     expect(page).toContain('shipperAddressMode');
     expect(page).toContain('externalShipperCode');
     expect(page).toContain('hasShipperAddressConfig');
-    expect(page).toContain('<Row gutter={24}>');
+    expect(page).not.toContain('getWarehousePairings');
+    expect(page).toContain('getLogisticsChannelSyncList');
+    expect(page).toContain('getLogisticsChannelPairings');
+    expect(page).toContain('addLogisticsChannelPairing');
+    expect(page).toContain('deleteLogisticsChannelPairing');
+    expect(page).toContain('UPSTREAM_PAIRING_ROLE_FULFILLMENT');
+    expect(page).toContain('loadUpstreamConnectionOptions');
+    expect(page).not.toContain('loadFulfillmentWarehousePairingContext');
+    expect(page).not.toContain('pairing.systemWarehouseCode === item.warehouseCode');
+    expect(page).not.toContain('<ProFormText name="systemWarehouseCode" hidden />');
+    expect(page).not.toContain('<ProFormText name="upstreamWarehouseCode" hidden />');
+    expect(page).not.toContain("fulfillmentChannelForm.getFieldValue('upstreamWarehouseCode')");
+    expect(page).toContain('label: connection.masterWarehouseName || connection.connectionCode');
+    expect(page).toContain('searchText: connection.masterWarehouseName || connection.connectionCode');
+    expect(page).not.toContain('label: `${connection.connectionCode} / ${connection.masterWarehouseName}`');
+    expect(page).toContain("label: '主仓渠道映射'");
+    expect(page).toContain('title="配置主仓渠道"');
+    expect(page).toContain('name="upstreamChannelCode"');
+    expect(page).toContain('label="主仓渠道"');
+    expect(page).not.toContain('ProFormText name="upstreamChannelCode"');
+    expect(page).not.toContain('主仓渠道手工录入');
+    expect(page).toContain('<Row gutter={24} style={{ marginLeft: 0, marginRight: 0 }}>');
     expect(page).toContain('<Switch');
     expect(page).toContain("checked={record.status === 'ENABLED'}");
-    expect(page).toContain('onChange={() => toggleStatus(record)}');
+    expect(page).toContain('onClick={() => toggleStatus(record)}');
+    expect(page).not.toContain('size="small"\n          checked={record.status === \'ENABLED\'}');
     expect(page).toContain('配置发货地址');
     expect(page).toContain("payload.shipperAddressMode = hasShipperAddressConfig(payload) ? 'OVERRIDE' : 'WAREHOUSE';");
     expect(page).toContain('shipperAddressLine1');
@@ -85,6 +107,11 @@ describe('system logistics channel admin contract', () => {
     expect(page).toContain("const shouldShowChannelDetails = channelEditorMode === 'edit' || !!currentChannel?.systemChannelCode;");
     expect(page).toContain('保存并下一步');
     expect(page).toContain('{shouldShowChannelDetails ? (');
+    expect(page).toContain('width="94vw"');
+    expect(page).toContain('maxWidth: 1680');
+    expect(page).toContain("overflowX: 'hidden'");
+    expect(page).not.toContain('width="88vw"');
+    expect(page).not.toContain('maxWidth: 1440');
     expect(page).not.toContain('key="config"');
     expect(mainChannelForm).not.toContain('name="status"');
     expect(mainChannelForm).toContain('name="signatureServices"');

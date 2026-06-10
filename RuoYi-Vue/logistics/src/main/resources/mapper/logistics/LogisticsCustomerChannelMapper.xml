@@ -43,6 +43,22 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="remark"                       column="remark"                          />
     </resultMap>
 
+    <resultMap type="LogisticsCustomerChannelQuoteMapping" id="QuoteMappingResult">
+        <id     property="mappingId"                    column="mapping_id"                      />
+        <result property="customerChannelCode"          column="customer_channel_code"           />
+        <result property="connectionCode"               column="connection_code"                 />
+        <result property="masterWarehouseNameSnapshot"  column="master_warehouse_name_snapshot"  />
+        <result property="upstreamChannelCode"          column="upstream_channel_code"           />
+        <result property="upstreamChannelName"          column="upstream_channel_name"           />
+        <result property="pairingRole"                  column="pairing_role"                    />
+        <result property="status"                       column="status"                          />
+        <result property="createBy"                     column="create_by"                       />
+        <result property="createTime"                   column="create_time"                     />
+        <result property="updateBy"                     column="update_by"                       />
+        <result property="updateTime"                   column="update_time"                     />
+        <result property="remark"                       column="remark"                          />
+    </resultMap>
+
     <resultMap type="LogisticsCustomerChannelBuyerScope" id="BuyerScopeResult">
         <id     property="scopeId"                 column="scope_id"                   />
         <result property="customerChannelCode"     column="customer_channel_code"      />
@@ -211,6 +227,40 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
     <delete id="deleteSystemMapping">
         delete from logistics_customer_channel_system_mapping
+        where customer_channel_code = #{customerChannelCode}
+          and mapping_id = #{mappingId}
+    </delete>
+
+    <select id="selectQuoteMappingList" resultMap="QuoteMappingResult">
+        select *
+        from logistics_customer_channel_quote_mapping
+        where customer_channel_code = #{customerChannelCode}
+        order by mapping_id desc
+    </select>
+
+    <select id="selectQuoteMappingById" resultMap="QuoteMappingResult">
+        select *
+        from logistics_customer_channel_quote_mapping
+        where customer_channel_code = #{customerChannelCode}
+          and mapping_id = #{mappingId}
+        limit 1
+    </select>
+
+    <insert id="insertQuoteMapping" parameterType="LogisticsCustomerChannelQuoteMapping" useGeneratedKeys="true"
+            keyProperty="mappingId" keyColumn="mapping_id">
+        insert into logistics_customer_channel_quote_mapping(
+            customer_channel_code, connection_code, master_warehouse_name_snapshot,
+            upstream_channel_code, upstream_channel_name, pairing_role, status,
+            create_by, create_time, update_by, update_time, remark
+        ) values (
+            #{customerChannelCode}, #{connectionCode}, #{masterWarehouseNameSnapshot},
+            #{upstreamChannelCode}, #{upstreamChannelName}, #{pairingRole}, #{status},
+            #{createBy}, sysdate(), #{updateBy}, sysdate(), #{remark}
+        )
+    </insert>
+
+    <delete id="deleteQuoteMapping">
+        delete from logistics_customer_channel_quote_mapping
         where customer_channel_code = #{customerChannelCode}
           and mapping_id = #{mappingId}
     </delete>

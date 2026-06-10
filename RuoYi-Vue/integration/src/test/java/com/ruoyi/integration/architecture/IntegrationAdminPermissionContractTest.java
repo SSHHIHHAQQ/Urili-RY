@@ -263,6 +263,50 @@ public class IntegrationAdminPermissionContractTest
     }
 
     @Test
+    public void upstreamLogisticsChannelPairingMustStaySystemChannelScoped() throws IOException
+    {
+        Path backendRoot = findBackendRoot();
+        String serviceImpl = Files.readString(backendRoot.resolve(
+                "integration/src/main/java/com/ruoyi/integration/service/impl/UpstreamSystemServiceImpl.java"),
+                StandardCharsets.UTF_8);
+        String mapperApi = Files.readString(backendRoot.resolve(
+                "integration/src/main/java/com/ruoyi/integration/mapper/UpstreamSystemMapper.java"),
+                StandardCharsets.UTF_8);
+        String mapperXml = Files.readString(backendRoot.resolve(
+                "integration/src/main/resources/mapper/integration/UpstreamSystemMapper.xml"),
+                StandardCharsets.UTF_8);
+        List<String> violations = new ArrayList<>();
+
+        assertSourceContains(serviceImpl,
+                "assertSystemChannelNotPaired(systemChannelCode, pairingRole)",
+                "logistics channel duplicate check must be scoped by system channel", violations);
+        assertSourceContains(serviceImpl,
+                "upstreamSystemMapper.selectLogisticsChannelSyncItem(connectionCode,\n            upstreamChannelCode)",
+                "logistics channel candidate lookup must not be scoped to upstream warehouse", violations);
+        assertSourceContains(serviceImpl,
+                "pairing.setSystemWarehouseCode(\"\")",
+                "legacy warehouse scope column must be written as blank for system-channel scoped pairing", violations);
+        assertSourceContains(serviceImpl,
+                "pairing.setUpstreamWarehouseCode(\"\")",
+                "legacy upstream warehouse scope column must be written as blank for system-channel scoped pairing", violations);
+        assertSourceNotContains(serviceImpl, "assertWarehousePairingExists",
+                "logistics channel pairing must not require an existing warehouse pairing", violations);
+        assertSourceNotContains(mapperApi,
+                "@Param(\"systemWarehouseCode\") String systemWarehouseCode",
+                "logistics channel duplicate mapper must not accept system warehouse code", violations);
+        assertSourceNotContains(mapperXml, "where system_warehouse_code = #{systemWarehouseCode}",
+                "logistics channel duplicate SQL must not include system warehouse code", violations);
+        assertSourceContains(mapperXml, "where system_channel_code = #{systemChannelCode}",
+                "logistics channel duplicate SQL must be scoped by system channel", violations);
+
+        if (!violations.isEmpty())
+        {
+            fail("upstream logistics channel pairing must stay system-channel scoped:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    @Test
     public void integrationReadModelHandlersMustUseCurrentAdminMenuPermissions() throws IOException
     {
         Path backendRoot = findBackendRoot();

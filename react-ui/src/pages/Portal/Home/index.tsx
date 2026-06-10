@@ -27,12 +27,13 @@ import {
   PORTAL_SERVICE,
   type PortalTerminal,
 } from '../terminal';
+import PortalSelfManagement from './PortalSelfManagement';
 
 type PortalHomeData = {
   info?: API.Partner.PortalPermissionInfo;
   subject?: API.Partner.PortalSubjectProfile;
   account?: API.Partner.PortalAccountProfile;
-  accounts?: API.Partner.PortalAccountProfile[];
+  accounts?: API.Partner.PortalAccountBase[];
   depts?: API.Partner.PortalDeptProfile[];
   roles?: API.Partner.PortalRoleProfile[];
 };
@@ -448,6 +449,17 @@ const PortalHomePage: React.FC = () => {
                 locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
               />
             </Card>
+          ) : null}
+
+          {canViewAccounts || canViewDepts || canViewRoles ? (
+            <PortalSelfManagement
+              terminal={terminal}
+              permissions={permissions}
+              accounts={data.accounts || []}
+              depts={data.depts || []}
+              roles={data.roles || []}
+              onChanged={handleRefresh}
+            />
           ) : null}
 
           <Card title="权限标识" variant="borderless" style={fullGridStyle}>

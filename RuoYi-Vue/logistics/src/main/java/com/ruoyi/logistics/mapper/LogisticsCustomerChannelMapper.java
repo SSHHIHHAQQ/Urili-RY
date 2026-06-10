@@ -4,6 +4,7 @@ import java.util.List;
 import org.apache.ibatis.annotations.Param;
 import com.ruoyi.logistics.domain.LogisticsCustomerChannel;
 import com.ruoyi.logistics.domain.LogisticsCustomerChannelBuyerScope;
+import com.ruoyi.logistics.domain.LogisticsCustomerChannelQuoteMapping;
 import com.ruoyi.logistics.domain.LogisticsCustomerChannelSystemMapping;
 
 /**
@@ -40,6 +41,17 @@ public interface LogisticsCustomerChannelMapper
     int updateSystemMapping(LogisticsCustomerChannelSystemMapping mapping);
 
     int deleteSystemMapping(@Param("customerChannelCode") String customerChannelCode,
+        @Param("mappingId") Long mappingId);
+
+    List<LogisticsCustomerChannelQuoteMapping> selectQuoteMappingList(
+        @Param("customerChannelCode") String customerChannelCode);
+
+    LogisticsCustomerChannelQuoteMapping selectQuoteMappingById(
+        @Param("customerChannelCode") String customerChannelCode, @Param("mappingId") Long mappingId);
+
+    int insertQuoteMapping(LogisticsCustomerChannelQuoteMapping mapping);
+
+    int deleteQuoteMapping(@Param("customerChannelCode") String customerChannelCode,
         @Param("mappingId") Long mappingId);
 
     List<LogisticsCustomerChannelBuyerScope> selectBuyerScopeList(

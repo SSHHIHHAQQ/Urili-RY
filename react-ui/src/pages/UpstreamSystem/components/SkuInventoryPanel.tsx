@@ -91,17 +91,47 @@ export default function SkuInventoryPanel({
     loadSyncState();
   }, [selectedCode, canQueryInventory]);
 
+  const isSyncing = syncing || syncState?.status === 'SYNCING';
+
+  useEffect(() => {
+    if (!isSyncing || !selectedCode) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      loadSyncState();
+      actionRef.current?.reload();
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [isSyncing, selectedCode]);
+
+  useEffect(() => {
+    if (syncState?.status && syncState.status !== 'SYNCING') {
+      setSyncing(false);
+    }
+  }, [syncState?.status]);
+
   const triggerInventorySync = async () => {
     setSyncing(true);
-    const hide = message.loading('正在同步SKU库存');
-    const resp = await syncUpstreamInventory(selectedCode);
-    hide();
-    setSyncing(false);
+    const hide = message.loading('正在提交SKU库存同步任务');
+    let resp: (API.Result & { data: API.Integration.SyncResult }) | undefined;
+    try {
+      resp = await syncUpstreamInventory(selectedCode);
+    } catch {
+      setSyncing(false);
+      return;
+    } finally {
+      hide();
+    }
+    if (!resp) {
+      setSyncing(false);
+      return;
+    }
     if (resp.code === 200) {
-      message.success(`SKU库存同步完成：${resp.data?.warehouseStockCount || 0}`);
+      message.success('SKU库存同步已开始，可继续操作');
       await loadSyncState();
       actionRef.current?.reload();
     } else {
+      setSyncing(false);
       message.error(resp.msg);
       await loadSyncState();
     }
@@ -220,11 +250,12 @@ export default function SkuInventoryPanel({
         <Button
           type="primary"
           icon={<SyncOutlined />}
-          loading={syncing}
+          disabled={isSyncing}
+          loading={isSyncing}
           hidden={!access.hasPerms('integration:upstream:inventorySync')}
           onClick={triggerInventorySync}
         >
-          同步库存
+          {isSyncing ? '正在同步' : '同步库存'}
         </Button>
       </div>
       <Tabs

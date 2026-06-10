@@ -21,13 +21,16 @@ import { Alert, Button, Col, Form, Input, Modal, Radio, Row, Space, Switch, Tabs
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { getDictSelectOption, getDictValueEnum } from '@/services/system/dict';
 import {
+  addQuoteChannelMapping,
   addCustomerChannel,
   addSystemMapping,
+  deleteQuoteChannelMapping,
   deleteSystemMapping,
   getBuyerOptions,
   getBuyerScope,
   getCustomerChannel,
   getCustomerChannelList,
+  getQuoteChannelMappings,
   getSystemChannelOptions,
   getSystemMappings,
   saveBuyerScope,
@@ -35,6 +38,10 @@ import {
   updateCustomerChannelStatus,
   updateSystemMapping,
 } from '@/services/logistics/customerChannel';
+import {
+  getLogisticsChannelSyncList,
+  getUpstreamConnectionList,
+} from '@/services/integration/upstreamSystem';
 import {
   getPersistedProTableSearch,
   getProTablePagination,
@@ -80,6 +87,19 @@ type SystemMapping = {
   standardCarrierCodeSnapshot: string;
   signatureServicesSnapshot?: string;
   status: string;
+  createTime?: string;
+  remark?: string;
+};
+
+type QuoteChannelMapping = {
+  mappingId: number;
+  customerChannelCode: string;
+  connectionCode: string;
+  masterWarehouseNameSnapshot: string;
+  upstreamChannelCode: string;
+  upstreamChannelName: string;
+  pairingRole?: string;
+  status?: string;
   createTime?: string;
   remark?: string;
 };
@@ -145,6 +165,9 @@ const signatureServiceOrder = new Map([
   ['ASS', 3],
 ]);
 
+const UPSTREAM_SETTLEMENT_TYPE_QUOTE = 'self-operated-receivable';
+const UPSTREAM_PAIRING_ROLE_QUOTE = 'QUOTE';
+
 function splitSignatureServices(value?: string | string[]) {
   if (Array.isArray(value)) {
     return value;
@@ -170,6 +193,10 @@ function hasText(value?: string) {
   return String(value || '').trim().length > 0;
 }
 
+function isQuoteUpstreamConnection(connection?: API.Integration.UpstreamConnection) {
+  return connection?.settlementType === UPSTREAM_SETTLEMENT_TYPE_QUOTE;
+}
+
 export default function CustomerLogisticsChannelPage() {
   const access = useAccess();
   const canAdd = access.hasPerms('logistics:customerChannel:add');
@@ -177,19 +204,26 @@ export default function CustomerLogisticsChannelPage() {
   const canStatus = access.hasPerms('logistics:customerChannel:status');
   const canBind = access.hasPerms('logistics:customerChannel:binding');
   const canBuyer = access.hasPerms('logistics:customerChannel:buyer');
+  const canListUpstreamConnections = access.hasPerms('integration:upstream:list');
+  const canQueryUpstream = access.hasPerms('integration:upstream:query');
+  const canConfigureQuoteChannel = canBind && canListUpstreamConnections && canQueryUpstream;
 
   const actionRef = useRef<ActionType>(undefined);
+  const quoteChannelActionRef = useRef<ActionType>(undefined);
   const systemMappingActionRef = useRef<ActionType>(undefined);
   const [channelForm] = Form.useForm<CustomerChannel>();
+  const [quoteChannelForm] = Form.useForm<QuoteChannelMapping>();
   const [systemMappingForm] = Form.useForm<SystemMapping>();
 
   const [channelModalOpen, setChannelModalOpen] = useState(false);
+  const [quoteChannelModalOpen, setQuoteChannelModalOpen] = useState(false);
   const [systemMappingModalOpen, setSystemMappingModalOpen] = useState(false);
   const [buyerScopeModalOpen, setBuyerScopeModalOpen] = useState(false);
   const [channelEditorMode, setChannelEditorMode] = useState<'create' | 'edit'>('create');
   const [currentChannel, setCurrentChannel] = useState<CustomerChannel>();
+  const [quoteChannelMappings, setQuoteChannelMappings] = useState<QuoteChannelMapping[]>([]);
   const [currentSystemMapping, setCurrentSystemMapping] = useState<SystemMapping>();
-  const [activeEditorTab, setActiveEditorTab] = useState('systemMappings');
+  const [activeEditorTab, setActiveEditorTab] = useState('quoteChannelMappings');
 
   const [finalCarrierOptions, setFinalCarrierOptions] = useState<OptionItem[]>([]);
   const [channelTypeOptions, setChannelTypeOptions] = useState<OptionItem[]>([]);
@@ -200,6 +234,8 @@ export default function CustomerLogisticsChannelPage() {
   const [customerLabelUploadEnum, setCustomerLabelUploadEnum] = useState<Record<string, any>>({});
   const [scopeModeEnum, setScopeModeEnum] = useState<Record<string, any>>({});
   const [signatureServiceOptions, setSignatureServiceOptions] = useState<OptionItem[]>([]);
+  const [quoteConnectionOptions, setQuoteConnectionOptions] = useState<OptionItem[]>([]);
+  const [quoteLogisticsChannelOptions, setQuoteLogisticsChannelOptions] = useState<OptionItem[]>([]);
   const [systemChannelOptions, setSystemChannelOptions] = useState<OptionItem[]>([]);
   const [buyerOptions, setBuyerOptions] = useState<OptionItem[]>([]);
   const [buyerScopeRows, setBuyerScopeRows] = useState<BuyerScopeRow[]>([]);
@@ -295,6 +331,7 @@ export default function CustomerLogisticsChannelPage() {
   };
 
   const reloadDetailTables = () => {
+    quoteChannelActionRef.current?.reload();
     systemMappingActionRef.current?.reload();
     actionRef.current?.reload();
   };
@@ -306,10 +343,56 @@ export default function CustomerLogisticsChannelPage() {
     }
   };
 
+  const loadQuoteChannelMappings = async (customerChannelCode: string) => {
+    const resp = await getQuoteChannelMappings(customerChannelCode);
+    const data = resp.code === 200 ? (resp.data || []) : [];
+    setQuoteChannelMappings(data);
+    return data as QuoteChannelMapping[];
+  };
+
+  const loadQuoteConnectionOptions = async () => {
+    if (!canListUpstreamConnections || !canQueryUpstream) {
+      setQuoteConnectionOptions([]);
+      return [] as OptionItem[];
+    }
+    const connectionResp = await getUpstreamConnectionList({ pageNum: 1, pageSize: 200 });
+    const options = (connectionResp.rows || [])
+      .filter(isQuoteUpstreamConnection)
+      .map((connection) => ({
+        label: connection.masterWarehouseName || connection.connectionCode,
+        value: connection.connectionCode,
+        searchText: [connection.masterWarehouseName, connection.connectionCode].filter(Boolean).join(' '),
+      }));
+    setQuoteConnectionOptions(options);
+    return options;
+  };
+
+  const loadQuoteLogisticsChannelOptions = async (connectionCode?: string) => {
+    if (!connectionCode || !canQueryUpstream) {
+      setQuoteLogisticsChannelOptions([]);
+      return [] as OptionItem[];
+    }
+    const resp = await getLogisticsChannelSyncList(connectionCode, { status: 'ACTIVE' });
+    const channelMap = new Map<string, API.Integration.LogisticsChannelSyncItem>();
+    (resp.data || []).forEach((item) => {
+      if (!channelMap.has(item.channelCode)) {
+        channelMap.set(item.channelCode, item);
+      }
+    });
+    const options = Array.from(channelMap.values()).map((item) => ({
+      label: `${item.channelCode} / ${item.channelName}`,
+      value: item.channelCode,
+      searchText: [item.channelCode, item.channelName, item.warehouseCode].filter(Boolean).join(' '),
+    }));
+    setQuoteLogisticsChannelOptions(options);
+    return options;
+  };
+
   const openCreateChannel = () => {
     setChannelEditorMode('create');
     setCurrentChannel(undefined);
-    setActiveEditorTab('systemMappings');
+    setActiveEditorTab('quoteChannelMappings');
+    setQuoteChannelMappings([]);
     setBuyerScopeRows([]);
     setChannelModalOpen(true);
     setTimeout(() => {
@@ -324,7 +407,7 @@ export default function CustomerLogisticsChannelPage() {
     });
   };
 
-  const openEditChannel = async (record: CustomerChannel, tabKey = 'systemMappings') => {
+  const openEditChannel = async (record: CustomerChannel, tabKey = 'quoteChannelMappings') => {
     setChannelEditorMode('edit');
     setCurrentChannel(record);
     setActiveEditorTab(tabKey);
@@ -336,6 +419,7 @@ export default function CustomerLogisticsChannelPage() {
         signatureServices: splitSignatureServices(record.signatureServices),
       });
     });
+    await loadQuoteChannelMappings(record.customerChannelCode);
     await loadBuyerScope(record.customerChannelCode);
   };
 
@@ -391,7 +475,7 @@ export default function CustomerLogisticsChannelPage() {
       });
       setBuyerScopeRows([]);
       if (keepOpenAfterCreate) {
-        message.info('基础信息已保存，可以继续配置绑定系统渠道和绑定买家');
+        message.info('基础信息已保存，可以继续配置主仓渠道映射、绑定系统渠道和绑定买家');
         return false;
       }
     } else {
@@ -465,6 +549,106 @@ export default function CustomerLogisticsChannelPage() {
         ) {
           reloadDetailTables();
           await refreshCurrentChannel(currentChannel.customerChannelCode);
+        }
+      },
+    });
+  };
+
+  const openQuoteChannelMappingModal = async () => {
+    if (!currentChannel?.customerChannelCode) {
+      return;
+    }
+    if (!canConfigureQuoteChannel) {
+      message.warning('需要客户渠道绑定权限和上游系统查询权限');
+      return;
+    }
+    const mappings = await loadQuoteChannelMappings(currentChannel.customerChannelCode);
+    const existingMapping = mappings.find((item) => (
+      (item.pairingRole || UPSTREAM_PAIRING_ROLE_QUOTE) === UPSTREAM_PAIRING_ROLE_QUOTE
+    ));
+    setQuoteLogisticsChannelOptions([]);
+    quoteChannelForm.resetFields();
+    quoteChannelForm.setFieldsValue({
+      connectionCode: existingMapping?.connectionCode,
+      upstreamChannelCode: existingMapping?.upstreamChannelCode,
+      remark: existingMapping?.remark,
+    } as QuoteChannelMapping);
+    setQuoteChannelModalOpen(true);
+    try {
+      let connectionOptions = await loadQuoteConnectionOptions();
+      if (
+        existingMapping?.connectionCode
+        && !connectionOptions.some((option) => option.value === existingMapping.connectionCode)
+      ) {
+        connectionOptions = [
+          ...connectionOptions,
+          {
+            label: existingMapping.masterWarehouseNameSnapshot || existingMapping.connectionCode,
+            value: existingMapping.connectionCode,
+            searchText: [existingMapping.masterWarehouseNameSnapshot, existingMapping.connectionCode]
+              .filter(Boolean)
+              .join(' '),
+          },
+        ];
+        setQuoteConnectionOptions(connectionOptions);
+      }
+      const connectionCode = existingMapping?.connectionCode
+        || (connectionOptions.length === 1 ? String(connectionOptions[0].value) : undefined);
+      if (connectionCode) {
+        quoteChannelForm.setFieldValue('connectionCode', connectionCode);
+        const channelOptions = await loadQuoteLogisticsChannelOptions(connectionCode);
+        if (
+          existingMapping?.upstreamChannelCode
+          && !channelOptions.some((option) => option.value === existingMapping.upstreamChannelCode)
+        ) {
+          setQuoteLogisticsChannelOptions([
+            ...channelOptions,
+            {
+              label: `${existingMapping.upstreamChannelCode} / ${existingMapping.upstreamChannelName}`,
+              value: existingMapping.upstreamChannelCode,
+              searchText: [existingMapping.upstreamChannelCode, existingMapping.upstreamChannelName]
+                .filter(Boolean)
+                .join(' '),
+            },
+          ]);
+        }
+      }
+    } catch {
+      message.error('报价仓主仓渠道选项加载失败');
+    }
+  };
+
+  const saveQuoteChannelMapping = async (values: QuoteChannelMapping) => {
+    if (!currentChannel?.customerChannelCode) return false;
+    const ok = resultOk(
+      await addQuoteChannelMapping(currentChannel.customerChannelCode, values),
+      '主仓渠道映射已保存',
+    );
+    if (ok) {
+      await loadQuoteChannelMappings(currentChannel.customerChannelCode);
+      reloadDetailTables();
+      setQuoteChannelModalOpen(false);
+      return true;
+    }
+    return false;
+  };
+
+  const removeQuoteChannelMapping = (record: QuoteChannelMapping) => {
+    if (!currentChannel?.customerChannelCode) return;
+    Modal.confirm({
+      title: '解除主仓渠道映射',
+      content: `${record.masterWarehouseNameSnapshot || record.connectionCode} / ${record.upstreamChannelName}`,
+      okText: '确认',
+      cancelText: '取消',
+      onOk: async () => {
+        if (
+          resultOk(
+            await deleteQuoteChannelMapping(currentChannel.customerChannelCode, record.mappingId),
+            '主仓渠道映射已解除',
+          )
+        ) {
+          await loadQuoteChannelMappings(currentChannel.customerChannelCode);
+          reloadDetailTables();
         }
       },
     });
@@ -591,12 +775,11 @@ export default function CustomerLogisticsChannelPage() {
       width: 120,
       render: (_, record) => (
         <Switch
-          size="small"
           checked={record.status === 'ENABLED'}
           checkedChildren="启用"
           unCheckedChildren="停用"
           disabled={!canStatus}
-          onChange={() => toggleStatus(record)}
+          onClick={() => toggleStatus(record)}
         />
       ),
     },
@@ -623,8 +806,35 @@ export default function CustomerLogisticsChannelPage() {
       fixed: 'right',
       width: 100,
       render: (_, record) => [
-        <Button key="edit" type="link" size="small" hidden={!canEdit} onClick={() => openEditChannel(record, 'systemMappings')}>
+        <Button key="edit" type="link" size="small" hidden={!canEdit} onClick={() => openEditChannel(record, 'quoteChannelMappings')}>
           编辑
+        </Button>,
+      ],
+    },
+  ];
+
+  const quoteChannelColumns: ProColumns<QuoteChannelMapping>[] = [
+    {
+      title: '上游系统',
+      dataIndex: 'masterWarehouseNameSnapshot',
+      width: 220,
+      render: (_, record) => record.masterWarehouseNameSnapshot || record.connectionCode,
+    },
+    { title: '主仓渠道代码', dataIndex: 'upstreamChannelCode', width: 220 },
+    { title: '主仓渠道名称', dataIndex: 'upstreamChannelName', width: 260, ellipsis: true },
+    { title: '配对用途', dataIndex: 'pairingRole', width: 120, render: () => '报价' },
+    { title: '状态', dataIndex: 'status', valueEnum: bindingStatusEnum, width: 100 },
+    { title: '创建时间', dataIndex: 'createTime', width: 170 },
+    {
+      title: '操作',
+      valueType: 'option',
+      width: 130,
+      render: (_, record) => [
+        <Button key="edit" type="link" size="small" hidden={!canConfigureQuoteChannel} onClick={openQuoteChannelMappingModal}>
+          配置
+        </Button>,
+        <Button key="delete" type="link" size="small" danger hidden={!canConfigureQuoteChannel} onClick={() => removeQuoteChannelMapping(record)}>
+          解除
         </Button>,
       ],
     },
@@ -701,8 +911,8 @@ export default function CustomerLogisticsChannelPage() {
       <Modal
         title={channelModalTitle}
         open={channelModalOpen}
-        width="88vw"
-        style={{ maxWidth: 1440, top: 24 }}
+        width="94vw"
+        style={{ maxWidth: 1680, top: 24 }}
         destroyOnHidden
         onCancel={() => setChannelModalOpen(false)}
         footer={[
@@ -717,6 +927,7 @@ export default function CustomerLogisticsChannelPage() {
           body: {
             maxHeight: 'calc(100vh - 168px)',
             overflowY: 'auto',
+            overflowX: 'hidden',
             paddingTop: 8,
           },
         }}
@@ -726,7 +937,7 @@ export default function CustomerLogisticsChannelPage() {
             基础信息
           </div>
           <ProForm<CustomerChannel> form={channelForm} layout="vertical" submitter={false}>
-            <Row gutter={24}>
+            <Row gutter={24} style={{ marginLeft: 0, marginRight: 0 }}>
               <Col xs={24} lg={8}>
                 <ProFormSelect
                   name="channelType"
@@ -834,6 +1045,42 @@ export default function CustomerLogisticsChannelPage() {
               onChange={setActiveEditorTab}
               items={[
                 {
+                  key: 'quoteChannelMappings',
+                  label: '主仓渠道映射',
+                  children: (
+                    <ProTable<QuoteChannelMapping>
+                      actionRef={quoteChannelActionRef}
+                      rowKey="mappingId"
+                      columns={quoteChannelColumns}
+                      request={async () => {
+                        if (!currentChannel?.customerChannelCode) {
+                          return { data: [], success: true, total: 0 };
+                        }
+                        const data = await loadQuoteChannelMappings(currentChannel.customerChannelCode);
+                        return {
+                          data,
+                          success: true,
+                          total: data.length,
+                        };
+                      }}
+                      search={false}
+                      pagination={false}
+                      scroll={getProTableScroll(1050, { y: 260 })}
+                      toolBarRender={() => [
+                        <Button
+                          key="configure"
+                          icon={<LinkOutlined />}
+                          disabled={!currentChannel?.customerChannelCode}
+                          hidden={!canConfigureQuoteChannel}
+                          onClick={openQuoteChannelMappingModal}
+                        >
+                          配置主仓渠道
+                        </Button>,
+                      ]}
+                    />
+                  ),
+                },
+                {
                   key: 'systemMappings',
                   label: '绑定系统渠道',
                   children: (
@@ -905,6 +1152,46 @@ export default function CustomerLogisticsChannelPage() {
           </div>
         ) : null}
       </Modal>
+
+      <ModalForm<QuoteChannelMapping>
+        title="配置主仓渠道"
+        open={quoteChannelModalOpen}
+        form={quoteChannelForm}
+        modalProps={{ destroyOnHidden: true, onCancel: () => setQuoteChannelModalOpen(false) }}
+        onOpenChange={setQuoteChannelModalOpen}
+        onFinish={saveQuoteChannelMapping}
+      >
+        <Alert
+          showIcon
+          type="info"
+          message={`当前客户渠道：${currentChannel?.customerChannelCode || '-'} / ${currentChannel?.customerChannelName || '-'}`}
+          description="客户渠道只映射报价仓的主仓渠道；同一个客户渠道只保留一个主仓渠道映射，同一个主仓渠道可以被多个客户渠道复用。"
+        />
+        <ProFormSelect
+          name="connectionCode"
+          label="上游系统"
+          options={quoteConnectionOptions}
+          fieldProps={{
+            ...SEARCHABLE_SELECT_PROPS,
+            onChange: async (value) => {
+              quoteChannelForm.setFieldsValue({
+                upstreamChannelCode: undefined,
+              });
+              setQuoteLogisticsChannelOptions([]);
+              await loadQuoteLogisticsChannelOptions(String(value));
+            },
+          }}
+          rules={[{ required: true, message: '请选择报价仓上游系统' }]}
+        />
+        <ProFormSelect
+          name="upstreamChannelCode"
+          label="主仓渠道"
+          options={quoteLogisticsChannelOptions}
+          fieldProps={SEARCHABLE_SELECT_PROPS}
+          rules={[{ required: true, message: '请选择报价仓同步清单中的主仓渠道' }]}
+        />
+        <ProFormTextArea name="remark" label="备注" />
+      </ModalForm>
 
       <ModalForm<SystemMapping>
         title={currentSystemMapping?.mappingId ? '编辑系统渠道绑定' : '绑定系统渠道'}

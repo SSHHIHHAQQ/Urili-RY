@@ -47,7 +47,7 @@ public class BuyerPortalPermissionServiceImplMenuTreeTest
         BuyerAccount account = account(22L, 11L);
         RecordingBuyerMapper buyerMapper = recordingBuyerMapper(1, account);
         RecordingBuyerPortalPermissionMapper permissionMapper = new RecordingBuyerPortalPermissionMapper()
-                .withMenus(menu(200000L, 0L, "采购中心"),
+                .withMenus(buyerPageMenu(200000L, 0L, "门户首页", "buyer:portal:home"),
                         buyerPageMenu(200001L, 200000L, "商品列表", "buyer:product:list"));
         BuyerPortalPermissionServiceImpl service = service(buyerService(buyer), buyerMapper.proxy(),
                 permissionMapper.proxy());
@@ -58,10 +58,8 @@ public class BuyerPortalPermissionServiceImplMenuTreeTest
         assertBuyerMenuLookup(permissionMapper);
         assertEquals(1, menuTree.size());
         assertEquals(Long.valueOf(200000L), menuTree.get(0).getMenuId());
-        assertEquals("采购中心", menuTree.get(0).getMenuName());
-        assertEquals(1, menuTree.get(0).getChildren().size());
-        assertEquals(Long.valueOf(200001L), menuTree.get(0).getChildren().get(0).getMenuId());
-        assertEquals("商品列表", menuTree.get(0).getChildren().get(0).getMenuName());
+        assertEquals("门户首页", menuTree.get(0).getMenuName());
+        assertEquals(0, menuTree.get(0).getChildren().size());
     }
 
     @Test

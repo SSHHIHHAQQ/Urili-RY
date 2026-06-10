@@ -26,6 +26,10 @@ public class AdminDirectLoginPermissionContractTest
 
         assertTerminalControllerDirectLoginContract(backendRoot, "seller", "Seller", "sellerId", "accountId", violations);
         assertTerminalControllerDirectLoginContract(backendRoot, "buyer", "Buyer", "buyerId", "accountId", violations);
+        assertDirectLoginServiceUsesOwnerDefaultAccount(backendRoot, "seller", "Seller", "sellerId",
+                "sellerAccountId", "sellerMapper", violations);
+        assertDirectLoginServiceUsesOwnerDefaultAccount(backendRoot, "buyer", "Buyer", "buyerId",
+                "buyerAccountId", "buyerMapper", violations);
         assertTicketAuditTerminalScope(backendRoot, "seller", "Seller", violations);
         assertTicketAuditTerminalScope(backendRoot, "buyer", "Buyer", violations);
         assertTicketMapperCanFilterByTerminal(backendRoot, violations);
@@ -56,6 +60,59 @@ public class AdminDirectLoginPermissionContractTest
                 violations);
         assertHandlerAnnotations(controller, source, "directLoginTickets",
                 "@GetMapping(\"/directLoginTickets/list\")", ticketListPerm, false, violations);
+    }
+
+    private void assertDirectLoginServiceUsesOwnerDefaultAccount(Path backendRoot, String terminal, String classPrefix,
+            String subjectIdVariable, String accountIdVariable, String mapperName, List<String> violations)
+            throws IOException
+    {
+        Path service = backendRoot.resolve(terminal + "/src/main/java/com/ruoyi/" + terminal + "/service/impl/"
+                + classPrefix + "ServiceImpl.java");
+        String source = Files.readString(service, StandardCharsets.UTF_8);
+        String subjectMethodName = "create" + classPrefix + "DirectLogin";
+        String accountMethodName = "create" + classPrefix + "AccountDirectLogin";
+        String subjectMethodBody = extractMethodBody(source, subjectMethodName);
+        String accountMethodBody = extractMethodBody(source, accountMethodName);
+        String ownerLookup = mapperName + ".selectOwner" + classPrefix + "AccountBy" + classPrefix + "Id("
+                + subjectIdVariable + ")";
+        String scopedAccountLookup = mapperName + ".select" + classPrefix + "AccountByIdAnd" + classPrefix + "Id("
+                + subjectIdVariable + ", " + accountIdVariable + ")";
+        String accountGuard = "assert" + classPrefix + "AccountCanDirectLogin";
+        String subjectTokenCall = "directLoginSupport.createToken(\"" + terminal + "\", " + subjectIdVariable
+                + ", " + terminal + ".get" + classPrefix + "No(), owner, reason";
+        String accountTokenCall = "directLoginSupport.createToken(\"" + terminal + "\", " + subjectIdVariable
+                + ", " + terminal + ".get" + classPrefix + "No(), account, reason";
+
+        if (subjectMethodBody.isEmpty())
+        {
+            violations.add(service.getFileName() + "#" + subjectMethodName + " must exist");
+        }
+        else
+        {
+            assertContains(subjectMethodBody, ownerLookup, service, violations);
+            assertContains(subjectMethodBody, accountGuard + "(owner)", service, violations);
+            assertContains(subjectMethodBody, subjectTokenCall, service, violations);
+            assertNotContains(subjectMethodBody, scopedAccountLookup, service, violations);
+            assertNotContains(subjectMethodBody, mapperName + ".select" + classPrefix + "AccountById(",
+                    service, violations);
+            assertBefore(subjectMethodBody, ownerLookup, subjectTokenCall,
+                    service.getFileName() + "#" + subjectMethodName, violations);
+        }
+
+        if (accountMethodBody.isEmpty())
+        {
+            violations.add(service.getFileName() + "#" + accountMethodName + " must exist");
+        }
+        else
+        {
+            assertContains(accountMethodBody, scopedAccountLookup, service, violations);
+            assertContains(accountMethodBody, accountGuard + "(account)", service, violations);
+            assertContains(accountMethodBody, accountTokenCall, service, violations);
+            assertNotContains(accountMethodBody, mapperName + ".select" + classPrefix + "AccountById(",
+                    service, violations);
+            assertBefore(accountMethodBody, scopedAccountLookup, accountTokenCall,
+                    service.getFileName() + "#" + accountMethodName, violations);
+        }
     }
 
     private void assertTicketAuditTerminalScope(Path backendRoot, String terminal, String classPrefix,
@@ -321,6 +378,7 @@ public class AdminDirectLoginPermissionContractTest
             assertContains(pageSource, "access.hasPerms(`${permPrefix}:directLogin`)", page, violations);
             assertContains(pageSource, "access.hasPerms(`${permPrefix}:ticket:list`)", page, violations);
             assertContains(pageSource, "hasAuditPermission", page, violations);
+            assertFrontendDirectLoginWaitsForPortalConsume(pageSource, "handleDirectLogin", page, violations);
         }
         for (Path accountModal : accountModals)
         {
@@ -331,6 +389,8 @@ public class AdminDirectLoginPermissionContractTest
             }
             assertContains(accountModalSource,
                     "access.hasPerms(`${permPrefix}:directLogin`) && config.services.directLoginAccount",
+                    accountModal, violations);
+            assertFrontendDirectLoginWaitsForPortalConsume(accountModalSource, "handleDirectLoginAccount",
                     accountModal, violations);
         }
         for (Path auditModal : auditModals)
@@ -361,6 +421,25 @@ public class AdminDirectLoginPermissionContractTest
                 "export { default, buildAuditParams } from './PartnerAuditModal.tsx';",
                 workspaceRoot.resolve("react-ui/src/components/PartnerManagement/PartnerAuditModal.js"),
                 violations);
+    }
+
+    private void assertFrontendDirectLoginWaitsForPortalConsume(String source, String handlerName, Path path,
+            List<String> violations)
+    {
+        String handlerBody = extractBlockAfterNeedle(source, "const " + handlerName);
+        String prefix = path.getFileName() + "#" + handlerName;
+        if (handlerBody.isEmpty())
+        {
+            violations.add(prefix + " must exist");
+            return;
+        }
+        assertContains(handlerBody, "const bridgeResult", path, violations);
+        assertContains(handlerBody, "await openPortalDirectLoginWindow(resp.data, config.moduleKey)", path,
+                violations);
+        assertContains(handlerBody, "if (bridgeResult)", path, violations);
+        assertBefore(handlerBody, "await openPortalDirectLoginWindow(resp.data, config.moduleKey)",
+                "message.success", prefix, violations);
+        assertBefore(handlerBody, "if (bridgeResult)", "message.success", prefix, violations);
     }
 
     private String readRequired(Path path, List<String> violations) throws IOException
@@ -492,6 +571,38 @@ public class AdminDirectLoginPermissionContractTest
             return "";
         }
         int bodyStart = source.indexOf('{', signatureIndex);
+        if (bodyStart < 0)
+        {
+            return "";
+        }
+        int balance = 0;
+        for (int i = bodyStart; i < source.length(); i++)
+        {
+            char c = source.charAt(i);
+            if (c == '{')
+            {
+                balance++;
+            }
+            else if (c == '}')
+            {
+                balance--;
+                if (balance == 0)
+                {
+                    return source.substring(bodyStart, i + 1);
+                }
+            }
+        }
+        return "";
+    }
+
+    private String extractBlockAfterNeedle(String source, String needle)
+    {
+        int needleIndex = source.indexOf(needle);
+        if (needleIndex < 0)
+        {
+            return "";
+        }
+        int bodyStart = source.indexOf('{', needleIndex);
         if (bodyStart < 0)
         {
             return "";

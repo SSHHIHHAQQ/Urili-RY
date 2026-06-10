@@ -39,6 +39,62 @@ function sanitizePortalQueryParams(params?: Record<string, any>) {
   );
 }
 
+function sanitizePortalPayload(data?: Record<string, any>) {
+  if (!data) {
+    return undefined;
+  }
+  return Object.fromEntries(
+    Object.entries(data).filter(
+      ([key, value]) => !PORTAL_SCOPE_PARAM_KEYS.has(key) && value !== undefined,
+    ),
+  );
+}
+
+function normalizePortalIdArray(values: unknown, fieldName: string) {
+  if (values == null) {
+    return [];
+  }
+  if (!Array.isArray(values)) {
+    throw new Error(`${fieldName} 必须是数组`);
+  }
+  const ids: number[] = [];
+  const seen = new Set<number>();
+  for (const value of values) {
+    const id = typeof value === 'number' ? value : Number(String(value).trim());
+    if (!Number.isSafeInteger(id) || id <= 0) {
+      throw new Error(`${fieldName} 必须使用有效正整数ID`);
+    }
+    if (seen.has(id)) {
+      throw new Error(`${fieldName} 不能包含重复ID`);
+    }
+    seen.add(id);
+    ids.push(id);
+  }
+  return ids;
+}
+
+function normalizePortalIdentifier(value: unknown, fieldName: string) {
+  const id = typeof value === 'number' ? value : Number(String(value).trim());
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    throw new Error(`${fieldName} must be a positive integer id`);
+  }
+  return id;
+}
+
+function sanitizePortalRolePayload(data?: Record<string, any>) {
+  const payload = sanitizePortalPayload(data);
+  if (!payload) {
+    return undefined;
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, 'menuIds')) {
+    return {
+      ...payload,
+      menuIds: normalizePortalIdArray(payload.menuIds, 'menuIds'),
+    };
+  }
+  return payload;
+}
+
 function sanitizePortalSessionPageParams(params?: PortalSessionPageParams) {
   if (!params) {
     return undefined;
@@ -114,7 +170,7 @@ export async function updatePortalPassword(terminal: PortalTerminal, data: API.P
   return request<API.Result>(buildPortalUrl(terminal, '/account/password'), {
     method: 'PUT',
     headers: { ...buildPortalAuthHeaders(terminal), isToken: false },
-    data,
+    data: sanitizePortalPayload(data),
   });
 }
 
@@ -125,6 +181,54 @@ export async function getPortalAccounts(terminal: PortalTerminal) {
   });
 }
 
+export async function createPortalAccount(
+  terminal: PortalTerminal,
+  data: API.Partner.PortalAccountPayload,
+) {
+  return request<API.Result>(buildPortalUrl(terminal, '/accounts'), {
+    method: 'POST',
+    headers: { ...buildPortalAuthHeaders(terminal), isToken: false },
+    data: sanitizePortalPayload(data),
+  });
+}
+
+export async function updatePortalAccount(
+  terminal: PortalTerminal,
+  accountIdentifier: number,
+  data: API.Partner.PortalAccountPayload,
+) {
+  const accountId = normalizePortalIdentifier(accountIdentifier, 'accountIdentifier');
+  return request<API.Result>(buildPortalUrl(terminal, `/accounts/${accountId}`), {
+    method: 'PUT',
+    headers: { ...buildPortalAuthHeaders(terminal), isToken: false },
+    data: sanitizePortalPayload(data),
+  });
+}
+
+export async function getPortalAccountRoles(terminal: PortalTerminal, accountIdentifier: number) {
+  const accountId = normalizePortalIdentifier(accountIdentifier, 'accountIdentifier');
+  return request<API.Partner.PortalAccountRoleResult>(
+    buildPortalUrl(terminal, `/accounts/${accountId}/roles`),
+    {
+      method: 'GET',
+      headers: { ...buildPortalAuthHeaders(terminal), isToken: false },
+    },
+  );
+}
+
+export async function assignPortalAccountRoles(
+  terminal: PortalTerminal,
+  accountIdentifier: number,
+  roleIds: number[],
+) {
+  const accountId = normalizePortalIdentifier(accountIdentifier, 'accountIdentifier');
+  return request<API.Result>(buildPortalUrl(terminal, `/accounts/${accountId}/roles`), {
+    method: 'PUT',
+    headers: { ...buildPortalAuthHeaders(terminal), isToken: false },
+    data: { roleIds: normalizePortalIdArray(roleIds, 'roleIds') },
+  });
+}
+
 export async function getPortalDepts(terminal: PortalTerminal) {
   return request<API.Partner.PortalDeptProfileListResult>(buildPortalUrl(terminal, '/depts'), {
     method: 'GET',
@@ -132,9 +236,101 @@ export async function getPortalDepts(terminal: PortalTerminal) {
   });
 }
 
+export async function getPortalDept(terminal: PortalTerminal, deptIdentifier: number) {
+  const deptId = normalizePortalIdentifier(deptIdentifier, 'deptIdentifier');
+  return request<API.Partner.PortalDeptInfoResult>(buildPortalUrl(terminal, `/depts/${deptId}`), {
+    method: 'GET',
+    headers: { ...buildPortalAuthHeaders(terminal), isToken: false },
+  });
+}
+
+export async function getPortalDeptTree(terminal: PortalTerminal) {
+  return request<API.Partner.PortalDeptTreeResult>(buildPortalUrl(terminal, '/depts/treeselect'), {
+    method: 'GET',
+    headers: { ...buildPortalAuthHeaders(terminal), isToken: false },
+  });
+}
+
+export async function createPortalDept(terminal: PortalTerminal, data: API.Partner.PortalDept) {
+  return request<API.Result>(buildPortalUrl(terminal, '/depts'), {
+    method: 'POST',
+    headers: { ...buildPortalAuthHeaders(terminal), isToken: false },
+    data: sanitizePortalPayload(data),
+  });
+}
+
+export async function updatePortalDept(
+  terminal: PortalTerminal,
+  deptIdentifier: number,
+  data: API.Partner.PortalDept,
+) {
+  const deptId = normalizePortalIdentifier(deptIdentifier, 'deptIdentifier');
+  return request<API.Result>(buildPortalUrl(terminal, `/depts/${deptId}`), {
+    method: 'PUT',
+    headers: { ...buildPortalAuthHeaders(terminal), isToken: false },
+    data: sanitizePortalPayload(data),
+  });
+}
+
+export async function deletePortalDept(terminal: PortalTerminal, deptIdentifier: number) {
+  const deptId = normalizePortalIdentifier(deptIdentifier, 'deptIdentifier');
+  return request<API.Result>(buildPortalUrl(terminal, `/depts/${deptId}`), {
+    method: 'DELETE',
+    headers: { ...buildPortalAuthHeaders(terminal), isToken: false },
+  });
+}
+
 export async function getPortalRoles(terminal: PortalTerminal) {
   return request<API.Partner.PortalRoleProfileListResult>(buildPortalUrl(terminal, '/roles'), {
     method: 'GET',
+    headers: { ...buildPortalAuthHeaders(terminal), isToken: false },
+  });
+}
+
+export async function getPortalRole(terminal: PortalTerminal, roleIdentifier: number) {
+  const roleId = normalizePortalIdentifier(roleIdentifier, 'roleIdentifier');
+  return request<API.Partner.PortalRoleInfoResult>(buildPortalUrl(terminal, `/roles/${roleId}`), {
+    method: 'GET',
+    headers: { ...buildPortalAuthHeaders(terminal), isToken: false },
+  });
+}
+
+export async function getPortalRoleMenus(terminal: PortalTerminal, roleIdentifier?: number) {
+  const path =
+    roleIdentifier == null
+      ? '/roles/menus'
+      : `/roles/${normalizePortalIdentifier(roleIdentifier, 'roleIdentifier')}/menus`;
+  return request<API.Partner.PortalRoleMenuTreeResult>(buildPortalUrl(terminal, path), {
+    method: 'GET',
+    headers: { ...buildPortalAuthHeaders(terminal), isToken: false },
+  });
+}
+
+export async function createPortalRole(terminal: PortalTerminal, data: API.Partner.PortalRole) {
+  return request<API.Result>(buildPortalUrl(terminal, '/roles'), {
+    method: 'POST',
+    headers: { ...buildPortalAuthHeaders(terminal), isToken: false },
+    data: sanitizePortalRolePayload(data),
+  });
+}
+
+export async function updatePortalRole(
+  terminal: PortalTerminal,
+  roleIdentifier: number,
+  data: API.Partner.PortalRole,
+) {
+  const roleId = normalizePortalIdentifier(roleIdentifier, 'roleIdentifier');
+  return request<API.Result>(buildPortalUrl(terminal, `/roles/${roleId}`), {
+    method: 'PUT',
+    headers: { ...buildPortalAuthHeaders(terminal), isToken: false },
+    data: sanitizePortalRolePayload(data),
+  });
+}
+
+export async function deletePortalRole(terminal: PortalTerminal, roleIdentifier: number) {
+  const roleId = normalizePortalIdentifier(roleIdentifier, 'roleIdentifier');
+  return request<API.Result>(buildPortalUrl(terminal, `/roles/${roleId}`), {
+    method: 'DELETE',
     headers: { ...buildPortalAuthHeaders(terminal), isToken: false },
   });
 }
@@ -284,8 +480,26 @@ export const sellerPortalSessionService = {
   getAccountProfile: () => getPortalAccountProfile('seller'),
   updatePassword: (data: API.Partner.PortalPasswordChangeParams) => updatePortalPassword('seller', data),
   getAccounts: () => getPortalAccounts('seller'),
+  createAccount: (data: API.Partner.PortalAccountPayload) => createPortalAccount('seller', data),
+  updateAccount: (accountIdentifier: number, data: API.Partner.PortalAccountPayload) =>
+    updatePortalAccount('seller', accountIdentifier, data),
+  getAccountRoles: (accountIdentifier: number) => getPortalAccountRoles('seller', accountIdentifier),
+  assignAccountRoles: (accountIdentifier: number, roleIds: number[]) =>
+    assignPortalAccountRoles('seller', accountIdentifier, roleIds),
   getDepts: () => getPortalDepts('seller'),
+  getDept: (deptIdentifier: number) => getPortalDept('seller', deptIdentifier),
+  getDeptTree: () => getPortalDeptTree('seller'),
+  createDept: (data: API.Partner.PortalDept) => createPortalDept('seller', data),
+  updateDept: (deptIdentifier: number, data: API.Partner.PortalDept) =>
+    updatePortalDept('seller', deptIdentifier, data),
+  deleteDept: (deptIdentifier: number) => deletePortalDept('seller', deptIdentifier),
   getRoles: () => getPortalRoles('seller'),
+  getRole: (roleIdentifier: number) => getPortalRole('seller', roleIdentifier),
+  getRoleMenus: (roleIdentifier?: number) => getPortalRoleMenus('seller', roleIdentifier),
+  createRole: (data: API.Partner.PortalRole) => createPortalRole('seller', data),
+  updateRole: (roleIdentifier: number, data: API.Partner.PortalRole) =>
+    updatePortalRole('seller', roleIdentifier, data),
+  deleteRole: (roleIdentifier: number) => deletePortalRole('seller', roleIdentifier),
   getLoginLogs: (params?: Record<string, any>) => getPortalLoginLogs('seller', params),
   getOperLogs: (params?: Record<string, any>) => getPortalOperLogs('seller', params),
   getSessions: (params?: PortalSessionPageParams) => getPortalSessions('seller', params),
@@ -301,8 +515,26 @@ export const buyerPortalSessionService = {
   getAccountProfile: () => getPortalAccountProfile('buyer'),
   updatePassword: (data: API.Partner.PortalPasswordChangeParams) => updatePortalPassword('buyer', data),
   getAccounts: () => getPortalAccounts('buyer'),
+  createAccount: (data: API.Partner.PortalAccountPayload) => createPortalAccount('buyer', data),
+  updateAccount: (accountIdentifier: number, data: API.Partner.PortalAccountPayload) =>
+    updatePortalAccount('buyer', accountIdentifier, data),
+  getAccountRoles: (accountIdentifier: number) => getPortalAccountRoles('buyer', accountIdentifier),
+  assignAccountRoles: (accountIdentifier: number, roleIds: number[]) =>
+    assignPortalAccountRoles('buyer', accountIdentifier, roleIds),
   getDepts: () => getPortalDepts('buyer'),
+  getDept: (deptIdentifier: number) => getPortalDept('buyer', deptIdentifier),
+  getDeptTree: () => getPortalDeptTree('buyer'),
+  createDept: (data: API.Partner.PortalDept) => createPortalDept('buyer', data),
+  updateDept: (deptIdentifier: number, data: API.Partner.PortalDept) =>
+    updatePortalDept('buyer', deptIdentifier, data),
+  deleteDept: (deptIdentifier: number) => deletePortalDept('buyer', deptIdentifier),
   getRoles: () => getPortalRoles('buyer'),
+  getRole: (roleIdentifier: number) => getPortalRole('buyer', roleIdentifier),
+  getRoleMenus: (roleIdentifier?: number) => getPortalRoleMenus('buyer', roleIdentifier),
+  createRole: (data: API.Partner.PortalRole) => createPortalRole('buyer', data),
+  updateRole: (roleIdentifier: number, data: API.Partner.PortalRole) =>
+    updatePortalRole('buyer', roleIdentifier, data),
+  deleteRole: (roleIdentifier: number) => deletePortalRole('buyer', roleIdentifier),
   getLoginLogs: (params?: Record<string, any>) => getPortalLoginLogs('buyer', params),
   getOperLogs: (params?: Record<string, any>) => getPortalOperLogs('buyer', params),
   getSessions: (params?: PortalSessionPageParams) => getPortalSessions('buyer', params),

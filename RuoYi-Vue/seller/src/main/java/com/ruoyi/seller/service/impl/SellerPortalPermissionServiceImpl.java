@@ -1,5 +1,6 @@
 package com.ruoyi.seller.service.impl;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -11,7 +12,6 @@ import org.springframework.transaction.annotation.Transactional;
 import com.ruoyi.common.constant.HttpStatus;
 import com.ruoyi.common.constant.UserConstants;
 import com.ruoyi.common.exception.ServiceException;
-import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.seller.domain.Seller;
 import com.ruoyi.seller.domain.SellerAccount;
@@ -26,6 +26,7 @@ import com.ruoyi.system.domain.PortalRole;
 import com.ruoyi.system.domain.PortalTreeSelect;
 import com.ruoyi.system.service.IPortalPermissionCheckService;
 import com.ruoyi.system.service.support.PartnerSupport;
+import com.ruoyi.system.service.support.PortalActorSupport;
 import com.ruoyi.system.service.support.PortalPermissionSupport;
 
 /**
@@ -35,6 +36,27 @@ import com.ruoyi.system.service.support.PortalPermissionSupport;
 public class SellerPortalPermissionServiceImpl implements ISellerPortalPermissionService, IPortalPermissionCheckService
 {
     private static final String OWNER_ROLE_KEY = "owner";
+
+    private static final Set<String> PORTAL_SELF_MANAGEMENT_PERMS = new HashSet<>(Arrays.asList(
+            "seller:portal:home",
+            "seller:account:list",
+            "seller:account:add",
+            "seller:account:edit",
+            "seller:account:role:query",
+            "seller:account:role:edit",
+            "seller:account:loginLog:list",
+            "seller:account:operLog:list",
+            "seller:account:session:list",
+            "seller:dept:list",
+            "seller:dept:query",
+            "seller:dept:add",
+            "seller:dept:edit",
+            "seller:dept:remove",
+            "seller:role:list",
+            "seller:role:query",
+            "seller:role:add",
+            "seller:role:edit",
+            "seller:role:remove"));
 
     @Autowired
     private SellerPortalPermissionMapper permissionMapper;
@@ -105,7 +127,7 @@ public class SellerPortalPermissionServiceImpl implements ISellerPortalPermissio
         {
             throw new ServiceException("新增卖家端菜单失败，菜单名称已存在");
         }
-        menu.setCreateBy(SecurityUtils.getUsername());
+        menu.setCreateBy(PortalActorSupport.currentActorName());
         return permissionMapper.insertSellerMenu(menu);
     }
 
@@ -120,7 +142,7 @@ public class SellerPortalPermissionServiceImpl implements ISellerPortalPermissio
         {
             throw new ServiceException("修改卖家端菜单失败，菜单名称已存在");
         }
-        menu.setUpdateBy(SecurityUtils.getUsername());
+        menu.setUpdateBy(PortalActorSupport.currentActorName());
         return permissionMapper.updateSellerMenu(menu);
     }
 
@@ -174,7 +196,7 @@ public class SellerPortalPermissionServiceImpl implements ISellerPortalPermissio
         PortalPermissionSupport.normalizeRole(role, sellerId);
         checkRoleUnique(role);
         assertRoleMenusExist(role);
-        role.setCreateBy(SecurityUtils.getUsername());
+        role.setCreateBy(PortalActorSupport.currentActorName());
         int rows = permissionMapper.insertSellerRole(role);
         insertRoleMenus(role);
         return rows;
@@ -188,7 +210,7 @@ public class SellerPortalPermissionServiceImpl implements ISellerPortalPermissio
         PortalPermissionSupport.normalizeRole(role, sellerId);
         checkRoleUnique(role);
         assertRoleMenusExist(role);
-        role.setUpdateBy(SecurityUtils.getUsername());
+        role.setUpdateBy(PortalActorSupport.currentActorName());
         int rows = permissionMapper.updateSellerRole(role);
         permissionMapper.deleteSellerRoleMenuByRoleId(sellerId, role.getRoleId());
         insertRoleMenus(role);
@@ -201,14 +223,14 @@ public class SellerPortalPermissionServiceImpl implements ISellerPortalPermissio
         assertRoleNotOwner(selectRoleById(sellerId, role.getRoleId()));
         String status = StringUtils.defaultIfBlank(role.getStatus(), UserConstants.NORMAL);
         PartnerSupport.assertStatus(status);
-        return permissionMapper.updateSellerRoleStatus(sellerId, role.getRoleId(), status, SecurityUtils.getUsername());
+        return permissionMapper.updateSellerRoleStatus(sellerId, role.getRoleId(), status, PortalActorSupport.currentActorName());
     }
 
     @Override
     @Transactional
     public int deleteRoleByIds(Long sellerId, Long[] roleIds)
     {
-        Long[] ids = PortalPermissionSupport.sanitizeIds(roleIds);
+        Long[] ids = normalizeRoleIds(roleIds);
         if (ids.length == 0)
         {
             throw new ServiceException("请选择要删除的角色");
@@ -222,7 +244,7 @@ public class SellerPortalPermissionServiceImpl implements ISellerPortalPermissio
                 throw new ServiceException("角色已分配账号，不允许删除");
             }
             permissionMapper.deleteSellerRoleMenuByRoleId(sellerId, roleId);
-            rows += permissionMapper.deleteSellerRoleById(sellerId, roleId, SecurityUtils.getUsername());
+            rows += permissionMapper.deleteSellerRoleById(sellerId, roleId, PortalActorSupport.currentActorName());
         }
         return rows;
     }
@@ -239,7 +261,7 @@ public class SellerPortalPermissionServiceImpl implements ISellerPortalPermissio
     public int assignAccountRoles(Long sellerId, Long accountId, Long[] roleIds)
     {
         SellerAccount account = assertSellerAccount(sellerId, accountId);
-        Long[] ids = PortalPermissionSupport.sanitizeIds(roleIds);
+        Long[] ids = normalizeRoleIds(roleIds);
         if (ids.length > 0 && permissionMapper.countSellerRolesByIds(sellerId, ids) != ids.length)
         {
             throw new ServiceException("存在不属于该卖家的角色");
@@ -265,7 +287,8 @@ public class SellerPortalPermissionServiceImpl implements ISellerPortalPermissio
         info.setUserName(account.getUserName());
         info.setNickName(account.getNickName());
         info.setRoles(new LinkedHashSet<>(permissionMapper.selectSellerAccountRoleKeys(session.getSubjectId(), session.getAccountId())));
-        info.setPermissions(splitPermissions(permissionMapper.selectSellerAccountPermissions(session.getSubjectId(), session.getAccountId())));
+        info.setPermissions(splitSelfManagementPermissions(permissionMapper.selectSellerAccountPermissions(
+                session.getSubjectId(), session.getAccountId())));
         return info;
     }
 
@@ -274,11 +297,16 @@ public class SellerPortalPermissionServiceImpl implements ISellerPortalPermissio
     {
         assertActiveSellerSession(session);
         List<PortalMenu> menus = permissionMapper.selectSellerAccountMenuList(session.getSubjectId(), session.getAccountId());
+        List<PortalMenu> selfManagementMenus = new ArrayList<>();
         for (PortalMenu menu : menus)
         {
             PortalPermissionSupport.assertReadableTerminalMenu(menu, "seller");
+            if (PORTAL_SELF_MANAGEMENT_PERMS.contains(StringUtils.trimToEmpty(menu.getPerms())))
+            {
+                selfManagementMenus.add(menu);
+            }
         }
-        return PortalPermissionSupport.buildMenuTree(menus);
+        return PortalPermissionSupport.buildMenuTree(selfManagementMenus);
     }
 
     @Override
@@ -302,9 +330,31 @@ public class SellerPortalPermissionServiceImpl implements ISellerPortalPermissio
         }
     }
 
+    private Long[] normalizeRoleIds(Long[] roleIds)
+    {
+        if (roleIds == null || roleIds.length == 0)
+        {
+            return new Long[0];
+        }
+        Set<Long> values = new LinkedHashSet<>();
+        for (Long roleId : roleIds)
+        {
+            if (roleId == null || roleId <= 0)
+            {
+                throw new ServiceException("卖家端账号角色必须使用有效角色ID");
+            }
+            if (!values.add(roleId))
+            {
+                throw new ServiceException("卖家端账号角色不能重复");
+            }
+        }
+        return values.toArray(new Long[0]);
+    }
+
     private void assertRoleMenusExist(PortalRole role)
     {
-        Long[] menuIds = PortalPermissionSupport.sanitizeIds(role.getMenuIds());
+        Long[] menuIds = normalizeRoleMenuIds(role.getMenuIds());
+        role.setMenuIds(menuIds);
         if (menuIds.length > 0 && permissionMapper.countSellerMenusByIds(menuIds) != menuIds.length)
         {
             throw new ServiceException("存在不属于卖家端的菜单");
@@ -320,6 +370,27 @@ public class SellerPortalPermissionServiceImpl implements ISellerPortalPermissio
             PortalPermissionSupport.assertTerminalMenuComponent(menu, "seller");
             PortalPermissionSupport.assertTerminalMenuPerms(menu, "seller");
         }
+    }
+
+    private Long[] normalizeRoleMenuIds(Long[] menuIds)
+    {
+        if (menuIds == null || menuIds.length == 0)
+        {
+            return new Long[0];
+        }
+        Set<Long> values = new LinkedHashSet<>();
+        for (Long menuId : menuIds)
+        {
+            if (menuId == null || menuId <= 0)
+            {
+                throw new ServiceException("卖家端角色菜单必须使用有效菜单ID");
+            }
+            if (!values.add(menuId))
+            {
+                throw new ServiceException("卖家端角色菜单不能重复");
+            }
+        }
+        return values.toArray(new Long[0]);
     }
 
     private void assertMenuParentSafe(PortalMenu menu)
@@ -440,7 +511,7 @@ public class SellerPortalPermissionServiceImpl implements ISellerPortalPermissio
         }
     }
 
-    private Set<String> splitPermissions(List<String> values)
+    private Set<String> splitSelfManagementPermissions(List<String> values)
     {
         Set<String> permissions = new LinkedHashSet<>();
         for (String value : values)
@@ -453,7 +524,10 @@ public class SellerPortalPermissionServiceImpl implements ISellerPortalPermissio
                     if (StringUtils.isNotEmpty(permission))
                     {
                         assertSellerPortalPermission(permission);
-                        permissions.add(permission);
+                        if (PORTAL_SELF_MANAGEMENT_PERMS.contains(permission))
+                        {
+                            permissions.add(permission);
+                        }
                     }
                 }
             }
@@ -464,7 +538,7 @@ public class SellerPortalPermissionServiceImpl implements ISellerPortalPermissio
     private void assertSellerPortalPermission(String permission)
     {
         if (!permission.startsWith("seller:") || permission.startsWith("seller:admin:")
-                || "*:*:*".equals(permission))
+                || permission.contains("*"))
         {
             throw new ServiceException("卖家端权限配置异常");
         }

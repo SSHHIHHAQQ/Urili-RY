@@ -2802,6 +2802,26 @@
   - 后续平台渠道映射归客户渠道管理，不得重新放回系统渠道管理。
   - 后续新增客户渠道下单规则、平台映射或客户侧面单流程时，必须同步 SQL 字典、DTO、Service 校验、前端控件和契约测试。
 
+## 报价方案阶段一配置入口
+
+- 位置：
+  - `RuoYi-Vue/finance/src/main/java/com/ruoyi/finance/service/IQuoteSchemeService.java`
+  - `RuoYi-Vue/finance/src/main/java/com/ruoyi/finance/service/impl/QuoteSchemeServiceImpl.java`
+  - `RuoYi-Vue/finance/src/main/resources/mapper/finance/QuoteSchemeMapper.xml`
+  - `RuoYi-Vue/sql/20260610_quote_scheme_phase1.sql`
+  - `react-ui/src/services/finance/quoteScheme.ts`
+  - `react-ui/src/pages/Finance/QuoteScheme/index.tsx`
+  - `react-ui/tests/finance-quote-scheme-contract.test.ts`
+- 当前用途：
+  - 固定报价方案属于 `finance` 模块，管理端接口走 `/finance/admin/quote-schemes`，权限走 `finance:quoteScheme:*`。
+  - 固定阶段一只维护基础信息、方案类型、费用来源模式、生效优先级、适用买家范围、仓库范围和客户渠道明细。
+  - 固定操作费/运费当前只作为 `quote_scheme_channel` 的占位字段，不代表手工计费规则已经落地。
+  - 固定 `finance` 通过 `QuoteSchemeBuyerLookupService`、`QuoteSchemeWarehouseLookupService`、`QuoteSchemeCustomerChannelLookupService` 读取买家、仓库、客户渠道快照，不直接依赖这些模块的 Mapper。
+- 复用规则：
+  - 后续下单、报价试算、买家侧渠道候选、成本候选筛选，优先从报价方案读取候选链路，不要重新做一套散落配置。
+  - 后续新增自动最优、外部试算或手工费率时，应扩展报价方案 service/facade 或新增明确阶段表，不要把算法状态塞进 `quote_scheme_channel` 的占位字段。
+  - 后续如果需要读取仓库、买家、客户渠道更多字段，先扩展对应 lookup port 和实现，再补契约测试；不要让 `finance` 反向依赖 `warehouse`、`buyer`、`logistics` 的内部 Mapper。
+
 ## 管理端与端内操作日志凭证字段脱敏模板
 
 - 位置：

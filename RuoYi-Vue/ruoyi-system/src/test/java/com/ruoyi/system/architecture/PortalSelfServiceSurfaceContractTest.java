@@ -17,6 +17,8 @@ public class PortalSelfServiceSurfaceContractTest
 {
     private static final Pattern METHOD_NAME = Pattern.compile("(?:public|private)\\s+[^\\(]+\\s+(\\w+)\\s*\\(");
 
+    private static final Pattern STRING_LITERAL = Pattern.compile("\"([^\"]+)\"");
+
     private static final List<String> FORBIDDEN_LOGIN_QUERY_SETTERS = Arrays.asList(
             "setInfoId(",
             "setLoginLocation(",
@@ -93,6 +95,8 @@ public class PortalSelfServiceSurfaceContractTest
         assertPortalController(backendRoot, "buyer", violations);
         assertPortalService(backendRoot, "seller", violations);
         assertPortalService(backendRoot, "buyer", violations);
+        assertPortalPermissionService(backendRoot, "seller", violations);
+        assertPortalPermissionService(backendRoot, "buyer", violations);
 
         if (!violations.isEmpty())
         {
@@ -123,11 +127,73 @@ public class PortalSelfServiceSurfaceContractTest
                         + "OwnSessionList(session));", violations);
 
         String source = Files.readString(controller, StandardCharsets.UTF_8);
+        assertPortalSelfManagementControllerSurface(controller, source, terminal, violations);
         requireSourceAbsent(controller, source, "getOwnLoginLogDataTable(", violations);
         requireSourceAbsent(controller, source, "getOwnOperLogDataTable(", violations);
         requireSourceAbsent(controller, source, "buildOwnLoginLogProfile(", violations);
         requireSourceAbsent(controller, source, "buildOwnOperLogProfile(", violations);
         requireSourceAbsent(controller, source, "buildOwnSessionProfile(", violations);
+    }
+
+    private void assertPortalSelfManagementControllerSurface(Path controller, String source, String terminal,
+            List<String> violations)
+    {
+        String terminalCap = capitalize(terminal);
+        String serviceName = terminal + "Service";
+        String accountIdSetter = "set" + terminalCap + "AccountId(targetAccountId);";
+
+        assertExactStringLiteralBlock(controller, source,
+                "private static final Set<String> PORTAL_SELF_MANAGEMENT_PERMS", "));",
+                portalSelfManagementPermissions(terminal), violations);
+
+        for (String expected : Arrays.asList(
+                "private static final Set<String> PORTAL_SELF_MANAGEMENT_PERMS",
+                "\"" + terminal + ":account:add\"",
+                "\"" + terminal + ":account:edit\"",
+                "\"" + terminal + ":account:role:query\"",
+                "\"" + terminal + ":account:role:edit\"",
+                "\"" + terminal + ":dept:query\"",
+                "\"" + terminal + ":dept:add\"",
+                "\"" + terminal + ":dept:edit\"",
+                "\"" + terminal + ":dept:remove\"",
+                "\"" + terminal + ":role:query\"",
+                "\"" + terminal + ":role:add\"",
+                "\"" + terminal + ":role:edit\"",
+                "\"" + terminal + ":role:remove\"",
+                serviceName + ".insert" + terminalCap + "Account(session.getSubjectId(), account)",
+                serviceName + ".update" + terminalCap + "Account(session.getSubjectId(), account)",
+                "permissionService.selectRoleAll(session.getSubjectId())",
+                "permissionService.selectAccountRoleIds(session.getSubjectId(), targetAccountId)",
+                "permissionService.assignAccountRoles(session.getSubjectId(), targetAccountId,",
+                "deptService.selectDeptById(session.getSubjectId(), deptId)",
+                "deptService.buildDeptTreeSelect(session.getSubjectId(), dept)",
+                "deptService.insertDept(session.getSubjectId(), dept)",
+                "deptService.updateDept(session.getSubjectId(), dept)",
+                "deptService.deleteDeptById(session.getSubjectId(), deptId)",
+                "permissionService.selectRoleById(session.getSubjectId(), roleId)",
+                "selectPortalSelfManagementMenuIds(session.getSubjectId(), roleId, selfManagementMenus)",
+                "permissionService.selectMenuIdsByRoleId(" + terminal + "Id, roleId)",
+                "permissionService.insertRole(session.getSubjectId(), role)",
+                "permissionService.updateRole(session.getSubjectId(), role)",
+                "permissionService.deleteRoleByIds(session.getSubjectId(), roleIds)",
+                accountIdSetter,
+                "if (menuId == null || menuId <= 0)",
+                "if (!seenMenuIds.add(menuId))",
+                "if (menu == null || !PORTAL_SELF_MANAGEMENT_PERMS.contains(menu.getPerms()))",
+                "if (allowedMenuIds.contains(menuId))",
+                "PortalPermissionSupport.buildMenuTreeSelect(selectPortalSelfManagementMenus())"
+        ))
+        {
+            requireSourceContains(controller, source, expected, violations);
+        }
+
+        requireSourceContains(controller, source, "account.set" + terminalCap + "Id(null);", violations);
+        requireSourceAbsent(controller, source, "@RequestParam(\"" + terminal + "Id\")", violations);
+        requireSourceAbsent(controller, source, "@PathVariable(\"" + terminal + "Id\")", violations);
+        requireSourceAbsent(controller, source, "@RequestParam(\"subjectId\")", violations);
+        requireSourceAbsent(controller, source, "@PathVariable(\"subjectId\")", violations);
+        requireSourceAbsent(controller, source, "@RequestParam(\"accountId\")", violations);
+        requireSourceAbsent(controller, source, "@RequestParam(\"" + terminal + "AccountId\")", violations);
     }
 
     private void assertPortalService(Path backendRoot, String terminal, List<String> violations) throws IOException
@@ -156,6 +222,8 @@ public class PortalSelfServiceSurfaceContractTest
                 "public List<PortalOwnOperLogProfile> select" + terminalCap + "OwnOperLogList", violations);
         requireSourceContains(service, serviceSource,
                 "public List<PortalOwnSessionProfile> select" + terminalCap + "OwnSessionList", violations);
+
+        assertOwnerDefaultSelfManagementPerms(service, serviceSource, terminal, violations);
 
         requireBodyContains(service, methods, "select" + terminalCap + "OwnLoginLogList",
                 "newOwnLoginLogProfileList(logs)", violations);
@@ -211,6 +279,110 @@ public class PortalSelfServiceSurfaceContractTest
             requireContains(service, operQuery, "query.setAccountId(session.getAccountId());", violations);
             requireContains(service, operQuery, "copyTimeRangeParams(log.getParams())", violations);
             forbid(service, operQuery, FORBIDDEN_OPER_QUERY_SETTERS, violations);
+        }
+    }
+
+    private void assertOwnerDefaultSelfManagementPerms(Path service, String serviceSource, String terminal,
+            List<String> violations)
+    {
+        assertExactStringLiteralBlock(service, serviceSource,
+                "private static final String[] DEFAULT_OWNER_PERMS", "};",
+                portalSelfManagementPermissions(terminal), violations);
+    }
+
+    private void assertPortalPermissionService(Path backendRoot, String terminal, List<String> violations)
+            throws IOException
+    {
+        Path service = backendRoot.resolve(terminal + "/src/main/java/com/ruoyi/" + terminal
+                + "/service/impl/" + capitalize(terminal) + "PortalPermissionServiceImpl.java");
+        String source = Files.readString(service, StandardCharsets.UTF_8);
+
+        assertExactStringLiteralBlock(service, source,
+                "private static final Set<String> PORTAL_SELF_MANAGEMENT_PERMS", "));",
+                portalSelfManagementPermissions(terminal), violations);
+        requireSourceContains(service, source, "splitSelfManagementPermissions(permissionMapper.select"
+                + capitalize(terminal) + "AccountPermissions(", violations);
+        requireSourceContains(service, source, "if (PORTAL_SELF_MANAGEMENT_PERMS.contains(permission))", violations);
+        requireSourceContains(service, source, "permissions.add(permission);", violations);
+        requireSourceContains(service, source, "return selectPortalPermissionInfo(session).getPermissions();",
+                violations);
+        requireSourceContains(service, source, "permission.contains(\"*\")", violations);
+        requireSourceContains(service, source, "List<PortalMenu> selfManagementMenus = new ArrayList<>();",
+                violations);
+        requireSourceContains(service, source,
+                "if (PORTAL_SELF_MANAGEMENT_PERMS.contains(StringUtils.trimToEmpty(menu.getPerms())))", violations);
+        requireSourceContains(service, source, "selfManagementMenus.add(menu);", violations);
+        requireSourceContains(service, source, "return PortalPermissionSupport.buildMenuTree(selfManagementMenus);",
+                violations);
+        requireSourceContains(service, source, "Long[] ids = normalizeRoleIds(roleIds);", violations);
+        requireSourceContains(service, source, "if (roleId == null || roleId <= 0)", violations);
+        requireSourceContains(service, source, "if (!values.add(roleId))", violations);
+        requireSourceContains(service, source, "permissionMapper.count" + capitalize(terminal)
+                + "RolesByIds(" + terminal + "Id, ids) != ids.length", violations);
+        requireSourceAbsent(service, source, "PortalPermissionSupport.sanitizeIds(roleIds)", violations);
+        requireSourceContains(service, source, "Long[] menuIds = normalizeRoleMenuIds(role.getMenuIds());",
+                violations);
+        requireSourceContains(service, source, "role.setMenuIds(menuIds);", violations);
+        requireSourceContains(service, source, "if (menuId == null || menuId <= 0)", violations);
+        requireSourceContains(service, source, "if (!values.add(menuId))", violations);
+        requireSourceContains(service, source, "permissionMapper.count" + capitalize(terminal)
+                + "MenusByIds(menuIds) != menuIds.length", violations);
+    }
+
+    private List<String> portalSelfManagementPermissions(String terminal)
+    {
+        return Arrays.asList(
+                terminal + ":portal:home",
+                terminal + ":account:list",
+                terminal + ":account:add",
+                terminal + ":account:edit",
+                terminal + ":account:role:query",
+                terminal + ":account:role:edit",
+                terminal + ":account:loginLog:list",
+                terminal + ":account:operLog:list",
+                terminal + ":account:session:list",
+                terminal + ":dept:list",
+                terminal + ":dept:query",
+                terminal + ":dept:add",
+                terminal + ":dept:edit",
+                terminal + ":dept:remove",
+                terminal + ":role:list",
+                terminal + ":role:query",
+                terminal + ":role:add",
+                terminal + ":role:edit",
+                terminal + ":role:remove"
+        );
+    }
+
+    private void assertExactStringLiteralBlock(Path path, String source, String startMarker, String endMarker,
+            List<String> expected, List<String> violations)
+    {
+        int start = source.indexOf(startMarker);
+        if (start < 0)
+        {
+            violations.add(relative(path) + " must contain " + startMarker);
+            return;
+        }
+        int end = source.indexOf(endMarker, start);
+        if (end < 0)
+        {
+            violations.add(relative(path) + " must close string literal block " + startMarker + " with "
+                    + endMarker);
+            return;
+        }
+
+        String block = source.substring(start, end + endMarker.length());
+        List<String> actual = new ArrayList<>();
+        Matcher matcher = STRING_LITERAL.matcher(block);
+        while (matcher.find())
+        {
+            actual.add(matcher.group(1));
+        }
+
+        if (!expected.equals(actual))
+        {
+            violations.add(relative(path) + " block " + startMarker
+                    + " must equal self-management permissions " + expected + " but was " + actual);
         }
     }
 

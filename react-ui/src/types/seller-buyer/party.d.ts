@@ -254,7 +254,7 @@ declare namespace API.Partner {
   export interface PortalAccountListResult {
     code: number;
     msg: string;
-    data: PortalAccountProfile[];
+    data: PortalAccountBase[];
   }
 
   export interface PortalDeptProfile {

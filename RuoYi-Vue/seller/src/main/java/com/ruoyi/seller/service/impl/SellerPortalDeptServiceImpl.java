@@ -5,13 +5,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.ruoyi.common.exception.ServiceException;
-import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.seller.mapper.SellerPortalDeptMapper;
 import com.ruoyi.seller.service.ISellerPortalDeptService;
 import com.ruoyi.seller.service.ISellerService;
 import com.ruoyi.system.domain.PortalDept;
 import com.ruoyi.system.domain.PortalTreeSelect;
+import com.ruoyi.system.service.support.PortalActorSupport;
 import com.ruoyi.system.service.support.PortalDeptSupport;
 
 /**
@@ -83,7 +83,7 @@ public class SellerPortalDeptServiceImpl implements ISellerPortalDeptService
         {
             throw new ServiceException("新增卖家端部门失败，部门名称已存在");
         }
-        dept.setCreateBy(SecurityUtils.getUsername());
+        dept.setCreateBy(PortalActorSupport.currentActorName());
         return deptMapper.insertSellerDept(dept);
     }
 
@@ -99,12 +99,12 @@ public class SellerPortalDeptServiceImpl implements ISellerPortalDeptService
         {
             throw new ServiceException("修改卖家端部门失败，部门名称已存在");
         }
-        dept.setUpdateBy(SecurityUtils.getUsername());
+        dept.setUpdateBy(PortalActorSupport.currentActorName());
         int rows = deptMapper.updateSellerDept(dept);
         if (!StringUtils.equals(oldDept.getAncestors(), dept.getAncestors()))
         {
             deptMapper.updateSellerDeptAncestors(sellerId, oldDept.getAncestors() + "," + oldDept.getDeptId(),
-                    dept.getAncestors() + "," + dept.getDeptId(), SecurityUtils.getUsername());
+                    dept.getAncestors() + "," + dept.getDeptId(), PortalActorSupport.currentActorName());
         }
         return rows;
     }
@@ -121,7 +121,7 @@ public class SellerPortalDeptServiceImpl implements ISellerPortalDeptService
         {
             throw new ServiceException("部门存在账号，不允许删除");
         }
-        return deptMapper.deleteSellerDeptById(sellerId, deptId, SecurityUtils.getUsername());
+        return deptMapper.deleteSellerDeptById(sellerId, deptId, PortalActorSupport.currentActorName());
     }
 
     private void setAncestors(Long sellerId, PortalDept dept)

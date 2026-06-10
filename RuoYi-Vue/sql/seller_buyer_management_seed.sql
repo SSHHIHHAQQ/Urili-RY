@@ -640,11 +640,23 @@ begin
     select 1
     from (
       select 'seller:account:list' as perms
+      union all select 'seller:account:add'
+      union all select 'seller:account:edit'
+      union all select 'seller:account:role:query'
+      union all select 'seller:account:role:edit'
       union all select 'seller:account:loginLog:list'
       union all select 'seller:account:operLog:list'
       union all select 'seller:account:session:list'
       union all select 'seller:dept:list'
+      union all select 'seller:dept:query'
+      union all select 'seller:dept:add'
+      union all select 'seller:dept:edit'
+      union all select 'seller:dept:remove'
       union all select 'seller:role:list'
+      union all select 'seller:role:query'
+      union all select 'seller:role:add'
+      union all select 'seller:role:edit'
+      union all select 'seller:role:remove'
       union all select 'seller:product:category:list'
       union all select 'seller:product:schema:query'
       union all select 'seller:product:distribution:list'
@@ -668,11 +680,23 @@ begin
     select 1
     from (
       select 'buyer:account:list' as perms
+      union all select 'buyer:account:add'
+      union all select 'buyer:account:edit'
+      union all select 'buyer:account:role:query'
+      union all select 'buyer:account:role:edit'
       union all select 'buyer:account:loginLog:list'
       union all select 'buyer:account:operLog:list'
       union all select 'buyer:account:session:list'
       union all select 'buyer:dept:list'
+      union all select 'buyer:dept:query'
+      union all select 'buyer:dept:add'
+      union all select 'buyer:dept:edit'
+      union all select 'buyer:dept:remove'
       union all select 'buyer:role:list'
+      union all select 'buyer:role:query'
+      union all select 'buyer:role:add'
+      union all select 'buyer:role:edit'
+      union all select 'buyer:role:remove'
       union all select 'buyer:product:category:list'
       union all select 'buyer:product:schema:query'
       union all select 'buyer:product:distribution:list'
@@ -779,11 +803,23 @@ begin
                  and s.status = '0'
     join (
       select 'seller:account:list' as perms
+      union all select 'seller:account:add'
+      union all select 'seller:account:edit'
+      union all select 'seller:account:role:query'
+      union all select 'seller:account:role:edit'
       union all select 'seller:account:loginLog:list'
       union all select 'seller:account:operLog:list'
       union all select 'seller:account:session:list'
       union all select 'seller:dept:list'
+      union all select 'seller:dept:query'
+      union all select 'seller:dept:add'
+      union all select 'seller:dept:edit'
+      union all select 'seller:dept:remove'
       union all select 'seller:role:list'
+      union all select 'seller:role:query'
+      union all select 'seller:role:add'
+      union all select 'seller:role:edit'
+      union all select 'seller:role:remove'
     ) expected
     join seller_menu m on m.perms = expected.perms
                       and m.parent_id = 0
@@ -810,18 +846,31 @@ begin
     join seller_menu m on m.seller_menu_id = rm.seller_menu_id
     left join (
       select 'seller:account:list' as perms
+      union all select 'seller:account:add'
+      union all select 'seller:account:edit'
+      union all select 'seller:account:role:query'
+      union all select 'seller:account:role:edit'
       union all select 'seller:account:loginLog:list'
       union all select 'seller:account:operLog:list'
       union all select 'seller:account:session:list'
       union all select 'seller:dept:list'
+      union all select 'seller:dept:query'
+      union all select 'seller:dept:add'
+      union all select 'seller:dept:edit'
+      union all select 'seller:dept:remove'
       union all select 'seller:role:list'
+      union all select 'seller:role:query'
+      union all select 'seller:role:add'
+      union all select 'seller:role:edit'
+      union all select 'seller:role:remove'
     ) expected on expected.perms = m.perms
     where r.role_key = 'owner'
       and r.status = '0'
       and r.del_flag = '0'
       and (
         m.perms like 'seller:account:%'
-        or m.perms in ('seller:dept:list', 'seller:role:list')
+        or m.perms like 'seller:dept:%'
+        or m.perms like 'seller:role:%'
       )
       and expected.perms is null
   ) then
@@ -835,11 +884,23 @@ begin
                 and b.status = '0'
     join (
       select 'buyer:account:list' as perms
+      union all select 'buyer:account:add'
+      union all select 'buyer:account:edit'
+      union all select 'buyer:account:role:query'
+      union all select 'buyer:account:role:edit'
       union all select 'buyer:account:loginLog:list'
       union all select 'buyer:account:operLog:list'
       union all select 'buyer:account:session:list'
       union all select 'buyer:dept:list'
+      union all select 'buyer:dept:query'
+      union all select 'buyer:dept:add'
+      union all select 'buyer:dept:edit'
+      union all select 'buyer:dept:remove'
       union all select 'buyer:role:list'
+      union all select 'buyer:role:query'
+      union all select 'buyer:role:add'
+      union all select 'buyer:role:edit'
+      union all select 'buyer:role:remove'
     ) expected
     join buyer_menu m on m.perms = expected.perms
                      and m.parent_id = 0
@@ -866,18 +927,31 @@ begin
     join buyer_menu m on m.buyer_menu_id = rm.buyer_menu_id
     left join (
       select 'buyer:account:list' as perms
+      union all select 'buyer:account:add'
+      union all select 'buyer:account:edit'
+      union all select 'buyer:account:role:query'
+      union all select 'buyer:account:role:edit'
       union all select 'buyer:account:loginLog:list'
       union all select 'buyer:account:operLog:list'
       union all select 'buyer:account:session:list'
       union all select 'buyer:dept:list'
+      union all select 'buyer:dept:query'
+      union all select 'buyer:dept:add'
+      union all select 'buyer:dept:edit'
+      union all select 'buyer:dept:remove'
       union all select 'buyer:role:list'
+      union all select 'buyer:role:query'
+      union all select 'buyer:role:add'
+      union all select 'buyer:role:edit'
+      union all select 'buyer:role:remove'
     ) expected on expected.perms = m.perms
     where r.role_key = 'owner'
       and r.status = '0'
       and r.del_flag = '0'
       and (
         m.perms like 'buyer:account:%'
-        or m.perms in ('buyer:dept:list', 'buyer:role:list')
+        or m.perms like 'buyer:dept:%'
+        or m.perms like 'buyer:role:%'
       )
       and expected.perms is null
   ) then
@@ -1868,6 +1942,14 @@ where b.status = '0'
 
 call assert_seller_menu_permission_slot('seller:account:list', 0, 'F', '', null, '',
     'seller:account:list menu slot is occupied by another signature');
+call assert_seller_menu_permission_slot('seller:account:add', 0, 'F', '', null, '',
+    'seller:account:add menu slot is occupied by another signature');
+call assert_seller_menu_permission_slot('seller:account:edit', 0, 'F', '', null, '',
+    'seller:account:edit menu slot is occupied by another signature');
+call assert_seller_menu_permission_slot('seller:account:role:query', 0, 'F', '', null, '',
+    'seller:account:role:query menu slot is occupied by another signature');
+call assert_seller_menu_permission_slot('seller:account:role:edit', 0, 'F', '', null, '',
+    'seller:account:role:edit menu slot is occupied by another signature');
 call assert_seller_menu_permission_slot('seller:account:loginLog:list', 0, 'F', '', null, '',
     'seller:account:loginLog:list menu slot is occupied by another signature');
 call assert_seller_menu_permission_slot('seller:account:operLog:list', 0, 'F', '', null, '',
@@ -1876,8 +1958,24 @@ call assert_seller_menu_permission_slot('seller:account:session:list', 0, 'F', '
     'seller:account:session:list menu slot is occupied by another signature');
 call assert_seller_menu_permission_slot('seller:dept:list', 0, 'F', '', null, '',
     'seller:dept:list menu slot is occupied by another signature');
+call assert_seller_menu_permission_slot('seller:dept:query', 0, 'F', '', null, '',
+    'seller:dept:query menu slot is occupied by another signature');
+call assert_seller_menu_permission_slot('seller:dept:add', 0, 'F', '', null, '',
+    'seller:dept:add menu slot is occupied by another signature');
+call assert_seller_menu_permission_slot('seller:dept:edit', 0, 'F', '', null, '',
+    'seller:dept:edit menu slot is occupied by another signature');
+call assert_seller_menu_permission_slot('seller:dept:remove', 0, 'F', '', null, '',
+    'seller:dept:remove menu slot is occupied by another signature');
 call assert_seller_menu_permission_slot('seller:role:list', 0, 'F', '', null, '',
     'seller:role:list menu slot is occupied by another signature');
+call assert_seller_menu_permission_slot('seller:role:query', 0, 'F', '', null, '',
+    'seller:role:query menu slot is occupied by another signature');
+call assert_seller_menu_permission_slot('seller:role:add', 0, 'F', '', null, '',
+    'seller:role:add menu slot is occupied by another signature');
+call assert_seller_menu_permission_slot('seller:role:edit', 0, 'F', '', null, '',
+    'seller:role:edit menu slot is occupied by another signature');
+call assert_seller_menu_permission_slot('seller:role:remove', 0, 'F', '', null, '',
+    'seller:role:remove menu slot is occupied by another signature');
 call assert_seller_menu_permission_slot('seller:product:category:list', 0, 'F', '', null, '',
     'seller:product:category:list menu slot is occupied by another signature');
 call assert_seller_menu_permission_slot('seller:product:schema:query', 0, 'F', '', null, '',
@@ -1888,6 +1986,14 @@ call assert_seller_menu_permission_slot('seller:product:distribution:query', 0, 
     'seller:product:distribution:query menu slot is occupied by another signature');
 call assert_buyer_menu_permission_slot('buyer:account:list', 0, 'F', '', null, '',
     'buyer:account:list menu slot is occupied by another signature');
+call assert_buyer_menu_permission_slot('buyer:account:add', 0, 'F', '', null, '',
+    'buyer:account:add menu slot is occupied by another signature');
+call assert_buyer_menu_permission_slot('buyer:account:edit', 0, 'F', '', null, '',
+    'buyer:account:edit menu slot is occupied by another signature');
+call assert_buyer_menu_permission_slot('buyer:account:role:query', 0, 'F', '', null, '',
+    'buyer:account:role:query menu slot is occupied by another signature');
+call assert_buyer_menu_permission_slot('buyer:account:role:edit', 0, 'F', '', null, '',
+    'buyer:account:role:edit menu slot is occupied by another signature');
 call assert_buyer_menu_permission_slot('buyer:account:loginLog:list', 0, 'F', '', null, '',
     'buyer:account:loginLog:list menu slot is occupied by another signature');
 call assert_buyer_menu_permission_slot('buyer:account:operLog:list', 0, 'F', '', null, '',
@@ -1896,8 +2002,24 @@ call assert_buyer_menu_permission_slot('buyer:account:session:list', 0, 'F', '',
     'buyer:account:session:list menu slot is occupied by another signature');
 call assert_buyer_menu_permission_slot('buyer:dept:list', 0, 'F', '', null, '',
     'buyer:dept:list menu slot is occupied by another signature');
+call assert_buyer_menu_permission_slot('buyer:dept:query', 0, 'F', '', null, '',
+    'buyer:dept:query menu slot is occupied by another signature');
+call assert_buyer_menu_permission_slot('buyer:dept:add', 0, 'F', '', null, '',
+    'buyer:dept:add menu slot is occupied by another signature');
+call assert_buyer_menu_permission_slot('buyer:dept:edit', 0, 'F', '', null, '',
+    'buyer:dept:edit menu slot is occupied by another signature');
+call assert_buyer_menu_permission_slot('buyer:dept:remove', 0, 'F', '', null, '',
+    'buyer:dept:remove menu slot is occupied by another signature');
 call assert_buyer_menu_permission_slot('buyer:role:list', 0, 'F', '', null, '',
     'buyer:role:list menu slot is occupied by another signature');
+call assert_buyer_menu_permission_slot('buyer:role:query', 0, 'F', '', null, '',
+    'buyer:role:query menu slot is occupied by another signature');
+call assert_buyer_menu_permission_slot('buyer:role:add', 0, 'F', '', null, '',
+    'buyer:role:add menu slot is occupied by another signature');
+call assert_buyer_menu_permission_slot('buyer:role:edit', 0, 'F', '', null, '',
+    'buyer:role:edit menu slot is occupied by another signature');
+call assert_buyer_menu_permission_slot('buyer:role:remove', 0, 'F', '', null, '',
+    'buyer:role:remove menu slot is occupied by another signature');
 call assert_buyer_menu_permission_slot('buyer:product:category:list', 0, 'F', '', null, '',
     'buyer:product:category:list menu slot is occupied by another signature');
 call assert_buyer_menu_permission_slot('buyer:product:schema:query', 0, 'F', '', null, '',
@@ -1916,11 +2038,23 @@ select seed.menu_name, 0, seed.order_num, '', null, '', '',
        sysdate(), '', null, seed.remark
 from (
     select '账号列表' as menu_name, 30 as order_num, 'seller:account:list' as perms, '卖家端账号只读列表权限' as remark
-    union all select '登录日志', 31, 'seller:account:loginLog:list', '卖家端本人登录日志只读权限'
-    union all select '操作日志', 32, 'seller:account:operLog:list', '卖家端本人操作日志只读权限'
-    union all select '会话列表', 33, 'seller:account:session:list', '卖家端本人会话只读权限'
+    union all select '账号新增', 31, 'seller:account:add', '卖家端账号新增权限'
+    union all select '账号修改', 32, 'seller:account:edit', '卖家端账号修改权限'
+    union all select '账号角色查询', 33, 'seller:account:role:query', '卖家端账号角色查询权限'
+    union all select '账号角色分配', 34, 'seller:account:role:edit', '卖家端账号角色分配权限'
+    union all select '登录日志', 35, 'seller:account:loginLog:list', '卖家端本人登录日志只读权限'
+    union all select '操作日志', 36, 'seller:account:operLog:list', '卖家端本人操作日志只读权限'
+    union all select '会话列表', 37, 'seller:account:session:list', '卖家端本人会话只读权限'
     union all select '部门列表', 40, 'seller:dept:list', '卖家端部门只读列表权限'
-    union all select '角色列表', 41, 'seller:role:list', '卖家端角色只读列表权限'
+    union all select '部门详情', 41, 'seller:dept:query', '卖家端部门详情查询权限'
+    union all select '部门新增', 42, 'seller:dept:add', '卖家端部门新增权限'
+    union all select '部门修改', 43, 'seller:dept:edit', '卖家端部门修改权限'
+    union all select '部门删除', 44, 'seller:dept:remove', '卖家端部门删除权限'
+    union all select '角色列表', 45, 'seller:role:list', '卖家端角色只读列表权限'
+    union all select '角色详情', 46, 'seller:role:query', '卖家端角色详情查询权限'
+    union all select '角色新增', 47, 'seller:role:add', '卖家端角色新增权限'
+    union all select '角色修改', 48, 'seller:role:edit', '卖家端角色修改权限'
+    union all select '角色删除', 49, 'seller:role:remove', '卖家端角色删除权限'
     union all select 'Product Category List', 50, 'seller:product:category:list', 'Seller portal product category list permission'
     union all select 'Product Schema Query', 51, 'seller:product:schema:query', 'Seller portal product schema read permission'
     union all select 'Distribution Product List', 52, 'seller:product:distribution:list', 'Seller portal own distribution product list permission'
@@ -1939,11 +2073,23 @@ select seed.menu_name, 0, seed.order_num, '', null, '', '',
        sysdate(), '', null, seed.remark
 from (
     select '账号列表' as menu_name, 30 as order_num, 'buyer:account:list' as perms, '买家端账号只读列表权限' as remark
-    union all select '登录日志', 31, 'buyer:account:loginLog:list', '买家端本人登录日志只读权限'
-    union all select '操作日志', 32, 'buyer:account:operLog:list', '买家端本人操作日志只读权限'
-    union all select '会话列表', 33, 'buyer:account:session:list', '买家端本人会话只读权限'
+    union all select '账号新增', 31, 'buyer:account:add', '买家端账号新增权限'
+    union all select '账号修改', 32, 'buyer:account:edit', '买家端账号修改权限'
+    union all select '账号角色查询', 33, 'buyer:account:role:query', '买家端账号角色查询权限'
+    union all select '账号角色分配', 34, 'buyer:account:role:edit', '买家端账号角色分配权限'
+    union all select '登录日志', 35, 'buyer:account:loginLog:list', '买家端本人登录日志只读权限'
+    union all select '操作日志', 36, 'buyer:account:operLog:list', '买家端本人操作日志只读权限'
+    union all select '会话列表', 37, 'buyer:account:session:list', '买家端本人会话只读权限'
     union all select '部门列表', 40, 'buyer:dept:list', '买家端部门只读列表权限'
-    union all select '角色列表', 41, 'buyer:role:list', '买家端角色只读列表权限'
+    union all select '部门详情', 41, 'buyer:dept:query', '买家端部门详情查询权限'
+    union all select '部门新增', 42, 'buyer:dept:add', '买家端部门新增权限'
+    union all select '部门修改', 43, 'buyer:dept:edit', '买家端部门修改权限'
+    union all select '部门删除', 44, 'buyer:dept:remove', '买家端部门删除权限'
+    union all select '角色列表', 45, 'buyer:role:list', '买家端角色只读列表权限'
+    union all select '角色详情', 46, 'buyer:role:query', '买家端角色详情查询权限'
+    union all select '角色新增', 47, 'buyer:role:add', '买家端角色新增权限'
+    union all select '角色修改', 48, 'buyer:role:edit', '买家端角色修改权限'
+    union all select '角色删除', 49, 'buyer:role:remove', '买家端角色删除权限'
     union all select 'Product Category List', 50, 'buyer:product:category:list', 'Buyer portal product category list permission'
     union all select 'Product Schema Query', 51, 'buyer:product:schema:query', 'Buyer portal product schema read permission'
     union all select 'Distribution Product List', 52, 'buyer:product:distribution:list', 'Buyer portal distribution product list permission'
@@ -1988,11 +2134,23 @@ select r.seller_role_id, m.seller_menu_id
 from seller_role r
 join seller_menu m on m.perms in (
     'seller:account:list',
+    'seller:account:add',
+    'seller:account:edit',
+    'seller:account:role:query',
+    'seller:account:role:edit',
     'seller:account:loginLog:list',
     'seller:account:operLog:list',
     'seller:account:session:list',
     'seller:dept:list',
-    'seller:role:list'
+    'seller:dept:query',
+    'seller:dept:add',
+    'seller:dept:edit',
+    'seller:dept:remove',
+    'seller:role:list',
+    'seller:role:query',
+    'seller:role:add',
+    'seller:role:edit',
+    'seller:role:remove'
 )
                   and m.parent_id = 0
                   and coalesce(m.menu_type, '') = 'F'
@@ -2014,11 +2172,23 @@ select r.buyer_role_id, m.buyer_menu_id
 from buyer_role r
 join buyer_menu m on m.perms in (
     'buyer:account:list',
+    'buyer:account:add',
+    'buyer:account:edit',
+    'buyer:account:role:query',
+    'buyer:account:role:edit',
     'buyer:account:loginLog:list',
     'buyer:account:operLog:list',
     'buyer:account:session:list',
     'buyer:dept:list',
-    'buyer:role:list'
+    'buyer:dept:query',
+    'buyer:dept:add',
+    'buyer:dept:edit',
+    'buyer:dept:remove',
+    'buyer:role:list',
+    'buyer:role:query',
+    'buyer:role:add',
+    'buyer:role:edit',
+    'buyer:role:remove'
 )
                  and m.parent_id = 0
                  and coalesce(m.menu_type, '') = 'F'

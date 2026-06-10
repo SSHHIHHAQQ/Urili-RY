@@ -186,7 +186,6 @@ export default function SyncTabs({
             record.pairings.map((pairing) => {
               const tag = (
                 <Tag key={pairing.logisticsChannelPairingId} color="blue">
-                  {pairing.systemWarehouseCode || '-'} ·{' '}
                   {pairing.systemChannelCode} / {pairing.systemChannelName}
                 </Tag>
               );
@@ -345,36 +344,12 @@ export default function SyncTabs({
                       return { data: [], success: true };
                     }
                     const requestCode = selectedCode;
-                    const [syncResp, pairingResp, warehousePairingResp] =
-                      await Promise.all([
-                        getLogisticsChannelSyncList(requestCode),
-                        getLogisticsChannelPairings(requestCode),
-                        getWarehousePairings(requestCode),
-                      ]);
-                    const warehousePairingMap = new Map(
-                      (warehousePairingResp.data || [])
-                        .filter(
-                          (item) =>
-                            (item.pairingRole || 'FULFILLMENT') ===
-                            currentPairingRole,
-                        )
-                        .map((item) => [item.upstreamWarehouseCode, item]),
-                    );
+                    const [syncResp, pairingResp] = await Promise.all([
+                      getLogisticsChannelSyncList(requestCode),
+                      getLogisticsChannelPairings(requestCode),
+                    ]);
                     const groups = new Map<string, LogisticsRow>();
                     (syncResp.data || []).forEach((item) => {
-                      const warehousePairing = warehousePairingMap.get(
-                        item.warehouseCode,
-                      );
-                      const warehouseItem = {
-                        ...item,
-                        systemWarehouseCode:
-                          warehousePairing?.systemWarehouseCode,
-                        systemWarehouseName:
-                          warehousePairing?.systemWarehouseName,
-                        warehousePairingId:
-                          warehousePairing?.warehousePairingId,
-                        pairingRole: warehousePairing?.pairingRole,
-                      };
                       const current = groups.get(item.channelCode);
                       if (current) {
                         current.warehouseCodes = Array.from(
@@ -384,12 +359,12 @@ export default function SyncTabs({
                             ),
                           ),
                         ).join(',');
-                        current.warehouseItems.push(warehouseItem);
+                        current.warehouseItems.push(item);
                       } else {
                         groups.set(item.channelCode, {
                           ...item,
                           warehouseCodes: item.warehouseCode,
-                          warehouseItems: [warehouseItem],
+                          warehouseItems: [item],
                           pairings: [],
                         });
                       }

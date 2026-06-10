@@ -28,6 +28,7 @@ import com.ruoyi.integration.support.UpstreamSystemConstants;
 import com.ruoyi.integration.sync.UpstreamInventorySyncComponent;
 import com.ruoyi.integration.sync.UpstreamLingxingClientFactory;
 import com.ruoyi.integration.sync.UpstreamLogisticsChannelSyncComponent;
+import com.ruoyi.integration.sync.UpstreamManualSyncSubmitter;
 import com.ruoyi.integration.sync.UpstreamSkuDimensionSyncComponent;
 import com.ruoyi.integration.sync.UpstreamSkuInfoSyncComponent;
 import com.ruoyi.integration.sync.UpstreamSyncStateRecorder;
@@ -39,8 +40,6 @@ import com.ruoyi.integration.sync.UpstreamWarehouseSyncComponent;
 @Service
 public class UpstreamSyncServiceImpl implements IUpstreamSyncService
 {
-    private static final int SKU_DIMENSION_FULL_RATE_LIMIT_MS = 2000;
-
     private static final int SKU_DIMENSION_SELECTED_LIMIT = 100;
 
     private final Set<String> syncingConnectionCodes = ConcurrentHashMap.newKeySet();
@@ -77,6 +76,9 @@ public class UpstreamSyncServiceImpl implements IUpstreamSyncService
 
     @Autowired
     private UpstreamSyncStateRecorder syncStateRecorder;
+
+    @Autowired
+    private UpstreamManualSyncSubmitter manualSyncSubmitter;
 
     @Override
     public UpstreamSyncResult syncAll(String connectionCode)
@@ -120,6 +122,18 @@ public class UpstreamSyncServiceImpl implements IUpstreamSyncService
     }
 
     @Override
+    public UpstreamSyncResult submitSelected(String connectionCode, UpstreamSyncRequest request)
+    {
+        UpstreamSystemConnection connection = selectEnabledConnection(connectionCode);
+        List<String> syncTypes = normalizeSyncTypes(request == null ? null : request.getSyncTypes());
+        if (syncTypes.isEmpty())
+        {
+            throw new ServiceException("请选择需要同步的内容");
+        }
+        return submitAsyncSync(connection, syncTypes, UpstreamSystemConstants.SYNC_MODE_MANUAL);
+    }
+
+    @Override
     public UpstreamSyncResult syncScheduled(String connectionCode, String syncType)
     {
         return syncSingleType(connectionCode, normalizeSingleSyncType(syncType),
@@ -154,9 +168,25 @@ public class UpstreamSyncServiceImpl implements IUpstreamSyncService
     }
 
     @Override
+    public UpstreamSyncResult submitSkusOnly(String connectionCode)
+    {
+        UpstreamSystemConnection connection = selectEnabledConnection(connectionCode);
+        return submitAsyncSync(connection, List.of(UpstreamSystemConstants.SYNC_TYPE_SKU),
+            UpstreamSystemConstants.SYNC_MODE_MANUAL);
+    }
+
+    @Override
     public UpstreamSyncResult syncSkuDimensionsOnly(String connectionCode)
     {
         return syncSingleType(connectionCode, UpstreamSystemConstants.SYNC_TYPE_SKU_DIMENSION,
+            UpstreamSystemConstants.SYNC_MODE_MANUAL);
+    }
+
+    @Override
+    public UpstreamSyncResult submitSkuDimensionsOnly(String connectionCode)
+    {
+        UpstreamSystemConnection connection = selectEnabledConnection(connectionCode);
+        return submitAsyncSync(connection, List.of(UpstreamSystemConstants.SYNC_TYPE_SKU_DIMENSION),
             UpstreamSystemConstants.SYNC_MODE_MANUAL);
     }
 
@@ -214,10 +244,69 @@ public class UpstreamSyncServiceImpl implements IUpstreamSyncService
     }
 
     @Override
+    public UpstreamSyncResult submitSkuDimensionsBySkuList(String connectionCode, SkuDimensionSelectedSyncRequest request)
+    {
+        UpstreamSystemConnection connection = selectEnabledConnection(connectionCode);
+        List<String> skuList = normalizeSelectedSkuList(request == null ? null : request.getSkuList());
+        return submitAsyncSelectedDimensionSync(connection, skuList);
+    }
+
+    @Override
     public UpstreamSyncResult syncWarehouseStocksOnly(String connectionCode)
     {
         return syncSingleType(connectionCode, UpstreamSystemConstants.SYNC_TYPE_INVENTORY,
             UpstreamSystemConstants.SYNC_MODE_MANUAL);
+    }
+
+    @Override
+    public UpstreamSyncResult submitWarehouseStocksOnly(String connectionCode)
+    {
+        UpstreamSystemConnection connection = selectEnabledConnection(connectionCode);
+        return submitAsyncSync(connection, List.of(UpstreamSystemConstants.SYNC_TYPE_INVENTORY),
+            UpstreamSystemConstants.SYNC_MODE_MANUAL);
+    }
+
+    private UpstreamSyncResult submitAsyncSync(UpstreamSystemConnection connection, List<String> syncTypes, String mode)
+    {
+        String connectionCode = connection.getConnectionCode();
+        LingxingOpenApiClient client = lingxingClientFactory.createClient(connection);
+        return manualSyncSubmitter.submit(connectionCode, syncTypes, mode,
+            () -> acquireSyncLock(connectionCode),
+            () -> releaseSyncLock(connectionCode),
+            workItem -> runManualSyncItem(client, connectionCode, workItem),
+            lingxingClientFactory::toServiceException,
+            () -> upstreamSystemMapper.updateConnectionSyncSummary(connectionCode));
+    }
+
+    private UpstreamSyncResult submitAsyncSelectedDimensionSync(UpstreamSystemConnection connection, List<String> skuList)
+    {
+        String connectionCode = connection.getConnectionCode();
+        LingxingOpenApiClient client = lingxingClientFactory.createClient(connection);
+        return manualSyncSubmitter.submit(connectionCode, List.of(UpstreamSystemConstants.SYNC_TYPE_SKU_DIMENSION),
+            UpstreamSystemConstants.SYNC_MODE_SELECTED,
+            () -> acquireSyncLock(connectionCode),
+            () -> releaseSyncLock(connectionCode),
+            workItem -> runSelectedDimensionSyncItem(client, connectionCode, skuList, workItem),
+            lingxingClientFactory::toServiceException,
+            () -> upstreamSystemMapper.updateConnectionSyncSummary(connectionCode));
+    }
+
+    private UpstreamSyncItemResult runManualSyncItem(LingxingOpenApiClient client, String connectionCode,
+        UpstreamManualSyncSubmitter.SyncWorkItem workItem)
+    {
+        UpstreamSyncItemResult item = doSyncItem(client, connectionCode, workItem.getSyncType(),
+            workItem.getSyncBatchId(), workItem.getStartedTime(), workItem.getRateLimitMs());
+        rebuildReadModel(connectionCode, workItem.getSyncType());
+        return item;
+    }
+
+    private UpstreamSyncItemResult runSelectedDimensionSyncItem(LingxingOpenApiClient client, String connectionCode,
+        List<String> skuList, UpstreamManualSyncSubmitter.SyncWorkItem workItem)
+    {
+        UpstreamSyncItemResult item = skuDimensionSyncComponent.syncSelected(client, connectionCode, skuList,
+            workItem.getSyncBatchId());
+        sourceProductReadModelService.rebuildOfficialMasterByConnection(connectionCode);
+        return item;
     }
 
     private UpstreamSyncResult syncSingleType(String connectionCode, String syncType, String mode)
@@ -246,7 +335,7 @@ public class UpstreamSyncServiceImpl implements IUpstreamSyncService
         String syncBatchId = UUID.randomUUID().toString();
         Date startedTime = new Date();
         int rateLimitMs = UpstreamSystemConstants.SYNC_TYPE_SKU_DIMENSION.equals(syncType)
-            ? SKU_DIMENSION_FULL_RATE_LIMIT_MS : 0;
+            ? UpstreamSystemConstants.SKU_DIMENSION_FULL_RATE_LIMIT_MS : 0;
         syncStateRecorder.recordSyncing(connectionCode, syncType, syncBatchId, startedTime, mode, rateLimitMs);
 
         try
@@ -351,6 +440,10 @@ public class UpstreamSyncServiceImpl implements IUpstreamSyncService
         if (!UpstreamSystemConstants.STATUS_ENABLED.equals(connection.getStatus()))
         {
             throw new ServiceException("主仓接入已停用，不能同步");
+        }
+        if (!UpstreamSystemConstants.CREDENTIAL_STATUS_CONFIGURED.equals(connection.getCredentialStatus()))
+        {
+            throw new ServiceException("主仓授权未通过，请先校验授权");
         }
         return connection;
     }

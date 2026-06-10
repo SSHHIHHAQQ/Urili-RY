@@ -132,9 +132,12 @@ public interface UpstreamSystemMapper
         @Param("status") String status);
 
     UpstreamLogisticsChannelSyncItem selectLogisticsChannelSyncItem(@Param("connectionCode") String connectionCode,
-        @Param("warehouseCode") String warehouseCode, @Param("channelCode") String channelCode);
+        @Param("channelCode") String channelCode);
 
     List<UpstreamLogisticsChannelPairing> selectLogisticsChannelPairingList(@Param("connectionCode") String connectionCode);
+
+    UpstreamLogisticsChannelPairing selectLogisticsChannelPairingBySystemChannel(
+        @Param("systemChannelCode") String systemChannelCode, @Param("pairingRole") String pairingRole);
 
     int insertLogisticsChannelPairing(UpstreamLogisticsChannelPairing pairing);
 

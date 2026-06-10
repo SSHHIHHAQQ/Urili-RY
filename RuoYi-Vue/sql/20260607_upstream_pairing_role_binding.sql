@@ -353,11 +353,11 @@ call recreate_index_if_mismatch('upstream_system_warehouse_pairing',
   'uk_upstream_wh_pairing_upstream_role', 'connection_code,upstream_warehouse_code,pairing_role', 0,
   'unique key `uk_upstream_wh_pairing_upstream_role` (`connection_code`, `upstream_warehouse_code`, `pairing_role`)');
 call recreate_index_if_mismatch('upstream_system_logistics_channel_pairing',
-  'uk_upstream_channel_pairing_system_role', 'system_warehouse_code,system_channel_code,pairing_role', 0,
-  'unique key `uk_upstream_channel_pairing_system_role` (`system_warehouse_code`, `system_channel_code`, `pairing_role`)');
+  'uk_upstream_channel_pairing_system_role', 'system_channel_code,pairing_role', 0,
+  'unique key `uk_upstream_channel_pairing_system_role` (`system_channel_code`, `pairing_role`)');
 call recreate_index_if_mismatch('upstream_system_logistics_channel_pairing',
-  'idx_upstream_channel_pairing_upstream_role', 'connection_code,upstream_warehouse_code,upstream_channel_code,pairing_role', 1,
-  'key `idx_upstream_channel_pairing_upstream_role` (`connection_code`, `upstream_warehouse_code`, `upstream_channel_code`, `pairing_role`)');
+  'idx_upstream_channel_pairing_upstream_role', 'connection_code,upstream_channel_code,pairing_role', 1,
+  'key `idx_upstream_channel_pairing_upstream_role` (`connection_code`, `upstream_channel_code`, `pairing_role`)');
 
 call assert_index_definition('upstream_system_warehouse_pairing',
   'uk_upstream_wh_pairing_system_role', 'system_warehouse_code,pairing_role', 0,
@@ -366,10 +366,10 @@ call assert_index_definition('upstream_system_warehouse_pairing',
   'uk_upstream_wh_pairing_upstream_role', 'connection_code,upstream_warehouse_code,pairing_role', 0,
   'warehouse upstream pairing role unique index mismatch');
 call assert_index_definition('upstream_system_logistics_channel_pairing',
-  'uk_upstream_channel_pairing_system_role', 'system_warehouse_code,system_channel_code,pairing_role', 0,
+  'uk_upstream_channel_pairing_system_role', 'system_channel_code,pairing_role', 0,
   'logistics system pairing role unique index mismatch');
 call assert_index_definition('upstream_system_logistics_channel_pairing',
-  'idx_upstream_channel_pairing_upstream_role', 'connection_code,upstream_warehouse_code,upstream_channel_code,pairing_role', 1,
+  'idx_upstream_channel_pairing_upstream_role', 'connection_code,upstream_channel_code,pairing_role', 1,
   'logistics upstream pairing role index mismatch');
 
 drop procedure if exists assert_upstream_pairing_role_binding_confirmed;

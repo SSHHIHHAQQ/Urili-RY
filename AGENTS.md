@@ -150,6 +150,7 @@ cd E:\Urili-Ruoyi
 - 平台管理端基础能力优先复用若依 `sys_user`、`sys_role`、`sys_menu`、`sys_dict`、`sys_oper_log` 等基础表。
 - 卖家端、买家端必须另起端内账号权限控制面：`seller_account` / `buyer_account` 存端内登录账号和密码密文，`seller_role` / `buyer_role` 存端内角色，`seller_menu` / `buyer_menu` 存端内菜单权限，`seller_dept` / `buyer_dept` 存端内部门，`seller_login_log` / `buyer_login_log` 和 `seller_oper_log` / `buyer_oper_log` 存端内日志。
 - 主体资料表、业务事实表、流水表、外部请求日志表必须分清楚；不要把订单、库存、财务流水或外部请求日志塞进卖家、买家等主体资料表。
+- 订单、履约、财务、库存流水、外部请求日志等业务事实数据，应保存必要快照字段和源 ID，避免依赖运行时连表还原历史；权限、账号、菜单、主体当前状态等控制面仍以源表为准。
 - 跨模块调用不能直接读写对方 Mapper 或表实现细节，应通过 Service、Facade 或明确公共接口。
 - 如果一个需求同时涉及多个模块，必须先写 Markdown 方案说明模块边界、数据归属、表关系和权限点，再进入实现。
 - 数据库业务表命名应按业务对象直接命名，例如 `seller`、`buyer`、`seller_account`、`buyer_account`，不要为了项目名前缀默认加 `urili_`。

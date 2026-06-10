@@ -132,8 +132,8 @@ declare namespace API.Integration {
   export interface LogisticsChannelPairing {
     logisticsChannelPairingId: number;
     connectionCode: string;
-    systemWarehouseCode: string;
-    upstreamWarehouseCode: string;
+    systemWarehouseCode?: string;
+    upstreamWarehouseCode?: string;
     upstreamChannelCode: string;
     upstreamChannelName: string;
     systemChannelCode: string;
@@ -145,9 +145,7 @@ declare namespace API.Integration {
   }
 
   export interface LogisticsChannelPairingRequest {
-    upstreamWarehouseCode: string;
     upstreamChannelCode: string;
-    systemWarehouseCode: string;
     systemChannelCode: string;
     systemChannelName: string;
     pairingRole?: 'FULFILLMENT' | 'QUOTE' | string;

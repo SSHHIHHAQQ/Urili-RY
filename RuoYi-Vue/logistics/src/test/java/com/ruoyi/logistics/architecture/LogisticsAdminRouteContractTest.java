@@ -272,6 +272,10 @@ public class LogisticsAdminRouteContractTest
 
         assertContains(controller, "@GetMapping({\"\", \"/list\"})");
         assertContains(controller, "@GetMapping(\"/{customerChannelCode}/system-mappings/list\")");
+        assertContains(controller, "@GetMapping(\"/{customerChannelCode}/quote-channel-mappings/list\")");
+        assertContains(controller, "@PostMapping(\"/{customerChannelCode}/quote-channel-mappings\")");
+        assertContains(controller, "@DeleteMapping(\"/{customerChannelCode}/quote-channel-mappings/{mappingId}\")");
+        assertContains(controller, "LogisticsCustomerChannelQuoteMappingRequest");
         assertContains(controller, "@PutMapping(\"/{customerChannelCode}/buyer-scope\")");
         assertContains(controller, "@GetMapping(\"/options/system-channels\")");
         assertContains(controller, "@GetMapping(\"/options/buyers\")");
@@ -298,6 +302,7 @@ public class LogisticsAdminRouteContractTest
         for (String table : new String[] {
             "logistics_customer_channel",
             "logistics_customer_channel_system_mapping",
+            "logistics_customer_channel_quote_mapping",
             "logistics_customer_channel_buyer_scope"
         })
         {
@@ -361,6 +366,10 @@ public class LogisticsAdminRouteContractTest
         assertContains(service, "BUYER_SCOPE_EXCLUDE");
         assertContains(service, "buyerMapper.selectBuyerById(buyerId)");
         assertContains(service, "systemChannelMapper.selectSystemChannelByCode(systemChannelCode)");
+        assertContains(service, "UpstreamSystemConstants.SETTLEMENT_TYPE_SELF_OPERATED_RECEIVABLE");
+        assertContains(service, "UpstreamSystemConstants.PAIRING_ROLE_QUOTE");
+        assertContains(service, "upstreamSystemService.selectLogisticsChannelSyncList");
+        assertContains(service, "customerChannelMapper.deleteQuoteMapping");
         assertContains(service, "channel.setDisplayOrder(maxOrder == null ? 1 : maxOrder + 1);");
         assertContains(service, "mapping.setDisplayOrder(maxOrder == null ? 1 : maxOrder + 1);");
         assertNotContains(service, "request.getDisplayOrder()");

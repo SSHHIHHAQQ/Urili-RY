@@ -125,7 +125,7 @@ public class SellerPortalPermissionServiceImplPortalAccessTest
         RecordingSellerMapper sellerMapper = recordingSellerMapper(1, account);
         RecordingSellerPortalPermissionMapper permissionMapper = new RecordingSellerPortalPermissionMapper()
                 .withRoleKeys("seller_owner", "seller_staff")
-                .withPermissions("seller:product:list,seller:order:list", "seller:order:detail");
+                .withPermissions("seller:account:list,seller:product:list", "seller:role:list,seller:order:detail");
         SellerPortalPermissionServiceImpl service = service(sellerService(seller), sellerMapper.proxy(),
                 permissionMapper.proxy());
         PortalLoginSession session = session(11L, 22L);
@@ -140,7 +140,7 @@ public class SellerPortalPermissionServiceImplPortalAccessTest
         assertEquals("seller_owner", info.getUserName());
         assertEquals("Seller Owner", info.getNickName());
         assertArrayEquals(new String[] { "seller_owner", "seller_staff" }, info.getRoles().toArray(new String[0]));
-        assertArrayEquals(new String[] { "seller:product:list", "seller:order:list", "seller:order:detail" },
+        assertArrayEquals(new String[] { "seller:account:list", "seller:role:list" },
                 info.getPermissions().toArray(new String[0]));
         assertOnlineSellerSessionLookup(sellerMapper);
         assertSellerPermissionLookup(permissionMapper);
@@ -154,24 +154,43 @@ public class SellerPortalPermissionServiceImplPortalAccessTest
         RecordingSellerMapper sellerMapper = recordingSellerMapper(1, account);
         RecordingSellerPortalPermissionMapper permissionMapper = new RecordingSellerPortalPermissionMapper()
                 .withRoleKeys("seller_owner")
-                .withPermissions(" seller:product:list, seller:order:list ", "seller:order:detail,, ");
+                .withPermissions(" seller:account:list, seller:product:list ", "seller:dept:list,, ");
         SellerPortalPermissionServiceImpl service = service(sellerService(seller), sellerMapper.proxy(),
                 permissionMapper.proxy());
 
         PortalPermissionInfo info = service.selectPortalPermissionInfo(session(11L, 22L));
 
-        assertArrayEquals(new String[] { "seller:product:list", "seller:order:list", "seller:order:detail" },
+        assertArrayEquals(new String[] { "seller:account:list", "seller:dept:list" },
                 info.getPermissions().toArray(new String[0]));
 
-        for (String pollutedPermission : new String[] { "buyer:account:list", "seller:admin:list", "*:*:*" })
+        for (String pollutedPermission : new String[] { "buyer:account:list", "seller:admin:list", "*:*:*",
+                "seller:*", "seller:role:*" })
         {
             RecordingSellerPortalPermissionMapper pollutedMapper = new RecordingSellerPortalPermissionMapper()
-                    .withPermissions("seller:product:list", pollutedPermission);
+                    .withPermissions("seller:account:list", pollutedPermission);
             SellerPortalPermissionServiceImpl pollutedService = service(sellerService(seller),
                     recordingSellerMapper(1, account).proxy(), pollutedMapper.proxy());
             assertServiceException("卖家端权限配置异常",
                     () -> pollutedService.selectPortalPermissionInfo(session(11L, 22L)));
         }
+    }
+
+    @Test
+    public void selectPermissionsStripsFrozenBusinessPermissionsForPortalPreAuthorize()
+    {
+        Seller seller = seller(11L);
+        SellerAccount account = account(22L, 11L);
+        RecordingSellerMapper sellerMapper = recordingSellerMapper(1, account);
+        RecordingSellerPortalPermissionMapper permissionMapper = new RecordingSellerPortalPermissionMapper()
+                .withPermissions("seller:account:list,seller:product:distribution:list",
+                        "seller:role:list,seller:order:detail");
+        SellerPortalPermissionServiceImpl service = service(sellerService(seller), sellerMapper.proxy(),
+                permissionMapper.proxy());
+
+        assertArrayEquals(new String[] { "seller:account:list", "seller:role:list" },
+                service.selectPermissions(session(11L, 22L)).toArray(new String[0]));
+        assertOnlineSellerSessionLookup(sellerMapper);
+        assertSellerPermissionLookup(permissionMapper);
     }
 
     @Test

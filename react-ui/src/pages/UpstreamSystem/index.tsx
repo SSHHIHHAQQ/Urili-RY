@@ -8,13 +8,16 @@ import {
   addUpstreamConnection,
   addWarehousePairing,
   authorizeUpstreamConnection,
+  getLogisticsChannelPairings,
   getUpstreamConnectionList,
+  getUpstreamSyncStates,
   syncUpstreamConnection,
   updateUpstreamConnection,
   updateUpstreamConnectionOrder,
   updateUpstreamCredentials,
   updateUpstreamStatus,
 } from '@/services/integration/upstreamSystem';
+import { getSystemChannelList } from '@/services/logistics/systemChannel';
 import { getOfficialWarehouseList } from '@/services/warehouse/warehouse';
 import { message } from '@/utils/feedback';
 import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
@@ -25,11 +28,7 @@ import ConnectionSidebar from './components/ConnectionSidebar';
 import ConnectionSummary from './components/ConnectionSummary';
 import PairingModal from './components/PairingModal';
 import SyncTabs from './components/SyncTabs';
-import {
-  normalizeSettlementTypeValue,
-  pairingRoleText,
-  syncTypeText,
-} from './constants';
+import { normalizeSettlementTypeValue, pairingRoleText } from './constants';
 import { resultOk } from './helpers';
 import './style.css';
 import styles from './style.module.css';
@@ -42,6 +41,14 @@ const defaultManualSyncTypes = ['WAREHOUSE', 'LOGISTICS_CHANNEL', 'SKU'];
 type WarehouseSelectOption = API.Warehouse.Option & {
   warehouseCode: string;
   warehouseName: string;
+};
+
+type SystemChannelSelectOption = {
+  label: string;
+  value: string;
+  systemChannelCode: string;
+  systemChannelName: string;
+  searchText: string;
 };
 
 const syncTypeOptions = [
@@ -72,26 +79,12 @@ const syncTypeOptions = [
   },
 ];
 
-const formatSyncItemResult = (item: API.Integration.SyncItemResult) => {
-  const label = syncTypeText[item.syncType || ''] || item.syncType || '同步项';
-  if (item.status === 'FAILED') {
-    return `${label}失败：${item.errorMessage || '-'}`;
-  }
-  const changedTotal = (item.insertedCount || 0) + (item.changedCount || 0);
-  return `${label}：拉取${item.pulledCount || item.count || 0}，新增${item.insertedCount || 0}，变更${item.changedCount || 0}，停用${item.disabledCount || 0}，未变${item.unchangedCount || 0}，写入${changedTotal}`;
-};
-
-const formatSyncResult = (data?: API.Integration.SyncResult) => {
-  if (data?.items?.length) {
-    return data.items.map(formatSyncItemResult).join('；');
-  }
-  return `仓库 ${data?.warehouseCount || 0}，渠道 ${data?.logisticsChannelCount || 0}，SKU ${data?.skuCount || 0}，尺寸重量 ${data?.skuDimensionCount || 0}，库存 ${data?.warehouseStockCount || 0}`;
-};
-
 export default function UpstreamSystemPage() {
   const access = useAccess();
   const canListUpstreamConnections = access.hasPerms('integration:upstream:list');
+  const canQueryUpstream = access.hasPerms('integration:upstream:query');
   const canQueryOfficialWarehouses = access.hasPerms('warehouse:official:list');
+  const canQuerySystemChannels = access.hasPerms('channel:system:list');
   const warehouseActionRef = useRef<ActionType>(null);
   const logisticsActionRef = useRef<ActionType>(null);
   const skuActionRef = useRef<ActionType>(null);
@@ -126,6 +119,24 @@ export default function UpstreamSystemPage() {
     WarehouseSelectOption[]
   >([]);
   const [warehouseOptionsLoading, setWarehouseOptionsLoading] = useState(false);
+  const [systemChannelOptions, setSystemChannelOptions] = useState<
+    SystemChannelSelectOption[]
+  >([]);
+  const [systemChannelOptionsLoading, setSystemChannelOptionsLoading] =
+    useState(false);
+  const [syncingConnectionCodes, setSyncingConnectionCodes] = useState<
+    string[]
+  >([]);
+  const syncPollersRef = useRef<Record<string, number>>({});
+
+  useEffect(
+    () => () => {
+      Object.values(syncPollersRef.current).forEach((timer) => {
+        window.clearInterval(timer);
+      });
+    },
+    [],
+  );
 
   const fetchConnections = useCallback(async (preferredCode?: string) => {
     if (!canListUpstreamConnections) {
@@ -219,11 +230,74 @@ export default function UpstreamSystemPage() {
   const selectedPairingRoleLabel =
     pairingRoleText[selectedPairingRole] || selectedPairingRole;
 
+  const loadSystemChannelOptions = useCallback(async () => {
+    if (!canQuerySystemChannels) {
+      setSystemChannelOptions([]);
+      message.warning('缺少系统渠道查询权限');
+      return;
+    }
+    setSystemChannelOptionsLoading(true);
+    try {
+      const [channelResp, ...pairingResponses] = await Promise.all([
+        getSystemChannelList({ pageNum: 1, pageSize: 1000, status: '0' }),
+        ...connections.map((item) =>
+          getLogisticsChannelPairings(item.connectionCode),
+        ),
+      ]);
+      if (channelResp.code !== 200) {
+        message.error(channelResp.msg || '系统渠道加载失败');
+        setSystemChannelOptions([]);
+        return;
+      }
+      const pairedSystemChannels = new Set(
+        pairingResponses.flatMap((resp) =>
+          (resp.data || [])
+            .filter(
+              (item) =>
+                (item.pairingRole || 'FULFILLMENT') === selectedPairingRole,
+            )
+            .map((item) => item.systemChannelCode),
+        ),
+      );
+      const options = (channelResp.rows || [])
+        .filter((item: any) => item.systemChannelCode)
+        .filter((item: any) => !pairedSystemChannels.has(item.systemChannelCode))
+        .map((item: any) => {
+          const systemChannelCode = item.systemChannelCode || '';
+          const systemChannelName = item.systemChannelName || '';
+          return {
+            label: `${systemChannelCode} / ${systemChannelName}`,
+            value: systemChannelCode,
+            systemChannelCode,
+            systemChannelName,
+            searchText: [
+              systemChannelCode,
+              systemChannelName,
+              item.standardCarrierCode,
+            ]
+              .filter(Boolean)
+              .join(' '),
+          };
+        });
+      setSystemChannelOptions(options);
+    } finally {
+      setSystemChannelOptionsLoading(false);
+    }
+  }, [canQuerySystemChannels, connections, selectedPairingRole]);
+
   useEffect(() => {
     if (pairingModal.open && pairingModal.type === 'warehouse') {
       loadWarehouseOptions(selectedCode, selectedPairingRole);
+    } else if (pairingModal.open && pairingModal.type === 'logistics') {
+      loadSystemChannelOptions();
     }
-  }, [loadWarehouseOptions, pairingModal, selectedCode, selectedPairingRole]);
+  }, [
+    loadSystemChannelOptions,
+    loadWarehouseOptions,
+    pairingModal,
+    selectedCode,
+    selectedPairingRole,
+  ]);
 
   const reloadTabs = () => {
     warehouseActionRef.current?.reload();
@@ -241,6 +315,76 @@ export default function UpstreamSystemPage() {
       reloadTabs();
     }
   };
+
+  const markConnectionSyncing = (connectionCode: string, syncing: boolean) => {
+    setSyncingConnectionCodes((current) => {
+      if (syncing) {
+        return current.includes(connectionCode)
+          ? current
+          : [...current, connectionCode];
+      }
+      return current.filter((item) => item !== connectionCode);
+    });
+  };
+
+  const stopSyncPolling = (connectionCode: string) => {
+    const timer = syncPollersRef.current[connectionCode];
+    if (timer) {
+      window.clearInterval(timer);
+      delete syncPollersRef.current[connectionCode];
+    }
+  };
+
+  const pollSyncState = async (connectionCode: string, syncTypes: string[]) => {
+    const resp = await getUpstreamSyncStates(connectionCode);
+    if (resp.code !== 200) {
+      return;
+    }
+    const states = resp.data || [];
+    const targetStates =
+      syncTypes.length > 0
+        ? states.filter((item) => syncTypes.includes(item.syncType))
+        : states;
+    const stillSyncing = targetStates.some((item) => item.status === 'SYNCING');
+    if (!stillSyncing) {
+      markConnectionSyncing(connectionCode, false);
+      stopSyncPolling(connectionCode);
+      await reloadCurrent(connectionCode);
+    }
+  };
+
+  const startSyncPolling = (connectionCode: string, syncTypes: string[]) => {
+    markConnectionSyncing(connectionCode, true);
+    stopSyncPolling(connectionCode);
+    window.setTimeout(() => pollSyncState(connectionCode, syncTypes), 1200);
+    syncPollersRef.current[connectionCode] = window.setInterval(
+      () => pollSyncState(connectionCode, syncTypes),
+      5000,
+    );
+  };
+
+  useEffect(() => {
+    if (!selectedCode || !canQueryUpstream) {
+      return;
+    }
+    let disposed = false;
+    getUpstreamSyncStates(selectedCode).then((resp) => {
+      if (disposed || resp.code !== 200) {
+        return;
+      }
+      const syncingTypes = (resp.data || [])
+        .filter((item) => item.status === 'SYNCING')
+        .map((item) => item.syncType);
+      if (syncingTypes.length > 0) {
+        startSyncPolling(selectedCode, syncingTypes);
+      } else {
+        markConnectionSyncing(selectedCode, false);
+      }
+    });
+    return () => {
+      disposed = true;
+    };
+  }, [selectedCode, canQueryUpstream]);
 
   const handleAuthorize = async (
     record: API.Integration.UpstreamConnection,
@@ -277,23 +421,26 @@ export default function UpstreamSystemPage() {
       return;
     }
     setSyncModal((current) => ({ ...current, submitting: true }));
-    const resp = await syncUpstreamConnection(record.connectionCode, {
-      syncTypes: syncModal.syncTypes,
-    });
-    setSyncModal((current) => ({ ...current, submitting: false }));
+    let resp: (API.Result & { data: API.Integration.SyncResult }) | undefined;
+    try {
+      resp = await syncUpstreamConnection(record.connectionCode, {
+        syncTypes: syncModal.syncTypes,
+      });
+    } finally {
+      setSyncModal((current) => ({ ...current, submitting: false }));
+    }
+    if (!resp) {
+      return;
+    }
     if (resp.code === 200) {
-      const hasFailed = resp.data?.items?.some((item) => item.status === 'FAILED');
-      const feedback = `同步完成：${formatSyncResult(resp.data)}`;
-      if (hasFailed) {
-        message.warning(feedback);
-      } else {
-        message.success(feedback);
-      }
+      const submittedTypes = [...syncModal.syncTypes];
       setSyncModal({
         open: false,
         syncTypes: defaultManualSyncTypes,
         submitting: false,
       });
+      message.success('已开始后台同步，可继续操作');
+      startSyncPolling(record.connectionCode, submittedTypes);
       await reloadCurrent(record.connectionCode);
     } else {
       message.error(resp.msg);
@@ -324,20 +471,6 @@ export default function UpstreamSystemPage() {
     return ok;
   };
 
-  const logisticsWarehouseOptions =
-    pairingModal.open && pairingModal.type === 'logistics'
-      ? pairingModal.row.warehouseItems.map((item) => ({
-          label: item.systemWarehouseCode
-            ? `${item.warehouseCode} -> ${item.systemWarehouseCode} / ${item.systemWarehouseName || '-'}`
-            : `${item.warehouseCode}（请先配对${selectedPairingRoleLabel}仓）`,
-          value: item.warehouseCode,
-          disabled: !item.systemWarehouseCode,
-          searchText: `${item.warehouseCode} ${item.systemWarehouseCode || ''} ${
-            item.systemWarehouseName || ''
-          }`,
-        }))
-      : [];
-
   return (
     <PageContainer>
       <div className={styles.workspace}>
@@ -356,6 +489,7 @@ export default function UpstreamSystemPage() {
             <ConnectionSummary
               access={access}
               connection={selectedConnection}
+              syncing={syncingConnectionCodes.includes(selectedCode)}
               onAuthorize={() => handleAuthorize(selectedConnection)}
               onCredential={() =>
                 setConnectionModal({
@@ -535,20 +669,6 @@ export default function UpstreamSystemPage() {
               : 'systemChannelName'
         }
         showCustomerName={pairingModal.open && pairingModal.type === 'sku'}
-        extraItems={
-          pairingModal.open && pairingModal.type === 'logistics' ? (
-            <Form.Item
-              name="upstreamWarehouseCode"
-              label="领星仓库"
-              rules={[{ required: true, message: '请选择领星仓库' }]}
-            >
-              <Select
-                {...SEARCHABLE_SELECT_PROPS}
-                options={logisticsWarehouseOptions}
-              />
-            </Form.Item>
-          ) : null
-        }
         customPairingItems={
           pairingModal.open && pairingModal.type === 'warehouse' ? (
             <Form.Item
@@ -561,6 +681,19 @@ export default function UpstreamSystemPage() {
                 loading={warehouseOptionsLoading}
                 options={warehouseOptions}
                 placeholder={`请选择要绑定为${selectedPairingRoleLabel}仓的系统仓库`}
+              />
+            </Form.Item>
+          ) : pairingModal.open && pairingModal.type === 'logistics' ? (
+            <Form.Item
+              name="systemChannelCode"
+              label="系统渠道"
+              rules={[{ required: true, message: '请选择系统渠道' }]}
+            >
+              <Select
+                {...SEARCHABLE_SELECT_PROPS}
+                loading={systemChannelOptionsLoading}
+                options={systemChannelOptions}
+                placeholder="请选择要绑定的系统渠道"
               />
             </Form.Item>
           ) : null
@@ -587,19 +720,20 @@ export default function UpstreamSystemPage() {
               systemWarehouseName: systemWarehouse.warehouseName,
             });
           } else if (pairingModal.type === 'logistics') {
-            const warehouseContext = pairingModal.row.warehouseItems.find(
-              (item) => item.warehouseCode === values.upstreamWarehouseCode,
+            const systemChannel = systemChannelOptions.find(
+              (item) => item.value === values.systemChannelCode,
             );
-            if (!warehouseContext?.systemWarehouseCode) {
+            if (!systemChannel) {
               hide();
-              message.error(`请先配对${selectedPairingRoleLabel}仓`);
+              message.error('请选择系统渠道');
               return false;
             }
             resp = await addLogisticsChannelPairing(selectedCode, {
-              ...values,
+              remark: values.remark,
               pairingRole: selectedPairingRole,
-              systemWarehouseCode: warehouseContext.systemWarehouseCode,
               upstreamChannelCode: pairingModal.row.channelCode,
+              systemChannelCode: systemChannel.systemChannelCode,
+              systemChannelName: systemChannel.systemChannelName,
             });
           } else {
             resp = await addSkuPairing(selectedCode, {

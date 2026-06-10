@@ -1537,3 +1537,52 @@
 - 未做浏览器运行态验收、截图、DOM 检测。
 - 未验证三端物理前端拆分完成。
 - 未执行远端 MySQL DDL/DML，未读写 Redis，未启动或重启后端。
+
+## 追加复核：当前三端框架完成判断
+
+时间：2026-06-10 22:03，本机 `Asia/Shanghai`。
+
+### 复核口径
+
+- 参考方向：`docs/plans/2026-06-04-three-terminal-isolation-control-plan.md`。
+- 本轮只判断当前三端账号权限框架 P0/P1 是否仍有失败项。
+- 不把 logistics、Channel、integration/upstream、inventory、product review、sample data、浏览器 UI、截图、DOM 或三物理前端拆分纳入当前完成口径。
+
+### 当前结论
+
+当前三端账号权限框架按 P0/P1 口径已经做好，可以关闭这一阶段目标。
+
+已满足的核心条件：
+
+- 管理端继续使用若依 `sys_*` 后台控制面。
+- seller/buyer 端内账号、密码、角色、菜单、部门、日志、会话使用 `seller_*` / `buyer_*` 独立体系。
+- seller/buyer 生产代码未发现复用 `sys_user` / `sys_role` / `sys_menu` / `sys_dept` 作为端内账号权限控制面。
+- 端内账号查询仍带主体 ID + account ID，没有发现生产裸单参 `accountId` 查询入口。
+- portal 自助接口继续使用 `@PortalPreAuthorize`、`@PortalLog` 和 `PortalSessionContext.requireSession(...)`。
+- 前端 portal 请求继续剥离 `sellerId`、`buyerId`、`subjectId`、`accountId` 等调用方范围字段。
+- 默认 OWNER 权限仍只包含账号、日志、会话、部门、角色和 portal home，不恢复 `*:product:*` 默认授权。
+
+### 本轮验证
+
+- `rg "sys_user|sys_role|sys_menu|sys_dept|sys_user_role|sys_role_menu|SysUser|SysRole|SysMenu|SysDept|LoginUser|SecurityUtils\\.getLoginUser" RuoYi-Vue\seller\src\main RuoYi-Vue\buyer\src\main -g "*.java" -g "*.xml"`：无命中。
+- `rg "select[A-Za-z]*AccountById\\s*\\(|select.*AccountById|AccountById\\(" RuoYi-Vue\seller RuoYi-Vue\buyer RuoYi-Vue\ruoyi-system -g "*.java" -g "*.xml"`：生产代码只命中双参数 service 或 `select*AccountByIdAnd*Id(...)`，裸单参入口只出现在合同测试的禁止断言中。
+- `git diff --check`：通过，仅有 LF/CRLF 工作区提示。
+- `cd react-ui; node scripts\verify-three-terminal.mjs --check-manifest`：通过。
+- `cd react-ui; node scripts\verify-three-terminal.mjs`：通过，输出 `three-terminal verification passed.`。
+  - 前端 guard 全部通过。
+  - React typecheck 通过。
+  - 前端 Jest：27 suites / 220 tests 通过。
+  - 后端 reactor `test-compile`：15 个模块 BUILD SUCCESS。
+  - 后端合同测试：12 个模块 BUILD SUCCESS；seller 110 tests、buyer 112 tests、product 69 tests、integration 12 tests、inventory 13 tests、logistics 12 tests 均通过。
+
+### 仍不属于本阶段完成项
+
+- 没有做浏览器级验收、截图或 DOM 检测。
+- 没有验证三物理前端拆分完成。
+- 当前工作树仍有 integration/upstream、inventory、Channel/logistics 等旁路改动；这些不计入三端账号权限框架完成度。
+
+### 数据源与远端影响
+
+- 本轮未执行远端 MySQL DDL/DML。
+- 本轮未读取或写入 Redis。
+- 本轮未启动或重启后端。

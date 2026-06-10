@@ -17060,3 +17060,187 @@ API 验证：
 - 本轮未发现新的 P0/P1 编译、guard、接口、权限、串端、service/mapper/DTO 字段、裸 accountId、前端主体范围、`@PortalPreAuthorize` / `@PortalLog`、SQL fail-closed、菜单 ID 段、权限前缀或 OWNER 授权闭环问题。
 - P2/冻结范围仍不阻塞：当前工作树仍存在 logistics、product review、inventory overview、upstream system、Channel 等旁路改动；本轮只读识别，不计入三端账号权限完成度。
 - 目标仍保持 active，不标记完成。
+
+## 2026-06-10 21:18 检查点：OWNER product 授权冲突收口与远端只读核验
+
+参考方向仍为 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md`。本轮继续只处理三端账号权限框架 P0/P1；logistics、system/customer channel、product review UI/性能、sample data、商品/库存/财务/外部系统完整业务、浏览器 UI、DOM/截图和三物理前端拆分仍冻结。
+
+### 子 Agent 使用记录
+
+- 本轮曾按快速推进要求启动 6 个 `gpt-5.4` worker，覆盖 admin controller、service/mapper、portal 自助接口、React 管理端、guard/manifest、SQL/角色菜单合同。
+- 6 个 worker 均已关闭。
+- SQL/角色菜单 worker 曾建议把 `*:product:*` 默认授给端内 `owner` 角色；主线程复核后判定该建议与当前 cleanup 方向冲突，未采纳为最终状态。
+
+### 冲突处理
+
+- 当前仓库已有 `RuoYi-Vue/sql/20260610_terminal_owner_product_permission_cleanup.sql`，并有远端执行记录，明确目标是保留 seller/buyer product hidden `F` 权限菜单定义，但不把 `*:product:*` 默认授给端内 `owner` 角色。
+- `react-ui/tests/portal-product-schema-preview.test.ts` 也固定了 portal home 仍是最小账号/部门/角色框架，不挂载 product schema/list 组件；product 组件当前是 detached reuse widgets。
+- 因此本轮最终方向是：product 权限菜单定义存在，相关后端接口继续按 `@PortalPreAuthorize` 控制；默认 `OWNER` 角色不恢复 `*:product:*` 授权。
+- 已撤回本轮临时引入的 `DEFAULT_OWNER_PERMS` product 授权、seed owner product 授权和相关合同断言，避免与 cleanup 脚本和远端状态互相打架。
+
+### 远端只读核验
+
+- 数据源来源：`application.yml` 激活 `druid`，JDBC/Redis 配置来自本机 `.env.local`；本轮未输出远端地址、账号、密码、Redis 密码、token secret 或 `URILI_SECRET_ENCRYPTION_KEY`。
+- 目标库：远端 MySQL，`database() = fenxiao`，`url_is_local=false`，版本 `8.0.30-cynos-3.1.16.003`。
+- 只读 SQL 结果：
+  - `seller_product_menu_defs=4`
+  - `buyer_product_menu_defs=4`
+  - `seller_owner_product_grants=0`
+  - `buyer_owner_product_grants=0`
+  - `seller_owner_basic_missing_grants=0`
+  - `buyer_owner_basic_missing_grants=0`
+  - `seller_owner_account_role_missing=0`
+  - `buyer_owner_account_role_missing=0`
+  - `seller_role_menu_orphan_or_out_of_range=0`
+  - `buyer_role_menu_orphan_or_out_of_range=0`
+  - `seller_blank_passwords=0`
+  - `buyer_blank_passwords=0`
+
+### 验证
+
+- `cd RuoYi-Vue; mvn -pl seller,buyer -am "-Dtest=SellerServiceImplTest,BuyerServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，seller 63 tests / buyer 64 tests。
+- `cd RuoYi-Vue; mvn -pl ruoyi-system -am "-Dtest=SqlExecutionGuardContractTest,TerminalRoleMenuMapperIsolationContractTest,TerminalSeedPermissionContractTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，84 tests / 0 failures / 0 errors / 0 skipped。
+- `cd RuoYi-Vue; mvn -pl ruoyi-system -am "-Dtest=SqlExecutionGuardContractTest,TerminalSeedPermissionContractTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，83 tests / 0 failures / 0 errors / 0 skipped。
+- `cd react-ui; npx jest --config jest.config.ts --runTestsByPath tests\portal-product-schema-preview.test.ts tests\portal-home-error-handling.test.ts --runInBand`：2 suites / 10 tests 通过。
+
+### 数据源与远端影响
+
+- 本轮只读查询远端 MySQL，没有执行 DDL/DML。
+- 本轮未读取或写入 Redis。
+- 本轮未启动或重启后端。
+- 远端当前状态已经满足本轮结论：product 权限菜单定义存在、owner product 授权为 0、基础 OWNER 授权和 OWNER 账号角色绑定无缺口。
+
+### P2 与冻结范围
+
+- 当前工作树仍存在 integration、logistics、Channel、product review、inventory overview、upstream system 等旁路改动；本轮未接管、不继续实现、不计入三端账号权限框架完成度。
+- 浏览器、截图、DOM、UI 细调和三物理前端拆分继续跳过。
+
+### 结论
+
+- 本轮实际收口 1 个 P1 风险：消除“默认 OWNER 是否应恢复 product 授权”的方向冲突，最终以已有 cleanup 和 portal home 最小框架为准。
+- 未发现当前远端运行库需要执行三端账号权限 P0/P1 DML。
+- 目标仍保持 active，不标记完成。
+
+## 2026-06-10 21:28 检查点：三端 P0/P1 主线程复扫与最小 guard 复验
+
+参考方向仍为 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md`。本轮继续只处理三端账号权限框架 P0/P1，不接管 logistics、system/customer channel、product review UI/性能、sample data、商品/库存/财务/外部系统完整业务、浏览器 UI、DOM/截图或三物理前端拆分。
+
+### 子 Agent 使用记录
+
+- 本轮尝试启动 6 个只读 explorer，计划模型均为 `GPT-5.3-Codex-Spark` / `gpt-5.3-codex-spark`，切片包括后端 portal、mapper/SQL、seed guard、React portal、manifest/guard、管理端控制权。
+- 6 个只读 explorer 均因额度限制失败并已关闭，错误原因一致：`You've hit your usage limit for GPT-5.3-Codex-Spark. Switch to another model now, or try again at Jun 17th, 2026 2:16 AM.`
+- 按当前 AGENTS 规则记录不可用原因；本轮只读复扫由主线程完成，未把只读任务回退给 `gpt5.4`。
+
+### 主线程复扫结论
+
+- 裸账号查询：`rg "select[A-Za-z]*AccountById\\s*\\(|select.*AccountById|AccountById\\(" RuoYi-Vue/seller RuoYi-Vue/buyer RuoYi-Vue/ruoyi-system -g "*.java" -g "*.xml"` 未发现生产代码保留单参数裸 accountId mapper/service 查询；生产调用仍落在 `select*AccountByIdAnd*Id(...)` 或双参数 service 入口。
+- 管理端控制权：`SellerAdminPermissionContractTest` / `BuyerAdminPermissionContractTest` 覆盖账号角色、会话列表、强退、免密票据、重置密码权限；前端 `PartnerAccountModal` / `PartnerManagementPage` 仍按端配置使用 `*:admin:account:role:query`、`*:admin:account:role:edit`、`*:admin:role:query` 和 `*:admin:session:list` / `*:admin:forceLogout`。
+- 免密和会话：`PortalDirectLoginSupport` 当前使用 `portal_direct_login:{terminal}:{token_hash}`；测试覆盖旧 key 拒绝、错端拒绝、30 分钟、一次性和审计字段。
+- React guard：远程菜单空 `authority` fail-closed；portal 401、direct-login 失败、portal token 清理和 redirect 范围由对应 Jest 固定。
+- SQL/seed：端内菜单 ID 段、perms 前缀、页面菜单 component、确认 token、`45000` fail-closed 和 product owner cleanup 方向由 SQL 合同与远端只读核验固定；本轮未发现需要新增 DDL/DML。
+
+### 验证
+
+- `cd react-ui; node scripts\verify-three-terminal.mjs --check-manifest`：通过。
+- `cd react-ui; node scripts\check-portal-token-isolation.mjs`：通过。
+- `cd RuoYi-Vue; mvn -pl ruoyi-system -am "-Dtest=TerminalAccountIsolationTest,TerminalRoleMenuMapperIsolationContractTest,TerminalSqlIsolationContractTest,AdminDirectLoginPermissionContractTest,SellerAdminPermissionContractTest,BuyerAdminPermissionContractTest,AdminAccountPermissionUiContractTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，27 tests / 0 failures / 0 errors / 0 skipped。
+- `cd RuoYi-Vue; mvn -pl seller,buyer -am "-Dtest=SellerServiceImplTest,BuyerServiceImplTest,SellerPortalPermissionServiceImplTest,BuyerPortalPermissionServiceImplTest,SellerPortalPermissionServiceImplPortalAccessTest,BuyerPortalPermissionServiceImplPortalAccessTest,SellerPortalPermissionServiceImplMenuTreeTest,BuyerPortalPermissionServiceImplMenuTreeTest,SellerPortalProductServiceImplTest,BuyerPortalProductServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，seller 106 tests / buyer 108 tests。
+- `cd react-ui; npx jest --config jest.config.ts --runTestsByPath tests\getrouters-authority-contract.test.ts tests\remote-menu-route-guard.test.ts tests\static-route-authority-contract.test.ts tests\terminal-session-token.test.ts tests\portal-unauthorized-redirect.test.ts tests\portal-session-request.test.ts tests\partner-management-contract.test.ts tests\partner-audit-modal.test.ts tests\portal-direct-login-message.test.ts tests\portal-product-schema-preview.test.ts --runInBand`：10 suites / 90 tests 通过。
+
+### 数据源与远端影响
+
+- 当前配置确认：`application.yml` 激活 profile 为 `druid`；MySQL 配置来自 `application-druid.yml` 的 `${RUOYI_DB_URL}` / `${RUOYI_DB_USERNAME}` / `${RUOYI_DB_PASSWORD}`；Redis 配置来自 `${RUOYI_REDIS_HOST}` / `${RUOYI_REDIS_PORT}` / `${RUOYI_REDIS_DATABASE}`。
+- 本轮未执行远端 MySQL DDL/DML。
+- 本轮未读取或写入 Redis。
+- 本轮未启动或重启后端。
+
+### 结论
+
+- 本轮未发现新的三端账号权限 P0/P1：编译、guard、接口、权限、串端、service/mapper/DTO 字段、裸 accountId、前端主体范围参数、`@PortalPreAuthorize` / `@PortalLog`、SQL fail-closed、菜单 ID 段、权限前缀或 OWNER 授权闭环均未暴露硬失败。
+- 当前工作树仍存在 AGENTS、integration、inventory、Channel、upstream system 等旁路改动；本轮只读识别，不接管、不计入三端账号权限完成度。
+- 目标仍保持 active，不标记完成。
+
+## 2026-06-10 21:35 检查点：完整 three-terminal gate 复验通过
+
+参考方向仍为 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md`。本轮不扩大到浏览器、截图、DOM、UI 细调或三物理前端拆分，只用完整非浏览器 gate 加强三端账号权限框架完成审计证据。
+
+### 补充静态审计
+
+- seller/buyer 生产代码扫描 `sys_user`、`sys_role`、`sys_menu`、`sys_dept`、`sys_user_role`、`sys_role_menu`、`SysUser`、`SysRole`、`SysMenu`、`SysDept`、`LoginUser`：未发现端内账号权限体系复用若依 `sys_*`。
+- 管理端 seller/buyer controller 扫描：账号、角色、菜单、部门、会话、强退、免密、审计列表均保留端命名空间 `@PreAuthorize`；写操作和敏感读列表保留 `@Log`。
+- Portal controller 复核：普通 portal 自助接口有 `@PortalPreAuthorize` + `@PortalLog` + `PortalSessionContext.requireSession(...)`；`/login` 与 `/direct-login` 是预期匿名入口，使用 `@PortalLog(... allowAnonymous = true)` 并排除密码、验证码、uuid、directLoginToken 等敏感请求字段。
+- 端内角色菜单绑定复核：写入 `seller_role_menu` / `buyer_role_menu` 前先通过当前端菜单表计数和逐项 `select*MenuById` 校验，并再次校验菜单 ID 段、component 根路径和 perms 前缀；最终 `batch*RoleMenu` 也限定当前端菜单表与 ID 段。
+- `DEFAULT_OWNER_PERMS` 复核：seller/buyer 默认 owner 只包含账号、登录日志、操作日志、会话、部门、角色和 portal home 权限，不包含 `*:product:*`，继续保持 product owner cleanup 方向。
+
+### 完整 gate
+
+- `cd react-ui; node scripts\verify-three-terminal.mjs`：通过。
+  - 前端 guard：`guard:portal-token`、`guard:partner-management`、`guard:seller-portal-product`、`guard:buyer-portal-product`、`guard:product-upstream-mirrors` 全部通过。
+  - React typecheck：`npm run tsc` 通过。
+  - React Jest：27 suites / 220 tests 通过。
+  - 后端 reactor `test-compile`：15 个 Maven 模块通过，包括 `ruoyi-admin`、`seller`、`buyer`、`ruoyi-system`、`product`、`inventory`、`integration`、`logistics` 等。
+  - 后端 manifest 测试：12 个 Maven 模块通过；其中 seller 110 tests、buyer 112 tests、product 69 tests、integration 12 tests、inventory 13 tests、logistics 12 tests 均通过。
+  - 输出结论：`three-terminal verification passed.`
+
+### 数据源与远端影响
+
+- 本轮只运行本地静态审计、编译、单测、Jest、guard 和 manifest gate。
+- 本轮未执行远端 MySQL DDL/DML。
+- 本轮未读取或写入 Redis。
+- 本轮未启动或重启后端。
+
+### 结论
+
+- 以当前非浏览器 gate 口径，本轮没有剩余三端账号权限 P0/P1 失败项。
+- 旁路改动仍存在并继续冻结：integration/upstream、inventory、Channel、logistics 等不计入当前三端账号权限框架完成度。
+- 目标是否最终关闭仍需按 completion audit 再核一次当前证据边界；本检查点本身不扩大需求范围。
+
+## 2026-06-10 21:40 完成审计：三端账号权限 P0/P1 收口
+
+参考方向仍为 `docs/plans/2026-06-04-three-terminal-isolation-control-plan.md`。本审计只判断当前目标声明的三端账号权限框架 P0/P1，不把旁路 P2、浏览器/截图/DOM/UI 细调或三物理前端拆分纳入完成条件。
+
+### 需求逐项结论
+
+| 要求 | 当前证据 | 结论 |
+| --- | --- | --- |
+| 管理端继续保留若依 `sys_*` 后台控制面 | 管理端 seller/buyer controller 使用 `@PreAuthorize("@ss.hasPermi('seller:admin:*')")` / `buyer:admin:*`；若依后台 `sys_*` 未被替换 | 已满足 |
+| 卖家/买家端账号、密码、角色、菜单、部门、日志、会话、权限独立 | seller/buyer 模块使用 `seller_*` / `buyer_*` 表和 mapper；生产代码扫描未发现端内账号权限体系复用 `sys_user`、`sys_role`、`sys_menu`、`sys_dept` | 已满足 |
+| 端接口从 portal session 推导主体和账号，不相信前端主体范围参数 | portal controller/service 使用 `PortalSessionContext.requireSession(...)`；前端 `sanitizePortalQueryParams(...)` 剥离 `sellerId`、`buyerId`、`subjectId`、`accountId` 等范围字段；对应 Jest 通过 | 已满足 |
+| 裸 `accountId` 查询被禁止 | `TerminalAccountIsolationTest` 覆盖；生产 mapper/service 搜索只保留 `select*AccountByIdAnd*Id(...)` 或双参数 service 入口 | 已满足 |
+| `@PortalPreAuthorize` / `@PortalLog` 和管理端 `@PreAuthorize` / `@Log` 不缺失 | 静态复核 portal/admin controller；`PortalAnonymousEndpointContractTest`、`PortalSelfServiceSurfaceContractTest`、`SellerAdminPermissionContractTest`、`BuyerAdminPermissionContractTest`、`PortalLogAspectContractTest` 已纳入完整 gate 并通过 | 已满足 |
+| SQL fail-closed、端菜单 ID 段、权限前缀和 OWNER 闭环正确 | `TerminalSqlIsolationContractTest`、`SqlExecutionGuardContractTest`、`TerminalSeedPermissionContractTest`、`TerminalRoleMenuMapperIsolationContractTest` 通过；远端只读核验菜单 ID/role-menu 无孤儿或越界 | 已满足 |
+| 默认 OWNER 不恢复 product 授权 | `DEFAULT_OWNER_PERMS` 不含 `*:product:*`；远端 seller/buyer product 菜单定义均为 4，OWNER product 授权均为 0 | 已满足 |
+| 免密代入 token/Redis key 端隔离、短时、一次性、可审计 | `PortalDirectLoginSupportTest`、`PortalDirectLoginTicketSqlContractTest`、`terminal-session-token.test.ts`、`portal-direct-login-message.test.ts`、`check-portal-token-isolation.mjs` 均通过 | 已满足 |
+| 管理端控制权保留且不混用账号体系 | 管理端账号、角色、会话、强退、免密、审计列表均走端管理接口和端权限；`seller:admin:session:list` / `buyer:admin:session:list` 与 `*:admin:forceLogout` 已分离并通过合同测试 | 已满足 |
+| P2 与旁路范围不阻塞本轮 | integration/upstream、inventory、Channel、logistics 等仍作为旁路改动只读记录，不计入当前完成度 | 已记录 |
+
+### 远端只读核验
+
+- 数据源：`application.yml` 激活 `druid`；MySQL 连接来自 `.env.local` 的 `RUOYI_DB_*`；本记录未输出 URL、账号、密码、Redis 密码、token secret 或 `URILI_SECRET_ENCRYPTION_KEY`。
+- 目标库：远端 MySQL，`target_db=fenxiao`，`url_is_local=false`。
+- 只读结果：
+  - `missing_required_terminal_tables=0`
+  - `missing_terminal_audit_columns=0`
+  - `seller_product_menu_defs=4`
+  - `buyer_product_menu_defs=4`
+  - `seller_owner_product_grants=0`
+  - `buyer_owner_product_grants=0`
+  - `seller_owner_basic_missing_grants=0`
+  - `buyer_owner_basic_missing_grants=0`
+  - `seller_owner_account_role_missing=0`
+  - `buyer_owner_account_role_missing=0`
+  - `seller_role_menu_orphan_or_out_of_range=0`
+  - `buyer_role_menu_orphan_or_out_of_range=0`
+  - `seller_blank_passwords=0`
+  - `buyer_blank_passwords=0`
+
+### 最终验证
+
+- `cd react-ui; node scripts\verify-three-terminal.mjs`：通过，输出 `three-terminal verification passed.`。
+- `git diff --check`：仅 CRLF 提示，无空白错误。
+- `codegraph sync .`：已执行。
+
+### 完成判定
+
+- 当前三端账号权限框架 P0/P1 已无剩余失败项。
+- 本目标可关闭；旁路 P2 和后续业务功能继续按后续目标推进。

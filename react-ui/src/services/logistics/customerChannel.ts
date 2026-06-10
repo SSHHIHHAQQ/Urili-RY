@@ -73,6 +73,25 @@ export async function deleteSystemMapping(customerChannelCode: string, mappingId
   });
 }
 
+export async function getQuoteChannelMappings(customerChannelCode: string) {
+  return request<any>(`${baseUrl}/${customerChannelCode}/quote-channel-mappings/list`, {
+    method: 'GET',
+  });
+}
+
+export async function addQuoteChannelMapping(customerChannelCode: string, data: Record<string, any>) {
+  return request<API.Result>(`${baseUrl}/${customerChannelCode}/quote-channel-mappings`, {
+    method: 'POST',
+    data,
+  });
+}
+
+export async function deleteQuoteChannelMapping(customerChannelCode: string, mappingId: number) {
+  return request<API.Result>(`${baseUrl}/${customerChannelCode}/quote-channel-mappings/${mappingId}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function getBuyerScope(customerChannelCode: string) {
   return request<any>(`${baseUrl}/${customerChannelCode}/buyer-scope`, {
     method: 'GET',

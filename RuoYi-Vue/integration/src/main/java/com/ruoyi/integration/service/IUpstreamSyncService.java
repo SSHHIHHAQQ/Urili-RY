@@ -13,6 +13,8 @@ public interface IUpstreamSyncService
 
     UpstreamSyncResult syncSelected(String connectionCode, UpstreamSyncRequest request);
 
+    UpstreamSyncResult submitSelected(String connectionCode, UpstreamSyncRequest request);
+
     UpstreamSyncResult syncScheduled(String connectionCode, String syncType);
 
     UpstreamSyncResult syncWarehousesOnly(String connectionCode);
@@ -23,9 +25,17 @@ public interface IUpstreamSyncService
 
     UpstreamSyncResult syncSkusOnly(String connectionCode);
 
+    UpstreamSyncResult submitSkusOnly(String connectionCode);
+
     UpstreamSyncResult syncSkuDimensionsOnly(String connectionCode);
+
+    UpstreamSyncResult submitSkuDimensionsOnly(String connectionCode);
 
     UpstreamSyncResult syncSkuDimensionsBySkuList(String connectionCode, SkuDimensionSelectedSyncRequest request);
 
+    UpstreamSyncResult submitSkuDimensionsBySkuList(String connectionCode, SkuDimensionSelectedSyncRequest request);
+
     UpstreamSyncResult syncWarehouseStocksOnly(String connectionCode);
+
+    UpstreamSyncResult submitWarehouseStocksOnly(String connectionCode);
 }

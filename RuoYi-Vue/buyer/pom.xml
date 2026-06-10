@@ -37,6 +37,11 @@
             <scope>test</scope>
         </dependency>
 
+        <dependency>
+            <groupId>com.ruoyi</groupId>
+            <artifactId>finance</artifactId>
+        </dependency>
+
     </dependencies>
 
 </project>

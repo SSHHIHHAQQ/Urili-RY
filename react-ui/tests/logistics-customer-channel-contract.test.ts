@@ -22,6 +22,9 @@ describe('customer logistics channel admin contract', () => {
       'addCustomerChannel',
       'updateCustomerChannelStatus',
       'getSystemMappings',
+      'getQuoteChannelMappings',
+      'addQuoteChannelMapping',
+      'deleteQuoteChannelMapping',
       'saveBuyerScope',
       'getSystemChannelOptions',
       'getBuyerOptions',
@@ -29,6 +32,7 @@ describe('customer logistics channel admin contract', () => {
       expect(service).toContain(method);
     }
     expect(service).toContain('system-mappings');
+    expect(service).toContain('quote-channel-mappings');
     expect(service).toContain('buyer-scope');
     expect(service).toContain('options/system-channels');
     expect(service).toContain('options/buyers');
@@ -51,6 +55,9 @@ describe('customer logistics channel admin contract', () => {
 
     expect(page).toContain("const canBind = access.hasPerms('logistics:customerChannel:binding');");
     expect(page).toContain("const canBuyer = access.hasPerms('logistics:customerChannel:buyer');");
+    expect(page).toContain("const canListUpstreamConnections = access.hasPerms('integration:upstream:list');");
+    expect(page).toContain("const canQueryUpstream = access.hasPerms('integration:upstream:query');");
+    expect(page).toContain('const canConfigureQuoteChannel = canBind && canListUpstreamConnections && canQueryUpstream;');
     expect(page).not.toContain('logistics:systemChannel:');
   });
 
@@ -70,11 +77,24 @@ describe('customer logistics channel admin contract', () => {
     expect(page).toContain("payload.channelType === 'WAREHOUSE_LABEL'");
     expect(page).toContain("payload.labelUploadRequired === 'REQUIRED'");
     expect(page).toContain('需要上传物流面单时，平台面单获取和客户上传面单至少开启一个');
-    expect(page).toContain('<Row gutter={24}>');
+    expect(page).toContain('<Row gutter={24} style={{ marginLeft: 0, marginRight: 0 }}>');
     expect(page).toContain('<Col xs={24} lg={8}>');
     expect(page).toContain('<Switch');
     expect(page).toContain("checked={record.status === 'ENABLED'}");
-    expect(page).toContain('onChange={() => toggleStatus(record)}');
+    expect(page).toContain('onClick={() => toggleStatus(record)}');
+    expect(page).not.toContain('size="small"\n          checked={record.status === \'ENABLED\'}');
+    expect(page).toContain("const UPSTREAM_SETTLEMENT_TYPE_QUOTE = 'self-operated-receivable';");
+    expect(page).toContain("const UPSTREAM_PAIRING_ROLE_QUOTE = 'QUOTE';");
+    expect(page).toContain('function isQuoteUpstreamConnection');
+    expect(page).toContain('getUpstreamConnectionList');
+    expect(page).toContain('getLogisticsChannelSyncList');
+    expect(page).toContain('loadQuoteConnectionOptions');
+    expect(page).toContain('loadQuoteLogisticsChannelOptions');
+    expect(page).toContain("key: 'quoteChannelMappings'");
+    expect(page).toContain("label: '主仓渠道映射'");
+    expect(page).toContain('配置主仓渠道');
+    expect(page).toContain("label=\"主仓渠道\"");
+    expect(page).toContain("filter(isQuoteUpstreamConnection)");
     expect(page).toContain("const isCreateBaseStep = channelEditorMode === 'create' && !currentChannel?.customerChannelCode;");
     expect(page).toContain("const shouldShowChannelDetails = channelEditorMode === 'edit' || !!currentChannel?.customerChannelCode;");
     expect(page).toContain('保存并下一步');
@@ -85,6 +105,11 @@ describe('customer logistics channel admin contract', () => {
     expect(page).toContain('买家代码');
     expect(page).toContain('买家名称');
     expect(page).toContain('买家简称');
+    expect(page).toContain('width="94vw"');
+    expect(page).toContain('maxWidth: 1680');
+    expect(page).toContain("overflowX: 'hidden'");
+    expect(page).not.toContain('width="88vw"');
+    expect(page).not.toContain('maxWidth: 1440');
     expect(buyerModal).toContain("overflow: 'hidden'");
     expect(buyerModal).toContain('scroll={getProTableScroll(680, { y: 300 })}');
     expect(buyerModal).not.toContain("overflowY: 'auto'");
@@ -112,6 +137,7 @@ describe('customer logistics channel admin contract', () => {
     expect(sql).toContain("perms = 'logistics:customerChannel:list'");
     expect(sql).toContain('logistics_customer_channel');
     expect(sql).toContain('logistics_customer_channel_system_mapping');
+    expect(sql).toContain('logistics_customer_channel_quote_mapping');
     expect(sql).toContain('logistics_customer_channel_buyer_scope');
     expect(sql).toContain('channel:customer:query');
     expect(sql).toContain('channel:customer:add');
@@ -128,6 +154,13 @@ describe('customer logistics channel admin contract', () => {
     }
     expect(sql).not.toContain('logistics_platform_channel_mapping');
     expect(sql).not.toContain('logistics_system_channel_buyer_scope');
+
+    const incrementalSql = readRepoSource('RuoYi-Vue/sql/20260611_customer_channel_quote_mapping.sql');
+    expect(incrementalSql).toContain('@confirm_customer_channel_quote_mapping');
+    expect(incrementalSql).toContain('APPLY_CUSTOMER_CHANNEL_QUOTE_MAPPING');
+    expect(incrementalSql).toContain('logistics_customer_channel_quote_mapping');
+    expect(incrementalSql).toContain('uk_logistics_customer_quote_channel');
+    expect(incrementalSql).toContain('idx_logistics_customer_quote_upstream');
   });
 
   it('keeps logistics customer channel contract in the three-terminal manifest', () => {

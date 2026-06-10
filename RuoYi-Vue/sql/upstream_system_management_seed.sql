@@ -216,8 +216,8 @@ create table if not exists upstream_system_logistics_channel_candidate (
 create table if not exists upstream_system_logistics_channel_pairing (
   logistics_channel_pairing_id bigint(20)   not null auto_increment comment '物流渠道配对ID',
   connection_code              varchar(64)  not null                comment '主仓接入编号',
-  system_warehouse_code        varchar(64)  not null                comment '系统仓库代码',
-  upstream_warehouse_code      varchar(100) not null                comment '领星仓库代码',
+  system_warehouse_code        varchar(64)  not null default ''     comment '历史兼容：系统仓库代码，系统渠道级配对不再使用',
+  upstream_warehouse_code      varchar(100) not null default ''     comment '历史兼容：领星仓库代码，系统渠道级配对不再使用',
   upstream_channel_code        varchar(100) not null                comment '领星物流渠道代码',
   upstream_channel_name        varchar(200) not null                comment '领星物流渠道名称快照',
   system_channel_code          varchar(64)  not null                comment '系统物流渠道代码',
@@ -230,8 +230,8 @@ create table if not exists upstream_system_logistics_channel_pairing (
   update_time                  datetime                             comment '更新时间',
   remark                       varchar(500) default ''              comment '备注',
   primary key (logistics_channel_pairing_id),
-  unique key uk_upstream_channel_pairing_system_role (system_warehouse_code, system_channel_code, pairing_role),
-  key idx_upstream_channel_pairing_upstream_role (connection_code, upstream_warehouse_code, upstream_channel_code, pairing_role),
+  unique key uk_upstream_channel_pairing_system_role (system_channel_code, pairing_role),
+  key idx_upstream_channel_pairing_upstream_role (connection_code, upstream_channel_code, pairing_role),
   key idx_upstream_channel_pairing_connection (connection_code)
 ) engine=innodb comment='系统物流渠道与领星渠道配对表';
 

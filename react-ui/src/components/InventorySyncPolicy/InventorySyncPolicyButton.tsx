@@ -1,14 +1,12 @@
-import { Button, Descriptions, Form, Input, Modal, Select, Segmented, Space, Table, Tag, Typography, message } from 'antd';
+import { Button, Descriptions, Form, Input, Modal, Radio, Select, Space, Table, Tag, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useEffect, useMemo, useState } from 'react';
 import {
   confirmInventoryOverviewSyncPolicy,
-  getInventoryOverviewSkuList,
-  getInventoryOverviewSpuList,
-  getInventoryOverviewWarehouseList,
   previewInventoryOverviewSyncPolicy,
 } from '@/services/inventory/overview';
 import { SEARCHABLE_SELECT_PROPS } from '@/utils/selectSearch';
+import InventorySyncPolicyTargetPicker from './InventorySyncPolicyTargetPicker';
 
 const scopeOptions = [
   { label: '卖家维度', value: 'SELLER' },
@@ -118,10 +116,6 @@ export function InventorySyncPolicyModal({
   const [preview, setPreview] = useState<API.InventoryOverview.SyncPolicyPreview>();
   const [previewing, setPreviewing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [spuOptions, setSpuOptions] = useState<any[]>([]);
-  const [skuOptions, setSkuOptions] = useState<any[]>([]);
-  const [stockOptions, setStockOptions] = useState<any[]>([]);
-  const [targetLoading, setTargetLoading] = useState(false);
   const scopeType = Form.useWatch('scopeType', form);
 
   const currentScope = (scopeType || initialScope) as API.InventoryOverview.SyncPolicyScope;
@@ -134,98 +128,28 @@ export function InventorySyncPolicyModal({
     [warehouseOptions],
   );
 
-  const loadSpuOptions = async (keyword?: string) => {
-    setTargetLoading(true);
-    try {
-      const resp = await getInventoryOverviewSpuList({ pageNum: 1, pageSize: 50, keyword });
-      setSpuOptions((resp.rows || []).map((item) => ({
-        label: `${item.productName || '-'} / ${item.systemSpuCode || item.spuId}`,
-        value: item.spuId,
-        sellerId: item.sellerId,
-      })));
-    } finally {
-      setTargetLoading(false);
-    }
-  };
-
-  const loadSkuOptions = async (keyword?: string) => {
-    setTargetLoading(true);
-    try {
-      const resp = await getInventoryOverviewSkuList({ pageNum: 1, pageSize: 50, keyword });
-      setSkuOptions((resp.rows || []).map((item) => ({
-        label: `${item.systemSkuCode || item.skuId} / ${item.productName || '-'}${item.skuName ? ` / ${item.skuName}` : ''}`,
-        value: item.skuId,
-        sellerId: item.sellerId,
-        spuId: item.spuId,
-      })));
-    } finally {
-      setTargetLoading(false);
-    }
-  };
-
-  const loadStockOptions = async (keyword?: string) => {
-    setTargetLoading(true);
-    try {
-      const resp = await getInventoryOverviewWarehouseList({ pageNum: 1, pageSize: 50, keyword });
-      setStockOptions((resp.rows || []).map((item) => ({
-        label: `${item.systemSkuCode || item.skuId} / ${item.warehouseName || '-'} / ${item.productName || '-'}`,
-        value: item.stockId,
-        sellerId: item.sellerId,
-        spuId: item.spuId,
-        skuId: item.skuId,
-        warehouseName: item.warehouseName,
-      })));
-    } finally {
-      setTargetLoading(false);
-    }
-  };
-
   useEffect(() => {
     if (!open) {
       setPreview(undefined);
       return;
     }
     form.setFieldsValue(buildInitialRequest(initialScope, overviewRecord, warehouseRecord));
-    if (initialScope === 'SPU' && overviewRecord?.spuId) {
-      setSpuOptions([{
-        label: `${overviewRecord.productName || '-'} / ${overviewRecord.systemSpuCode || overviewRecord.spuId}`,
-        value: overviewRecord.spuId,
-        sellerId: overviewRecord.sellerId,
-      }]);
-    } else if (initialScope === 'SKU' && overviewRecord?.skuId) {
-      setSkuOptions([{
-        label: `${overviewRecord.systemSkuCode || overviewRecord.skuId} / ${overviewRecord.productName || '-'}${overviewRecord.skuName ? ` / ${overviewRecord.skuName}` : ''}`,
-        value: overviewRecord.skuId,
-        sellerId: overviewRecord.sellerId,
-        spuId: overviewRecord.spuId,
-      }]);
-    } else if (initialScope === 'SKU_WAREHOUSE' && warehouseRecord?.stockId) {
-      setStockOptions([{
-        label: `${warehouseRecord.systemSkuCode || warehouseRecord.skuId} / ${warehouseRecord.warehouseName || '-'} / ${warehouseRecord.productName || '-'}`,
-        value: warehouseRecord.stockId,
-        sellerId: warehouseRecord.sellerId,
-        spuId: warehouseRecord.spuId,
-        skuId: warehouseRecord.skuId,
-        warehouseName: warehouseRecord.warehouseName,
-      }]);
-    }
     setPreview(undefined);
   }, [form, initialScope, open, overviewRecord, warehouseRecord]);
 
-  useEffect(() => {
-    if (!open || lockScope) {
-      return;
-    }
-    if (currentScope === 'SPU') {
-      loadSpuOptions();
-    } else if (currentScope === 'SKU') {
-      loadSkuOptions();
-    } else if (currentScope === 'SKU_WAREHOUSE') {
-      loadStockOptions();
-    }
-  }, [currentScope, lockScope, open]);
-
   const resetPreview = () => setPreview(undefined);
+
+  const resetScopeTarget = () => {
+    form.setFieldsValue({
+      warehouseKey: undefined,
+      warehouseKeys: undefined,
+      warehouseName: undefined,
+      spuId: undefined,
+      skuId: undefined,
+      stockId: undefined,
+    });
+    resetPreview();
+  };
 
   const buildPayload = async (confirmed?: boolean) => {
     const values = await form.validateFields();
@@ -388,10 +312,22 @@ export function InventorySyncPolicyModal({
         >
           <Space direction="vertical" size={12} style={{ width: '100%' }}>
             <Form.Item name="scopeType" label="设置范围" rules={[{ required: true, message: '请选择设置范围' }]}>
-              <Segmented options={scopeOptions as any} disabled={lockScope} />
+              <Radio.Group buttonStyle="solid" disabled={lockScope} onChange={resetScopeTarget}>
+                {scopeOptions.map((item) => (
+                  <Radio.Button key={item.value} value={item.value}>
+                    {item.label}
+                  </Radio.Button>
+                ))}
+              </Radio.Group>
             </Form.Item>
             <Form.Item name="syncMode" label="库存同步方式" rules={[{ required: true, message: '请选择库存同步方式' }]}>
-              <Segmented options={syncModeOptions as any} />
+              <Radio.Group buttonStyle="solid">
+                {syncModeOptions.map((item) => (
+                  <Radio.Button key={item.value} value={item.value}>
+                    {item.label}
+                  </Radio.Button>
+                ))}
+              </Radio.Group>
             </Form.Item>
             {currentScope === 'SELLER' || currentScope === 'WAREHOUSE' ? (
               <Form.Item name="sellerId" label="卖家" rules={[{ required: true, message: '请选择卖家' }]}>
@@ -416,59 +352,27 @@ export function InventorySyncPolicyModal({
                 />
               </Form.Item>
             ) : null}
-            {currentScope === 'SPU' ? (
-              <Form.Item name="spuId" label="SPU" rules={[{ required: true, message: '请选择SPU' }]}>
-                <Select
-                  {...SEARCHABLE_SELECT_PROPS}
-                  showSearch
-                  disabled={lockScope}
-                  loading={targetLoading}
-                  options={spuOptions}
-                  placeholder="搜索商品名 / SPU"
-                  onSearch={loadSpuOptions}
-                  onChange={(_, option: any) => {
-                    form.setFieldValue('sellerId', option?.sellerId);
-                  }}
-                />
-              </Form.Item>
-            ) : null}
-            {currentScope === 'SKU' ? (
-              <Form.Item name="skuId" label="SKU" rules={[{ required: true, message: '请选择SKU' }]}>
-                <Select
-                  {...SEARCHABLE_SELECT_PROPS}
-                  showSearch
-                  disabled={lockScope}
-                  loading={targetLoading}
-                  options={skuOptions}
-                  placeholder="搜索商品名 / SKU"
-                  onSearch={loadSkuOptions}
-                  onChange={(_, option: any) => {
-                    form.setFieldsValue({ sellerId: option?.sellerId, spuId: option?.spuId });
-                  }}
-                />
-              </Form.Item>
-            ) : null}
-            {currentScope === 'SKU_WAREHOUSE' ? (
-              <Form.Item name="stockId" label="库存明细行" rules={[{ required: true, message: '请选择库存明细行' }]}>
-                <Select
-                  {...SEARCHABLE_SELECT_PROPS}
-                  showSearch
-                  disabled={lockScope}
-                  loading={targetLoading}
-                  options={stockOptions}
-                  placeholder="搜索商品名 / SKU / 仓库"
-                  onSearch={loadStockOptions}
-                  onChange={(_, option: any) => {
-                    form.setFieldsValue({
-                      sellerId: option?.sellerId,
-                      spuId: option?.spuId,
-                      skuId: option?.skuId,
-                      warehouseName: option?.warehouseName,
-                    });
-                  }}
-                />
-              </Form.Item>
-            ) : null}
+            <Form.Item name="spuId" hidden rules={currentScope === 'SPU' ? [{ required: true, message: '请选择SPU' }] : []}>
+              <Input />
+            </Form.Item>
+            <Form.Item name="skuId" hidden rules={currentScope === 'SKU' ? [{ required: true, message: '请选择SKU' }] : []}>
+              <Input />
+            </Form.Item>
+            <Form.Item
+              name="stockId"
+              hidden
+              rules={currentScope === 'SKU_WAREHOUSE' ? [{ required: true, message: '请选择库存明细行' }] : []}
+            >
+              <Input />
+            </Form.Item>
+            <InventorySyncPolicyTargetPicker
+              form={form}
+              currentScope={currentScope}
+              lockScope={lockScope}
+              overviewRecord={overviewRecord}
+              warehouseRecord={warehouseRecord}
+              onSelectionChange={resetPreview}
+            />
             <Form.Item name="remark" label="备注">
               <Input.TextArea maxLength={500} rows={2} placeholder="备注（选填）" showCount />
             </Form.Item>

@@ -41,6 +41,7 @@ import com.ruoyi.system.domain.PortalSessionProfile;
 import com.ruoyi.system.mapper.PortalDirectLoginTicketMapper;
 import com.ruoyi.system.service.ISysConfigService;
 import com.ruoyi.system.service.ISysDictTypeService;
+import com.ruoyi.system.service.support.PortalActorSupport;
 import com.ruoyi.system.service.support.PortalDirectLoginSupport;
 import com.ruoyi.system.service.support.PortalTokenSupport;
 import com.ruoyi.system.service.support.PartnerSupport;
@@ -56,13 +57,25 @@ public class SellerServiceImpl implements ISellerService
     private static final String OWNER_ROLE_KEY = "owner";
 
     private static final String[] DEFAULT_OWNER_PERMS = {
+        "seller:portal:home",
         "seller:account:list",
+        "seller:account:add",
+        "seller:account:edit",
+        "seller:account:role:query",
+        "seller:account:role:edit",
         "seller:account:loginLog:list",
         "seller:account:operLog:list",
         "seller:account:session:list",
         "seller:dept:list",
+        "seller:dept:query",
+        "seller:dept:add",
+        "seller:dept:edit",
+        "seller:dept:remove",
         "seller:role:list",
-        "seller:portal:home"
+        "seller:role:query",
+        "seller:role:add",
+        "seller:role:edit",
+        "seller:role:remove"
     };
 
     private static final String LOGIN_BLACK_IP_CONFIG_KEY = "sys.login.blackIPList";
@@ -114,7 +127,7 @@ public class SellerServiceImpl implements ISellerService
     {
         normalizeSeller(seller);
         seller.setSellerNo(PartnerSupport.generateNo(SELLER_NO_PREFIX, sellerMapper::selectMaxSellerNoByPrefix));
-        seller.setCreateBy(SecurityUtils.getUsername());
+        seller.setCreateBy(PortalActorSupport.currentActorName());
         checkSellerCodeUnique(seller);
 
         int rows = sellerMapper.insertSeller(seller);
@@ -129,7 +142,7 @@ public class SellerServiceImpl implements ISellerService
         Seller current = selectSellerById(seller.getSellerId());
         seller.setSellerNo(current.getSellerNo());
         normalizeSeller(seller, current.getAttachmentFileUrl());
-        seller.setUpdateBy(SecurityUtils.getUsername());
+        seller.setUpdateBy(PortalActorSupport.currentActorName());
         checkSellerCodeUnique(seller);
 
         int rows = sellerMapper.updateSeller(seller);
@@ -143,12 +156,12 @@ public class SellerServiceImpl implements ISellerService
     {
         selectSellerById(seller.getSellerId());
         PartnerSupport.assertStatus(seller.getStatus());
-        int rows = sellerMapper.updateSellerStatus(seller.getSellerId(), seller.getStatus(), SecurityUtils.getUsername());
+        int rows = sellerMapper.updateSellerStatus(seller.getSellerId(), seller.getStatus(), PortalActorSupport.currentActorName());
         SellerAccount owner = sellerMapper.selectOwnerSellerAccountBySellerId(seller.getSellerId());
         if (owner != null)
         {
             owner.setStatus(seller.getStatus());
-            owner.setUpdateBy(SecurityUtils.getUsername());
+            owner.setUpdateBy(PortalActorSupport.currentActorName());
             sellerMapper.updateSellerAccount(owner);
         }
         if (!PartnerSupport.STATUS_NORMAL.equals(seller.getStatus()))
@@ -184,7 +197,7 @@ public class SellerServiceImpl implements ISellerService
         selectSellerById(sellerId);
         normalizeSellerAccount(account, true);
         account.setSellerId(sellerId);
-        account.setCreateBy(SecurityUtils.getUsername());
+        account.setCreateBy(PortalActorSupport.currentActorName());
         validateSellerAccountDept(sellerId, account.getDeptId());
         assertSingleSellerOwner(sellerId, account);
         if (sellerMapper.selectSellerAccountByUserName(account.getUserName()) != null)
@@ -216,7 +229,7 @@ public class SellerServiceImpl implements ISellerService
         account.setLockReason(current.getLockReason());
         normalizeSellerAccount(account, false);
         validateSellerAccountDept(sellerId, account.getDeptId());
-        account.setUpdateBy(SecurityUtils.getUsername());
+        account.setUpdateBy(PortalActorSupport.currentActorName());
         int rows = sellerMapper.updateSellerAccount(account);
         if (!PartnerSupport.STATUS_NORMAL.equals(account.getStatus()))
         {
@@ -240,7 +253,7 @@ public class SellerServiceImpl implements ISellerService
             throw new ServiceException("锁定原因不能超过500个字符");
         }
         int rows = sellerMapper.updateSellerAccountLockStatus(sellerId, account.getSellerAccountId(),
-            PartnerSupport.ACCOUNT_LOCK_STATUS_LOCKED, reason, SecurityUtils.getUsername());
+            PartnerSupport.ACCOUNT_LOCK_STATUS_LOCKED, reason, PortalActorSupport.currentActorName());
         forceLogoutSellerSessionScope(sellerId, account.getSellerAccountId());
         return rows;
     }
@@ -251,7 +264,7 @@ public class SellerServiceImpl implements ISellerService
     {
         SellerAccount account = selectSellerAccountById(sellerId, sellerAccountId);
         return sellerMapper.updateSellerAccountLockStatus(sellerId, account.getSellerAccountId(),
-            PartnerSupport.ACCOUNT_LOCK_STATUS_UNLOCKED, "", SecurityUtils.getUsername());
+            PartnerSupport.ACCOUNT_LOCK_STATUS_UNLOCKED, "", PortalActorSupport.currentActorName());
     }
 
     @Override
@@ -261,7 +274,7 @@ public class SellerServiceImpl implements ISellerService
         String normalizedPassword = PartnerSupport.normalizeTemporaryPassword(password);
         SellerAccount current = selectSellerAccountById(sellerId, sellerAccountId);
         int rows = sellerMapper.resetSellerAccountPassword(current.getSellerId(), current.getSellerAccountId(),
-            SecurityUtils.encryptPassword(normalizedPassword), SecurityUtils.getUsername());
+            SecurityUtils.encryptPassword(normalizedPassword), PortalActorSupport.currentActorName());
         forceLogoutSellerAccountSessionsAfterPasswordReset(rows, current.getSellerId(), current.getSellerAccountId());
         return rows;
     }
@@ -894,7 +907,7 @@ public class SellerServiceImpl implements ISellerService
 
         owner.setNickName(PartnerSupport.buildOwnerNickName(seller.getSellerName(), seller.getSellerShortName(), seller.getContactName()));
         owner.setStatus(seller.getStatus());
-        owner.setUpdateBy(SecurityUtils.getUsername());
+        owner.setUpdateBy(PortalActorSupport.currentActorName());
         owner.setRemark("卖家主账号");
         sellerMapper.updateSellerAccount(owner);
         bindOwnerRoleIfNeeded(seller.getSellerId(), owner);
@@ -964,7 +977,7 @@ public class SellerServiceImpl implements ISellerService
 
     private PortalRole ensureOwnerRoleReady(Long sellerId)
     {
-        permissionMapper.insertSellerOwnerRoleIfMissing(sellerId, SecurityUtils.getUsername());
+        permissionMapper.insertSellerOwnerRoleIfMissing(sellerId, PortalActorSupport.currentActorName());
         PortalRole ownerRole = permissionMapper.checkSellerRoleKeyUnique(sellerId, OWNER_ROLE_KEY);
         if (ownerRole == null || !PartnerSupport.STATUS_NORMAL.equals(ownerRole.getStatus()))
         {

@@ -29,6 +29,7 @@ public class UpstreamScheduledSyncExecutor
     {
         UpstreamSystemConnection query = new UpstreamSystemConnection();
         query.setStatus(UpstreamSystemConstants.STATUS_ENABLED);
+        query.setCredentialStatus(UpstreamSystemConstants.CREDENTIAL_STATUS_CONFIGURED);
         List<UpstreamSystemConnection> connections = upstreamSystemService.selectConnectionList(query);
 
         int attempted = 0;

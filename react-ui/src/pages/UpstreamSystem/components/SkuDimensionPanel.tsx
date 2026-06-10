@@ -62,14 +62,6 @@ const dimensionText = (
 const weightText = (weight?: number) =>
   hasDimensionValue(weight) ? `${weight} kg` : '-';
 
-const dimensionResultText = (data?: API.Integration.SyncResult) => {
-  const item = data?.items?.find((result) => result.syncType === 'SKU_DIMENSION');
-  if (!item) {
-    return `${data?.skuDimensionCount || 0}`;
-  }
-  return `拉取${item.pulledCount || 0}，新增${item.insertedCount || 0}，变更${item.changedCount || 0}，未变${item.unchangedCount || 0}`;
-};
-
 const parseSkuText = (value: string) =>
   Array.from(
     new Set(
@@ -114,17 +106,49 @@ export default function SkuDimensionPanel({
     loadSyncState();
   }, [selectedCode, canQueryUpstream]);
 
+  const isDimensionSyncing =
+    syncing || selectedSyncing || syncState?.status === 'SYNCING';
+
+  useEffect(() => {
+    if (!isDimensionSyncing || !selectedCode) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      loadSyncState();
+      actionRef.current?.reload();
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [isDimensionSyncing, selectedCode]);
+
+  useEffect(() => {
+    if (syncState?.status && syncState.status !== 'SYNCING') {
+      setSyncing(false);
+      setSelectedSyncing(false);
+    }
+  }, [syncState?.status]);
+
   const triggerDimensionSync = async () => {
     setSyncing(true);
-    const hide = message.loading('正在同步仓库尺寸重量');
-    const resp = await syncUpstreamSkuDimensions(selectedCode);
-    hide();
-    setSyncing(false);
+    const hide = message.loading('正在提交仓库尺寸重量同步任务');
+    let resp: (API.Result & { data: API.Integration.SyncResult }) | undefined;
+    try {
+      resp = await syncUpstreamSkuDimensions(selectedCode);
+    } catch {
+      setSyncing(false);
+      return;
+    } finally {
+      hide();
+    }
+    if (!resp) {
+      setSyncing(false);
+      return;
+    }
     if (resp.code === 200) {
-      message.success(`仓库尺寸重量同步完成：${dimensionResultText(resp.data)}`);
+      message.success('仓库尺寸重量同步已开始，可继续操作');
       await loadSyncState();
       actionRef.current?.reload();
     } else {
+      setSyncing(false);
       message.error(resp.msg);
       await loadSyncState();
     }
@@ -146,18 +170,29 @@ export default function SkuDimensionPanel({
       return;
     }
     setSelectedSyncing(true);
-    const hide = message.loading('正在获取指定SKU尺寸重量');
-    const resp = await syncUpstreamSkuDimensionsSelected(selectedCode, skuList);
-    hide();
-    setSelectedSyncing(false);
+    const hide = message.loading('正在提交指定SKU尺寸重量获取任务');
+    let resp: (API.Result & { data: API.Integration.SyncResult }) | undefined;
+    try {
+      resp = await syncUpstreamSkuDimensionsSelected(selectedCode, skuList);
+    } catch {
+      setSelectedSyncing(false);
+      return;
+    } finally {
+      hide();
+    }
+    if (!resp) {
+      setSelectedSyncing(false);
+      return;
+    }
     if (resp.code === 200) {
-      message.success(`指定SKU尺寸重量获取完成：${dimensionResultText(resp.data)}`);
+      message.success('指定SKU尺寸重量获取已开始，可继续操作');
       setSelectedModalOpen(false);
       setSelectedSkuText('');
       setSelectedRowKeys([]);
       await loadSyncState();
       actionRef.current?.reload();
     } else {
+      setSelectedSyncing(false);
       message.error(resp.msg);
       await loadSyncState();
     }
@@ -241,6 +276,7 @@ export default function SkuDimensionPanel({
         <Space>
           <Button
             icon={<SearchOutlined />}
+            disabled={isDimensionSyncing}
             loading={selectedSyncing}
             hidden={!access.hasPerms('integration:upstream:dimensionSync')}
             onClick={openSelectedSyncModal}
@@ -250,11 +286,12 @@ export default function SkuDimensionPanel({
           <Button
             type="primary"
             icon={<SyncOutlined />}
-            loading={syncing}
+            disabled={isDimensionSyncing}
+            loading={syncing || syncState?.status === 'SYNCING'}
             hidden={!access.hasPerms('integration:upstream:dimensionSync')}
             onClick={triggerDimensionSync}
           >
-            同步尺寸重量
+            {isDimensionSyncing ? '正在同步' : '同步尺寸重量'}
           </Button>
         </Space>
       </div>

@@ -33,6 +33,10 @@ describe('inventory overview contract', () => {
       "export { default, InventorySyncPolicyModal } from './InventorySyncPolicyButton.tsx';",
     );
     expectPureSource(
+      'src/components/InventorySyncPolicy/InventorySyncPolicyTargetPicker.js',
+      "export { default } from './InventorySyncPolicyTargetPicker.tsx';",
+    );
+    expectPureSource(
       'src/pages/Inventory/Overview/components/SkuWarehouseTable.js',
       "export { default, WarehouseStockTable } from './SkuWarehouseTable.tsx';",
     );
@@ -58,6 +62,7 @@ describe('inventory overview contract', () => {
     const adjustButtonWrapper = readSource('src/pages/Inventory/Overview/components/InventoryAdjustButton.tsx');
     const adjustButton = readSource('src/components/InventoryAdjust/InventoryAdjustButton.tsx');
     const syncPolicyButton = readSource('src/components/InventorySyncPolicy/InventorySyncPolicyButton.tsx');
+    const syncPolicyTargetPicker = readSource('src/components/InventorySyncPolicy/InventorySyncPolicyTargetPicker.tsx');
 
     expect(service).toContain("const baseUrl = '/api/inventory/admin/overview';");
     expect(service).toContain(apiUrl('/spu/list'));
@@ -121,10 +126,14 @@ describe('inventory overview contract', () => {
     expect(syncPolicyButton).toContain('confirmInventoryOverviewSyncPolicy');
     expect(syncPolicyButton).toContain('自动同步WMS库存设置');
     expect(syncPolicyButton).toContain('卖家维度');
+    expect(syncPolicyButton).toContain('buttonStyle="solid"');
     expect(syncPolicyButton).toContain('mode="multiple"');
-    expect(syncPolicyButton).toContain('getInventoryOverviewSpuList');
-    expect(syncPolicyButton).toContain('getInventoryOverviewSkuList');
-    expect(syncPolicyButton).toContain('getInventoryOverviewWarehouseList');
+    expect(syncPolicyButton).toContain('InventorySyncPolicyTargetPicker');
+    expect(syncPolicyTargetPicker).toContain('ProTable');
+    expect(syncPolicyTargetPicker).toContain("type: 'radio'");
+    expect(syncPolicyTargetPicker).toContain('getInventoryOverviewSpuList');
+    expect(syncPolicyTargetPicker).toContain('getInventoryOverviewSkuList');
+    expect(syncPolicyTargetPicker).toContain('getInventoryOverviewWarehouseList');
     expect(syncPolicyButton).not.toContain('InputNumber');
   });
 

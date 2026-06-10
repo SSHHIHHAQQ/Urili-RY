@@ -90,6 +90,34 @@ describe('partner management contract', () => {
     expect(buyerService).toMatch(/getAdminBuyerSessions[\s\S]*method: 'GET'/);
   });
 
+  it('waits for portal direct-login consumption before showing admin success messages', () => {
+    const subjectBridgeIndex = managementPage.indexOf(
+      'await openPortalDirectLoginWindow(resp.data, config.moduleKey)',
+    );
+    const subjectSuccessIndex = managementPage.indexOf(
+      'message.success(`${config.label}端免密登录已确认',
+    );
+    const accountBridgeIndex = accountModal.indexOf(
+      'await openPortalDirectLoginWindow(resp.data, config.moduleKey)',
+    );
+    const accountSuccessIndex = accountModal.indexOf(
+      'message.success(`${config.label}端账号免密登录已确认',
+    );
+
+    expect(managementPage).toContain("import { openPortalDirectLoginWindow } from '@/utils/portalDirectLoginMessage';");
+    expect(accountModal).toContain("import { openPortalDirectLoginWindow } from '@/utils/portalDirectLoginMessage';");
+    expect(managementPage).toContain('const bridgeResult = resp.code === 200');
+    expect(accountModal).toContain('const bridgeResult = resp?.code === 200');
+    expect(managementPage).toContain('if (bridgeResult) {');
+    expect(accountModal).toContain('if (bridgeResult) {');
+    expect(subjectBridgeIndex).toBeGreaterThan(-1);
+    expect(accountBridgeIndex).toBeGreaterThan(-1);
+    expect(subjectSuccessIndex).toBeGreaterThan(subjectBridgeIndex);
+    expect(accountSuccessIndex).toBeGreaterThan(accountBridgeIndex);
+    expect(managementPage).not.toContain('message.success(`${config.label}端免密登录链接已生成');
+    expect(accountModal).not.toContain('message.success(`${config.label}端账号免密登录链接已生成');
+  });
+
   it('keeps admin session list params limited to pagination', () => {
     expect(managementPage).toContain('params?: API.Partner.PartnerSessionPageParams');
     expect(sellerService).toContain('sanitizePartnerSessionPageParams');

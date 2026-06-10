@@ -125,7 +125,7 @@ public class BuyerPortalPermissionServiceImplPortalAccessTest
         RecordingBuyerMapper buyerMapper = recordingBuyerMapper(1, account);
         RecordingBuyerPortalPermissionMapper permissionMapper = new RecordingBuyerPortalPermissionMapper()
                 .withRoleKeys("buyer_owner", "buyer_staff")
-                .withPermissions("buyer:product:list,buyer:order:list", "buyer:order:detail");
+                .withPermissions("buyer:account:list,buyer:product:list", "buyer:role:list,buyer:order:detail");
         BuyerPortalPermissionServiceImpl service = service(buyerService(buyer), buyerMapper.proxy(),
                 permissionMapper.proxy());
         PortalLoginSession session = session(11L, 22L);
@@ -140,7 +140,7 @@ public class BuyerPortalPermissionServiceImplPortalAccessTest
         assertEquals("buyer_owner", info.getUserName());
         assertEquals("Buyer Owner", info.getNickName());
         assertArrayEquals(new String[] { "buyer_owner", "buyer_staff" }, info.getRoles().toArray(new String[0]));
-        assertArrayEquals(new String[] { "buyer:product:list", "buyer:order:list", "buyer:order:detail" },
+        assertArrayEquals(new String[] { "buyer:account:list", "buyer:role:list" },
                 info.getPermissions().toArray(new String[0]));
         assertOnlineBuyerSessionLookup(buyerMapper);
         assertBuyerPermissionLookup(permissionMapper);
@@ -154,24 +154,43 @@ public class BuyerPortalPermissionServiceImplPortalAccessTest
         RecordingBuyerMapper buyerMapper = recordingBuyerMapper(1, account);
         RecordingBuyerPortalPermissionMapper permissionMapper = new RecordingBuyerPortalPermissionMapper()
                 .withRoleKeys("buyer_owner")
-                .withPermissions(" buyer:product:list, buyer:order:list ", "buyer:order:detail,, ");
+                .withPermissions(" buyer:account:list, buyer:product:list ", "buyer:dept:list,, ");
         BuyerPortalPermissionServiceImpl service = service(buyerService(buyer), buyerMapper.proxy(),
                 permissionMapper.proxy());
 
         PortalPermissionInfo info = service.selectPortalPermissionInfo(session(11L, 22L));
 
-        assertArrayEquals(new String[] { "buyer:product:list", "buyer:order:list", "buyer:order:detail" },
+        assertArrayEquals(new String[] { "buyer:account:list", "buyer:dept:list" },
                 info.getPermissions().toArray(new String[0]));
 
-        for (String pollutedPermission : new String[] { "seller:account:list", "buyer:admin:list", "*:*:*" })
+        for (String pollutedPermission : new String[] { "seller:account:list", "buyer:admin:list", "*:*:*",
+                "buyer:*", "buyer:role:*" })
         {
             RecordingBuyerPortalPermissionMapper pollutedMapper = new RecordingBuyerPortalPermissionMapper()
-                    .withPermissions("buyer:product:list", pollutedPermission);
+                    .withPermissions("buyer:account:list", pollutedPermission);
             BuyerPortalPermissionServiceImpl pollutedService = service(buyerService(buyer),
                     recordingBuyerMapper(1, account).proxy(), pollutedMapper.proxy());
             assertServiceException("买家端权限配置异常",
                     () -> pollutedService.selectPortalPermissionInfo(session(11L, 22L)));
         }
+    }
+
+    @Test
+    public void selectPermissionsStripsFrozenBusinessPermissionsForPortalPreAuthorize()
+    {
+        Buyer buyer = buyer(11L);
+        BuyerAccount account = account(22L, 11L);
+        RecordingBuyerMapper buyerMapper = recordingBuyerMapper(1, account);
+        RecordingBuyerPortalPermissionMapper permissionMapper = new RecordingBuyerPortalPermissionMapper()
+                .withPermissions("buyer:account:list,buyer:product:distribution:list",
+                        "buyer:role:list,buyer:order:detail");
+        BuyerPortalPermissionServiceImpl service = service(buyerService(buyer), buyerMapper.proxy(),
+                permissionMapper.proxy());
+
+        assertArrayEquals(new String[] { "buyer:account:list", "buyer:role:list" },
+                service.selectPermissions(session(11L, 22L)).toArray(new String[0]));
+        assertOnlineBuyerSessionLookup(buyerMapper);
+        assertBuyerPermissionLookup(permissionMapper);
     }
 
     @Test

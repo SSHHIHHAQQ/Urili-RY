@@ -143,11 +143,23 @@ public class TerminalSeedPermissionContractTest
     private void assertTerminalPortalPermissions(Path seed, String sql, String terminal, List<String> violations)
     {
         assertContains(sql, terminal + ":account:list", seed, violations);
+        assertContains(sql, terminal + ":account:add", seed, violations);
+        assertContains(sql, terminal + ":account:edit", seed, violations);
+        assertContains(sql, terminal + ":account:role:query", seed, violations);
+        assertContains(sql, terminal + ":account:role:edit", seed, violations);
         assertContains(sql, terminal + ":account:loginLog:list", seed, violations);
         assertContains(sql, terminal + ":account:operLog:list", seed, violations);
         assertContains(sql, terminal + ":account:session:list", seed, violations);
         assertContains(sql, terminal + ":dept:list", seed, violations);
+        assertContains(sql, terminal + ":dept:query", seed, violations);
+        assertContains(sql, terminal + ":dept:add", seed, violations);
+        assertContains(sql, terminal + ":dept:edit", seed, violations);
+        assertContains(sql, terminal + ":dept:remove", seed, violations);
         assertContains(sql, terminal + ":role:list", seed, violations);
+        assertContains(sql, terminal + ":role:query", seed, violations);
+        assertContains(sql, terminal + ":role:add", seed, violations);
+        assertContains(sql, terminal + ":role:edit", seed, violations);
+        assertContains(sql, terminal + ":role:remove", seed, violations);
         assertContains(sql, terminal + ":product:category:list", seed, violations);
         assertContains(sql, terminal + ":product:schema:query", seed, violations);
     }

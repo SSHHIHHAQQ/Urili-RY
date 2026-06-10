@@ -38,6 +38,13 @@ import {
   updateWarehouseBinding,
 } from '@/services/logistics/systemChannel';
 import {
+  addLogisticsChannelPairing,
+  deleteLogisticsChannelPairing,
+  getLogisticsChannelPairings,
+  getLogisticsChannelSyncList,
+  getUpstreamConnectionList,
+} from '@/services/integration/upstreamSystem';
+import {
   getPersistedProTableSearch,
   getProTablePagination,
   getProTableScroll,
@@ -102,6 +109,10 @@ type WarehouseBinding = {
   remark?: string;
 };
 
+type FulfillmentChannelPairing = API.Integration.LogisticsChannelPairing & {
+  masterWarehouseName?: string;
+};
+
 function resultOk(resp: API.Result, successText: string) {
   if (resp.code === 200) {
     message.success(successText);
@@ -149,6 +160,7 @@ const fallbackSignatureOptions: OptionItem[] = [
 
 const FULFILLMENT_MODE_CARRIER_LABELING = 'CARRIER_LABELING';
 const FULFILLMENT_MODE_DIRECT_WAREHOUSE = 'DIRECT_FULFILLMENT_WAREHOUSE';
+const UPSTREAM_PAIRING_ROLE_FULFILLMENT = 'FULFILLMENT';
 
 const fallbackFulfillmentModeOptions: OptionItem[] = [
   { label: '物流商打单', value: FULFILLMENT_MODE_CARRIER_LABELING },
@@ -205,6 +217,10 @@ function hasShipperAddressConfig(value?: Partial<WarehouseBinding>) {
   return shipperAddressFieldNames.some((fieldName) => String(value?.[fieldName] || '').trim());
 }
 
+function isFulfillmentPairingRole(role?: string) {
+  return (role || UPSTREAM_PAIRING_ROLE_FULFILLMENT) === UPSTREAM_PAIRING_ROLE_FULFILLMENT;
+}
+
 export default function SystemLogisticsChannelPage() {
   const access = useAccess();
   const canAdd = access.hasPerms('logistics:systemChannel:add');
@@ -212,13 +228,19 @@ export default function SystemLogisticsChannelPage() {
   const canStatus = access.hasPerms('logistics:systemChannel:status');
   const canBind = access.hasPerms('logistics:systemChannel:binding');
   const canRule = access.hasPerms('logistics:systemChannel:rule');
+  const canListUpstreamConnections = access.hasPerms('integration:upstream:list');
+  const canQueryUpstream = access.hasPerms('integration:upstream:query');
+  const canPairUpstream = access.hasPerms('integration:upstream:pair');
+  const canConfigureFulfillmentChannel = canBind && canListUpstreamConnections && canQueryUpstream && canPairUpstream;
 
   const actionRef = useRef<ActionType>(undefined);
   const carrierMappingActionRef = useRef<ActionType>(undefined);
+  const fulfillmentChannelActionRef = useRef<ActionType>(undefined);
   const warehouseActionRef = useRef<ActionType>(undefined);
   const [channelForm] = Form.useForm<SystemChannel>();
   const [carrierMappingForm] = Form.useForm();
   const [warehouseForm] = Form.useForm<WarehouseBinding>();
+  const [fulfillmentChannelForm] = Form.useForm();
 
   const [finalCarrierOptions, setFinalCarrierOptions] = useState<OptionItem[]>([]);
   const [statusEnum, setStatusEnum] = useState<Record<string, any>>({});
@@ -229,14 +251,18 @@ export default function SystemLogisticsChannelPage() {
   const [carrierAccountOptions, setCarrierAccountOptions] = useState<OptionItem[]>([]);
   const [carrierChannelOptions, setCarrierChannelOptions] = useState<OptionItem[]>([]);
   const [warehouseOptions, setWarehouseOptions] = useState<OptionItem[]>([]);
+  const [upstreamConnectionOptions, setUpstreamConnectionOptions] = useState<OptionItem[]>([]);
+  const [upstreamLogisticsChannelOptions, setUpstreamLogisticsChannelOptions] = useState<OptionItem[]>([]);
 
   const [channelEditorMode, setChannelEditorMode] = useState<'create' | 'edit'>('create');
   const [channelModalOpen, setChannelModalOpen] = useState(false);
   const [carrierMappingModalOpen, setCarrierMappingModalOpen] = useState(false);
   const [warehouseModalOpen, setWarehouseModalOpen] = useState(false);
+  const [fulfillmentChannelModalOpen, setFulfillmentChannelModalOpen] = useState(false);
   const [currentChannel, setCurrentChannel] = useState<SystemChannel>();
   const [activeEditorTab, setActiveEditorTab] = useState('carrierMappings');
   const [currentWarehouseBinding, setCurrentWarehouseBinding] = useState<WarehouseBinding>();
+  const [systemFulfillmentChannelPairings, setSystemFulfillmentChannelPairings] = useState<FulfillmentChannelPairing[]>([]);
   const [orderSettingRemark, setOrderSettingRemark] = useState('');
 
   useEffect(() => {
@@ -297,7 +323,7 @@ export default function SystemLogisticsChannelPage() {
 
   useEffect(() => {
     if (!shouldShowCarrierMappings && activeEditorTab === 'carrierMappings') {
-      setActiveEditorTab('warehouses');
+      setActiveEditorTab('fulfillmentChannel');
     }
   }, [activeEditorTab, shouldShowCarrierMappings]);
 
@@ -311,8 +337,81 @@ export default function SystemLogisticsChannelPage() {
 
   const reloadDetailTables = () => {
     carrierMappingActionRef.current?.reload();
+    fulfillmentChannelActionRef.current?.reload();
     warehouseActionRef.current?.reload();
     actionRef.current?.reload();
+  };
+
+  const loadSystemChannelFulfillmentPairings = async (systemChannelCode: string) => {
+    if (!canListUpstreamConnections || !canQueryUpstream) {
+      return [] as FulfillmentChannelPairing[];
+    }
+    try {
+      const connectionResp = await getUpstreamConnectionList({ pageNum: 1, pageSize: 200 });
+      const connections = connectionResp.rows || [];
+      const pairingGroups = await Promise.all(
+        connections.map(async (connection) => {
+          try {
+            const pairingResp = await getLogisticsChannelPairings(connection.connectionCode);
+            return (pairingResp.data || [])
+              .filter((pairing) => (
+                pairing.systemChannelCode === systemChannelCode
+                && isFulfillmentPairingRole(pairing.pairingRole)
+              ))
+              .map((pairing) => ({
+                ...pairing,
+                masterWarehouseName: connection.masterWarehouseName,
+              }));
+          } catch {
+            return [] as FulfillmentChannelPairing[];
+          }
+        }),
+      );
+      return pairingGroups.reduce<FulfillmentChannelPairing[]>(
+        (result, group) => result.concat(group),
+        [],
+      );
+    } catch {
+      return [] as FulfillmentChannelPairing[];
+    }
+  };
+
+  const loadUpstreamConnectionOptions = async () => {
+    if (!canListUpstreamConnections || !canQueryUpstream) {
+      setUpstreamConnectionOptions([]);
+      return [] as OptionItem[];
+    }
+    const connectionResp = await getUpstreamConnectionList({ pageNum: 1, pageSize: 200 });
+    const connections = connectionResp.rows || [];
+    const connectionOptions = connections.map((connection) => ({
+      label: connection.masterWarehouseName || connection.connectionCode,
+      value: connection.connectionCode,
+      searchText: connection.masterWarehouseName || connection.connectionCode,
+    }));
+    setUpstreamConnectionOptions(connectionOptions);
+    return connectionOptions;
+  };
+
+  const loadUpstreamLogisticsChannelOptions = async (connectionCode?: string) => {
+    if (!connectionCode || !canQueryUpstream) {
+      setUpstreamLogisticsChannelOptions([]);
+      return [] as OptionItem[];
+    }
+    const resp = await getLogisticsChannelSyncList(connectionCode, { status: 'ACTIVE' });
+    const channelMap = new Map<string, API.Integration.LogisticsChannelSyncItem>();
+    (resp.data || [])
+      .forEach((item) => {
+        if (!channelMap.has(item.channelCode)) {
+          channelMap.set(item.channelCode, item);
+        }
+      });
+    const options = Array.from(channelMap.values()).map((item) => ({
+      label: `${item.channelCode} / ${item.channelName}`,
+      value: item.channelCode,
+      searchText: [item.channelCode, item.channelName, item.warehouseCode].filter(Boolean).join(' '),
+    }));
+    setUpstreamLogisticsChannelOptions(options);
+    return options;
   };
 
   const refreshCurrentChannel = async (systemChannelCode: string) => {
@@ -345,7 +444,7 @@ export default function SystemLogisticsChannelPage() {
     setCurrentChannel(record);
     setActiveEditorTab(
       nextFulfillmentMode === FULFILLMENT_MODE_DIRECT_WAREHOUSE && tabKey === 'carrierMappings'
-        ? 'warehouses'
+        ? 'fulfillmentChannel'
         : tabKey,
     );
     setChannelModalOpen(true);
@@ -386,8 +485,8 @@ export default function SystemLogisticsChannelPage() {
       if (keepOpenAfterCreate) {
         message.info(
           created.fulfillmentMode === FULFILLMENT_MODE_DIRECT_WAREHOUSE
-            ? '基础信息已保存，可以继续配置下方仓库和下单规则'
-            : '基础信息已保存，可以继续配置下方物流商映射、仓库和下单规则',
+            ? '基础信息已保存，可以继续配置下方主仓渠道映射、仓库和下单规则'
+            : '基础信息已保存，可以继续配置下方物流商映射、主仓渠道映射、仓库和下单规则',
         );
         return false;
       }
@@ -521,6 +620,112 @@ export default function SystemLogisticsChannelPage() {
     });
   };
 
+  const openFulfillmentChannelModal = async () => {
+    if (!currentChannel?.systemChannelCode) {
+      return;
+    }
+    if (!canConfigureFulfillmentChannel) {
+      message.warning('需要系统渠道绑定权限和上游系统查询/配对权限');
+      return;
+    }
+    const pairings = await loadSystemChannelFulfillmentPairings(currentChannel.systemChannelCode);
+    const existingPairing = pairings.find((pairing) => isFulfillmentPairingRole(pairing.pairingRole));
+    setSystemFulfillmentChannelPairings(pairings);
+    setUpstreamLogisticsChannelOptions([]);
+    fulfillmentChannelForm.resetFields();
+    fulfillmentChannelForm.setFieldsValue({
+      connectionCode: existingPairing?.connectionCode,
+      upstreamChannelCode: existingPairing?.upstreamChannelCode,
+      remark: existingPairing?.remark,
+    });
+    setFulfillmentChannelModalOpen(true);
+    try {
+      const connectionOptions = await loadUpstreamConnectionOptions();
+      const connectionCode = existingPairing?.connectionCode
+        || (connectionOptions.length === 1 ? String(connectionOptions[0].value) : undefined);
+      if (connectionCode) {
+        fulfillmentChannelForm.setFieldValue('connectionCode', connectionCode);
+        const channelOptions = await loadUpstreamLogisticsChannelOptions(connectionCode);
+        if (
+          existingPairing?.upstreamChannelCode
+          && !channelOptions.some((option) => option.value === existingPairing.upstreamChannelCode)
+        ) {
+          setUpstreamLogisticsChannelOptions([
+            ...channelOptions,
+            {
+              label: `${existingPairing.upstreamChannelCode} / ${existingPairing.upstreamChannelName}`,
+              value: existingPairing.upstreamChannelCode,
+              searchText: [existingPairing.upstreamChannelCode, existingPairing.upstreamChannelName].filter(Boolean).join(' '),
+            },
+          ]);
+        }
+      }
+    } catch {
+      message.error('上游系统渠道选项加载失败');
+    }
+  };
+
+  const saveFulfillmentChannelPairing = async (values: Record<string, any>) => {
+    if (!currentChannel?.systemChannelCode) {
+      return false;
+    }
+    const existingPairing = systemFulfillmentChannelPairings
+      .find((pairing) => isFulfillmentPairingRole(pairing.pairingRole));
+    if (
+      existingPairing
+      && existingPairing.connectionCode === values.connectionCode
+      && existingPairing.upstreamChannelCode === values.upstreamChannelCode
+    ) {
+      return true;
+    }
+    if (existingPairing?.logisticsChannelPairingId) {
+      const deleteResp = await deleteLogisticsChannelPairing(
+        existingPairing.connectionCode,
+        existingPairing.logisticsChannelPairingId,
+      );
+      if (deleteResp.code !== 200) {
+        message.error(deleteResp.msg || '原有主仓渠道配对解除失败');
+        return false;
+      }
+    }
+    const ok = resultOk(
+      await addLogisticsChannelPairing(values.connectionCode, {
+        upstreamChannelCode: values.upstreamChannelCode,
+        systemChannelCode: currentChannel.systemChannelCode,
+        systemChannelName: currentChannel.systemChannelName,
+        pairingRole: UPSTREAM_PAIRING_ROLE_FULFILLMENT,
+        remark: values.remark,
+      }),
+      '主仓渠道已配对',
+    );
+    if (ok) {
+      reloadDetailTables();
+      fulfillmentChannelActionRef.current?.reload();
+      setFulfillmentChannelModalOpen(false);
+      return true;
+    }
+    return false;
+  };
+
+  const removeFulfillmentChannelPairing = (pairing: FulfillmentChannelPairing) => {
+    Modal.confirm({
+      title: '解除主仓渠道配对',
+      content: `${pairing.masterWarehouseName || pairing.connectionCode} / ${pairing.upstreamChannelName}`,
+      okText: '确认',
+      cancelText: '取消',
+      onOk: async () => {
+        if (
+          resultOk(
+            await deleteLogisticsChannelPairing(pairing.connectionCode, pairing.logisticsChannelPairingId),
+            '主仓渠道配对已解除',
+          )
+        ) {
+          reloadDetailTables();
+        }
+      },
+    });
+  };
+
   const loadOrderSetting = async (systemChannelCode: string) => {
     const resp = await getOrderSetting(systemChannelCode);
     setOrderSettingRemark(resp.data?.remark || '');
@@ -582,12 +787,11 @@ export default function SystemLogisticsChannelPage() {
       width: 120,
       render: (_, record) => (
         <Switch
-          size="small"
           checked={record.status === 'ENABLED'}
           checkedChildren="启用"
           unCheckedChildren="停用"
           disabled={!canStatus}
-          onChange={() => toggleStatus(record)}
+          onClick={() => toggleStatus(record)}
         />
       ),
     },
@@ -628,6 +832,33 @@ export default function SystemLogisticsChannelPage() {
       render: (_, record) => [
         <Button key="delete" type="link" size="small" danger hidden={!canBind} onClick={() => removeCarrierMapping(record)}>
           删除
+        </Button>,
+      ],
+    },
+  ];
+
+  const fulfillmentChannelColumns: ProColumns<FulfillmentChannelPairing>[] = [
+    {
+      title: '上游系统',
+      dataIndex: 'masterWarehouseName',
+      width: 220,
+      render: (_, record) => record.masterWarehouseName || record.connectionCode,
+    },
+    { title: '主仓渠道代码', dataIndex: 'upstreamChannelCode', width: 220 },
+    { title: '主仓渠道名称', dataIndex: 'upstreamChannelName', width: 260, ellipsis: true },
+    { title: '配对用途', dataIndex: 'pairingRole', width: 120, render: () => '履约' },
+    { title: '状态', dataIndex: 'status', valueEnum: bindingStatusEnum, width: 100 },
+    { title: '创建时间', dataIndex: 'createTime', width: 170 },
+    {
+      title: '操作',
+      valueType: 'option',
+      width: 130,
+      render: (_, record) => [
+        <Button key="edit" type="link" size="small" hidden={!canConfigureFulfillmentChannel} onClick={openFulfillmentChannelModal}>
+          配置
+        </Button>,
+        <Button key="delete" type="link" size="small" danger hidden={!canConfigureFulfillmentChannel} onClick={() => removeFulfillmentChannelPairing(record)}>
+          解除
         </Button>,
       ],
     },
@@ -703,8 +934,8 @@ export default function SystemLogisticsChannelPage() {
       <Modal
         title={channelModalTitle}
         open={channelModalOpen}
-        width="88vw"
-        style={{ maxWidth: 1440, top: 24 }}
+        width="94vw"
+        style={{ maxWidth: 1680, top: 24 }}
         destroyOnHidden
         onCancel={() => setChannelModalOpen(false)}
         footer={[
@@ -719,6 +950,7 @@ export default function SystemLogisticsChannelPage() {
           body: {
             maxHeight: 'calc(100vh - 168px)',
             overflowY: 'auto',
+            overflowX: 'hidden',
             paddingTop: 8,
           },
         }}
@@ -728,7 +960,7 @@ export default function SystemLogisticsChannelPage() {
             基础信息
           </div>
           <ProForm<SystemChannel> form={channelForm} layout="vertical" submitter={false}>
-            <Row gutter={24}>
+            <Row gutter={24} style={{ marginLeft: 0, marginRight: 0 }}>
               <Col xs={24} lg={8}>
                 <ProFormSelect
                   name="fulfillmentMode"
@@ -815,6 +1047,43 @@ export default function SystemLogisticsChannelPage() {
               },
               ] : []),
               {
+                key: 'fulfillmentChannel',
+                label: '主仓渠道映射',
+                children: (
+                  <ProTable<FulfillmentChannelPairing>
+                    actionRef={fulfillmentChannelActionRef}
+                    rowKey="logisticsChannelPairingId"
+                    columns={fulfillmentChannelColumns}
+                    request={async () => {
+                      if (!currentChannel?.systemChannelCode) {
+                        return { data: [], success: true, total: 0 };
+                      }
+                      const data = await loadSystemChannelFulfillmentPairings(currentChannel.systemChannelCode);
+                      setSystemFulfillmentChannelPairings(data);
+                      return {
+                        data,
+                        success: true,
+                        total: data.length,
+                      };
+                    }}
+                    search={false}
+                    pagination={false}
+                    scroll={getProTableScroll(1050, { y: 260 })}
+                    toolBarRender={() => [
+                      <Button
+                        key="configure"
+                        icon={<LinkOutlined />}
+                        disabled={!currentChannel?.systemChannelCode}
+                        hidden={!canConfigureFulfillmentChannel}
+                        onClick={openFulfillmentChannelModal}
+                      >
+                        配置主仓渠道
+                      </Button>,
+                    ]}
+                  />
+                ),
+              },
+              {
                 key: 'warehouses',
                 label: '仓库与发货地址',
                 children: (
@@ -822,12 +1091,21 @@ export default function SystemLogisticsChannelPage() {
                     actionRef={warehouseActionRef}
                     rowKey="bindingId"
                     columns={warehouseColumns}
-                    request={() => currentChannel?.systemChannelCode
-                      ? getWarehouseBindings(currentChannel.systemChannelCode).then(toListResult)
-                      : Promise.resolve({ data: [], success: true, total: 0 })}
+                    request={async () => {
+                      if (!currentChannel?.systemChannelCode) {
+                        return { data: [], success: true, total: 0 };
+                      }
+                      const warehouseResp = await getWarehouseBindings(currentChannel.systemChannelCode);
+                      const data = warehouseResp.data || [];
+                      return {
+                        data,
+                        success: warehouseResp.code === 200,
+                        total: data.length,
+                      };
+                    }}
                     search={false}
                     pagination={getProTablePagination(10)}
-                    scroll={getProTableScroll(1350, { y: 320 })}
+                    scroll={getProTableScroll(1710, { y: 320 })}
                     toolBarRender={() => [
                       <Button
                         key="add"
@@ -946,6 +1224,46 @@ export default function SystemLogisticsChannelPage() {
             <ProFormSelect name="status" label="状态" options={statusOptions} fieldProps={SEARCHABLE_SELECT_PROPS} />
           </>
         )}
+        <ProFormTextArea name="remark" label="备注" />
+      </ModalForm>
+
+      <ModalForm
+        title="配置主仓渠道"
+        open={fulfillmentChannelModalOpen}
+        form={fulfillmentChannelForm}
+        modalProps={{ destroyOnHidden: true, onCancel: () => setFulfillmentChannelModalOpen(false) }}
+        onOpenChange={setFulfillmentChannelModalOpen}
+        onFinish={saveFulfillmentChannelPairing}
+      >
+        <Alert
+          showIcon
+          type="info"
+          message={`当前系统渠道：${currentChannel?.systemChannelCode || '-'} / ${currentChannel?.systemChannelName || '-'}`}
+          description="系统渠道只配对一个主仓渠道；同一个主仓渠道可以被多个系统渠道复用，不按仓库过滤。"
+        />
+        <ProFormSelect
+          name="connectionCode"
+          label="上游系统"
+          options={upstreamConnectionOptions}
+          fieldProps={{
+            ...SEARCHABLE_SELECT_PROPS,
+            onChange: async (value) => {
+              fulfillmentChannelForm.setFieldsValue({
+                upstreamChannelCode: undefined,
+              });
+              setUpstreamLogisticsChannelOptions([]);
+              await loadUpstreamLogisticsChannelOptions(String(value));
+            },
+          }}
+          rules={[{ required: true, message: '请选择上游系统' }]}
+        />
+        <ProFormSelect
+          name="upstreamChannelCode"
+          label="主仓渠道"
+          options={upstreamLogisticsChannelOptions}
+          fieldProps={SEARCHABLE_SELECT_PROPS}
+          rules={[{ required: true, message: '请选择领星物流渠道同步清单中的渠道' }]}
+        />
         <ProFormTextArea name="remark" label="备注" />
       </ModalForm>
     </PageContainer>

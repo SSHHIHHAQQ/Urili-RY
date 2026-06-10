@@ -7,14 +7,8 @@ import jakarta.validation.constraints.NotBlank;
  */
 public class LogisticsChannelPairingRequest
 {
-    @NotBlank(message = "领星仓库代码不能为空")
-    private String upstreamWarehouseCode;
-
     @NotBlank(message = "领星渠道代码不能为空")
     private String upstreamChannelCode;
-
-    @NotBlank(message = "系统仓库代码不能为空")
-    private String systemWarehouseCode;
 
     @NotBlank(message = "系统渠道代码不能为空")
     private String systemChannelCode;
@@ -26,12 +20,8 @@ public class LogisticsChannelPairingRequest
 
     private String remark;
 
-    public String getUpstreamWarehouseCode() { return upstreamWarehouseCode; }
-    public void setUpstreamWarehouseCode(String upstreamWarehouseCode) { this.upstreamWarehouseCode = upstreamWarehouseCode; }
     public String getUpstreamChannelCode() { return upstreamChannelCode; }
     public void setUpstreamChannelCode(String upstreamChannelCode) { this.upstreamChannelCode = upstreamChannelCode; }
-    public String getSystemWarehouseCode() { return systemWarehouseCode; }
-    public void setSystemWarehouseCode(String systemWarehouseCode) { this.systemWarehouseCode = systemWarehouseCode; }
     public String getSystemChannelCode() { return systemChannelCode; }
     public void setSystemChannelCode(String systemChannelCode) { this.systemChannelCode = systemChannelCode; }
     public String getSystemChannelName() { return systemChannelName; }

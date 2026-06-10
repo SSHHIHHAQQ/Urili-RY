@@ -15,12 +15,18 @@ import com.ruoyi.buyer.mapper.BuyerMapper;
 import com.ruoyi.common.constant.UserConstants;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
+import com.ruoyi.integration.domain.UpstreamLogisticsChannelSyncItem;
+import com.ruoyi.integration.domain.UpstreamSystemConnection;
+import com.ruoyi.integration.service.IUpstreamSystemService;
+import com.ruoyi.integration.support.UpstreamSystemConstants;
 import com.ruoyi.logistics.domain.LogisticsCustomerChannel;
 import com.ruoyi.logistics.domain.LogisticsCustomerChannelBuyerScope;
+import com.ruoyi.logistics.domain.LogisticsCustomerChannelQuoteMapping;
 import com.ruoyi.logistics.domain.LogisticsCustomerChannelSystemMapping;
 import com.ruoyi.logistics.domain.LogisticsOption;
 import com.ruoyi.logistics.domain.LogisticsSystemChannel;
 import com.ruoyi.logistics.domain.request.LogisticsCustomerChannelBuyerScopeRequest;
+import com.ruoyi.logistics.domain.request.LogisticsCustomerChannelQuoteMappingRequest;
 import com.ruoyi.logistics.domain.request.LogisticsCustomerChannelRequest;
 import com.ruoyi.logistics.domain.request.LogisticsCustomerChannelSystemMappingRequest;
 import com.ruoyi.logistics.mapper.LogisticsCustomerChannelMapper;
@@ -51,6 +57,9 @@ public class LogisticsCustomerChannelServiceImpl implements ILogisticsCustomerCh
 
     @Autowired
     private LogisticsSystemChannelMapper systemChannelMapper;
+
+    @Autowired
+    private IUpstreamSystemService upstreamSystemService;
 
     @Autowired
     private BuyerMapper buyerMapper;
@@ -159,6 +168,45 @@ public class LogisticsCustomerChannelServiceImpl implements ILogisticsCustomerCh
         LogisticsCustomerChannel channel = requireCustomerChannel(customerChannelCode);
         requireSystemMapping(channel.getCustomerChannelCode(), mappingId);
         return customerChannelMapper.deleteSystemMapping(channel.getCustomerChannelCode(), mappingId);
+    }
+
+    @Override
+    public List<LogisticsCustomerChannelQuoteMapping> selectQuoteMappingList(String customerChannelCode)
+    {
+        LogisticsCustomerChannel channel = requireCustomerChannel(customerChannelCode);
+        return customerChannelMapper.selectQuoteMappingList(channel.getCustomerChannelCode());
+    }
+
+    @Override
+    @Transactional
+    public int insertQuoteMapping(String customerChannelCode, LogisticsCustomerChannelQuoteMappingRequest request)
+    {
+        LogisticsCustomerChannel channel = requireCustomerChannel(customerChannelCode);
+        LogisticsCustomerChannelQuoteMapping mapping = buildQuoteMapping(channel.getCustomerChannelCode(), request);
+        String username = SecurityUtils.getUsername();
+        mapping.setCreateBy(username);
+        mapping.setUpdateBy(username);
+        for (LogisticsCustomerChannelQuoteMapping existing : customerChannelMapper.selectQuoteMappingList(
+            channel.getCustomerChannelCode()))
+        {
+            customerChannelMapper.deleteQuoteMapping(channel.getCustomerChannelCode(), existing.getMappingId());
+        }
+        try
+        {
+            return customerChannelMapper.insertQuoteMapping(mapping);
+        }
+        catch (DuplicateKeyException ex)
+        {
+            throw new ServiceException("客户渠道已经配置报价主仓渠道，不能重复配置");
+        }
+    }
+
+    @Override
+    public int deleteQuoteMapping(String customerChannelCode, Long mappingId)
+    {
+        LogisticsCustomerChannel channel = requireCustomerChannel(customerChannelCode);
+        requireQuoteMapping(channel.getCustomerChannelCode(), mappingId);
+        return customerChannelMapper.deleteQuoteMapping(channel.getCustomerChannelCode(), mappingId);
     }
 
     @Override
@@ -298,6 +346,45 @@ public class LogisticsCustomerChannelServiceImpl implements ILogisticsCustomerCh
         return mapping;
     }
 
+    private LogisticsCustomerChannelQuoteMapping buildQuoteMapping(String customerChannelCode,
+        LogisticsCustomerChannelQuoteMappingRequest request)
+    {
+        String connectionCode = trimRequired(request.getConnectionCode(), "上游系统不能为空");
+        String upstreamChannelCode = trimRequired(request.getUpstreamChannelCode(), "主仓渠道不能为空");
+        UpstreamSystemConnection connection = upstreamSystemService.selectConnectionByCode(connectionCode);
+        if (!UpstreamSystemConstants.SETTLEMENT_TYPE_SELF_OPERATED_RECEIVABLE.equals(connection.getSettlementType()))
+        {
+            throw new ServiceException("客户渠道主仓渠道只能选择报价仓");
+        }
+
+        UpstreamLogisticsChannelSyncItem candidate = null;
+        for (UpstreamLogisticsChannelSyncItem item : upstreamSystemService.selectLogisticsChannelSyncList(connectionCode,
+            UpstreamSystemConstants.STATUS_ACTIVE))
+        {
+            if (upstreamChannelCode.equals(item.getChannelCode()))
+            {
+                candidate = item;
+                break;
+            }
+        }
+        if (candidate == null)
+        {
+            throw new ServiceException("主仓渠道不在报价仓同步清单中，请先同步物流渠道");
+        }
+
+        LogisticsCustomerChannelQuoteMapping mapping = new LogisticsCustomerChannelQuoteMapping();
+        mapping.setCustomerChannelCode(customerChannelCode);
+        mapping.setConnectionCode(connection.getConnectionCode());
+        mapping.setMasterWarehouseNameSnapshot(
+            StringUtils.defaultIfBlank(connection.getMasterWarehouseName(), connection.getConnectionCode()));
+        mapping.setUpstreamChannelCode(candidate.getChannelCode());
+        mapping.setUpstreamChannelName(candidate.getChannelName());
+        mapping.setPairingRole(UpstreamSystemConstants.PAIRING_ROLE_QUOTE);
+        mapping.setStatus(LogisticsConstants.STATUS_ENABLED);
+        mapping.setRemark(trimOptional(request.getRemark()));
+        return mapping;
+    }
+
     private void fillLabelSettings(LogisticsCustomerChannel channel, LogisticsCustomerChannelRequest request)
     {
         if (CHANNEL_TYPE_WAREHOUSE_LABEL.equals(channel.getChannelType()))
@@ -349,6 +436,21 @@ public class LogisticsCustomerChannelServiceImpl implements ILogisticsCustomerCh
         if (mapping == null)
         {
             throw new ServiceException("系统渠道绑定不存在");
+        }
+        return mapping;
+    }
+
+    private LogisticsCustomerChannelQuoteMapping requireQuoteMapping(String customerChannelCode, Long mappingId)
+    {
+        if (mappingId == null || mappingId.longValue() <= 0)
+        {
+            throw new ServiceException("报价主仓渠道映射ID不能为空");
+        }
+        LogisticsCustomerChannelQuoteMapping mapping = customerChannelMapper.selectQuoteMappingById(customerChannelCode,
+            mappingId);
+        if (mapping == null)
+        {
+            throw new ServiceException("报价主仓渠道映射不存在");
         }
         return mapping;
     }

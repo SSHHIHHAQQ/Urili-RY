@@ -424,12 +424,11 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
     {
         UpstreamSystemConnection connection = selectConnectionByCode(connectionCode);
         String pairingRole = normalizePairingRole(connection, request.getPairingRole());
-        String upstreamWarehouseCode = trimRequired(request.getUpstreamWarehouseCode(), "领星仓库代码不能为空");
-        String systemWarehouseCode = trimRequired(request.getSystemWarehouseCode(), "系统仓库代码不能为空");
-        assertWarehousePairingExists(connectionCode, upstreamWarehouseCode, systemWarehouseCode, pairingRole);
         String upstreamChannelCode = trimRequired(request.getUpstreamChannelCode(), "领星渠道代码不能为空");
+        String systemChannelCode = trimRequired(request.getSystemChannelCode(), "系统渠道代码不能为空");
+        assertSystemChannelNotPaired(systemChannelCode, pairingRole);
         UpstreamLogisticsChannelSyncItem candidate = upstreamSystemMapper.selectLogisticsChannelSyncItem(connectionCode,
-            upstreamWarehouseCode, upstreamChannelCode);
+            upstreamChannelCode);
         if (candidate == null)
         {
             throw new ServiceException("领星物流渠道不在同步清单中，请先同步物流渠道");
@@ -440,11 +439,11 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
         }
         UpstreamLogisticsChannelPairing pairing = new UpstreamLogisticsChannelPairing();
         pairing.setConnectionCode(connectionCode);
-        pairing.setSystemWarehouseCode(systemWarehouseCode);
-        pairing.setUpstreamWarehouseCode(upstreamWarehouseCode);
+        pairing.setSystemWarehouseCode("");
+        pairing.setUpstreamWarehouseCode("");
         pairing.setUpstreamChannelCode(upstreamChannelCode);
         pairing.setUpstreamChannelName(candidate.getChannelName());
-        pairing.setSystemChannelCode(trimRequired(request.getSystemChannelCode(), "系统渠道代码不能为空"));
+        pairing.setSystemChannelCode(systemChannelCode);
         pairing.setSystemChannelName(trimRequired(request.getSystemChannelName(), "系统渠道名称不能为空"));
         pairing.setPairingRole(pairingRole);
         pairing.setStatus(UpstreamSystemConstants.STATUS_ACTIVE);
@@ -456,7 +455,7 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
         }
         catch (DuplicateKeyException ex)
         {
-            throw new ServiceException("物流渠道配对重复：" + pairingRoleLabel(pairingRole) + "渠道已经绑定，不能重复配对");
+            throw new ServiceException("物流渠道配对重复：" + pairingRoleLabel(pairingRole) + "系统渠道已经绑定，不能重复配对");
         }
     }
 
@@ -628,17 +627,14 @@ public class UpstreamSystemServiceImpl implements IUpstreamSystemService
         return UpstreamSystemConstants.PAIRING_ROLE_QUOTE.equals(pairingRole) ? "报价" : "履约";
     }
 
-    private void assertWarehousePairingExists(String connectionCode, String upstreamWarehouseCode,
-        String systemWarehouseCode, String pairingRole)
+    private void assertSystemChannelNotPaired(String systemChannelCode, String pairingRole)
     {
-        boolean matched = upstreamSystemMapper.selectWarehousePairingList(connectionCode).stream()
-            .anyMatch(item -> pairingRole.equals(item.getPairingRole())
-                && UpstreamSystemConstants.STATUS_ACTIVE.equals(item.getStatus())
-                && upstreamWarehouseCode.equals(item.getUpstreamWarehouseCode())
-                && systemWarehouseCode.equals(item.getSystemWarehouseCode()));
-        if (!matched)
+        UpstreamLogisticsChannelPairing existing =
+            upstreamSystemMapper.selectLogisticsChannelPairingBySystemChannel(systemChannelCode, pairingRole);
+        if (existing != null)
         {
-            throw new ServiceException("请先完成对应" + pairingRoleLabel(pairingRole) + "仓配对，再配对物流渠道");
+            throw new ServiceException("物流渠道配对重复：" + pairingRoleLabel(pairingRole)
+                + "系统渠道已经绑定，不能重复配对");
         }
     }
 

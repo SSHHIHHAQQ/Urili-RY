@@ -1,0 +1,412 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.finance.mapper.QuoteSchemeMapper">
+
+    <resultMap type="QuoteScheme" id="QuoteSchemeResult">
+        <id     property="schemeId"             column="scheme_id"              />
+        <result property="schemeCode"           column="scheme_code"            />
+        <result property="schemeName"           column="scheme_name"            />
+        <result property="schemeType"           column="scheme_type"            />
+        <result property="feeSourceMode"        column="fee_source_mode"        />
+        <result property="currencyCode"         column="currency_code"          />
+        <result property="scopeType"            column="scope_type"             />
+        <result property="warehouseScopeMode"   column="warehouse_scope_mode"   />
+        <result property="effectiveTime"        column="effective_time"         />
+        <result property="expireTime"           column="expire_time"            />
+        <result property="effectivePriority"    column="effective_priority"     />
+        <result property="status"               column="status"                 />
+        <result property="scopeCount"           column="scope_count"            />
+        <result property="warehouseCount"       column="warehouse_count"        />
+        <result property="channelCount"         column="channel_count"          />
+        <result property="scopeSummary"         column="scope_summary"          />
+        <result property="warehouseSummary"     column="warehouse_summary"      />
+        <result property="channelSummary"       column="channel_summary"        />
+        <result property="createBy"             column="create_by"              />
+        <result property="createTime"           column="create_time"            />
+        <result property="updateBy"             column="update_by"              />
+        <result property="updateTime"           column="update_time"            />
+        <result property="remark"               column="remark"                 />
+    </resultMap>
+
+    <resultMap type="QuoteSchemeScope" id="QuoteSchemeScopeResult">
+        <id     property="scopeId"                 column="scope_id"                  />
+        <result property="schemeId"                column="scheme_id"                 />
+        <result property="scopeType"               column="scope_type"                />
+        <result property="scopeKey"                column="scope_key"                 />
+        <result property="buyerLevelCode"          column="buyer_level_code"          />
+        <result property="buyerLevelNameSnapshot"  column="buyer_level_name_snapshot" />
+        <result property="buyerId"                 column="buyer_id"                  />
+        <result property="buyerCodeSnapshot"       column="buyer_code_snapshot"       />
+        <result property="buyerNameSnapshot"       column="buyer_name_snapshot"       />
+        <result property="buyerShortNameSnapshot"  column="buyer_short_name_snapshot" />
+        <result property="createBy"                column="create_by"                 />
+        <result property="createTime"              column="create_time"               />
+        <result property="remark"                  column="remark"                    />
+    </resultMap>
+
+    <resultMap type="QuoteSchemeWarehouse" id="QuoteSchemeWarehouseResult">
+        <id     property="schemeWarehouseId"   column="scheme_warehouse_id"     />
+        <result property="schemeId"            column="scheme_id"               />
+        <result property="warehouseCode"       column="warehouse_code"          />
+        <result property="warehouseNameSnapshot" column="warehouse_name_snapshot" />
+        <result property="warehouseKindSnapshot" column="warehouse_kind_snapshot" />
+        <result property="createBy"            column="create_by"               />
+        <result property="createTime"          column="create_time"             />
+        <result property="remark"              column="remark"                  />
+    </resultMap>
+
+    <resultMap type="QuoteSchemeChannel" id="QuoteSchemeChannelResult">
+        <id     property="schemeChannelId"          column="scheme_channel_id"           />
+        <result property="schemeId"                 column="scheme_id"                  />
+        <result property="customerChannelCode"      column="customer_channel_code"      />
+        <result property="customerChannelNameSnapshot" column="customer_channel_name_snapshot" />
+        <result property="operationFeeCode"         column="operation_fee_code"         />
+        <result property="operationFeeNameSnapshot" column="operation_fee_name_snapshot" />
+        <result property="freightFeeCode"           column="freight_fee_code"           />
+        <result property="freightFeeNameSnapshot"   column="freight_fee_name_snapshot"  />
+        <result property="status"                   column="status"                     />
+        <result property="displayOrder"             column="display_order"              />
+        <result property="createBy"                 column="create_by"                  />
+        <result property="createTime"               column="create_time"                />
+        <result property="updateBy"                 column="update_by"                  />
+        <result property="updateTime"               column="update_time"                />
+        <result property="remark"                   column="remark"                     />
+    </resultMap>
+
+    <resultMap type="QuoteSchemeValueFeeRule" id="QuoteSchemeValueFeeRuleResult">
+        <id     property="valueFeeRuleId"              column="value_fee_rule_id"              />
+        <result property="schemeId"                    column="scheme_id"                      />
+        <result property="logisticsChannelCode"        column="logistics_channel_code"          />
+        <result property="logisticsChannelNameSnapshot" column="logistics_channel_name_snapshot" />
+        <result property="triggerCode"                 column="trigger_code"                   />
+        <result property="calculationMethod"           column="calculation_method"             />
+        <result property="adjustmentDirection"         column="adjustment_direction"           />
+        <result property="adjustmentValue"             column="adjustment_value"               />
+        <result property="status"                      column="status"                         />
+        <result property="displayOrder"                column="display_order"                  />
+        <result property="createBy"                    column="create_by"                      />
+        <result property="createTime"                  column="create_time"                    />
+        <result property="updateBy"                    column="update_by"                      />
+        <result property="updateTime"                  column="update_time"                    />
+        <result property="remark"                      column="remark"                         />
+    </resultMap>
+
+    <sql id="QuoteSchemeSummarySelect">
+        select s.*,
+               coalesce(scope_stat.scope_count, 0) as scope_count,
+               coalesce(warehouse_stat.warehouse_count, 0) as warehouse_count,
+               coalesce(channel_stat.channel_count, 0) as channel_count,
+               case
+                 when s.scope_type = 'ALL_BUYERS' then '全部买家'
+                 else coalesce(scope_stat.scope_summary, '')
+               end as scope_summary,
+               case
+                 when s.warehouse_scope_mode = 'ALL_WAREHOUSES' then '全部仓库'
+                 else coalesce(warehouse_stat.warehouse_summary, '')
+               end as warehouse_summary,
+               coalesce(channel_stat.channel_summary, '') as channel_summary
+        from quote_scheme s
+        left join (
+            select scheme_id,
+                   count(1) as scope_count,
+                   group_concat(coalesce(buyer_level_name_snapshot, buyer_name_snapshot)
+                       order by scope_id asc separator ', ') as scope_summary
+            from quote_scheme_scope
+            group by scheme_id
+        ) scope_stat on scope_stat.scheme_id = s.scheme_id
+        left join (
+            select scheme_id,
+                   count(1) as warehouse_count,
+                   group_concat(warehouse_name_snapshot order by scheme_warehouse_id asc separator ', ') as warehouse_summary
+            from quote_scheme_warehouse
+            group by scheme_id
+        ) warehouse_stat on warehouse_stat.scheme_id = s.scheme_id
+        left join (
+            select scheme_id,
+                   count(1) as channel_count,
+                   group_concat(customer_channel_name_snapshot order by display_order asc, scheme_channel_id asc separator ', ') as channel_summary
+            from quote_scheme_channel
+            group by scheme_id
+        ) channel_stat on channel_stat.scheme_id = s.scheme_id
+    </sql>
+
+    <select id="selectQuoteSchemeList" parameterType="QuoteScheme" resultMap="QuoteSchemeResult">
+        <include refid="QuoteSchemeSummarySelect" />
+        where 1 = 1
+        <if test="keyword != null and keyword != ''">
+            and (
+                s.scheme_code like concat('%', #{keyword}, '%')
+                or s.scheme_name like concat('%', #{keyword}, '%')
+            )
+        </if>
+        <if test="schemeCode != null and schemeCode != ''">
+            and s.scheme_code like concat('%', #{schemeCode}, '%')
+        </if>
+        <if test="schemeName != null and schemeName != ''">
+            and s.scheme_name like concat('%', #{schemeName}, '%')
+        </if>
+        <if test="schemeType != null and schemeType != ''">
+            and s.scheme_type = #{schemeType}
+        </if>
+        <if test="feeSourceMode != null and feeSourceMode != ''">
+            and s.fee_source_mode = #{feeSourceMode}
+        </if>
+        <if test="currencyCode != null and currencyCode != ''">
+            and s.currency_code = #{currencyCode}
+        </if>
+        <if test="scopeType != null and scopeType != ''">
+            and s.scope_type = #{scopeType}
+        </if>
+        <if test="warehouseScopeMode != null and warehouseScopeMode != ''">
+            and s.warehouse_scope_mode = #{warehouseScopeMode}
+        </if>
+        <if test="status != null and status != ''">
+            and s.status = #{status}
+        </if>
+        <if test="params.effectiveBeginTime != null and params.effectiveBeginTime != ''">
+            and date_format(s.effective_time,'%Y%m%d') &gt;= date_format(#{params.effectiveBeginTime},'%Y%m%d')
+        </if>
+        <if test="params.effectiveEndTime != null and params.effectiveEndTime != ''">
+            and date_format(s.effective_time,'%Y%m%d') &lt;= date_format(#{params.effectiveEndTime},'%Y%m%d')
+        </if>
+        order by s.effective_priority desc, s.effective_time desc, s.scheme_id desc
+    </select>
+
+    <select id="selectQuoteSchemeById" parameterType="Long" resultMap="QuoteSchemeResult">
+        <include refid="QuoteSchemeSummarySelect" />
+        where s.scheme_id = #{schemeId}
+        limit 1
+    </select>
+
+    <select id="selectQuoteSchemeByCode" resultMap="QuoteSchemeResult">
+        <include refid="QuoteSchemeSummarySelect" />
+        where s.scheme_code = #{schemeCode}
+        limit 1
+    </select>
+
+    <insert id="insertQuoteScheme" parameterType="QuoteScheme" useGeneratedKeys="true" keyProperty="schemeId">
+        insert into quote_scheme(
+            scheme_code, scheme_name, scheme_type, fee_source_mode, currency_code,
+            scope_type, warehouse_scope_mode, effective_time, expire_time,
+            effective_priority, status, create_by, create_time, remark
+        ) values (
+            #{schemeCode}, #{schemeName}, #{schemeType}, #{feeSourceMode}, #{currencyCode},
+            #{scopeType}, #{warehouseScopeMode}, #{effectiveTime}, #{expireTime},
+            #{effectivePriority}, #{status}, #{createBy}, sysdate(), #{remark}
+        )
+    </insert>
+
+    <update id="updateQuoteScheme" parameterType="QuoteScheme">
+        update quote_scheme
+        set scheme_name = #{schemeName},
+            scheme_type = #{schemeType},
+            fee_source_mode = #{feeSourceMode},
+            currency_code = #{currencyCode},
+            scope_type = #{scopeType},
+            warehouse_scope_mode = #{warehouseScopeMode},
+            effective_time = #{effectiveTime},
+            expire_time = #{expireTime},
+            effective_priority = #{effectivePriority},
+            status = #{status},
+            update_by = #{updateBy},
+            update_time = sysdate(),
+            remark = #{remark}
+        where scheme_id = #{schemeId}
+    </update>
+
+    <update id="updateQuoteSchemeStatus">
+        update quote_scheme
+        set status = #{status},
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where scheme_id = #{schemeId}
+    </update>
+
+    <update id="updateQuoteSchemeWarehouseScopeMode">
+        update quote_scheme
+        set warehouse_scope_mode = #{warehouseScopeMode},
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where scheme_id = #{schemeId}
+    </update>
+
+    <select id="selectQuoteSchemeScopeList" resultMap="QuoteSchemeScopeResult">
+        select *
+        from quote_scheme_scope
+        where scheme_id = #{schemeId}
+        order by scope_id asc
+    </select>
+
+    <delete id="deleteQuoteSchemeScopes">
+        delete from quote_scheme_scope
+        where scheme_id = #{schemeId}
+    </delete>
+
+    <insert id="insertQuoteSchemeScope" parameterType="QuoteSchemeScope" useGeneratedKeys="true" keyProperty="scopeId">
+        insert into quote_scheme_scope(
+            scheme_id, scope_type, scope_key, buyer_level_code, buyer_level_name_snapshot,
+            buyer_id, buyer_code_snapshot, buyer_name_snapshot, buyer_short_name_snapshot,
+            create_by, create_time, remark
+        ) values (
+            #{schemeId}, #{scopeType}, #{scopeKey}, #{buyerLevelCode}, #{buyerLevelNameSnapshot},
+            #{buyerId}, #{buyerCodeSnapshot}, #{buyerNameSnapshot}, #{buyerShortNameSnapshot},
+            #{createBy}, sysdate(), #{remark}
+        )
+    </insert>
+
+    <select id="selectQuoteSchemeWarehouseList" resultMap="QuoteSchemeWarehouseResult">
+        select *
+        from quote_scheme_warehouse
+        where scheme_id = #{schemeId}
+        order by scheme_warehouse_id asc
+    </select>
+
+    <delete id="deleteQuoteSchemeWarehouses">
+        delete from quote_scheme_warehouse
+        where scheme_id = #{schemeId}
+    </delete>
+
+    <insert id="insertQuoteSchemeWarehouse" parameterType="QuoteSchemeWarehouse" useGeneratedKeys="true"
+            keyProperty="schemeWarehouseId">
+        insert into quote_scheme_warehouse(
+            scheme_id, warehouse_code, warehouse_name_snapshot, warehouse_kind_snapshot,
+            create_by, create_time, remark
+        ) values (
+            #{schemeId}, #{warehouseCode}, #{warehouseNameSnapshot}, #{warehouseKindSnapshot},
+            #{createBy}, sysdate(), #{remark}
+        )
+    </insert>
+
+    <select id="selectQuoteSchemeChannelList" resultMap="QuoteSchemeChannelResult">
+        select *
+        from quote_scheme_channel
+        where scheme_id = #{schemeId}
+        order by display_order asc, scheme_channel_id asc
+    </select>
+
+    <select id="selectQuoteSchemeChannelById" resultMap="QuoteSchemeChannelResult">
+        select *
+        from quote_scheme_channel
+        where scheme_id = #{schemeId}
+          and scheme_channel_id = #{schemeChannelId}
+        limit 1
+    </select>
+
+    <select id="selectQuoteSchemeChannelByCustomerChannelCode" resultMap="QuoteSchemeChannelResult">
+        select *
+        from quote_scheme_channel
+        where scheme_id = #{schemeId}
+          and customer_channel_code = #{customerChannelCode}
+        limit 1
+    </select>
+
+    <select id="selectMaxChannelDisplayOrder" resultType="int">
+        select max(display_order)
+        from quote_scheme_channel
+        where scheme_id = #{schemeId}
+    </select>
+
+    <insert id="insertQuoteSchemeChannel" parameterType="QuoteSchemeChannel" useGeneratedKeys="true"
+            keyProperty="schemeChannelId">
+        insert into quote_scheme_channel(
+            scheme_id, customer_channel_code, customer_channel_name_snapshot,
+            operation_fee_code, operation_fee_name_snapshot, freight_fee_code,
+            freight_fee_name_snapshot, status, display_order, create_by, create_time, remark
+        ) values (
+            #{schemeId}, #{customerChannelCode}, #{customerChannelNameSnapshot},
+            #{operationFeeCode}, #{operationFeeNameSnapshot}, #{freightFeeCode},
+            #{freightFeeNameSnapshot}, #{status}, #{displayOrder}, #{createBy}, sysdate(), #{remark}
+        )
+    </insert>
+
+    <update id="updateQuoteSchemeChannel" parameterType="QuoteSchemeChannel">
+        update quote_scheme_channel
+        set customer_channel_code = #{customerChannelCode},
+            customer_channel_name_snapshot = #{customerChannelNameSnapshot},
+            operation_fee_code = #{operationFeeCode},
+            operation_fee_name_snapshot = #{operationFeeNameSnapshot},
+            freight_fee_code = #{freightFeeCode},
+            freight_fee_name_snapshot = #{freightFeeNameSnapshot},
+            status = #{status},
+            display_order = #{displayOrder},
+            update_by = #{updateBy},
+            update_time = sysdate(),
+            remark = #{remark}
+        where scheme_id = #{schemeId}
+          and scheme_channel_id = #{schemeChannelId}
+    </update>
+
+    <delete id="deleteQuoteSchemeChannel">
+        delete from quote_scheme_channel
+        where scheme_id = #{schemeId}
+          and scheme_channel_id = #{schemeChannelId}
+    </delete>
+
+    <select id="selectQuoteSchemeValueFeeRuleList" resultMap="QuoteSchemeValueFeeRuleResult">
+        select *
+        from quote_scheme_value_fee_rule
+        where scheme_id = #{schemeId}
+        order by display_order asc, value_fee_rule_id asc
+    </select>
+
+    <select id="selectQuoteSchemeValueFeeRuleById" resultMap="QuoteSchemeValueFeeRuleResult">
+        select *
+        from quote_scheme_value_fee_rule
+        where scheme_id = #{schemeId}
+          and value_fee_rule_id = #{valueFeeRuleId}
+        limit 1
+    </select>
+
+    <select id="selectQuoteSchemeValueFeeRuleByChannelAndTrigger" resultMap="QuoteSchemeValueFeeRuleResult">
+        select *
+        from quote_scheme_value_fee_rule
+        where scheme_id = #{schemeId}
+          and logistics_channel_code = #{logisticsChannelCode}
+          and trigger_code = #{triggerCode}
+        limit 1
+    </select>
+
+    <select id="selectMaxValueFeeDisplayOrder" resultType="int">
+        select max(display_order)
+        from quote_scheme_value_fee_rule
+        where scheme_id = #{schemeId}
+    </select>
+
+    <insert id="insertQuoteSchemeValueFeeRule" parameterType="QuoteSchemeValueFeeRule" useGeneratedKeys="true"
+            keyProperty="valueFeeRuleId">
+        insert into quote_scheme_value_fee_rule(
+            scheme_id, logistics_channel_code, logistics_channel_name_snapshot, trigger_code,
+            calculation_method, adjustment_direction, adjustment_value, status, display_order,
+            create_by, create_time, remark
+        ) values (
+            #{schemeId}, #{logisticsChannelCode}, #{logisticsChannelNameSnapshot}, #{triggerCode},
+            #{calculationMethod}, #{adjustmentDirection}, #{adjustmentValue}, #{status}, #{displayOrder},
+            #{createBy}, sysdate(), #{remark}
+        )
+    </insert>
+
+    <update id="updateQuoteSchemeValueFeeRule" parameterType="QuoteSchemeValueFeeRule">
+        update quote_scheme_value_fee_rule
+        set logistics_channel_code = #{logisticsChannelCode},
+            logistics_channel_name_snapshot = #{logisticsChannelNameSnapshot},
+            trigger_code = #{triggerCode},
+            calculation_method = #{calculationMethod},
+            adjustment_direction = #{adjustmentDirection},
+            adjustment_value = #{adjustmentValue},
+            status = #{status},
+            display_order = #{displayOrder},
+            update_by = #{updateBy},
+            update_time = sysdate(),
+            remark = #{remark}
+        where scheme_id = #{schemeId}
+          and value_fee_rule_id = #{valueFeeRuleId}
+    </update>
+
+    <delete id="deleteQuoteSchemeValueFeeRule">
+        delete from quote_scheme_value_fee_rule
+        where scheme_id = #{schemeId}
+          and value_fee_rule_id = #{valueFeeRuleId}
+    </delete>
+</mapper>

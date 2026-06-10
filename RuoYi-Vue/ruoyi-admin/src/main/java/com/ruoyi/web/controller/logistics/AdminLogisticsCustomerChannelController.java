@@ -19,6 +19,7 @@ import com.ruoyi.common.core.page.TableDataInfo;
 import com.ruoyi.common.enums.BusinessType;
 import com.ruoyi.logistics.domain.LogisticsCustomerChannel;
 import com.ruoyi.logistics.domain.request.LogisticsCustomerChannelBuyerScopeRequest;
+import com.ruoyi.logistics.domain.request.LogisticsCustomerChannelQuoteMappingRequest;
 import com.ruoyi.logistics.domain.request.LogisticsCustomerChannelRequest;
 import com.ruoyi.logistics.domain.request.LogisticsCustomerChannelSystemMappingRequest;
 import com.ruoyi.logistics.domain.request.LogisticsStatusRequest;
@@ -108,6 +109,31 @@ public class AdminLogisticsCustomerChannelController extends BaseController
         @PathVariable("mappingId") Long mappingId)
     {
         return toAjax(customerChannelService.deleteSystemMapping(customerChannelCode, mappingId));
+    }
+
+    @PreAuthorize("@ss.hasPermi('logistics:customerChannel:query')")
+    @GetMapping("/{customerChannelCode}/quote-channel-mappings/list")
+    public AjaxResult quoteChannelMappings(@PathVariable("customerChannelCode") String customerChannelCode)
+    {
+        return success(customerChannelService.selectQuoteMappingList(customerChannelCode));
+    }
+
+    @PreAuthorize("@ss.hasPermi('logistics:customerChannel:binding')")
+    @Log(title = "客户渠道报价主仓渠道映射", businessType = BusinessType.INSERT)
+    @PostMapping("/{customerChannelCode}/quote-channel-mappings")
+    public AjaxResult addQuoteChannelMapping(@PathVariable("customerChannelCode") String customerChannelCode,
+        @Validated @RequestBody LogisticsCustomerChannelQuoteMappingRequest request)
+    {
+        return toAjax(customerChannelService.insertQuoteMapping(customerChannelCode, request));
+    }
+
+    @PreAuthorize("@ss.hasPermi('logistics:customerChannel:binding')")
+    @Log(title = "客户渠道报价主仓渠道映射", businessType = BusinessType.DELETE)
+    @DeleteMapping("/{customerChannelCode}/quote-channel-mappings/{mappingId}")
+    public AjaxResult deleteQuoteChannelMapping(@PathVariable("customerChannelCode") String customerChannelCode,
+        @PathVariable("mappingId") Long mappingId)
+    {
+        return toAjax(customerChannelService.deleteQuoteMapping(customerChannelCode, mappingId));
     }
 
     @PreAuthorize("@ss.hasPermi('logistics:customerChannel:query')")
