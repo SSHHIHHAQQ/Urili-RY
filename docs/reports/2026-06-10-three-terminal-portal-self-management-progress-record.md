@@ -607,21 +607,22 @@
 - 已加固：
   - `react-ui/scripts/verify-portal-self-management-live.mjs` 和 `react-ui/scripts/verify-portal-self-management-live-write.mjs` 默认直连后端真实路径，不再默认拼 `/api`。
   - 两个脚本新增可选 `PORTAL_LIVE_API_PREFIX=/api`，仅在目标为 React dev proxy 时启用。
+  - `verify-portal-self-management-live.mjs` 增加匿名 `/getInfo` 拒绝检查，避免只验证跨端 token 而漏掉无 token 鉴权入口。
   - 新增 `react-ui/scripts/verify-portal-direct-login-live.mjs`：
     - 需要外部显式提供 `ADMIN_AUTH_TOKEN`、`SELLER_DIRECT_LOGIN_SUBJECT_ID`、`BUYER_DIRECT_LOGIN_SUBJECT_ID`。
     - 需要显式 `PORTAL_DIRECT_LOGIN_LIVE_CONFIRM=APPLY_PORTAL_DIRECT_LOGIN_LIVE_VERIFY`。
-    - 每端只生成并消费一次管理端到 OWNER 的 direct-login ticket，随后用 portal token 调用 `/getInfo` 校验 19 个 self-management 权限，并 best-effort logout。
+    - 每端只生成并消费一次管理端到 OWNER 的 direct-login ticket，随后复用同一 ticket 必须失败，再用 portal token 调用 `/getInfo` 校验 19 个 self-management 权限，并 best-effort logout。
     - 不读取 `.env.local`，不执行 SQL，不触达商品、订单、库存、物流、财务、履约或外部系统业务 API。
   - `react-ui/package.json` 新增 `verify:portal-direct-login-live`。
   - `react-ui/tests/portal-direct-login-live-contract.test.ts` 新增合同，并纳入 `react-ui/tests/three-terminal.manifest.json` 的 frontend/critical frontend 门禁。
 - 已验证：
   - 通过：`cd react-ui; npx jest --config jest.config.ts tests/portal-direct-login-live-contract.test.ts tests/portal-self-management-live-contract.test.ts tests/portal-self-management-live-write-contract.test.ts tests/portal-self-management-sql-runner-contract.test.ts --runInBand`。
-  - 结果：4 suites / 21 tests passed。
+  - 结果：4 suites / 22 tests passed。
   - 通过：`cd react-ui; node scripts\verify-portal-self-management-live.mjs --help`。
   - 通过：`cd react-ui; node scripts\verify-portal-self-management-live-write.mjs --help`。
   - 通过：`cd react-ui; node scripts\verify-portal-direct-login-live.mjs --help`。
   - 通过：`cd react-ui; npm run verify:three-terminal`。
-  - 结果：`three-terminal verification passed.`；前端 33 suites / 284 tests passed；后端 reactor `test-compile` 与三端合同均 BUILD SUCCESS。
+  - 结果：`three-terminal verification passed.`；前端 33 suites / 285 tests passed；后端 reactor `test-compile` 与三端合同均 BUILD SUCCESS。
   - 通过：`git diff --check -- <本轮三端 portal 相关文件>`。
   - 结果：无 whitespace error；仅 `react-ui/package.json` 和 `react-ui/tests/three-terminal.manifest.json` 的 LF/CRLF 工作区提示。
   - 通过：`codegraph sync .`。

@@ -186,6 +186,21 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         limit 1
     </select>
 
+    <select id="countOverlappingEnabledSchemeWithSamePriority" resultType="int">
+        select count(1)
+        from quote_scheme s
+        where s.status = 'ENABLED'
+          and s.scheme_type = #{schemeType}
+          and s.effective_priority = #{effectivePriority}
+          and (s.expire_time is null or s.expire_time &gt;= #{effectiveTime})
+        <if test="expireTime != null">
+          and s.effective_time &lt;= #{expireTime}
+        </if>
+        <if test="schemeId != null">
+          and s.scheme_id &lt;&gt; #{schemeId}
+        </if>
+    </select>
+
     <insert id="insertQuoteScheme" parameterType="QuoteScheme" useGeneratedKeys="true" keyProperty="schemeId">
         insert into quote_scheme(
             scheme_code, scheme_name, scheme_type, fee_source_mode, currency_code,

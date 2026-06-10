@@ -316,6 +316,12 @@ npm run verify:portal-direct-login-live
 npm run verify:three-terminal
 ```
 
+三类 live 脚本覆盖范围：
+
+- `verify:portal-self-management-live`：只读验证账号密码登录、匿名 `/getInfo` 拒绝、`getInfo` / `getRouters` 自助权限收敛、只读自助接口和跨端 token 拒绝。
+- `verify:portal-self-management-live-write`：需要写确认变量，验证 OWNER 创建子账号、角色授权、部门维护、日志和会话自助 DTO 脱敏。
+- `verify:portal-direct-login-live`：需要管理端 token、目标主体 ID 和写确认变量，验证管理端到 OWNER 的 direct-login ticket 生成、消费、同一 ticket 不可复用、消费后 portal `/getInfo` 权限收敛。
+
 live 脚本默认直连后端 `http://127.0.0.1:8080`，请求路径不带 `/api`。如果改为通过 React dev server `http://127.0.0.1:8001` 验证，必须显式设置：
 
 ```powershell

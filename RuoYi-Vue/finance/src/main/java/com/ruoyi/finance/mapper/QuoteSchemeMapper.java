@@ -1,5 +1,6 @@
 package com.ruoyi.finance.mapper;
 
+import java.util.Date;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 import com.ruoyi.finance.domain.QuoteScheme;
@@ -15,6 +16,10 @@ public interface QuoteSchemeMapper
     QuoteScheme selectQuoteSchemeById(Long schemeId);
 
     QuoteScheme selectQuoteSchemeByCode(@Param("schemeCode") String schemeCode);
+
+    int countOverlappingEnabledSchemeWithSamePriority(@Param("schemeId") Long schemeId,
+        @Param("schemeType") String schemeType, @Param("effectiveTime") Date effectiveTime,
+        @Param("expireTime") Date expireTime, @Param("effectivePriority") Integer effectivePriority);
 
     int insertQuoteScheme(QuoteScheme scheme);
 
