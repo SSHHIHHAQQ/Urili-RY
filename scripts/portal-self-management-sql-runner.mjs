@@ -264,12 +264,20 @@ public class PortalSelfManagementSqlRunner {
             "select 'buyer_portal_home_menu' as item, null as value_text, count(*) as rows_count, null as min_id, null as max_id from buyer_menu where perms = 'buyer:portal:home' and parent_id = 0 and menu_type = 'C' and coalesce(path, '') = '/buyer/portal' and coalesce(component, '') = 'Buyer/Portal/index' and coalesce(route_name, '') = 'BuyerPortalHome'",
             "select 'seller_required_self_menu_entries' as item, null as value_text, count(*) as rows_count, null as min_id, null as max_id from seller_menu where perms in (" + sellerPerms() + ")",
             "select 'buyer_required_self_menu_entries' as item, null as value_text, count(*) as rows_count, null as min_id, null as max_id from buyer_menu where perms in (" + buyerPerms() + ")",
+            "select 'seller_required_self_root_button_entries' as item, null as value_text, count(*) as rows_count, null as min_id, null as max_id from seller_menu where perms in (" + sellerButtonPerms() + ") and parent_id = 0 and coalesce(menu_type, '') = 'F' and coalesce(path, '') = '' and coalesce(component, '') = '' and coalesce(route_name, '') = ''",
+            "select 'buyer_required_self_root_button_entries' as item, null as value_text, count(*) as rows_count, null as min_id, null as max_id from buyer_menu where perms in (" + buyerButtonPerms() + ") and parent_id = 0 and coalesce(menu_type, '') = 'F' and coalesce(path, '') = '' and coalesce(component, '') = '' and coalesce(route_name, '') = ''",
             "select 'seller_owner_self_grants' as item, null as value_text, count(*) as rows_count, null as min_id, null as max_id from seller_role r join seller_role_menu rm on rm.seller_role_id = r.seller_role_id join seller_menu m on m.seller_menu_id = rm.seller_menu_id where r.del_flag = '0' and r.status = '0' and r.role_key = 'owner' and m.perms in (" + sellerPerms() + ")",
             "select 'buyer_owner_self_grants' as item, null as value_text, count(*) as rows_count, null as min_id, null as max_id from buyer_role r join buyer_role_menu rm on rm.buyer_role_id = r.buyer_role_id join buyer_menu m on m.buyer_menu_id = rm.buyer_menu_id where r.del_flag = '0' and r.status = '0' and r.role_key = 'owner' and m.perms in (" + buyerPerms() + ")",
             "select 'seller_owner_non_self_grants' as item, null as value_text, count(*) as rows_count, null as min_id, null as max_id from seller_role_menu rm join seller_role r on r.seller_role_id = rm.seller_role_id join seller_menu m on m.seller_menu_id = rm.seller_menu_id where r.del_flag = '0' and r.status = '0' and r.role_key = 'owner' and m.perms not in (" + sellerPerms() + ")",
             "select 'buyer_owner_non_self_grants' as item, null as value_text, count(*) as rows_count, null as min_id, null as max_id from buyer_role_menu rm join buyer_role r on r.buyer_role_id = rm.buyer_role_id join buyer_menu m on m.buyer_menu_id = rm.buyer_menu_id where r.del_flag = '0' and r.status = '0' and r.role_key = 'owner' and m.perms not in (" + buyerPerms() + ")",
             "select 'seller_invalid_menu_perms' as item, null as value_text, count(*) as rows_count, null as min_id, null as max_id from seller_menu where coalesce(perms, '') = '' or coalesce(perms, '') like '%*%' or coalesce(perms, '') not like 'seller:%' or coalesce(perms, '') like 'seller:admin:%' or coalesce(perms, '') like 'buyer:%'",
-            "select 'buyer_invalid_menu_perms' as item, null as value_text, count(*) as rows_count, null as min_id, null as max_id from buyer_menu where coalesce(perms, '') = '' or coalesce(perms, '') like '%*%' or coalesce(perms, '') not like 'buyer:%' or coalesce(perms, '') like 'buyer:admin:%' or coalesce(perms, '') like 'seller:%'"
+            "select 'buyer_invalid_menu_perms' as item, null as value_text, count(*) as rows_count, null as min_id, null as max_id from buyer_menu where coalesce(perms, '') = '' or coalesce(perms, '') like '%*%' or coalesce(perms, '') not like 'buyer:%' or coalesce(perms, '') like 'buyer:admin:%' or coalesce(perms, '') like 'seller:%'",
+            "select 'seller_menu_id_range_violations' as item, null as value_text, count(*) as rows_count, null as min_id, null as max_id from seller_menu where seller_menu_id > 0 and (seller_menu_id < 100000 or seller_menu_id >= 200000)",
+            "select 'buyer_menu_id_range_violations' as item, null as value_text, count(*) as rows_count, null as min_id, null as max_id from buyer_menu where buyer_menu_id > 0 and (buyer_menu_id < 200000 or buyer_menu_id >= 300000)",
+            "select 'seller_invalid_page_components' as item, null as value_text, count(*) as rows_count, null as min_id, null as max_id from seller_menu where menu_type = 'C' and (coalesce(trim(component), '') = '' or lower(coalesce(trim(component), '')) not like 'seller/%')",
+            "select 'buyer_invalid_page_components' as item, null as value_text, count(*) as rows_count, null as min_id, null as max_id from buyer_menu where menu_type = 'C' and (coalesce(trim(component), '') = '' or lower(coalesce(trim(component), '')) not like 'buyer/%')",
+            "select 'seller_duplicate_menu_perms' as item, null as value_text, count(*) as rows_count, null as min_id, null as max_id from (select perms from seller_menu group by perms having count(1) > 1) duplicate_seller_menu_perms",
+            "select 'buyer_duplicate_menu_perms' as item, null as value_text, count(*) as rows_count, null as min_id, null as max_id from (select perms from buyer_menu group by perms having count(1) > 1) duplicate_buyer_menu_perms"
         };
         System.out.println("phase\titem\tvalue_text\trows_count\tmin_id\tmax_id");
         for (String sql : queries) {
@@ -303,6 +311,10 @@ public class PortalSelfManagementSqlRunner {
         assertCount("buyer_portal_home_menu", 1, requireCount(counts, "buyer_portal_home_menu"));
         assertCount("seller_required_self_menu_entries", 19, requireCount(counts, "seller_required_self_menu_entries"));
         assertCount("buyer_required_self_menu_entries", 19, requireCount(counts, "buyer_required_self_menu_entries"));
+        assertCount("seller_required_self_root_button_entries", 18,
+                requireCount(counts, "seller_required_self_root_button_entries"));
+        assertCount("buyer_required_self_root_button_entries", 18,
+                requireCount(counts, "buyer_required_self_root_button_entries"));
         assertCount("seller_owner_self_grants", sellerOwnerRoles * 19,
                 requireCount(counts, "seller_owner_self_grants"));
         assertCount("buyer_owner_self_grants", buyerOwnerRoles * 19,
@@ -311,6 +323,12 @@ public class PortalSelfManagementSqlRunner {
         assertCount("buyer_owner_non_self_grants", 0, requireCount(counts, "buyer_owner_non_self_grants"));
         assertCount("seller_invalid_menu_perms", 0, requireCount(counts, "seller_invalid_menu_perms"));
         assertCount("buyer_invalid_menu_perms", 0, requireCount(counts, "buyer_invalid_menu_perms"));
+        assertCount("seller_menu_id_range_violations", 0, requireCount(counts, "seller_menu_id_range_violations"));
+        assertCount("buyer_menu_id_range_violations", 0, requireCount(counts, "buyer_menu_id_range_violations"));
+        assertCount("seller_invalid_page_components", 0, requireCount(counts, "seller_invalid_page_components"));
+        assertCount("buyer_invalid_page_components", 0, requireCount(counts, "buyer_invalid_page_components"));
+        assertCount("seller_duplicate_menu_perms", 0, requireCount(counts, "seller_duplicate_menu_perms"));
+        assertCount("buyer_duplicate_menu_perms", 0, requireCount(counts, "buyer_duplicate_menu_perms"));
     }
 
     private static long requireCount(Map<String, Long> counts, String item) {
@@ -334,6 +352,14 @@ public class PortalSelfManagementSqlRunner {
 
     private static String buyerPerms() {
         return sellerPerms().replace("seller:", "buyer:");
+    }
+
+    private static String sellerButtonPerms() {
+        return "'seller:account:list','seller:account:add','seller:account:edit','seller:account:role:query','seller:account:role:edit','seller:account:loginLog:list','seller:account:operLog:list','seller:account:session:list','seller:dept:list','seller:dept:query','seller:dept:add','seller:dept:edit','seller:dept:remove','seller:role:list','seller:role:query','seller:role:add','seller:role:edit','seller:role:remove'";
+    }
+
+    private static String buyerButtonPerms() {
+        return sellerButtonPerms().replace("seller:", "buyer:");
     }
 }
 `;

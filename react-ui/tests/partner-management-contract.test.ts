@@ -24,6 +24,7 @@ function readSource(relativePath: string) {
 describe('partner management contract', () => {
   const accountModal = readSource('src/components/PartnerManagement/PartnerAccountModal.tsx');
   const managementPage = readSource('src/components/PartnerManagement/PartnerManagementPage.tsx');
+  const menuModal = readSource('src/components/PartnerManagement/PartnerMenuModal.tsx');
   const sellerPage = readSource('src/pages/Seller/index.tsx');
   const buyerPage = readSource('src/pages/Buyer/index.tsx');
   const sellerService = readSource('src/services/seller/seller.ts');
@@ -74,6 +75,42 @@ describe('partner management contract', () => {
     expect(buyerService).toContain('/api/buyer/admin/buyers/${buyerId}/accounts/${buyerAccountId}/resetPwd');
     expect(buyerService).toContain('/api/buyer/admin/buyers/${buyerId}/accounts/${buyerAccountId}/directLogin');
     expect(buyerService).not.toContain('/api/seller/');
+  });
+
+  it('keeps seller and buyer menu templates readonly in admin management', () => {
+    expect(menuModal).toContain('config.services.listMenus()');
+    expect(menuModal).not.toContain('useAccess');
+    expect(menuModal).not.toContain('config.services.addMenu');
+    expect(menuModal).not.toContain('config.services.updateMenu');
+    expect(menuModal).not.toContain('config.services.removeMenu');
+    expect(menuModal).not.toContain('handleSubmit');
+    expect(menuModal).not.toContain('handleRemove');
+    expect(menuModal).not.toContain('openMenuForm');
+    expect(menuModal).not.toContain('menu:add');
+    expect(menuModal).not.toContain('menu:edit');
+    expect(menuModal).not.toContain('menu:remove');
+
+    expect(managementPage).not.toContain('addMenu:');
+    expect(managementPage).not.toContain('updateMenu:');
+    expect(managementPage).not.toContain('removeMenu:');
+    expect(sellerPage).not.toContain('addAdminSellerMenu');
+    expect(sellerPage).not.toContain('updateAdminSellerMenu');
+    expect(sellerPage).not.toContain('removeAdminSellerMenu');
+    expect(sellerPage).not.toContain('addMenu:');
+    expect(sellerPage).not.toContain('updateMenu:');
+    expect(sellerPage).not.toContain('removeMenu:');
+    expect(sellerService).not.toContain('function addAdminSellerMenu');
+    expect(sellerService).not.toContain('function updateAdminSellerMenu');
+    expect(sellerService).not.toContain('function removeAdminSellerMenu');
+    expect(buyerPage).not.toContain('addAdminBuyerMenu');
+    expect(buyerPage).not.toContain('updateAdminBuyerMenu');
+    expect(buyerPage).not.toContain('removeAdminBuyerMenu');
+    expect(buyerPage).not.toContain('addMenu:');
+    expect(buyerPage).not.toContain('updateMenu:');
+    expect(buyerPage).not.toContain('removeMenu:');
+    expect(buyerService).not.toContain('function addAdminBuyerMenu');
+    expect(buyerService).not.toContain('function updateAdminBuyerMenu');
+    expect(buyerService).not.toContain('function removeAdminBuyerMenu');
   });
 
   it('keeps session list readonly permission separate from force logout', () => {

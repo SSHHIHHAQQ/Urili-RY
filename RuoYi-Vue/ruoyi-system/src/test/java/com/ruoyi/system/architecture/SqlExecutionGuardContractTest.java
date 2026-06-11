@@ -2317,6 +2317,14 @@ public class SqlExecutionGuardContractTest
         requireContains(violations, "20260610_portal_self_management_permission_seed.sql", portalSelfManagementSource,
                 "buyer owner roles self-management permission exact grant count mismatch");
         requireContains(violations, "20260610_portal_self_management_permission_seed.sql", portalSelfManagementSource,
+                "seller portal home menu signature mismatch");
+        requireContains(violations, "20260610_portal_self_management_permission_seed.sql", portalSelfManagementSource,
+                "buyer portal home menu signature mismatch");
+        requireContains(violations, "20260610_portal_self_management_permission_seed.sql", portalSelfManagementSource,
+                "seller self-management root button menu signature mismatch");
+        requireContains(violations, "20260610_portal_self_management_permission_seed.sql", portalSelfManagementSource,
+                "buyer self-management root button menu signature mismatch");
+        requireContains(violations, "20260610_portal_self_management_permission_seed.sql", portalSelfManagementSource,
                 "v_owner_role_count * 19");
         requireContains(violations, "20260610_portal_self_management_permission_seed.sql", portalSelfManagementSource,
                 "coalesce(perms, '') like '%*%'");

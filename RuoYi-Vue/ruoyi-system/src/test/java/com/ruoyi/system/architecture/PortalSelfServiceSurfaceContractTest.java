@@ -152,6 +152,10 @@ public class PortalSelfServiceSurfaceContractTest
                 "\"" + terminal + ":account:edit\"",
                 "\"" + terminal + ":account:role:query\"",
                 "\"" + terminal + ":account:role:edit\"",
+                "@PortalPreAuthorize(terminal = \"" + terminal + "\", hasPermi = {",
+                "\"" + terminal + ":account:role:query\", \"" + terminal + ":role:list\" })",
+                "\"" + terminal + ":account:role:edit\", \"" + terminal + ":account:role:query\", \""
+                        + terminal + ":role:list\" })",
                 "\"" + terminal + ":dept:query\"",
                 "\"" + terminal + ":dept:add\"",
                 "\"" + terminal + ":dept:edit\"",
@@ -179,8 +183,11 @@ public class PortalSelfServiceSurfaceContractTest
                 accountIdSetter,
                 "if (menuId == null || menuId <= 0)",
                 "if (!seenMenuIds.add(menuId))",
-                "if (menu == null || !PORTAL_SELF_MANAGEMENT_PERMS.contains(menu.getPerms()))",
+                "PortalPermissionSupport.assertReadableTerminalMenu(menu, \"" + terminal + "\");",
+                "if (!PORTAL_SELF_MANAGEMENT_PERMS.contains(StringUtils.trimToEmpty(menu.getPerms())))",
                 "if (allowedMenuIds.contains(menuId))",
+                "String perms = menu == null ? \"\" : StringUtils.trimToEmpty(menu.getPerms());",
+                "if (PORTAL_SELF_MANAGEMENT_PERMS.contains(perms))",
                 "PortalPermissionSupport.buildMenuTreeSelect(selectPortalSelfManagementMenus())"
         ))
         {
@@ -327,6 +334,12 @@ public class PortalSelfServiceSurfaceContractTest
         requireSourceContains(service, source, "if (!values.add(menuId))", violations);
         requireSourceContains(service, source, "permissionMapper.count" + capitalize(terminal)
                 + "MenusByIds(menuIds) != menuIds.length", violations);
+        requireSourceContains(service, source, "assertRoleMenuSelfManagement(menu);", violations);
+        requireSourceContains(service, source, "private void assertRoleMenuSelfManagement(PortalMenu menu)",
+                violations);
+        requireSourceContains(service, source,
+                "if (!PORTAL_SELF_MANAGEMENT_PERMS.contains(StringUtils.trimToEmpty(menu.getPerms())))",
+                violations);
     }
 
     private List<String> portalSelfManagementPermissions(String terminal)

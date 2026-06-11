@@ -84,6 +84,50 @@ public class PortalLogAspectContractTest
         }
     }
 
+    @Test
+    public void portalPreAuthorizeAspectMustKeepDirectLoginAuditOnAuthorizationFailures() throws IOException
+    {
+        Path sourcePath = findBackendRoot().resolve(
+                "ruoyi-framework/src/main/java/com/ruoyi/framework/aspectj/PortalPreAuthorizeAspect.java");
+        String source = Files.readString(sourcePath, StandardCharsets.UTF_8);
+        List<String> violations = new ArrayList<>();
+
+        if (!source.contains("recordAuthorizationFailure(joinPoint, portalPreAuthorize, e)"))
+        {
+            violations.add("PortalPreAuthorizeAspect must audit authorization failures before rethrowing");
+        }
+        if (!source.contains("portalTokenSupport.getSession(portalPreAuthorize.terminal())"))
+        {
+            violations.add("PortalPreAuthorizeAspect must resolve the current terminal session for denied requests");
+        }
+        if (!source.contains("applyDirectLoginAudit(operLog, session)"))
+        {
+            violations.add("PortalPreAuthorizeAspect must attach direct-login audit scope to denied requests");
+        }
+        if (!source.contains("operLog.setDirectLogin(Boolean.FALSE)")
+                || !source.contains("operLog.setDirectLogin(Boolean.TRUE)")
+                || !source.contains("operLog.setDirectLoginTicketId(session.getDirectLoginTicketId())")
+                || !source.contains("operLog.setActingAdminId(session.getActingAdminId())")
+                || !source.contains("operLog.setActingAdminName(session.getActingAdminName())")
+                || !source.contains("operLog.setDirectLoginReason(session.getDirectLoginReason())"))
+        {
+            violations.add("PortalPreAuthorizeAspect must copy direct-login audit context into structured fields");
+        }
+        if (!source.contains("directLoginAudit{ticketId=")
+                || !source.contains("appendDirectLoginAuditParam(operLog, session)"))
+        {
+            violations.add("PortalPreAuthorizeAspect must keep the direct-login oper_param compatibility prefix");
+        }
+        assertAppearsBefore(source, "PortalPreAuthorizeAspect.java",
+                "applyDirectLoginAudit(operLog, session)",
+                "AsyncFactory.recordPortalOper(portalPreAuthorize.terminal(), operLog)", violations);
+
+        if (!violations.isEmpty())
+        {
+            fail(String.join("\n", violations));
+        }
+    }
+
     private void assertAppearsBefore(String source, String fileName, String first, String second,
             List<String> violations)
     {

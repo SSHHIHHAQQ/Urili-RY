@@ -92,10 +92,36 @@ public class SellerPortalPermissionServiceImpl implements ISellerPortalPermissio
     }
 
     @Override
+    public List<PortalTreeSelect> buildSelfManagementMenuTreeSelect()
+    {
+        return PortalPermissionSupport.buildMenuTreeSelect(selectSelfManagementMenus());
+    }
+
+    @Override
     public List<Long> selectMenuIdsByRoleId(Long sellerId, Long roleId)
     {
         selectRoleById(sellerId, roleId);
         return permissionMapper.selectSellerMenuIdsByRoleId(sellerId, roleId);
+    }
+
+    @Override
+    public List<Long> selectSelfManagementMenuIdsByRoleId(Long sellerId, Long roleId)
+    {
+        List<Long> checkedKeys = selectMenuIdsByRoleId(sellerId, roleId);
+        Set<Long> allowedMenuIds = new LinkedHashSet<>();
+        for (PortalMenu menu : selectSelfManagementMenus())
+        {
+            allowedMenuIds.add(menu.getMenuId());
+        }
+        List<Long> result = new ArrayList<>();
+        for (Long checkedKey : checkedKeys)
+        {
+            if (allowedMenuIds.contains(checkedKey))
+            {
+                result.add(checkedKey);
+            }
+        }
+        return result;
     }
 
     @Override
@@ -309,6 +335,21 @@ public class SellerPortalPermissionServiceImpl implements ISellerPortalPermissio
         return PortalPermissionSupport.buildMenuTree(selfManagementMenus);
     }
 
+    private List<PortalMenu> selectSelfManagementMenus()
+    {
+        List<PortalMenu> menus = permissionMapper.selectSellerMenuList(new PortalMenu());
+        List<PortalMenu> selfManagementMenus = new ArrayList<>();
+        for (PortalMenu menu : menus)
+        {
+            PortalPermissionSupport.assertReadableTerminalMenu(menu, "seller");
+            if (PORTAL_SELF_MANAGEMENT_PERMS.contains(StringUtils.trimToEmpty(menu.getPerms())))
+            {
+                selfManagementMenus.add(menu);
+            }
+        }
+        return selfManagementMenus;
+    }
+
     @Override
     public String terminal()
     {
@@ -369,6 +410,15 @@ public class SellerPortalPermissionServiceImpl implements ISellerPortalPermissio
             PortalPermissionSupport.assertTerminalMenuId(menu.getMenuId(), "seller");
             PortalPermissionSupport.assertTerminalMenuComponent(menu, "seller");
             PortalPermissionSupport.assertTerminalMenuPerms(menu, "seller");
+            assertRoleMenuSelfManagement(menu);
+        }
+    }
+
+    private void assertRoleMenuSelfManagement(PortalMenu menu)
+    {
+        if (!PORTAL_SELF_MANAGEMENT_PERMS.contains(StringUtils.trimToEmpty(menu.getPerms())))
+        {
+            throw new ServiceException("卖家端角色只能分配自助管理权限模板");
         }
     }
 

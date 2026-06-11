@@ -18,7 +18,11 @@ public interface ISellerPortalPermissionService
 
     public List<PortalTreeSelect> buildMenuTreeSelect(PortalMenu menu);
 
+    public List<PortalTreeSelect> buildSelfManagementMenuTreeSelect();
+
     public List<Long> selectMenuIdsByRoleId(Long sellerId, Long roleId);
+
+    public List<Long> selectSelfManagementMenuIdsByRoleId(Long sellerId, Long roleId);
 
     public boolean checkMenuNameUnique(PortalMenu menu);
 

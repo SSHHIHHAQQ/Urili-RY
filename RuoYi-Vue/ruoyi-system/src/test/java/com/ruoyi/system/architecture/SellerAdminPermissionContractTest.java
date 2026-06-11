@@ -143,10 +143,20 @@ public class SellerAdminPermissionContractTest
 
         assertHandlerPermission(handlers, "roleMenuTreeselect", "seller:admin:role:query", violations);
         assertHandlerPermission(handlers, "roleMenuTreeselect", "seller:admin:menu:query", violations);
+        assertSourceContains(source, "permissionService.selectSelfManagementMenuIdsByRoleId(sellerId, roleId)",
+                "AdminSellerMenuController#roleMenuTreeselect must filter checked menu IDs to self-management",
+                violations);
+        assertSourceContains(source, "permissionService.buildSelfManagementMenuTreeSelect()",
+                "AdminSellerMenuController#roleMenuTreeselect must expose only self-management menu templates",
+                violations);
+        assertSourceNotContains(source, "permissionService.selectMenuIdsByRoleId(sellerId, roleId)",
+                "AdminSellerMenuController#roleMenuTreeselect must not return all checked menu IDs", violations);
+        assertSourceNotContains(source, "permissionService.buildMenuTreeSelect(new PortalMenu())",
+                "AdminSellerMenuController#roleMenuTreeselect must not return all terminal menus", violations);
 
         if (!violations.isEmpty())
         {
-            fail("seller role menu tree must require both role query and menu query permissions:\n"
+            fail("seller role menu tree must require both role query and menu query permissions and only expose self-management templates:\n"
                     + String.join("\n", violations));
         }
     }
@@ -217,9 +227,10 @@ public class SellerAdminPermissionContractTest
         assertControllerHandlerRouteContains(deptHandlers, "AdminSellerDeptController", "remove",
                 "@DeleteMapping(\"/{deptId}\")", violations);
 
-        List<HandlerMethod> menuHandlers = extractHandlerMethods(Files.readString(
+        String menuSource = Files.readString(
                 backendRoot.resolve("seller/src/main/java/com/ruoyi/seller/controller/AdminSellerMenuController.java"),
-                StandardCharsets.UTF_8));
+                StandardCharsets.UTF_8);
+        List<HandlerMethod> menuHandlers = extractHandlerMethods(menuSource);
         assertControllerHandlerPermission(menuHandlers, "AdminSellerMenuController", "list",
                 "seller:admin:menu:list", violations);
         assertControllerHandlerPermission(menuHandlers, "AdminSellerMenuController", "getInfo",
@@ -230,12 +241,6 @@ public class SellerAdminPermissionContractTest
                 "seller:admin:role:query", violations);
         assertControllerHandlerPermission(menuHandlers, "AdminSellerMenuController", "roleMenuTreeselect",
                 "seller:admin:menu:query", violations);
-        assertControllerHandlerPermission(menuHandlers, "AdminSellerMenuController", "add",
-                "seller:admin:menu:add", violations);
-        assertControllerHandlerPermission(menuHandlers, "AdminSellerMenuController", "edit",
-                "seller:admin:menu:edit", violations);
-        assertControllerHandlerPermission(menuHandlers, "AdminSellerMenuController", "remove",
-                "seller:admin:menu:remove", violations);
         assertControllerHandlerRouteContains(menuHandlers, "AdminSellerMenuController", "list",
                 "@GetMapping(\"/list\")", violations);
         assertControllerHandlerRouteContains(menuHandlers, "AdminSellerMenuController", "getInfo",
@@ -244,12 +249,24 @@ public class SellerAdminPermissionContractTest
                 "@GetMapping(\"/treeselect\")", violations);
         assertControllerHandlerRouteContains(menuHandlers, "AdminSellerMenuController", "roleMenuTreeselect",
                 "@GetMapping(\"/roleMenuTreeselect/{sellerId}/{roleId}\")", violations);
-        assertControllerHandlerRouteContains(menuHandlers, "AdminSellerMenuController", "add",
-                "@PostMapping", violations);
-        assertControllerHandlerRouteContains(menuHandlers, "AdminSellerMenuController", "edit",
-                "@PutMapping", violations);
-        assertControllerHandlerRouteContains(menuHandlers, "AdminSellerMenuController", "remove",
-                "@DeleteMapping(\"/{menuId}\")", violations);
+        assertHandlerMissing(menuHandlers, "add",
+                "AdminSellerMenuController must not expose menu template add in this phase", violations);
+        assertHandlerMissing(menuHandlers, "edit",
+                "AdminSellerMenuController must not expose menu template edit in this phase", violations);
+        assertHandlerMissing(menuHandlers, "remove",
+                "AdminSellerMenuController must not expose menu template remove in this phase", violations);
+        assertSourceNotContains(menuSource, "seller:admin:menu:add",
+                "AdminSellerMenuController must not require stale menu add permission", violations);
+        assertSourceNotContains(menuSource, "seller:admin:menu:edit",
+                "AdminSellerMenuController must not require stale menu edit permission", violations);
+        assertSourceNotContains(menuSource, "seller:admin:menu:remove",
+                "AdminSellerMenuController must not require stale menu remove permission", violations);
+        assertSourceNotContains(menuSource, "@PostMapping",
+                "AdminSellerMenuController must keep seller menu templates readonly", violations);
+        assertSourceNotContains(menuSource, "@PutMapping",
+                "AdminSellerMenuController must keep seller menu templates readonly", violations);
+        assertSourceNotContains(menuSource, "@DeleteMapping",
+                "AdminSellerMenuController must keep seller menu templates readonly", violations);
 
         if (!violations.isEmpty())
         {

@@ -220,6 +220,34 @@ begin
   select count(1)
     into v_permission_count
   from seller_menu
+  where perms = 'seller:portal:home'
+    and parent_id = 0
+    and menu_type = 'C'
+    and coalesce(path, '') = '/seller/portal'
+    and coalesce(component, '') = 'Seller/Portal/index'
+    and coalesce(route_name, '') = 'SellerPortalHome';
+
+  if v_permission_count <> 1 then
+    signal sqlstate '45000' set message_text = 'seller portal home menu signature mismatch';
+  end if;
+
+  select count(1)
+    into v_permission_count
+  from buyer_menu
+  where perms = 'buyer:portal:home'
+    and parent_id = 0
+    and menu_type = 'C'
+    and coalesce(path, '') = '/buyer/portal'
+    and coalesce(component, '') = 'Buyer/Portal/index'
+    and coalesce(route_name, '') = 'BuyerPortalHome';
+
+  if v_permission_count <> 1 then
+    signal sqlstate '45000' set message_text = 'buyer portal home menu signature mismatch';
+  end if;
+
+  select count(1)
+    into v_permission_count
+  from seller_menu
   where perms in (
       'seller:account:add',
       'seller:account:edit',
@@ -269,6 +297,72 @@ begin
 
   if v_permission_count <> 12 then
     signal sqlstate '45000' set message_text = 'buyer self-management permissions were not created';
+  end if;
+
+  select count(1)
+    into v_permission_count
+  from seller_menu
+  where perms in (
+      'seller:account:list',
+      'seller:account:add',
+      'seller:account:edit',
+      'seller:account:role:query',
+      'seller:account:role:edit',
+      'seller:account:loginLog:list',
+      'seller:account:operLog:list',
+      'seller:account:session:list',
+      'seller:dept:list',
+      'seller:dept:query',
+      'seller:dept:add',
+      'seller:dept:edit',
+      'seller:dept:remove',
+      'seller:role:list',
+      'seller:role:query',
+      'seller:role:add',
+      'seller:role:edit',
+      'seller:role:remove'
+    )
+    and parent_id = 0
+    and menu_type = 'F'
+    and coalesce(path, '') = ''
+    and coalesce(component, '') = ''
+    and coalesce(route_name, '') = '';
+
+  if v_permission_count <> 18 then
+    signal sqlstate '45000' set message_text = 'seller self-management root button menu signature mismatch';
+  end if;
+
+  select count(1)
+    into v_permission_count
+  from buyer_menu
+  where perms in (
+      'buyer:account:list',
+      'buyer:account:add',
+      'buyer:account:edit',
+      'buyer:account:role:query',
+      'buyer:account:role:edit',
+      'buyer:account:loginLog:list',
+      'buyer:account:operLog:list',
+      'buyer:account:session:list',
+      'buyer:dept:list',
+      'buyer:dept:query',
+      'buyer:dept:add',
+      'buyer:dept:edit',
+      'buyer:dept:remove',
+      'buyer:role:list',
+      'buyer:role:query',
+      'buyer:role:add',
+      'buyer:role:edit',
+      'buyer:role:remove'
+    )
+    and parent_id = 0
+    and menu_type = 'F'
+    and coalesce(path, '') = ''
+    and coalesce(component, '') = ''
+    and coalesce(route_name, '') = '';
+
+  if v_permission_count <> 18 then
+    signal sqlstate '45000' set message_text = 'buyer self-management root button menu signature mismatch';
   end if;
 
   select count(1)
@@ -427,6 +521,10 @@ delimiter ;
 call assert_portal_self_management_permission_seed_confirmed();
 call assert_terminal_menu_range_ready();
 
+call assert_seller_menu_permission_slot('seller:portal:home', 0, 'C', '/seller/portal', 'Seller/Portal/index', 'SellerPortalHome',
+    'seller:portal:home menu slot is occupied by another signature');
+call assert_seller_menu_permission_slot('seller:account:list', 0, 'F', '', null, '',
+    'seller:account:list menu slot is occupied by another signature');
 call assert_seller_menu_permission_slot('seller:account:add', 0, 'F', '', null, '',
     'seller:account:add menu slot is occupied by another signature');
 call assert_seller_menu_permission_slot('seller:account:edit', 0, 'F', '', null, '',
@@ -435,6 +533,14 @@ call assert_seller_menu_permission_slot('seller:account:role:query', 0, 'F', '',
     'seller:account:role:query menu slot is occupied by another signature');
 call assert_seller_menu_permission_slot('seller:account:role:edit', 0, 'F', '', null, '',
     'seller:account:role:edit menu slot is occupied by another signature');
+call assert_seller_menu_permission_slot('seller:account:loginLog:list', 0, 'F', '', null, '',
+    'seller:account:loginLog:list menu slot is occupied by another signature');
+call assert_seller_menu_permission_slot('seller:account:operLog:list', 0, 'F', '', null, '',
+    'seller:account:operLog:list menu slot is occupied by another signature');
+call assert_seller_menu_permission_slot('seller:account:session:list', 0, 'F', '', null, '',
+    'seller:account:session:list menu slot is occupied by another signature');
+call assert_seller_menu_permission_slot('seller:dept:list', 0, 'F', '', null, '',
+    'seller:dept:list menu slot is occupied by another signature');
 call assert_seller_menu_permission_slot('seller:dept:query', 0, 'F', '', null, '',
     'seller:dept:query menu slot is occupied by another signature');
 call assert_seller_menu_permission_slot('seller:dept:add', 0, 'F', '', null, '',
@@ -443,6 +549,8 @@ call assert_seller_menu_permission_slot('seller:dept:edit', 0, 'F', '', null, ''
     'seller:dept:edit menu slot is occupied by another signature');
 call assert_seller_menu_permission_slot('seller:dept:remove', 0, 'F', '', null, '',
     'seller:dept:remove menu slot is occupied by another signature');
+call assert_seller_menu_permission_slot('seller:role:list', 0, 'F', '', null, '',
+    'seller:role:list menu slot is occupied by another signature');
 call assert_seller_menu_permission_slot('seller:role:query', 0, 'F', '', null, '',
     'seller:role:query menu slot is occupied by another signature');
 call assert_seller_menu_permission_slot('seller:role:add', 0, 'F', '', null, '',
@@ -452,6 +560,10 @@ call assert_seller_menu_permission_slot('seller:role:edit', 0, 'F', '', null, ''
 call assert_seller_menu_permission_slot('seller:role:remove', 0, 'F', '', null, '',
     'seller:role:remove menu slot is occupied by another signature');
 
+call assert_buyer_menu_permission_slot('buyer:portal:home', 0, 'C', '/buyer/portal', 'Buyer/Portal/index', 'BuyerPortalHome',
+    'buyer:portal:home menu slot is occupied by another signature');
+call assert_buyer_menu_permission_slot('buyer:account:list', 0, 'F', '', null, '',
+    'buyer:account:list menu slot is occupied by another signature');
 call assert_buyer_menu_permission_slot('buyer:account:add', 0, 'F', '', null, '',
     'buyer:account:add menu slot is occupied by another signature');
 call assert_buyer_menu_permission_slot('buyer:account:edit', 0, 'F', '', null, '',
@@ -460,6 +572,14 @@ call assert_buyer_menu_permission_slot('buyer:account:role:query', 0, 'F', '', n
     'buyer:account:role:query menu slot is occupied by another signature');
 call assert_buyer_menu_permission_slot('buyer:account:role:edit', 0, 'F', '', null, '',
     'buyer:account:role:edit menu slot is occupied by another signature');
+call assert_buyer_menu_permission_slot('buyer:account:loginLog:list', 0, 'F', '', null, '',
+    'buyer:account:loginLog:list menu slot is occupied by another signature');
+call assert_buyer_menu_permission_slot('buyer:account:operLog:list', 0, 'F', '', null, '',
+    'buyer:account:operLog:list menu slot is occupied by another signature');
+call assert_buyer_menu_permission_slot('buyer:account:session:list', 0, 'F', '', null, '',
+    'buyer:account:session:list menu slot is occupied by another signature');
+call assert_buyer_menu_permission_slot('buyer:dept:list', 0, 'F', '', null, '',
+    'buyer:dept:list menu slot is occupied by another signature');
 call assert_buyer_menu_permission_slot('buyer:dept:query', 0, 'F', '', null, '',
     'buyer:dept:query menu slot is occupied by another signature');
 call assert_buyer_menu_permission_slot('buyer:dept:add', 0, 'F', '', null, '',
@@ -468,6 +588,8 @@ call assert_buyer_menu_permission_slot('buyer:dept:edit', 0, 'F', '', null, '',
     'buyer:dept:edit menu slot is occupied by another signature');
 call assert_buyer_menu_permission_slot('buyer:dept:remove', 0, 'F', '', null, '',
     'buyer:dept:remove menu slot is occupied by another signature');
+call assert_buyer_menu_permission_slot('buyer:role:list', 0, 'F', '', null, '',
+    'buyer:role:list menu slot is occupied by another signature');
 call assert_buyer_menu_permission_slot('buyer:role:query', 0, 'F', '', null, '',
     'buyer:role:query menu slot is occupied by another signature');
 call assert_buyer_menu_permission_slot('buyer:role:add', 0, 'F', '', null, '',

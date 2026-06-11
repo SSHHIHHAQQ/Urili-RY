@@ -31,6 +31,7 @@ import com.ruoyi.common.core.page.TableDataInfo;
 import com.ruoyi.common.core.page.TableSupport;
 import com.ruoyi.common.enums.BusinessType;
 import com.ruoyi.common.exception.ServiceException;
+import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.common.utils.sql.SqlUtil;
 import com.ruoyi.system.domain.PortalAccountProfile;
 import com.ruoyi.system.domain.PortalAccountRoleAssign;
@@ -194,7 +195,8 @@ public class BuyerPortalController extends BaseController
 
     @GetMapping("/accounts/{targetAccountId}/roles")
     @Anonymous
-    @PortalPreAuthorize(terminal = "buyer", hasPermi = "buyer:account:role:query")
+    @PortalPreAuthorize(terminal = "buyer", hasPermi = {
+            "buyer:account:role:query", "buyer:role:list" })
     @PortalLog(terminal = "buyer", title = "买家端账号角色", businessType = BusinessType.OTHER,
             isSaveResponseData = false)
     public AjaxResult accountRoles(@PathVariable("targetAccountId") Long targetAccountId)
@@ -208,7 +210,8 @@ public class BuyerPortalController extends BaseController
 
     @PutMapping("/accounts/{targetAccountId}/roles")
     @Anonymous
-    @PortalPreAuthorize(terminal = "buyer", hasPermi = "buyer:account:role:edit")
+    @PortalPreAuthorize(terminal = "buyer", hasPermi = {
+            "buyer:account:role:edit", "buyer:account:role:query", "buyer:role:list" })
     @PortalLog(terminal = "buyer", title = "买家端账号角色分配", businessType = BusinessType.GRANT)
     public AjaxResult assignAccountRoles(@PathVariable("targetAccountId") Long targetAccountId,
             @RequestBody PortalAccountRoleAssign assign)
@@ -442,7 +445,8 @@ public class BuyerPortalController extends BaseController
                 throw new ServiceException("买家端自助角色菜单不能重复");
             }
             PortalMenu menu = permissionService.selectMenuById(menuId);
-            if (menu == null || !PORTAL_SELF_MANAGEMENT_PERMS.contains(menu.getPerms()))
+            PortalPermissionSupport.assertReadableTerminalMenu(menu, "buyer");
+            if (!PORTAL_SELF_MANAGEMENT_PERMS.contains(StringUtils.trimToEmpty(menu.getPerms())))
             {
                 throw new ServiceException("买家端自助角色只能分配本轮最小权限模板");
             }
@@ -476,8 +480,10 @@ public class BuyerPortalController extends BaseController
         List<PortalMenu> menus = new ArrayList<>();
         for (PortalMenu menu : permissionService.selectMenuList(new PortalMenu()))
         {
-            if (menu != null && PORTAL_SELF_MANAGEMENT_PERMS.contains(menu.getPerms()))
+            String perms = menu == null ? "" : StringUtils.trimToEmpty(menu.getPerms());
+            if (PORTAL_SELF_MANAGEMENT_PERMS.contains(perms))
             {
+                PortalPermissionSupport.assertReadableTerminalMenu(menu, "buyer");
                 menus.add(menu);
             }
         }

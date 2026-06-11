@@ -48,7 +48,7 @@ public class PortalHomeProfileSerializationTest
     }
 
     @Test
-    public void accountProfileMustNotSerializeInternalIdentityScope() throws Exception
+    public void accountProfileMustSerializeAccountIdButNotSubjectScope() throws Exception
     {
         PortalAccountProfile profile = new PortalAccountProfile();
         profile.setTerminal("seller");
@@ -58,7 +58,9 @@ public class PortalHomeProfileSerializationTest
 
         String json = mapper.writeValueAsString(profile);
 
-        assertInternalScopeHidden(json);
+        assertFalse(json.contains("\"terminal\""));
+        assertFalse(json.contains("\"subjectId\""));
+        assertTrue(json.contains("\"accountId\":8"));
         assertTrue(json.contains("\"userName\":\"seller-owner\""));
     }
 

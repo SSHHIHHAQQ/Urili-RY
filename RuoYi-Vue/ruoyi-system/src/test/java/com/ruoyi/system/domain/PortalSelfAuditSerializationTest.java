@@ -16,21 +16,21 @@ public class PortalSelfAuditSerializationTest
         profile.setUserName("seller-owner");
         profile.setIpaddr("127.0.0.1");
         profile.setStatus("0");
-        profile.setMsg("免密登录成功");
+        profile.setMsg("direct login success");
 
         String json = mapper.writeValueAsString(profile);
 
         assertInternalAuditScopeHidden(json);
-        assertFalse(json.contains("directLogin"));
+        assertFieldAbsent(json, "directLogin");
         assertTrue(json.contains("\"userName\":\"seller-owner\""));
-        assertTrue(json.contains("\"msg\":\"免密登录成功\""));
+        assertTrue(json.contains("\"msg\":\"direct login success\""));
     }
 
     @Test
     public void ownOperLogMustNotSerializeInternalAuditScope() throws Exception
     {
         PortalOwnOperLogProfile profile = new PortalOwnOperLogProfile();
-        profile.setTitle("卖家端菜单");
+        profile.setTitle("Seller portal menu");
         profile.setRequestMethod("GET");
         profile.setOperName("seller-owner");
         profile.setOperUrl("/seller/getRouters");
@@ -40,22 +40,45 @@ public class PortalSelfAuditSerializationTest
         String json = mapper.writeValueAsString(profile);
 
         assertInternalAuditScopeHidden(json);
-        assertFalse(json.contains("directLogin"));
-        assertFalse(json.contains("operParam"));
-        assertFalse(json.contains("jsonResult"));
-        assertFalse(json.contains("method"));
-        assertTrue(json.contains("\"title\":\"卖家端菜单\""));
+        assertFieldAbsent(json, "directLogin");
+        assertFieldAbsent(json, "operParam");
+        assertFieldAbsent(json, "jsonResult");
+        assertFieldAbsent(json, "method");
+        assertTrue(json.contains("\"title\":\"Seller portal menu\""));
         assertTrue(json.contains("\"operUrl\":\"/seller/getRouters\""));
+    }
+
+    @Test
+    public void ownSessionMustNotSerializeInternalAuditScope() throws Exception
+    {
+        PortalOwnSessionProfile profile = new PortalOwnSessionProfile();
+        profile.setUserName("seller-owner");
+        profile.setLoginIp("127.0.0.1");
+        profile.setStatus("online");
+        profile.setCurrent(Boolean.TRUE);
+
+        String json = mapper.writeValueAsString(profile);
+
+        assertInternalAuditScopeHidden(json);
+        assertFieldAbsent(json, "directLogin");
+        assertTrue(json.contains("\"userName\":\"seller-owner\""));
+        assertTrue(json.contains("\"current\":true"));
     }
 
     private void assertInternalAuditScopeHidden(String json)
     {
-        assertFalse(json.contains("subjectId"));
-        assertFalse(json.contains("accountId"));
-        assertFalse(json.contains("tokenId"));
-        assertFalse(json.contains("directLoginTicketId"));
-        assertFalse(json.contains("actingAdminId"));
-        assertFalse(json.contains("actingAdminName"));
-        assertFalse(json.contains("directLoginReason"));
+        assertFieldAbsent(json, "terminal");
+        assertFieldAbsent(json, "subjectId");
+        assertFieldAbsent(json, "accountId");
+        assertFieldAbsent(json, "tokenId");
+        assertFieldAbsent(json, "directLoginTicketId");
+        assertFieldAbsent(json, "actingAdminId");
+        assertFieldAbsent(json, "actingAdminName");
+        assertFieldAbsent(json, "directLoginReason");
+    }
+
+    private void assertFieldAbsent(String json, String fieldName)
+    {
+        assertFalse(json.contains("\"" + fieldName + "\""));
     }
 }

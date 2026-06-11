@@ -274,6 +274,28 @@ public class BuyerPortalPermissionServiceImplTest
     }
 
     @Test
+    public void insertRoleRejectsNonSelfManagementBuyerMenusBeforeMutatingRole()
+    {
+        Buyer buyer = buyer(11L);
+        BuyerAccount account = account(22L, 11L);
+        PortalMenu productMenu = menu(200003L, "F", "buyer:product:list", "");
+        RecordingBuyerPortalPermissionMapper permissionMapper = new RecordingBuyerPortalPermissionMapper(1)
+                .withValidMenuCount(1)
+                .withSelectedMenus(productMenu);
+        BuyerPortalPermissionServiceImpl service = service(buyerService(buyer), buyerMapper(account),
+                permissionMapper.proxy());
+        PortalRole payload = role(null, 11L, "staff");
+        payload.setMenuIds(new Long[] { 200003L });
+
+        assertServiceException(() -> service.insertRole(11L, payload));
+
+        assertEquals(1, permissionMapper.countMenusCallCount);
+        assertEquals(1, permissionMapper.selectMenuByIdCallCount);
+        assertEquals(0, permissionMapper.insertRoleCallCount);
+        assertEquals(0, permissionMapper.batchRoleMenuCallCount);
+    }
+
+    @Test
     public void selectMenuByIdRejectsMenuOutsideBuyerTerminalRange()
     {
         Buyer buyer = buyer(11L);
@@ -325,6 +347,30 @@ public class BuyerPortalPermissionServiceImplTest
         assertServiceException(() -> service.updateRole(11L, payload));
 
         assertEquals(0, permissionMapper.countMenusCallCount);
+        assertEquals(0, permissionMapper.updateRoleCallCount);
+        assertEquals(0, permissionMapper.deleteRoleMenuCallCount);
+        assertEquals(0, permissionMapper.batchRoleMenuCallCount);
+    }
+
+    @Test
+    public void updateRoleRejectsNonSelfManagementBuyerMenusBeforeMutatingRoleOrBindings()
+    {
+        Buyer buyer = buyer(11L);
+        BuyerAccount account = account(22L, 11L);
+        PortalMenu productMenu = menu(200003L, "F", "buyer:product:list", "");
+        RecordingBuyerPortalPermissionMapper permissionMapper = new RecordingBuyerPortalPermissionMapper(1)
+                .withSelectedRole(role(101L, 11L, "staff"))
+                .withValidMenuCount(1)
+                .withSelectedMenus(productMenu);
+        BuyerPortalPermissionServiceImpl service = service(buyerService(buyer), buyerMapper(account),
+                permissionMapper.proxy());
+        PortalRole payload = role(101L, 11L, "staff");
+        payload.setMenuIds(new Long[] { 200003L });
+
+        assertServiceException(() -> service.updateRole(11L, payload));
+
+        assertEquals(1, permissionMapper.countMenusCallCount);
+        assertEquals(1, permissionMapper.selectMenuByIdCallCount);
         assertEquals(0, permissionMapper.updateRoleCallCount);
         assertEquals(0, permissionMapper.deleteRoleMenuCallCount);
         assertEquals(0, permissionMapper.batchRoleMenuCallCount);

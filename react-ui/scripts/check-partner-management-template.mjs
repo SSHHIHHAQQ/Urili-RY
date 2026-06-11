@@ -173,9 +173,6 @@ const modules = [
       'getAdminSellerMenuTree',
       'getAdminSellerMenus',
       'getAdminSellerMenu',
-      'addAdminSellerMenu',
-      'updateAdminSellerMenu',
-      'removeAdminSellerMenu',
       'getAdminSellerRoleMenuTree',
       'getAdminSellerRoles',
       'getAdminSellerRole',
@@ -250,9 +247,6 @@ const modules = [
       'getAdminBuyerMenuTree',
       'getAdminBuyerMenus',
       'getAdminBuyerMenu',
-      'addAdminBuyerMenu',
-      'updateAdminBuyerMenu',
-      'removeAdminBuyerMenu',
       'getAdminBuyerRoleMenuTree',
       'getAdminBuyerRoles',
       'getAdminBuyerRole',
@@ -340,9 +334,6 @@ function buildExpectedServiceCalls(module) {
     [`getAdmin${cap}MenuTree`]: `${adminBase}/menus/treeselect`,
     [`getAdmin${cap}Menus`]: `${adminBase}/menus/list`,
     [`getAdmin${cap}Menu`]: `${adminBase}/menus/${menuId}`,
-    [`addAdmin${cap}Menu`]: `${adminBase}/menus`,
-    [`updateAdmin${cap}Menu`]: `${adminBase}/menus`,
-    [`removeAdmin${cap}Menu`]: `${adminBase}/menus/${menuId}`,
     [`getAdmin${cap}RoleMenuTree`]: `${adminBase}/menus/roleMenuTreeselect/${subjectId}/${roleId}`,
     [`getAdmin${cap}Roles`]: `${subjectBase}/${subjectId}/roles/list`,
     [`getAdmin${cap}Role`]: `${subjectBase}/${subjectId}/roles/${roleId}`,
@@ -653,6 +644,21 @@ function checkPage(module) {
       `must wire ${serviceName} into the ${module.key} management template`,
     );
   }
+  for (const forbiddenServiceName of [
+    `addAdmin${capitalize(module.key)}Menu`,
+    `updateAdmin${capitalize(module.key)}Menu`,
+    `removeAdmin${capitalize(module.key)}Menu`,
+    'addMenu:',
+    'updateMenu:',
+    'removeMenu:',
+  ]) {
+    assertNotIncludes(
+      source,
+      relativePath,
+      forbiddenServiceName,
+      `must not wire menu template write service ${forbiddenServiceName}`,
+    );
+  }
 
   const jsFile = files[module.pageJsKey];
   const jsSource = readOptional(jsFile);
@@ -717,6 +723,18 @@ function checkServiceSource(module, source, relativePath) {
     'resetDefaultPwd',
     'must not call account default password reset API',
   );
+  for (const forbiddenServiceName of [
+    `addAdmin${capitalize(module.key)}Menu`,
+    `updateAdmin${capitalize(module.key)}Menu`,
+    `removeAdmin${capitalize(module.key)}Menu`,
+  ]) {
+    assertNotIncludes(
+      source,
+      relativePath,
+      `function ${forbiddenServiceName}`,
+      `must not export menu template write service ${forbiddenServiceName}`,
+    );
+  }
   assertNoPattern(
     source,
     relativePath,
@@ -1235,31 +1253,39 @@ function checkMenuModalSource(source, relativePath) {
     return;
   }
   for (const expected of [
-    'validateMenuPathForTerminal',
-    'validateMenuComponentForTerminal',
-    'validateMenuPermsForTerminal',
-    'function normalizeMenuTarget',
-    "replace(/^(?:\\.\\/|\\/)+/, '')",
-    "const normalizedLower = normalized.toLowerCase()",
-    'menu component is required for page menus',
-    'menu component must use the current terminal root',
-    'const permissions = normalized.split',
-    'menu permission is required for page and button menus',
-    'terminal menu cannot use wildcard permissions',
-    'permission.startsWith(`${moduleKey}:`)',
-    'forbiddenPathRoots',
-    'forbiddenComponentRoots',
-    "forbiddenComponentRoots = new Set(['admin', 'common', 'shared', 'system', 'user', 'monitor', 'tool'])",
-    'permission.startsWith(`${moduleKey}:admin:`)',
-    'const canEditMenu = access.hasPerms(`${permPrefix}:menu:edit`) && access.hasPerms(`${permPrefix}:menu:query`)',
-    'hidden={!canEditMenu}',
-    'permissions.some((permission) => permission === `${moduleKey}:admin` || permission.startsWith(`${moduleKey}:admin:`))',
+    'config.services.listMenus()',
+    'dataSource={menuTree}',
+    'footer={null}',
+    'buildMenuTree',
+    'title={`${config.label}端权限模板`}',
   ]) {
     assertIncludes(
       source,
       relativePath,
       expected,
-      `must keep terminal fail-closed menu validation for ${expected}`,
+      `must keep readonly menu template support for ${expected}`,
+    );
+  }
+  for (const forbidden of [
+    'useAccess',
+    'config.services.addMenu',
+    'config.services.updateMenu',
+    'config.services.removeMenu',
+    'handleSubmit',
+    'handleRemove',
+    'openMenuForm',
+    'menu:add',
+    'menu:edit',
+    'menu:remove',
+    'validateMenuPathForTerminal',
+    'validateMenuComponentForTerminal',
+    'validateMenuPermsForTerminal',
+  ]) {
+    assertNotIncludes(
+      source,
+      relativePath,
+      forbidden,
+      `must not expose menu template write behavior ${forbidden}`,
     );
   }
 }

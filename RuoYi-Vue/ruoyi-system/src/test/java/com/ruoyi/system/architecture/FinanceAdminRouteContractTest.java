@@ -188,6 +188,14 @@ public class FinanceAdminRouteContractTest
                 "quote scheme service must restrict phase1 value fee trigger", violations);
         assertContains(service, "selectQuoteSchemeValueFeeRuleByChannelAndTrigger",
                 "quote scheme service must prevent duplicate value fee rules", violations);
+        assertContains(service, "normalizeWarehouseCodesForScope",
+                "quote scheme service must normalize warehouse scope as a single warehouse", violations);
+        assertContains(service, "仓库最多只能选择一个",
+                "quote scheme service must reject multiple warehouse selections", violations);
+        assertContains(service, "assertEffectivePriorityNotConflicting",
+                "quote scheme service must reject overlapping enabled schemes with the same priority", violations);
+        assertContains(service, "countOverlappingEnabledSchemeWithSamePriority",
+                "quote scheme service must delegate overlapping priority checks to mapper", violations);
         assertContains(controller, "@GetMapping(\"/options/system-channels\")",
                 "AdminQuoteSchemeController must expose finance-owned system channel options for cost schemes", violations);
         assertContains(controller, "@GetMapping(\"/{schemeId}/value-fees/list\")",
@@ -197,6 +205,12 @@ public class FinanceAdminRouteContractTest
         assertNotContains(service, "com.ruoyi.logistics.mapper", "finance quote scheme service must not import logistics mapper", violations);
         assertContains(mapperXml, "order by s.effective_priority desc, s.effective_time desc, s.scheme_id desc",
                 "quote scheme mapper must order overlapping schemes by effective priority first", violations);
+        assertContains(mapperXml, "countOverlappingEnabledSchemeWithSamePriority",
+                "quote scheme mapper must expose overlapping priority conflict query", violations);
+        assertContains(mapperXml, "s.status = 'ENABLED'",
+                "quote scheme overlapping priority check must only compare enabled schemes", violations);
+        assertContains(mapperXml, "s.effective_priority = #{effectivePriority}",
+                "quote scheme overlapping priority check must compare the effective priority", violations);
 
         assertContains(sql, "set @confirm_quote_scheme_phase1",
                 "quote scheme SQL must require an explicit confirmation token", violations);
@@ -275,6 +289,12 @@ public class FinanceAdminRouteContractTest
                 "quote scheme page must expose the value fee tab", violations);
         assertContains(page, "QuoteSchemeValueFeeRule",
                 "quote scheme page must render value fee rules", violations);
+        assertContains(page, "normalizeWarehouseCodes",
+                "quote scheme page must normalize warehouse form value before saving", violations);
+        assertContains(page, "warehouseCodes: normalizeWarehouseCodes",
+                "quote scheme page must submit at most one warehouse code", violations);
+        assertNotContains(page, "name=\"warehouseCodes\"\n                      label=\"适用仓库\"\n                      mode=\"multiple\"",
+                "quote scheme page warehouse selector must not allow multiple selections", violations);
         assertContains(page, "getPersistedProTableSearch({ fieldCount: 6 }, 'finance-quote-scheme')",
                 "quote scheme page must use persisted ProTable search", violations);
         assertContains(page, "getProTablePagination()",

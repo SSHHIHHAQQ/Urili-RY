@@ -113,6 +113,7 @@ public class QuoteSchemeServiceImpl implements IQuoteSchemeService
     public int insertQuoteScheme(QuoteScheme scheme)
     {
         normalizeScheme(scheme, true);
+        assertEffectivePriorityNotConflicting(scheme);
         if (quoteSchemeMapper.selectQuoteSchemeByCode(scheme.getSchemeCode()) != null)
         {
             throw new ServiceException("报价方案编码已存在");
@@ -141,6 +142,7 @@ public class QuoteSchemeServiceImpl implements IQuoteSchemeService
             scheme.setStatus(current.getStatus());
         }
         normalizeScheme(scheme, false);
+        assertEffectivePriorityNotConflicting(scheme);
         scheme.setUpdateBy(currentUsername());
         int rows = quoteSchemeMapper.updateQuoteScheme(scheme);
         saveScopes(schemeId, scheme);
@@ -151,8 +153,11 @@ public class QuoteSchemeServiceImpl implements IQuoteSchemeService
     @Override
     public int updateQuoteSchemeStatus(Long schemeId, String status)
     {
-        requireScheme(schemeId);
-        return quoteSchemeMapper.updateQuoteSchemeStatus(schemeId, normalizeStatus(status), currentUsername());
+        QuoteScheme scheme = requireScheme(schemeId);
+        String normalizedStatus = normalizeStatus(status);
+        scheme.setStatus(normalizedStatus);
+        assertEffectivePriorityNotConflicting(scheme);
+        return quoteSchemeMapper.updateQuoteSchemeStatus(schemeId, normalizedStatus, currentUsername());
     }
 
     @Override
@@ -168,8 +173,9 @@ public class QuoteSchemeServiceImpl implements IQuoteSchemeService
     {
         requireScheme(schemeId);
         String warehouseScopeMode = emptyIfNull(warehouseCodes).isEmpty() ? WAREHOUSE_ALL : WAREHOUSE_INCLUDE;
+        List<String> normalizedWarehouseCodes = normalizeWarehouseCodesForScope(warehouseScopeMode, warehouseCodes);
         quoteSchemeMapper.updateQuoteSchemeWarehouseScopeMode(schemeId, warehouseScopeMode, currentUsername());
-        saveWarehouses(schemeId, warehouseScopeMode, warehouseCodes);
+        saveWarehouses(schemeId, warehouseScopeMode, normalizedWarehouseCodes);
         return 1;
     }
 
@@ -335,6 +341,7 @@ public class QuoteSchemeServiceImpl implements IQuoteSchemeService
             SCOPE_ALL_BUYERS, SCOPE_BUYER_LEVEL, SCOPE_BUYER, "适用对象类型"));
         scheme.setWarehouseScopeMode(normalizeEnum(scheme.getWarehouseScopeMode(), WAREHOUSE_ALL,
             WAREHOUSE_ALL, WAREHOUSE_INCLUDE, "仓库范围模式"));
+        scheme.setWarehouseCodes(normalizeWarehouseCodesForScope(scheme.getWarehouseScopeMode(), scheme.getWarehouseCodes()));
         scheme.setStatus(normalizeStatus(scheme.getStatus()));
         if (scheme.getEffectiveTime() == null)
         {
@@ -347,6 +354,21 @@ public class QuoteSchemeServiceImpl implements IQuoteSchemeService
         if (scheme.getEffectivePriority() == null)
         {
             scheme.setEffectivePriority(0);
+        }
+    }
+
+    private void assertEffectivePriorityNotConflicting(QuoteScheme scheme)
+    {
+        if (!STATUS_ENABLED.equals(scheme.getStatus()))
+        {
+            return;
+        }
+        int conflictCount = quoteSchemeMapper.countOverlappingEnabledSchemeWithSamePriority(
+            scheme.getSchemeId(), scheme.getSchemeType(), scheme.getEffectiveTime(),
+            scheme.getExpireTime(), scheme.getEffectivePriority());
+        if (conflictCount > 0)
+        {
+            throw new ServiceException("同一方案类型下，生效时间有交叉的报价方案必须使用不同的生效优先级");
         }
     }
 
@@ -399,7 +421,7 @@ public class QuoteSchemeServiceImpl implements IQuoteSchemeService
         {
             return;
         }
-        for (String warehouseCode : normalizeCodes(warehouseCodes, "仓库"))
+        for (String warehouseCode : normalizeWarehouseCodesForScope(warehouseScopeMode, warehouseCodes))
         {
             QuoteSchemeOption warehouse = requireWarehouseLookupService().selectWarehouseOption(warehouseCode);
             if (warehouse == null)
@@ -414,6 +436,20 @@ public class QuoteSchemeServiceImpl implements IQuoteSchemeService
             detail.setCreateBy(currentUsername());
             quoteSchemeMapper.insertQuoteSchemeWarehouse(detail);
         }
+    }
+
+    private List<String> normalizeWarehouseCodesForScope(String warehouseScopeMode, List<String> warehouseCodes)
+    {
+        if (WAREHOUSE_ALL.equals(warehouseScopeMode))
+        {
+            return Collections.emptyList();
+        }
+        List<String> normalizedCodes = normalizeCodes(warehouseCodes, "仓库");
+        if (normalizedCodes.size() > 1)
+        {
+            throw new ServiceException("仓库最多只能选择一个");
+        }
+        return normalizedCodes;
     }
 
     private void normalizeChannel(QuoteScheme scheme, QuoteSchemeChannel channel)

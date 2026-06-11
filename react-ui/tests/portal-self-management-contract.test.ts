@@ -46,6 +46,10 @@ describe('portal self-management contract', () => {
     ]) {
       expect(page).toContain(`'${permission}'`);
     }
+    expect(page).toContain('const canAssignAccountRoles = canViewRoles && canQueryAccountRole && canEditAccountRole;');
+    expect(page).toContain('const canCreateRole = canAddRole && canQueryRole;');
+    expect(page).toContain('{canAssignAccountRoles ? (');
+    expect(page).toContain('extra={canCreateRole ? <Button type="primary" onClick={openRoleCreate}>');
   });
 
   it('covers the minimal account, role, department, audit, and session-adjacent portal loop', () => {

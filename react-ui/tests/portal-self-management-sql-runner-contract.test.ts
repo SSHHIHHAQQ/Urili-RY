@@ -72,12 +72,20 @@ describe('portal self-management SQL runner contract', () => {
     for (const requiredSnippet of [
       'seller_required_self_menu_entries", 19',
       'buyer_required_self_menu_entries", 19',
+      'seller_required_self_root_button_entries", 18',
+      'buyer_required_self_root_button_entries", 18',
       'seller_owner_self_grants", sellerOwnerRoles * 19',
       'buyer_owner_self_grants", buyerOwnerRoles * 19',
       'seller_owner_non_self_grants", 0',
       'buyer_owner_non_self_grants", 0',
       'seller_invalid_menu_perms", 0',
       'buyer_invalid_menu_perms", 0',
+      'seller_menu_id_range_violations", 0',
+      'buyer_menu_id_range_violations", 0',
+      'seller_invalid_page_components", 0',
+      'buyer_invalid_page_components", 0',
+      'seller_duplicate_menu_perms", 0',
+      'buyer_duplicate_menu_perms", 0',
       'postcheck exact self-management permission state verified.',
     ]) {
       expect(script).toContain(requiredSnippet);

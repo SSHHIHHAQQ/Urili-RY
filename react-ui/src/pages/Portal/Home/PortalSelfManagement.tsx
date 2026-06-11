@@ -115,6 +115,8 @@ const PortalSelfManagement: React.FC<Props> = ({
   const canRemoveRole = hasPermission(permissions, terminal, 'role:remove');
   const canViewLoginLogs = hasPermission(permissions, terminal, 'account:loginLog:list');
   const canViewOperLogs = hasPermission(permissions, terminal, 'account:operLog:list');
+  const canAssignAccountRoles = canViewRoles && canQueryAccountRole && canEditAccountRole;
+  const canCreateRole = canAddRole && canQueryRole;
 
   const deptOptions = useMemo(
     () => depts.map((dept) => ({ label: dept.deptName || String(dept.deptId), value: dept.deptId })),
@@ -347,7 +349,7 @@ const PortalSelfManagement: React.FC<Props> = ({
       render: (_, record) => (
         <Space size="small">
           {canEditAccount ? <Button type="link" size="small" onClick={() => openAccountEdit(record)}>编辑</Button> : null}
-          {canQueryAccountRole && canEditAccountRole ? (
+          {canAssignAccountRoles ? (
             <Button type="link" size="small" onClick={() => openAccountRoleAssign(record)}>角色</Button>
           ) : null}
         </Space>
@@ -442,7 +444,7 @@ const PortalSelfManagement: React.FC<Props> = ({
           title="角色管理"
           variant="borderless"
           style={fullSpanStyle}
-          extra={canAddRole ? <Button type="primary" onClick={openRoleCreate}>新增角色</Button> : null}
+          extra={canCreateRole ? <Button type="primary" onClick={openRoleCreate}>新增角色</Button> : null}
         >
           <Table
             rowKey={(record) => String(record.roleId || record.roleKey)}

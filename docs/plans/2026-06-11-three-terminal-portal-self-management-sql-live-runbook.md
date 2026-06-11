@@ -239,7 +239,7 @@ where r.del_flag = '0' and r.status = '0' and r.role_key = 'owner'
 
 ### 只读脚本验证
 
-执行 seed 后，可先用只读脚本验证账号密码登录、`getInfo`、`getRouters`、自助列表接口、冻结业务权限不可见和跨端 token 拒绝。该脚本不会读取 `.env.local`，不会执行 SQL，也不会做新增账号、角色、部门等写操作。
+执行 seed 后，可先用只读脚本验证账号密码登录、登录响应字段白名单、匿名 `getInfo` / `getRouters` 拒绝、`getInfo` 响应字段白名单、`getRouters`、自助列表接口、`/roles/menus` 模板 ID 区间和 19 个 self-management 权限模板数量、冻结业务权限和冻结业务路由 path 不可见、自助登录日志/操作日志/在线会话 DTO 不泄露内部审计字段，以及跨端 token 拒绝。该脚本不会读取 `.env.local`，不会执行 SQL，也不会做新增账号、角色、部门等写操作。
 
 ```powershell
 cd E:\Urili-Ruoyi\react-ui
@@ -248,14 +248,15 @@ $env:SELLER_PORTAL_USERNAME = '<seller owner username>'
 $env:SELLER_PORTAL_PASSWORD = '<seller owner password>'
 $env:BUYER_PORTAL_USERNAME = '<buyer owner username>'
 $env:BUYER_PORTAL_PASSWORD = '<buyer owner password>'
+$env:PORTAL_SELF_MANAGEMENT_LIVE_CONFIRM = 'APPLY_PORTAL_SELF_MANAGEMENT_LIVE_VERIFY'
 npm run verify:portal-self-management-live
 ```
 
-如果缺少任一账号密码环境变量，脚本会 fail-closed 并列出缺失变量；不得把明文账号密码写入报告。
+如果缺少确认变量或任一账号密码环境变量，脚本会 fail-closed 并列出缺失变量；不得把明文账号密码写入报告。
 
 ### 受控写脚本验证
 
-只读脚本通过后，可以用受控写脚本验证 OWNER 在 seller/buyer portal 内创建子账号、维护部门、维护角色、分配角色、查看自助审计 DTO 的最小闭环。该脚本默认不会运行写操作，必须显式提供确认变量。
+只读脚本通过后，可以用受控写脚本验证 OWNER 在 seller/buyer portal 内创建子账号、维护部门、维护角色、分配角色、查看自助审计 DTO 的最小闭环。该脚本默认不会运行写操作，必须显式提供确认变量。账号列表 DTO 必须返回端内 `accountId` 作为编辑和分配角色的操作句柄，但不得返回 `subjectId` 或 `terminal`。
 
 安全边界：
 
@@ -281,9 +282,11 @@ npm run verify:portal-self-management-live-write
 
 - seller/buyer `/getInfo` 权限集合精确等于 19 个 self-management 权限。
 - seller/buyer 角色菜单模板 ID 分别位于 `100000-199999` / `200000-299999`。
+- seller/buyer `/getInfo` 响应只包含 `subjectNo` / `userName` / `nickName` / `roles` / `permissions` 白名单字段。
+- seller/buyer 角色菜单模板非空、ID 不重复、数量等于 19 个 self-management 权限点。
 - OWNER 能创建、编辑、删除测试部门。
 - OWNER 能创建、编辑、删除测试角色，且角色授权只来自 self-management 菜单模板。
-- OWNER 能创建停用 STAFF 子账号，并给该子账号分配、清空测试角色。
+- OWNER 能创建停用 STAFF 子账号；账号记录必须返回可用 `accountId`，不得返回 `subjectId` / `terminal`，并能给该子账号分配、清空测试角色。
 - 自助登录日志、操作日志、在线会话 DTO 不暴露内部审计字段。
 
 ### 人工运行态验证
@@ -296,8 +299,8 @@ npm run verify:portal-self-management-live-write
 | buyer OWNER 账号密码登录 | 调用 buyer portal 登录接口或浏览器登录 `/buyer/login` | 返回 buyer token，Redis/session 端标识为 buyer |
 | 管理端直登 seller OWNER | 管理端对 seller 主体发起 direct-login | 目标 portal 消费成功并回传 `PORTAL_DIRECT_LOGIN_RESULT_MESSAGE` 成功 |
 | 管理端直登 buyer OWNER | 管理端对 buyer 主体发起 direct-login | 目标 portal 消费成功并回传成功 |
-| seller `/getInfo` / `/getRouters` | 使用 seller token 调用 | 只返回 seller self-management 权限和路由，不返回 product/order 等冻结业务权限 |
-| buyer `/getInfo` / `/getRouters` | 使用 buyer token 调用 | 只返回 buyer self-management 权限和路由 |
+| seller `/getInfo` / `/getRouters` | 使用 seller token 调用 | 只返回 seller self-management 权限和路由，不返回 product/order 等冻结业务权限或冻结业务 path |
+| buyer `/getInfo` / `/getRouters` | 使用 buyer token 调用 | 只返回 buyer self-management 权限和路由，不返回 product/order 等冻结业务权限或冻结业务 path |
 | OWNER 创建子账号 | 复核写脚本留下的停用 STAFF 测试账号，必要时人工创建一个测试账号 | 后端从 token 推导主体，前端不传 `sellerId/buyerId/subjectId` |
 | OWNER 角色授权 | 复核写脚本的角色授权日志，必要时人工给测试账号分配非 OWNER 角色 | 不存在/跨端/非 self-management menuId fail-closed |
 | 部门维护 | 复核写脚本新增、编辑、删除测试部门的操作日志 | 只影响当前端当前主体 |
@@ -318,9 +321,9 @@ npm run verify:three-terminal
 
 三类 live 脚本覆盖范围：
 
-- `verify:portal-self-management-live`：只读验证账号密码登录、匿名 `/getInfo` 拒绝、`getInfo` / `getRouters` 自助权限收敛、只读自助接口和跨端 token 拒绝。
-- `verify:portal-self-management-live-write`：需要写确认变量，验证 OWNER 创建子账号、角色授权、部门维护、日志和会话自助 DTO 脱敏。
-- `verify:portal-direct-login-live`：需要管理端 token、目标主体 ID 和写确认变量，验证管理端到 OWNER 的 direct-login ticket 生成、消费、同一 ticket 不可复用、消费后 portal `/getInfo` 权限收敛。
+- `verify:portal-self-management-live`：只读验证账号密码登录响应只包含 `token` / `terminal` / `subjectNo` / `username` / `nickName` / `expire*` 白名单字段、匿名 `/getInfo` / `/getRouters` 拒绝、`getInfo` 响应只包含 `subjectNo` / `userName` / `nickName` / `roles` / `permissions` 白名单字段、`getInfo` / `getRouters` 自助权限与路由收敛、`/roles/menus` 模板非空、ID 不重复、seller/buyer ID 区间正确且数量等于 19 个 self-management 权限模板、冻结业务权限和冻结业务 path 不可见、只读自助接口、自助审计 DTO 不泄露 `subjectId` / `accountId` / `directLoginTicketId` / `actingAdmin*` / `directLoginReason` / `operParam` / `jsonResult` / `tokenId`，以及账号密码登录后的跨端 token 访问另一端 `/getInfo` / `/getRouters` 必须被拒绝。
+- `verify:portal-self-management-live-write`：需要写确认变量，验证登录响应和 `/getInfo` 响应白名单、OWNER 创建子账号、账号 DTO 返回 `accountId` 但不返回 `subjectId` / `terminal`、角色授权、部门维护、日志和会话自助 DTO 脱敏。
+- `verify:portal-direct-login-live`：需要管理端认证上下文和写确认变量；管理端认证可用 `ADMIN_AUTH_TOKEN`，也可用 `ADMIN_USERNAME` / `ADMIN_PASSWORD` 临时登录获取 token。目标主体 ID 可选，未提供 `SELLER_DIRECT_LOGIN_SUBJECT_ID` / `BUYER_DIRECT_LOGIN_SUBJECT_ID` 时脚本会用管理端只读列表自动选择 active OWNER 主体。该脚本验证管理端到 OWNER 的 direct-login ticket 生成响应短时且只包含 `token` / `ticketId` / `loginUrl` / `expire*` 白名单字段、外端 portal 拒绝消费、当前端消费后的登录响应只包含 portal 登录白名单字段、消费后 portal `/getInfo` 响应只包含 `subjectNo` / `userName` / `nickName` / `roles` / `permissions` 白名单字段、同一 ticket 不可复用、消费后 portal `/getInfo` / `/getRouters` 权限和路由收敛，并验证消费后的 portal token 不能访问另一端 `/getInfo` / `/getRouters`。
 
 live 脚本默认直连后端 `http://127.0.0.1:8080`，请求路径不带 `/api`。如果改为通过 React dev server `http://127.0.0.1:8001` 验证，必须显式设置：
 
@@ -329,17 +332,42 @@ $env:PORTAL_LIVE_BASE_URL = 'http://127.0.0.1:8001'
 $env:PORTAL_LIVE_API_PREFIX = '/api'
 ```
 
-管理端直登 live 验证还需要显式传入当前已登录管理端 token 和目标主体 ID，并设置写确认变量：
+管理端直登 live 验证需要管理端认证上下文，并设置写确认变量。目标主体 ID 可选；未显式传入时，脚本会通过管理端只读列表自动发现 active OWNER 主体：
 
 ```powershell
+# 方式一：复用当前管理端 token
 $env:ADMIN_AUTH_TOKEN = '<current-admin-token>'
-$env:SELLER_DIRECT_LOGIN_SUBJECT_ID = '<seller-id>'
-$env:BUYER_DIRECT_LOGIN_SUBJECT_ID = '<buyer-id>'
+
+# 方式二：让脚本临时登录管理端，二选一即可
+$env:ADMIN_USERNAME = '<admin username>'
+$env:ADMIN_PASSWORD = '<admin password>'
+
+# 可选：显式指定目标主体；不提供时自动发现 active OWNER 主体
+$env:SELLER_DIRECT_LOGIN_SUBJECT_ID = '<optional-seller-id>'
+$env:BUYER_DIRECT_LOGIN_SUBJECT_ID = '<optional-buyer-id>'
+
 $env:PORTAL_DIRECT_LOGIN_LIVE_CONFIRM = 'APPLY_PORTAL_DIRECT_LOGIN_LIVE_VERIFY'
 npm run verify:portal-direct-login-live
 ```
 
 如执行过程中产生任何代码或 seed 修改，还需复跑相关 Maven/Jest 窄测，并在报告中写明。
+
+## 代码级前置门禁
+
+执行 SQL seed 或 live 写验证前，后端代码应继续满足以下门禁：
+
+- `SellerPortalController` / `BuyerPortalController` 的 `/roles/menus` 模板读取只展示本轮 self-management 权限模板。
+- 模板读取和角色分配预检对命中的菜单调用 `PortalPermissionSupport.assertReadableTerminalMenu(...)`，确保端内菜单 ID 区间、菜单类型、component、权限前缀、通配符和 admin 命名空间 fail-closed。
+- `PortalSelfServiceSurfaceContractTest` 必须通过，避免 portal 自助角色分配退回只按权限字符串过滤。
+
+当前已验证：
+
+```powershell
+cd E:\Urili-Ruoyi\RuoYi-Vue
+mvn -pl ruoyi-system,seller,buyer -am "-Dtest=PortalSelfServiceSurfaceContractTest" "-Dsurefire.failIfNoSpecifiedTests=false" test
+```
+
+结果：`PortalSelfServiceSurfaceContractTest` 1 test passed，seller/buyer 模块随 reactor 编译通过，BUILD SUCCESS。
 
 ## 执行记录模板
 
@@ -461,3 +489,350 @@ buyer:role:remove
 - `npm run verify:three-terminal` 结果：
 - CodeGraph 同步结果：
 - 未验证项：
+
+## 代码级门禁补充：SQL 模板签名与 runner postcheck
+
+- 更新时间：2026-06-11。
+- SQL seed 前置断言：
+  - `20260610_portal_self_management_permission_seed.sql` 会在写入前检查 seller/buyer 端内菜单 ID 区间、权限前缀、空权限、通配权限、admin 命名空间、页面 component 根路径和重复 perms。
+  - 本轮新增补强后，seed 会同时检查 portal 首页 `C` 菜单签名，以及 18 个 root `F` self-management 权限模板签名。
+  - slot guard 覆盖 portal 首页、账号列表、登录日志、操作日志、在线会话、部门列表、角色列表以及本轮新增的账号/部门/角色按钮和查询权限；任一历史模板签名漂移都会 `45000` fail-closed。
+- runner 执行后断言：
+  - `scripts/portal-self-management-sql-runner.mjs --apply` 在 seed commit 后会执行只读 postcheck。
+  - postcheck 期望 seller/buyer 各有 1 个 portal 首页 `C` 菜单、19 个 self-management 权限模板、18 个 root `F` 权限模板。
+  - postcheck 期望 active OWNER 授权数量为 `owner_role_count * 19`，且 active OWNER 不保留非 self-management 授权。
+  - postcheck 还会检查端内菜单 ID 区间、页面 component 根路径、重复 perms 和无效权限前缀；任一项不符合都会让 runner 以非 0 退出。
+- 当前已验证：
+  - `npx jest --config jest.config.ts tests/portal-self-management-sql-runner-contract.test.ts --runInBand` 通过，1 suite / 6 tests passed。
+  - `mvn -pl ruoyi-system -am "-Dtest=SqlExecutionGuardContractTest" "-Dsurefire.failIfNoSpecifiedTests=false" test` 通过，82 tests passed。
+  - `npm run verify:three-terminal` 通过，前端 33 suites / 296 tests passed，后端 reactor `test-compile` 和三端合同均 BUILD SUCCESS。
+- 执行边界：
+  - 本补充仅更新代码级执行门禁和记录；尚未执行远端 SQL seed。
+  - 真正执行 `--apply` 前仍需用户确认目标环境和影响范围。
+
+## 复跑只读预检记录
+
+- 预检时间：2026-06-11 04:51 +08:00。
+- 预检工具：`node .\scripts\portal-self-management-sql-runner.mjs --precheck`。
+- 预检性质：只读 `SELECT`；runner 输出 `portal self-management SQL precheck completed without writes.`；未执行 SQL seed，未写 MySQL 或 Redis。
+- 配置证据：
+  - `application.yml` 当前激活 profile 仍为 `druid`。
+  - `application-druid.yml` 中 MySQL URL、用户名、密码仍由 `RUOYI_DB_*` 注入，不能默认 `localhost`。
+  - Redis 仍由 `RUOYI_REDIS_*` 注入；本次 SQL precheck 未读写 Redis。
+  - `.env.local` 存在 `RUOYI_DB_URL`、`RUOYI_REDIS_HOST`、`RUOYI_REDIS_DATABASE`，记录中已脱敏，不输出明文。
+  - `docker ps` 无法连接 Docker API，未发现本地 Docker MySQL/Redis 正在运行并可被误读。
+
+| 检查项 | 结果 |
+| --- | --- |
+| 当前库 | `fenxiao` |
+| `seller_menu` | 11 行，ID 范围 `100008-100019` |
+| `buyer_menu` | 11 行，ID 范围 `200003-200014` |
+| active seller OWNER 角色 | 35 个 |
+| active buyer OWNER 角色 | 35 个 |
+| seller portal 首页 C 菜单 | 1 个 |
+| buyer portal 首页 C 菜单 | 1 个 |
+| seller self-management 权限模板 | 7 / 19 个 |
+| buyer self-management 权限模板 | 7 / 19 个 |
+| seller root button 权限模板 | 6 / 18 个 |
+| buyer root button 权限模板 | 6 / 18 个 |
+| seller OWNER self-management 授权 | 245 条，即 `35 * 7` |
+| buyer OWNER self-management 授权 | 245 条，即 `35 * 7` |
+| seller OWNER 非 self-management 授权 | 0 条 |
+| buyer OWNER 非 self-management 授权 | 0 条 |
+| seller 无效菜单权限 | 0 条 |
+| buyer 无效菜单权限 | 0 条 |
+| seller 菜单 ID 区间违规 | 0 条 |
+| buyer 菜单 ID 区间违规 | 0 条 |
+| seller 页面 component 违规 | 0 条 |
+| buyer 页面 component 违规 | 0 条 |
+| seller 重复 perms | 0 条 |
+| buyer 重复 perms | 0 条 |
+
+复跑结论：
+
+- 目标库仍已具备 seller/buyer portal 首页 `C` 菜单，不需要先执行 `20260610_terminal_portal_home_menu_seed.sql`。
+- 目标库仍只具备每端 7 个 self-management 权限模板，缺少本轮新增的 12 个账号/部门/角色自助按钮和查询权限。
+- active OWNER 当前没有非 self-management 授权残留。
+- 最终闭环仍需要用户确认目标环境后执行 `20260610_portal_self_management_permission_seed.sql`，再做 seller/buyer portal live 登录、直登和写验证。
+
+## 2026-06-12 01:33 执行前确认记录
+
+- 用户确认时间：2026-06-12 01:33 +08:00。
+- 用户确认原文：确认允许对当前目标库 fenxiao 执行本阶段 self-management 权限 seed，影响范围仅限 seller_menu、buyer_menu、seller_role_menu、buyer_role_menu。
+- 当前激活配置：
+  - `RuoYi-Vue/ruoyi-admin/src/main/resources/application.yml` 当前 `spring.profiles.active` 为 `druid`。
+  - `RuoYi-Vue/ruoyi-admin/src/main/resources/application-druid.yml` 中 MySQL 连接来自 `RUOYI_DB_URL` / `RUOYI_DB_USERNAME` / `RUOYI_DB_PASSWORD` 注入。
+  - Redis 连接来自 `RUOYI_REDIS_*` 注入；本次 SQL seed 不读写 Redis。
+- 只读预检命令：`node .\scripts\portal-self-management-sql-runner.mjs --precheck`。
+- 只读预检结果：
+  - 当前库：`fenxiao`。
+  - `seller_menu`：11 行，ID 范围 `100008-100019`。
+  - `buyer_menu`：11 行，ID 范围 `200003-200014`。
+  - active seller OWNER 角色：35 个。
+  - active buyer OWNER 角色：35 个。
+  - seller/buyer self-management 权限模板：均为 `7 / 19`。
+  - seller/buyer root button 权限模板：均为 `6 / 18`。
+  - seller/buyer OWNER self-management 授权：均为 `245 = 35 * 7`。
+  - seller/buyer OWNER 非 self-management 授权：均为 0。
+  - seller/buyer 无效权限、ID 区间违规、页面 component 违规、重复 perms：均为 0。
+- 即将执行的受控命令：`PORTAL_SELF_MANAGEMENT_SQL_CONFIRM=APPLY_PORTAL_SELF_MANAGEMENT_PERMISSION_SEED node .\scripts\portal-self-management-sql-runner.mjs --apply`。
+- SQL 文件：`RuoYi-Vue/sql/20260610_portal_self_management_permission_seed.sql`。
+- 影响范围：仅本阶段 self-management 权限模板和 OWNER 授权，限 `seller_menu`、`buyer_menu`、`seller_role_menu`、`buyer_role_menu`。
+- 不影响范围：不写商品、订单、库存、物流、财务、履约、外部系统等业务数据；不读写 Redis。
+
+## 2026-06-12 01:36 执行结果记录
+
+- 执行时间：2026-06-12 01:34-01:36 +08:00。
+- 执行命令：`PORTAL_SELF_MANAGEMENT_SQL_CONFIRM=APPLY_PORTAL_SELF_MANAGEMENT_PERMISSION_SEED node .\scripts\portal-self-management-sql-runner.mjs --apply`。
+- 执行结果：退出码 0；未出现 `45000`；runner 输出 `portal self-management SQL seed applied with explicit confirmation.`。
+- runner postcheck：
+  - 当前库：`fenxiao`。
+  - `seller_menu`：23 行，ID 范围 `100008-100031`。
+  - `buyer_menu`：23 行，ID 范围 `200003-200026`。
+  - active seller OWNER 角色：35 个。
+  - active buyer OWNER 角色：35 个。
+  - seller/buyer self-management 权限模板：均为 `19 / 19`。
+  - seller/buyer root button 权限模板：均为 `18 / 18`。
+  - seller/buyer OWNER self-management 授权：均为 `665 = 35 * 19`。
+  - seller/buyer OWNER 非 self-management 授权：均为 0。
+  - seller/buyer 无效权限、ID 区间违规、页面 component 违规、重复 perms：均为 0。
+  - runner 输出 `postcheck exact self-management permission state verified.`。
+- 执行后只读复核命令：`node .\scripts\portal-self-management-sql-runner.mjs --precheck`。
+- 执行后只读复核结果：与 postcheck 一致，确认 seed 已落库且未发现跨端、空权限、通配权限、admin 命名空间、ID 区间、component 或重复 perms 问题。
+- 三端门禁：`cd react-ui; npm run verify:three-terminal` 通过；前端 33 suites / 296 tests passed；后端 reactor `test-compile` 和三端合同测试均 BUILD SUCCESS。
+- live 验证状态：未执行。当前 shell 未注入 `SELLER_PORTAL_USERNAME`、`SELLER_PORTAL_PASSWORD`、`BUYER_PORTAL_USERNAME`、`BUYER_PORTAL_PASSWORD`、`ADMIN_AUTH_TOKEN`、`SELLER_DIRECT_LOGIN_SUBJECT_ID`、`BUYER_DIRECT_LOGIN_SUBJECT_ID`、`PORTAL_LIVE_WRITE_CONFIRM`、`PORTAL_DIRECT_LOGIN_LIVE_CONFIRM`。
+- live 未验证项：真实 seller/buyer 账号密码登录、管理端 OWNER 直登票据签发与一次性消费、真实 `/getInfo` / `/getRouters`、401 跳转、真实日志/会话隔离、OWNER 创建子账号/角色/部门写闭环。
+- P2 遗留：仍不做浏览器截图、DOM/UI 细调和冻结业务菜单铺设；商品、订单、库存、物流、财务、履约、外部系统业务页不纳入本轮完成口径。
+- 收尾检查：
+  - `git diff --check -- <本轮三端相关文件>` 通过，仅有 LF/CRLF 提示。
+  - `codegraph sync .` 通过，结果为 `Already up to date`。
+
+## 2026-06-12 01:42 live 验证准备记录
+
+- 后端启动：已执行 `.\start-backend-local.ps1 -Restart`，随后 8080 监听存在，`http://127.0.0.1:8080` 返回 HTTP 200。
+- 配置来源：继续使用 `druid` profile；MySQL、Redis、token secret 和加密密钥均从 `.env.local` 注入，记录中不输出明文。
+- 管理端登录探测：`/captchaImage` 显示验证码关闭；默认管理端账号 `admin/admin123` 登录成功并取得临时 token。token 未输出、未写入记录。
+- 候选主体：
+  - seller：`sellerId=41` / `SAF100031` / OWNER `s_mingtaistorage`。
+  - buyer：`buyerId=36` / `BAF100034` / OWNER `b_parksideretail`。
+- 当前阻塞 live 完成项：
+  - direct-login live 需要确认 `PORTAL_DIRECT_LOGIN_LIVE_CONFIRM=APPLY_PORTAL_DIRECT_LOGIN_LIVE_VERIFY`，因为会创建/消费短时票据并写审计和 session。
+  - portal 账号密码登录 live 需要 seller/buyer OWNER 凭据或确认使用候选 OWNER 用户名与候选默认密码尝试登录；该操作会写登录日志和 session。
+  - self-management 写闭环需要确认 `PORTAL_LIVE_WRITE_CONFIRM=APPLY_PORTAL_SELF_MANAGEMENT_WRITE_VERIFY`，因为会创建测试角色、部门和禁用 STAFF 测试账号。
+
+## 2026-06-12 01:46 direct-login live verifier 收口加固
+
+- 加固原因：当前环境可以通过默认管理端登录只读发现 seller/buyer OWNER 主体，但 `verify-portal-direct-login-live.mjs` 原先必须手工提供 `ADMIN_AUTH_TOKEN`、`SELLER_DIRECT_LOGIN_SUBJECT_ID`、`BUYER_DIRECT_LOGIN_SUBJECT_ID`，导致 live 直登验证仍依赖易过期 token 和人工复制主体 ID。
+- 已加固：
+  - `PORTAL_DIRECT_LOGIN_LIVE_CONFIRM=APPLY_PORTAL_DIRECT_LOGIN_LIVE_VERIFY` 仍是执行 direct-login live 的硬门槛。
+  - 如未提供 `ADMIN_AUTH_TOKEN`，脚本可使用 `ADMIN_USERNAME` / `ADMIN_PASSWORD` 调用管理端 `/login` 获取临时 token，且不输出 token。
+  - 如未提供 `SELLER_DIRECT_LOGIN_SUBJECT_ID` / `BUYER_DIRECT_LOGIN_SUBJECT_ID`，脚本会使用管理端只读列表和账号列表自动选择第一个 active 主体下的 active OWNER 账号。
+  - 自动发现只访问管理端 seller/buyer 主体列表和账号列表，不访问商品、订单、库存、物流、财务、履约或外部系统业务接口。
+- 已验证：
+  - `node --check react-ui/scripts/verify-portal-direct-login-live.mjs` 通过。
+  - `node scripts/verify-portal-direct-login-live.mjs --help` 通过。
+  - `cd react-ui; npx jest --config jest.config.ts tests/portal-direct-login-live-contract.test.ts --runInBand` 通过，1 suite / 11 tests。
+  - `cd react-ui; npm run verify:three-terminal` 通过；前端 33 suites / 297 tests passed；后端 reactor `test-compile` 和三端合同测试均 BUILD SUCCESS。
+- 尚未执行 live direct-login：仍需用户确认会写 direct-login 票据、审计日志和 portal session。
+
+## 2026-06-12 01:50 direct-login live 确认门槛负向合同
+
+- 加固原因：`verify-portal-direct-login-live.mjs` 已支持自动管理端登录和 OWNER 主体发现，必须防止后续回退成“缺少 live 确认变量时仍先登录管理端或读取主体列表”。
+- 已加固：
+  - `react-ui/tests/portal-direct-login-live-contract.test.ts` 新增负向合同，固定 `main()` 必须先执行 `requireLiveEnv()`，再进入 `verifyTerminal(...)`。
+  - 合同同时固定 `requireLiveEnv()` 必须检查 `PORTAL_DIRECT_LOGIN_LIVE_CONFIRM=APPLY_PORTAL_DIRECT_LOGIN_LIVE_VERIFY`。
+  - `requireLiveEnv()` 之前不得出现 `await`，避免确认门槛前触发网络调用或副作用。
+- 已验证：
+  - `cd react-ui; npx jest --config jest.config.ts tests/portal-direct-login-live-contract.test.ts --runInBand` 通过，1 suite / 12 tests。
+  - `cd react-ui; node scripts\verify-three-terminal.mjs --check-manifest` 通过。
+  - `node --check react-ui/scripts/verify-portal-direct-login-live.mjs` 通过。
+  - `cd react-ui; npm run verify:three-terminal` 通过；前端 33 suites / 298 tests passed；后端 reactor `test-compile` 和三端合同测试均 BUILD SUCCESS。
+- live 状态：仍未执行 direct-login / portal 登录 / 写闭环；等待用户明确确认写入登录日志、直登票据、portal session 和测试账号/角色/部门数据。
+
+## 2026-06-12 01:54 portal 账号密码 live 确认门槛加固
+
+- 加固原因：`verify-portal-self-management-live.mjs` 虽然只做登录后的只读接口检查，但 seller/buyer 账号密码登录本身会写登录日志和 portal session；缺少显式确认变量时不应允许脚本发起真实登录。
+- 已加固：
+  - 新增 `PORTAL_SELF_MANAGEMENT_LIVE_CONFIRM=APPLY_PORTAL_SELF_MANAGEMENT_LIVE_VERIFY` 确认门槛。
+  - `requireLiveEnv()` 在检查 seller/buyer 账号密码前先检查确认变量。
+  - help 文案明确该脚本登录后不做 portal 写操作，但真实登录会产生登录日志和 session。
+  - `react-ui/tests/portal-self-management-live-contract.test.ts` 新增负向合同，固定 `main()` 必须先执行 `requireLiveEnv()`，再进入任何 `verifyTerminal(...)`，且确认门槛前不得出现 `await`。
+- 已验证：
+  - `node --check react-ui/scripts/verify-portal-self-management-live.mjs` 通过。
+  - `cd react-ui; node scripts\verify-portal-self-management-live.mjs --help` 通过。
+  - `cd react-ui; npx jest --config jest.config.ts tests/portal-self-management-live-contract.test.ts --runInBand` 通过，1 suite / 12 tests。
+  - `cd react-ui; node scripts\verify-three-terminal.mjs --check-manifest` 通过。
+  - `cd react-ui; npm run verify:three-terminal` 通过；前端 33 suites / 299 tests passed；后端 reactor `test-compile` 和三端合同测试均 BUILD SUCCESS。
+- live 状态：仍未执行真实 portal 账号密码登录；等待用户明确确认写入登录日志和 portal session，并提供或确认 seller/buyer OWNER 凭据。
+
+## 2026-06-12 01:58 live-write 确认门槛负向合同
+
+- 加固原因：`verify-portal-self-management-live-write.mjs` 会执行真实 seller/buyer portal 写闭环，包含登录、创建/编辑/清理测试部门、创建/编辑/清理测试角色、创建并停用 STAFF 测试账号、分配/清空账号角色，以及读取登录日志、操作日志和在线会话；必须固定确认门槛早于任何网络调用或写副作用。
+- 已加固：
+  - `react-ui/tests/portal-self-management-live-write-contract.test.ts` 新增负向合同，固定 `main()` 必须先执行 `requireLiveEnv()`，再进入 `verifyTerminalWrites(terminal)`。
+  - 合同固定 `requireLiveEnv()` 必须检查 `PORTAL_LIVE_WRITE_CONFIRM=APPLY_PORTAL_SELF_MANAGEMENT_WRITE_VERIFY`。
+  - 合同固定确认门槛前不得出现 `await`、`requestJson(...)`、`login(...)`、`authorizedRequest(...)` 或 `cleanupTerminalWrites(...)`。
+- 已验证：
+  - `cd react-ui; npx jest --config jest.config.ts tests/portal-self-management-live-write-contract.test.ts --runInBand` 通过，1 suite / 7 tests。
+  - `cd react-ui; node scripts\verify-three-terminal.mjs --check-manifest` 通过。
+  - `cd react-ui; npm run verify:three-terminal` 通过；前端 33 suites / 300 tests passed；后端 reactor `test-compile` 和三端合同测试均 BUILD SUCCESS。
+  - `git diff --check -- react-ui\tests\portal-self-management-live-write-contract.test.ts react-ui\scripts\verify-portal-self-management-live-write.mjs` 通过，仅 LF/CRLF 工作区提示。
+  - `codegraph sync .` 通过，结果为 `Synced 1 changed files`，`Modified: 1 - 5 nodes`。
+- live 状态：仍未执行真实 portal self-management write 验证；等待用户明确确认写入登录日志、操作日志、portal session、测试角色、测试部门和停用 STAFF 测试账号，并提供或确认 seller/buyer OWNER 凭据。
+
+## 2026-06-12 02:02 执行后只读复核
+
+- 复核命令：`node .\scripts\portal-self-management-sql-runner.mjs --precheck`。
+- 复核性质：只读 `SELECT`；未执行 SQL seed；未写 MySQL、Redis 或业务数据。
+- 数据源确认：
+  - `application.yml` 当前 `spring.profiles.active` 为 `druid`。
+  - MySQL 连接仍来自 `RUOYI_DB_URL` / `RUOYI_DB_USERNAME` / `RUOYI_DB_PASSWORD` 注入。
+  - Redis 仍来自 `RUOYI_REDIS_*` 注入；本次 precheck 不读写 Redis。
+  - `.env.local` 中运行变量存在，记录中不输出明文值。
+- 复核结果：
+  - 当前库：`fenxiao`。
+  - `seller_menu`：23 行，ID 范围 `100008-100031`。
+  - `buyer_menu`：23 行，ID 范围 `200003-200026`。
+  - active seller/buyer OWNER 角色：各 35 个。
+  - seller/buyer self-management 权限模板：均为 `19 / 19`。
+  - seller/buyer root button 权限模板：均为 `18 / 18`。
+  - seller/buyer OWNER self-management 授权：均为 `665 = 35 * 19`。
+  - seller/buyer OWNER 非 self-management 授权：均为 0。
+  - seller/buyer 无效权限、ID 区间违规、页面 component 违规、重复 perms：均为 0。
+- 收尾检查：
+  - `cd react-ui; node scripts\verify-three-terminal.mjs --check-manifest` 通过。
+  - `git diff --check -- docs\plans\2026-06-11-three-terminal-portal-self-management-sql-live-runbook.md docs\reports\2026-06-10-three-terminal-portal-self-management-progress-record.md` 通过，仅 LF/CRLF 工作区提示。
+  - `codegraph sync .` 通过，结果为 `Already up to date`。
+- live 脚本缺确认变量运行验证：
+  - `verify-portal-self-management-live.mjs`：清空 live 相关环境变量后运行，退出码 1，提示缺少 `PORTAL_SELF_MANAGEMENT_LIVE_CONFIRM=APPLY_PORTAL_SELF_MANAGEMENT_LIVE_VERIFY`。
+  - `verify-portal-self-management-live-write.mjs`：清空 live 相关环境变量后运行，退出码 1，提示缺少 `PORTAL_LIVE_WRITE_CONFIRM=APPLY_PORTAL_SELF_MANAGEMENT_WRITE_VERIFY`。
+  - `verify-portal-direct-login-live.mjs`：清空 live 相关环境变量后运行，退出码 1，提示缺少 `PORTAL_DIRECT_LOGIN_LIVE_CONFIRM=APPLY_PORTAL_DIRECT_LOGIN_LIVE_VERIFY`。
+  - 上述验证未提供账号、token、主体 ID 或确认变量，未执行真实 portal 登录、direct-login、写闭环或清理动作。
+- 当前下一步：SQL/seed 缺口已收口；后续只剩 live 登录、direct-login 和 self-management 写闭环验证。未获用户确认 live 写入范围和 seller/buyer OWNER 凭据前，不执行会写登录日志、操作日志、direct-login 票据、portal session 或测试账号/角色/部门数据的 live 脚本。
+
+## 2026-06-12 02:09 live 参数示例同步
+
+- 同步原因：live verifier 已增加确认变量和管理端认证兜底能力，runbook 必须和脚本真实入口保持一致，避免执行时因文档缺参 fail-closed 或误以为必须手工复制主体 ID。
+- 已同步：
+  - 只读 live 示例补入 `PORTAL_SELF_MANAGEMENT_LIVE_CONFIRM=APPLY_PORTAL_SELF_MANAGEMENT_LIVE_VERIFY`。
+  - direct-login live 说明改为管理端认证上下文二选一：`ADMIN_AUTH_TOKEN` 或 `ADMIN_USERNAME` / `ADMIN_PASSWORD`。
+  - `SELLER_DIRECT_LOGIN_SUBJECT_ID` / `BUYER_DIRECT_LOGIN_SUBJECT_ID` 明确为可选；未传时脚本通过管理端只读列表自动发现 active OWNER 主体。
+- 已验证：
+  - `cd react-ui; npx jest --config jest.config.ts tests/portal-self-management-live-contract.test.ts tests/portal-direct-login-live-contract.test.ts --runInBand` 通过，2 suites / 26 tests passed。
+  - `cd react-ui; node scripts\verify-portal-self-management-live.mjs --help` 通过。
+  - `cd react-ui; node scripts\verify-portal-direct-login-live.mjs --help` 通过。
+  - `cd react-ui; node scripts\verify-three-terminal.mjs --check-manifest` 通过。
+  - `cd react-ui; npm run verify:three-terminal` 通过；前端 33 suites / 302 tests passed；后端 reactor `test-compile` 和三端合同测试均 BUILD SUCCESS。
+  - `git diff --check -- <本轮 runbook 同步相关文件>` 通过，仅 LF/CRLF 工作区提示。
+- 影响边界：本次只更新文档示例和静态合同，不执行 live 登录、direct-login 或写闭环。
+
+## 2026-06-12 02:12 live 前作用域隔离静态复核
+
+- 复核目的：在执行真实 live 登录或写闭环前，确认代码侧没有退回 caller-controlled 主体 ID 或裸 accountId 查询。
+- 复核结论：
+  - 后端 seller/buyer 账号查询链路继续保持 subject-scoped 查询，未发现生产代码裸 `select*AccountById(accountId)`。
+  - 前端 portal 自助面继续通过 `PORTAL_SERVICE[terminal]` 调用端内 service，不直接拼 `/api/seller` / `/api/buyer`，也不把 `sellerId` / `buyerId` / `subjectId` 作为请求范围。
+- 已验证：
+  - `cd RuoYi-Vue; mvn -pl ruoyi-system,seller,buyer -am "-Dtest=TerminalAccountIsolationTest" "-Dsurefire.failIfNoSpecifiedTests=false" test` 通过，`TerminalAccountIsolationTest` 4 tests passed。
+  - `cd react-ui; npx jest --config jest.config.ts tests/portal-session-request.test.ts tests/portal-self-management-contract.test.ts --runInBand` 通过，2 suites / 62 tests passed。
+  - `cd react-ui; node scripts\verify-three-terminal.mjs --check-manifest` 通过。
+- 影响边界：本次只做静态扫描和合同复核，不执行 live 登录、direct-login 或写闭环。
+## 2026-06-12 02:18 live 前自助审计 DTO 序列化门禁
+
+- 补充目的：live 登录、direct-login 和写闭环执行前，先固定端内自助审计 DTO 的静态序列化边界，避免 self-service 接口把管理审计字段或 token/session 内部字段暴露给 seller/buyer portal。
+- 当前门禁：
+  - `PortalOwnLoginLogProfile`、`PortalOwnOperLogProfile`、`PortalOwnSessionProfile` 均不得序列化 `terminal`、`subjectId`、`accountId`、`tokenId`、`directLoginTicketId`、`actingAdminId`、`actingAdminName`、`directLoginReason`。
+  - 自助在线会话还必须拒绝 `directLogin` 字段外露。
+  - 自助操作日志还必须拒绝 `operParam`、`jsonResult`、`method` 等内部执行细节外露。
+- 已验证：
+  - `cd RuoYi-Vue; mvn -pl ruoyi-system -am "-Dtest=PortalSelfAuditSerializationTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，3 tests passed。
+  - `cd RuoYi-Vue; mvn -pl ruoyi-system,seller,buyer -am "-Dtest=PortalSelfAuditSerializationTest,PortalSelfServiceSurfaceContractTest,SellerServiceImplTest,BuyerServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，130 tests passed，BUILD SUCCESS。
+  - `cd react-ui; node scripts\verify-three-terminal.mjs --check-manifest`：通过。
+- live 状态：本次仍未执行 portal 账号密码登录、direct-login 或 self-management 写闭环；后续真实 live 仍需显式确认写入日志、票据、session 和测试账号/角色/部门数据。
+
+## 2026-06-12 02:23 live 前权限拒绝日志审计门禁
+
+- 补充目的：真实 live 验证前，固定 403 权限拒绝日志的 direct-login 结构化审计字段，避免免密代入会话在权限拒绝路径丢失 acting admin、ticket 和 reason。
+- 当前门禁：
+  - `PortalPreAuthorizeAspect` 必须在 `ServiceException` 权限拒绝路径调用 `recordAuthorizationFailure(...)` 后再抛出异常。
+  - 拒绝日志必须从当前 terminal token/session 解析 `PortalLoginSession`，并调用 `applyDirectLoginAudit(operLog, session)`。
+  - direct-login 拒绝日志必须写入 `directLogin`、`directLoginTicketId`、`actingAdminId`、`actingAdminName`、`directLoginReason` 结构化字段，并保留 `directLoginAudit{ticketId=...}` 兼容前缀。
+- 已验证：
+  - `cd RuoYi-Vue; mvn -pl ruoyi-framework -am "-Dtest=PortalLogAspectContractTest,PortalPreAuthorizeAspectTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，5 tests passed，BUILD SUCCESS。
+- live 状态：本次仍未执行 portal 账号密码登录、direct-login 或 self-management 写闭环；后续真实 live 仍需显式确认写入日志、票据、session 和测试账号/角色/部门数据。
+
+## 2026-06-12 02:29 live 前 portal redirect 白名单门禁
+
+- 补充目的：真实 live 登录前，固定 portal 登录 redirect 只能跳回当前端相对路径白名单，避免绝对 URL、协议相对 URL、管理端 `/seller` / `/buyer` 路径或跨端路径进入 portal 登录后跳转链路。
+- 当前门禁：
+  - `isPortalTerminalPath(...)` 只允许 `/{terminal}/login`、`/{terminal}/direct-login` 和 `/{terminal}/portal/**`。
+  - `/seller/login/next`、`/seller/direct-login/next`、`/buyer/admin/**`、`/seller`、`/buyer`、`https://.../{terminal}/portal/**`、`//.../{terminal}/portal/**` 均必须 fail-closed。
+- 已验证：
+  - `cd react-ui; npx jest --config jest.config.ts tests/portal-session-request.test.ts --runInBand`：通过，57 tests passed。
+  - `cd react-ui; node scripts\verify-three-terminal.mjs --check-manifest`：通过。
+  - `cd react-ui; npm run verify:three-terminal`：通过，33 suites / 302 tests passed；后端 reactor `test-compile` 和三端合同测试均 BUILD SUCCESS。
+- live 状态：本次仍未执行 portal 账号密码登录、direct-login 或 self-management 写闭环；后续真实 live 仍需显式确认写入日志、票据、session 和测试账号/角色/部门数据。
+
+## 2026-06-12 02:31 SQL seed 后只读复核
+
+- 复核命令：`node .\scripts\portal-self-management-sql-runner.mjs --precheck`。
+- 复核性质：只读 `SELECT`；未执行 SQL seed；未写 MySQL、Redis 或业务数据。
+- 复核结果：
+  - 当前库：`fenxiao`。
+  - `seller_menu`：23 行，ID `100008-100031`；`buyer_menu`：23 行，ID `200003-200026`。
+  - active seller/buyer OWNER 角色：各 35 个。
+  - seller/buyer self-management 模板：均为 `19 / 19`。
+  - seller/buyer root button 模板：均为 `18 / 18`。
+  - seller/buyer OWNER self-management 授权：均为 `665 = 35 * 19`。
+  - seller/buyer OWNER 非 self-management 授权：均为 0。
+  - seller/buyer 无效权限、菜单 ID 区间违规、页面 component 违规、重复 perms：均为 0。
+- 收尾检查：
+  - `git diff --check -- <本轮 redirect 合同、审计合同和记录文件>`：通过，仅 LF/CRLF 工作区提示。
+  - `codegraph sync .`：首次同步通过，`Synced 1 changed files`，`Modified: 1 - 19 nodes`；记录补写后最终复跑为 `Already up to date`。
+- 当前下一步：SQL/seed 权限模板缺口已收口；live 登录、direct-login 和 self-management 写闭环仍需单独确认写入范围和 OWNER 凭据后执行。
+
+## 2026-06-12 02:39 live 前管理端角色菜单树模板收口
+
+- 补充目的：真实 live 写闭环前，先固定管理端 seller/buyer 角色菜单树只能展示本阶段 self-management 模板，避免历史冻结业务菜单模板通过管理端角色分配 UI 重新进入端内角色。
+- 当前门禁：
+  - `AdminSellerMenuController#roleMenuTreeselect` 和 `AdminBuyerMenuController#roleMenuTreeselect` 必须返回 `selectSelfManagementMenuIdsByRoleId(...)` 与 `buildSelfManagementMenuTreeSelect()`。
+  - self-management 菜单树候选必须先经过 `PortalPermissionSupport.assertReadableTerminalMenu(...)`，再按本端 `PORTAL_SELF_MANAGEMENT_PERMS` 过滤。
+  - 禁止回退到 `selectMenuIdsByRoleId(...)` + `buildMenuTreeSelect(new PortalMenu())` 的全量端菜单返回。
+- 已验证：
+  - `cd RuoYi-Vue; mvn -pl ruoyi-system,seller,buyer -am "-Dtest=SellerAdminPermissionContractTest,BuyerAdminPermissionContractTest,PortalSelfServiceSurfaceContractTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，9 tests passed，BUILD SUCCESS。
+  - `node .\scripts\portal-self-management-sql-runner.mjs --precheck`：通过，只读确认 `fenxiao` self-management 模板和 OWNER 授权状态仍正确。
+  - `cd react-ui; npm run verify:three-terminal`：通过，33 suites / 302 tests passed；后端 reactor `test-compile` 和三端合同测试均 BUILD SUCCESS。
+  - `git diff --check -- <本轮管理端角色菜单树收口文件>`：通过，仅 LF/CRLF 工作区提示。
+  - `codegraph sync .`：通过，`Synced 8 changed files`，`Modified: 8 - 457 nodes`。
+- live 状态：本次仍未执行 portal 账号密码登录、direct-login 或 self-management 写闭环；后续真实 live 仍需显式确认写入日志、票据、session 和测试账号/角色/部门数据。
+
+## 2026-06-12 02:46 live 前管理端角色写入模板收口
+
+- 补充目的：真实 live 写闭环前，固定管理端 seller/buyer 角色保存接口只能绑定本轮 self-management 菜单模板，避免通过接口提交历史冻结业务菜单 ID。
+- 当前门禁：
+  - `SellerPortalPermissionServiceImpl#assertRoleMenusExist` 和 `BuyerPortalPermissionServiceImpl#assertRoleMenusExist` 必须在端内菜单 ID、component、权限前缀、通配符和 admin 命名空间校验后调用 `assertRoleMenuSelfManagement(menu)`。
+  - `assertRoleMenuSelfManagement(menu)` 必须使用本端 `PORTAL_SELF_MANAGEMENT_PERMS` 校验 `StringUtils.trimToEmpty(menu.getPerms())`。
+  - 非 self-management 的合法端内业务权限，例如 `seller:product:list` / `buyer:product:list`，必须在写角色和 role-menu 绑定前 fail-closed。
+- 已验证：
+  - `cd RuoYi-Vue; mvn -pl ruoyi-system,seller,buyer -am "-Dtest=SellerPortalPermissionServiceImplTest,BuyerPortalPermissionServiceImplTest,PortalSelfServiceSurfaceContractTest,SellerAdminPermissionContractTest,BuyerAdminPermissionContractTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，`ruoyi-system` 9 tests、`seller` 25 tests、`buyer` 25 tests，BUILD SUCCESS。
+  - `cd react-ui; npm run verify:three-terminal`：通过，33 suites / 302 tests passed；后端 reactor `test-compile` 和三端合同测试均 BUILD SUCCESS。
+  - `node .\scripts\portal-self-management-sql-runner.mjs --precheck`：通过，只读确认当前库 `fenxiao` self-management 模板和 OWNER 授权状态仍正确。
+  - `git diff --check -- <本轮角色写入 fail-closed 文件>`：通过，仅 LF/CRLF 工作区提示。
+- live 状态：本次仍未执行 portal 账号密码登录、direct-login 或 self-management 写闭环；后续真实 live 仍需显式确认写入日志、票据、session、测试角色、测试部门和停用 STAFF 测试账号。
+
+## 2026-06-12 02:52 live-write 角色菜单负向验证补强
+
+- 补充目的：真实 live 写闭环执行时，不只验证正向角色创建/编辑，还要验证角色保存接口对跨端 role-menu 提交 fail-closed。
+- 当前门禁：
+  - `verify-portal-self-management-live-write.mjs` 在创建正式测试角色前，必须调用 `assertRoleCreateRejectsInvalidMenuIds(...)`，用当前端 self-management menuIds 追加跨端 menuId 尝试创建角色。
+  - 如果创建接口返回成功，或者失败后仍能在 `/roles` 中查到该 `roleKey`，脚本必须失败，并尝试清理意外落库角色。
+  - 正式角色创建后，脚本必须调用 `assertRoleUpdateRejectsInvalidMenuIds(...)`，用跨端 menuId 尝试更新角色。
+  - 如果更新接口返回成功，或者失败后 checkedKeys 出现跨端 ID、丢失 self-management 模板、或出现非模板 ID，脚本必须失败。
+- 已验证：
+  - `cd react-ui; node --check scripts\verify-portal-self-management-live-write.mjs`：通过。
+  - `cd react-ui; npx jest --config jest.config.ts tests/portal-self-management-live-write-contract.test.ts --runInBand`：通过，1 suite / 7 tests passed。
+  - `cd react-ui; node scripts\verify-three-terminal.mjs --check-manifest`：通过。
+  - `cd react-ui; node scripts\verify-portal-self-management-live-write.mjs --help`：通过。
+  - `git diff --check -- react-ui/scripts/verify-portal-self-management-live-write.mjs react-ui/tests/portal-self-management-live-write-contract.test.ts`：通过，仅 LF/CRLF 工作区提示。
+  - `cd react-ui; npm run verify:three-terminal`：通过，33 suites / 302 tests passed；后端 reactor `test-compile` 和三端合同测试均 BUILD SUCCESS。
+- live 状态：本次仍未执行 portal 账号密码登录、direct-login 或 self-management 写闭环；后续真实 live 仍需显式确认写入日志、票据、session、测试角色、测试部门和停用 STAFF 测试账号。

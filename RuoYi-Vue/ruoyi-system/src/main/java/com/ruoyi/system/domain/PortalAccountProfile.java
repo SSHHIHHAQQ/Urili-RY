@@ -17,7 +17,6 @@ public class PortalAccountProfile implements Serializable
     @JsonIgnore
     private Long subjectId;
 
-    @JsonIgnore
     private Long accountId;
 
     private Long deptId;

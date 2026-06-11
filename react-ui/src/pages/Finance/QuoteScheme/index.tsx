@@ -158,8 +158,19 @@ function toFormDateTime(value?: any) {
   return value ? dayjs(value) : undefined;
 }
 
+function normalizeWarehouseCodes(value?: string | string[]) {
+  if (Array.isArray(value)) {
+    const first = value.find(Boolean);
+    return first ? [first] : [];
+  }
+  return value ? [value] : [];
+}
+
 function buildFormValues(detail?: API.Finance.QuoteScheme): any {
   if (!detail) return defaultSchemeValues;
+  const warehouseCode =
+    detail.warehouses?.find((item) => item.warehouseCode)?.warehouseCode
+    || normalizeWarehouseCodes(detail.warehouseCodes as any)[0];
   return {
     ...detail,
     effectiveTime: toFormDateTime(detail.effectiveTime),
@@ -170,9 +181,7 @@ function buildFormValues(detail?: API.Finance.QuoteScheme): any {
     buyerIds: detail.scopes
       ?.filter((item) => item.scopeType === 'BUYER' && item.buyerId)
       .map((item) => item.buyerId as number),
-    warehouseCodes: detail.warehouses
-      ?.filter((item) => item.warehouseCode)
-      .map((item) => item.warehouseCode as string),
+    warehouseCodes: warehouseCode,
   };
 }
 
@@ -380,6 +389,7 @@ export default function FinanceQuoteSchemePage() {
       effectiveTime: toDateTime(values.effectiveTime),
       expireTime: toDateTime(values.expireTime),
       buyerIds: values.buyerIds?.map((item) => Number(item)),
+      warehouseCodes: normalizeWarehouseCodes((values as any).warehouseCodes),
     };
     const isEdit = !!currentScheme?.schemeId;
     const resp = isEdit
@@ -941,7 +951,6 @@ export default function FinanceQuoteSchemePage() {
                     <ProFormSelect
                       name="warehouseCodes"
                       label="适用仓库"
-                      mode="multiple"
                       options={warehouseOptions}
                       fieldProps={{ ...SEARCHABLE_SELECT_PROPS, style: { width: '100%' } }}
                       rules={[{ required: true, message: '请选择适用仓库' }]}

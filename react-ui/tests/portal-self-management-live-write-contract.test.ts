@@ -53,6 +53,29 @@ describe('portal self-management live write verifier contract', () => {
     expect(script).not.toContain('requestJson(`/api/');
   });
 
+  it('gates live writes before any asynchronous network side effect', () => {
+    const mainMatch = script.match(/async function main\(\) \{([\s\S]*?)\n\}\n\nmain\(\)\.catch/);
+    expect(mainMatch).not.toBeNull();
+    const mainBody = mainMatch?.[1] || '';
+    const requireIndex = mainBody.indexOf('requireLiveEnv();');
+    const verifyIndex = mainBody.indexOf('verifyTerminalWrites(terminal)');
+    expect(requireIndex).toBeGreaterThan(-1);
+    expect(verifyIndex).toBeGreaterThan(requireIndex);
+    expect(mainBody.slice(0, requireIndex)).not.toContain('await ');
+    expect(mainBody.slice(0, requireIndex)).not.toContain('requestJson(');
+    expect(mainBody.slice(0, requireIndex)).not.toContain('login(');
+    expect(mainBody.slice(0, requireIndex)).not.toContain('authorizedRequest(');
+    expect(mainBody.slice(0, requireIndex)).not.toContain('cleanupTerminalWrites(');
+
+    const requireLiveEnvMatch = script.match(
+      /function requireLiveEnv\(\) \{([\s\S]*?)\n\}\n\nasync function requestJson/,
+    );
+    expect(requireLiveEnvMatch).not.toBeNull();
+    const requireLiveEnvBody = requireLiveEnvMatch?.[1] || '';
+    expect(requireLiveEnvBody).toContain('process.env[WRITE_CONFIRM_ENV] !== WRITE_CONFIRM_VALUE');
+    expect(requireLiveEnvBody).toContain('missing.push(`${WRITE_CONFIRM_ENV}=${WRITE_CONFIRM_VALUE}`)');
+  });
+
   it('limits writes to the current portal self-management surface', () => {
     for (const pathFragment of [
       '/accounts',
@@ -90,8 +113,21 @@ describe('portal self-management live write verifier contract', () => {
   });
 
   it('verifies terminal-scoped menus, exact permissions, role assignment, and self-audit DTO redaction', () => {
+    expect(script).toContain('assertPortalLoginResultContract(terminal, data)');
+    expect(script).toContain('ALLOWED_PORTAL_LOGIN_RESULT_FIELDS');
+    expect(script).toContain('assertPortalGetInfoContract(terminal, info)');
+    expect(script).toContain('ALLOWED_PORTAL_GET_INFO_FIELDS');
     expect(script).toContain('assertExactSelfManagementPermissions(terminal, info.permissions)');
-    expect(script).toContain('assertTerminalMenuIds(terminal, menuIds)');
+    expect(script).toContain('assertTerminalRoleMenuTemplate(terminal, menuIds)');
+    expect(script).toContain('role menu template is not exactly self-management');
+    expect(script).toContain('SELF_MANAGEMENT_PERMISSIONS[terminal].length');
+    expect(script).toContain('crossTerminalMenuIdFor(terminal)');
+    expect(script).toContain('assertRoleCreateRejectsInvalidMenuIds(terminal, token, marker, menuIds, crossTerminalMenuId)');
+    expect(script).toContain('assertRoleUpdateRejectsInvalidMenuIds(');
+    expect(script).toContain('role create accepted cross-terminal menu ids');
+    expect(script).toContain('role update accepted cross-terminal menu ids');
+    expect(script).toContain('rejected role write still persisted');
+    expect(script).toContain('role update rejection mutated checkedKeys');
     expect(script).toContain("roleIds: [state.roleId]");
     expect(script).toContain('account role assignment was not persisted');
     for (const field of [
@@ -110,5 +146,13 @@ describe('portal self-management live write verifier contract', () => {
     expect(script).toContain('assertSelfAuditDto(`${terminal} login logs`');
     expect(script).toContain('assertSelfAuditDto(`${terminal} operation logs`');
     expect(script).toContain('assertSelfAuditDto(`${terminal} sessions`');
+  });
+
+  it('requires created account records to expose accountId without leaking subject scope', () => {
+    expect(script).toContain('assertPortalAccountRecord(terminal, createdAccount)');
+    expect(script).toContain('created account did not return a usable accountId');
+    expect(script).toContain('created account leaked internal subject scope');
+    expect(script).toContain('FORBIDDEN_PORTAL_ACCOUNT_FIELDS');
+    expect(script).not.toContain('info.subjectId');
   });
 });

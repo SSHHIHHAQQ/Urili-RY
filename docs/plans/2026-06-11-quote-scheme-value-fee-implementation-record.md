@@ -41,6 +41,14 @@
 - `react-ui/src/pages/Finance/QuoteScheme/index.tsx` 已超过 500 行。本次没有拆分，是因为现有报价方案页面已经把基础信息、物流费、操作费放在同一个聚合编辑弹窗中；增值费复用同一套 scheme 上下文、权限和渠道选项，单独拆分会引入额外状态传递，超出本次小步范围。
 - `RuoYi-Vue/finance/src/main/java/com/ruoyi/finance/service/impl/QuoteSchemeServiceImpl.java` 已超过 500 行。本次没有拆分，是因为方案、仓库、物流费、增值费共享同一套方案校验、渠道 lookup 和事务边界；后续如果继续增加费用规则维度，再考虑抽出规则子服务。
 
+## 2026-06-11 补充限制
+
+- 报价方案适用仓库改为单选：前端新增/编辑表单只允许选择一个仓库，提交时仍按后端接口数组格式传入至多一个仓库编码。
+- 后端统一兜底校验仓库数量，`仓库范围模式 = 指定仓库` 时如果传入多个仓库编码，直接拒绝保存。
+- 启用状态的报价方案在同一方案类型下，如果生效时间段有交叉，必须使用不同的生效优先级；空优先级会按 `0` 归一化后参与冲突校验。
+- 停用方案不参与生效优先级冲突；把停用方案切回启用时会重新校验。
+- 本次没有新增表或 SQL 迁移，只补应用层校验和前端交互限制。
+
 ## 验证记录
 
 - `react-ui`：`npm run tsc` 通过。
@@ -54,3 +62,11 @@
 - 后端 jar：先停止 8080 后端进程，再执行 `mvn -pl ruoyi-admin -am -DskipTests package` 通过。
 - 后端运行态：通过 `start-backend-local.ps1 -Restart` 启动标准 jar，`http://127.0.0.1:8080` 返回 HTTP 200。
 - API smoke：`admin/admin123` 登录成功；`GET /finance/admin/quote-schemes/list?pageNum=1&pageSize=1` 返回 HTTP 200、业务码 200、总数 2；`GET /finance/admin/quote-schemes/{schemeId}/value-fees/list` 返回 HTTP 200、业务码 200、空列表。
+
+## 2026-06-11 补充限制验证
+
+- `react-ui`：`npm run tsc` 通过。
+- `react-ui`：`npx jest --config jest.config.ts --runTestsByPath tests/finance-quote-scheme-contract.test.ts --runInBand` 通过，6 项断言通过。
+- `RuoYi-Vue`：`mvn -pl finance -am -DskipTests clean compile` 通过，finance 重新编译 32 个源文件。
+- `RuoYi-Vue`：`mvn -pl ruoyi-system -am "-Dtest=FinanceAdminRouteContractTest" "-Dsurefire.failIfNoSpecifiedTests=false" test` 通过，2 项断言通过。
+- 仓库根目录：`git diff --check` 通过；仅输出既有 LF/CRLF 警告。

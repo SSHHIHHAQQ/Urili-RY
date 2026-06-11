@@ -2,6 +2,9 @@
 
 const TERMINALS = ['seller', 'buyer'];
 
+const LIVE_CONFIRM_ENV = 'PORTAL_SELF_MANAGEMENT_LIVE_CONFIRM';
+const LIVE_CONFIRM_VALUE = 'APPLY_PORTAL_SELF_MANAGEMENT_LIVE_VERIFY';
+
 const SELF_MANAGEMENT_PERMISSIONS = {
   seller: [
     'seller:portal:home',
@@ -47,14 +50,44 @@ const SELF_MANAGEMENT_PERMISSIONS = {
   ],
 };
 
-const FROZEN_PERMISSION_PARTS = [
-  ':product:',
-  ':order:',
-  ':inventory:',
-  ':logistics:',
-  ':finance:',
-  ':fulfillment:',
-  ':integration:',
+const FROZEN_BUSINESS_TERMS = [
+  'product',
+  'order',
+  'inventory',
+  'logistics',
+  'finance',
+  'fulfillment',
+  'integration',
+];
+
+const FORBIDDEN_SELF_AUDIT_FIELDS = [
+  'subjectId',
+  'accountId',
+  'directLoginTicketId',
+  'actingAdminId',
+  'actingAdminName',
+  'directLoginReason',
+  'operParam',
+  'jsonResult',
+  'tokenId',
+];
+
+const ALLOWED_PORTAL_LOGIN_RESULT_FIELDS = [
+  'token',
+  'terminal',
+  'subjectNo',
+  'username',
+  'nickName',
+  'expireMinutes',
+  'expireTime',
+];
+
+const ALLOWED_PORTAL_GET_INFO_FIELDS = [
+  'subjectNo',
+  'userName',
+  'nickName',
+  'roles',
+  'permissions',
 ];
 
 const READ_ENDPOINTS = [
@@ -68,18 +101,27 @@ const READ_ENDPOINTS = [
   '/account/sessions?pageNum=1&pageSize=5',
 ];
 
+const SELF_AUDIT_ENDPOINT_PREFIXES = [
+  '/account/login-logs',
+  '/account/oper-logs',
+  '/account/sessions',
+];
+
 function printHelp() {
   console.log(`Usage:
   PORTAL_LIVE_BASE_URL=http://127.0.0.1:8080 \\
   PORTAL_LIVE_API_PREFIX= \\
   SELLER_PORTAL_USERNAME=... SELLER_PORTAL_PASSWORD=... \\
   BUYER_PORTAL_USERNAME=... BUYER_PORTAL_PASSWORD=... \\
+  ${LIVE_CONFIRM_ENV}=${LIVE_CONFIRM_VALUE} \\
   node scripts/verify-portal-self-management-live.mjs
 
 This script performs read-only live checks for the minimal seller/buyer portal
 self-management framework. It does not read .env.local and does not execute SQL
-or portal write operations. The default base URL is the backend service on 8080;
-set PORTAL_LIVE_API_PREFIX=/api only when targeting the React dev proxy.
+or portal write operations after login. It does perform real seller/buyer portal
+logins, which can create login logs and sessions, so it requires explicit live
+confirmation. It also verifies that each terminal token is rejected by the
+opposite terminal getInfo/getRouters endpoints. The default base URL is the backend service on 8080; set PORTAL_LIVE_API_PREFIX=/api only when targeting the React dev proxy.
 `);
 }
 
@@ -105,6 +147,9 @@ function apiPath(path) {
 
 function requireLiveEnv() {
   const missing = [];
+  if (process.env[LIVE_CONFIRM_ENV] !== LIVE_CONFIRM_VALUE) {
+    missing.push(`${LIVE_CONFIRM_ENV}=${LIVE_CONFIRM_VALUE}`);
+  }
   for (const terminal of TERMINALS) {
     for (const field of ['USERNAME', 'PASSWORD']) {
       const key = envName(terminal, field);
@@ -143,6 +188,30 @@ function assertSuccess(label, response, body) {
   return body.data;
 }
 
+function assertNoUnexpectedFields(label, data, allowedFields) {
+  const unexpected = Object.keys(data || {}).filter((field) => !allowedFields.includes(field));
+  if (unexpected.length > 0) {
+    throw new Error(`${label} exposed unexpected response fields: ${unexpected.join(', ')}`);
+  }
+}
+
+function assertPortalLoginResultContract(terminal, data) {
+  assertNoUnexpectedFields(`${terminal} login`, data, ALLOWED_PORTAL_LOGIN_RESULT_FIELDS);
+  if (!data || data.terminal !== terminal || typeof data.token !== 'string' || data.token.length === 0) {
+    throw new Error(`${terminal} login returned invalid token payload`);
+  }
+  if (data.expireMinutes !== undefined && (!Number.isInteger(data.expireMinutes) || data.expireMinutes <= 0)) {
+    throw new Error(`${terminal} login returned invalid expireMinutes`);
+  }
+  if (data.expireTime !== undefined && (typeof data.expireTime !== 'string' || data.expireTime.trim().length === 0)) {
+    throw new Error(`${terminal} login returned invalid expireTime`);
+  }
+}
+
+function assertPortalGetInfoContract(terminal, data) {
+  assertNoUnexpectedFields(`${terminal} getInfo`, data, ALLOWED_PORTAL_GET_INFO_FIELDS);
+}
+
 async function login(terminal) {
   const username = process.env[envName(terminal, 'USERNAME')];
   const password = process.env[envName(terminal, 'PASSWORD')];
@@ -151,9 +220,7 @@ async function login(terminal) {
     body: JSON.stringify({ username, password }),
   });
   const data = assertSuccess(`${terminal} login`, response, body);
-  if (!data || data.terminal !== terminal || typeof data.token !== 'string' || data.token.length === 0) {
-    throw new Error(`${terminal} login returned invalid token payload`);
-  }
+  assertPortalLoginResultContract(terminal, data);
   return data.token;
 }
 
@@ -182,45 +249,160 @@ function assertSelfManagementPermissions(terminal, permissions) {
   }
 }
 
+function collectTreeIds(nodes, target = []) {
+  for (const node of nodes || []) {
+    if (Number.isInteger(node.id) && node.id > 0) {
+      target.push(node.id);
+    }
+    collectTreeIds(node.children || [], target);
+  }
+  return target;
+}
+
+function assertTerminalRoleMenuTemplate(terminal, value) {
+  const [min, max] = terminal === 'seller' ? [100000, 200000] : [200000, 300000];
+  const menuIds = collectTreeIds(value?.menus || []);
+  const uniqueMenuIds = new Set(menuIds);
+  const invalid = menuIds.filter((menuId) => menuId < min || menuId >= max);
+  if (menuIds.length === 0) {
+    throw new Error(`${terminal} role menu template is empty`);
+  }
+  if (uniqueMenuIds.size !== menuIds.length) {
+    throw new Error(`${terminal} role menu template contains duplicate ids`);
+  }
+  if (invalid.length > 0) {
+    throw new Error(`${terminal} role menu template has cross-terminal ids: ${invalid.join(',')}`);
+  }
+  if (menuIds.length !== SELF_MANAGEMENT_PERMISSIONS[terminal].length) {
+    throw new Error(
+      `${terminal} role menu template is not exactly self-management; expected=${
+        SELF_MANAGEMENT_PERMISSIONS[terminal].length
+      } actual=${menuIds.length}`,
+    );
+  }
+}
+
 function assertNoFrozenBusinessSurface(terminal, label, value) {
-  const serialized = JSON.stringify(value);
-  const frozen = FROZEN_PERMISSION_PARTS.filter((part) => serialized.includes(`${terminal}${part}`));
+  const serialized = JSON.stringify(value).toLowerCase();
+  const frozen = FROZEN_BUSINESS_TERMS.filter(
+    (term) => serialized.includes(`${terminal}:${term}:`) || serialized.includes(`/${term}/`),
+  );
   if (frozen.length > 0) {
     throw new Error(`${terminal} ${label} exposes frozen business permissions: ${frozen.join(', ')}`);
   }
 }
 
+function rowsOf(value) {
+  if (Array.isArray(value)) {
+    return value;
+  }
+  if (Array.isArray(value?.data)) {
+    return value.data;
+  }
+  if (Array.isArray(value?.rows)) {
+    return value.rows;
+  }
+  return [];
+}
+
+function assertSelfAuditDto(label, body) {
+  const serialized = JSON.stringify(rowsOf(body));
+  const leaked = FORBIDDEN_SELF_AUDIT_FIELDS.filter((field) => serialized.includes(`"${field}"`));
+  if (leaked.length > 0) {
+    throw new Error(`${label} leaked internal audit fields: ${leaked.join(', ')}`);
+  }
+}
+
+function isSelfAuditEndpoint(endpoint) {
+  return SELF_AUDIT_ENDPOINT_PREFIXES.some((prefix) => endpoint.startsWith(prefix));
+}
+
+function flattenRouters(nodes, target = []) {
+  for (const node of nodes || []) {
+    target.push(node);
+    flattenRouters(node.children || [], target);
+  }
+  return target;
+}
+
+function assertSelfManagementRouters(terminal, routers) {
+  const flatRouters = flattenRouters(Array.isArray(routers) ? routers : []);
+  const homePerm = `${terminal}:portal:home`;
+  const homeRoute = flatRouters.find((route) => route?.perms === homePerm);
+  if (!homeRoute) {
+    throw new Error(`${terminal} getRouters did not include ${homePerm}`);
+  }
+  if (homeRoute.path !== `/${terminal}/portal`) {
+    throw new Error(`${terminal} portal home route path is not terminal-scoped`);
+  }
+  const expectedComponent = `${terminal === 'seller' ? 'Seller' : 'Buyer'}/Portal/index`;
+  if (homeRoute.component !== expectedComponent) {
+    throw new Error(`${terminal} portal home route component is not terminal-scoped`);
+  }
+  for (const route of flatRouters) {
+    const perms = typeof route?.perms === 'string' ? route.perms.trim() : '';
+    if (!perms) {
+      continue;
+    }
+    if (perms.includes('*')) {
+      throw new Error(`${terminal} getRouters exposes wildcard permission ${perms}`);
+    }
+    if (!perms.startsWith(`${terminal}:`)) {
+      throw new Error(`${terminal} getRouters exposes cross-terminal permission ${perms}`);
+    }
+    if (perms.startsWith(`${terminal}:admin:`)) {
+      throw new Error(`${terminal} getRouters exposes admin permission ${perms}`);
+    }
+    const isSelfManagement = SELF_MANAGEMENT_PERMISSIONS[terminal].includes(perms);
+    if (!isSelfManagement) {
+      throw new Error(`${terminal} getRouters exposes non self-management permission ${perms}`);
+    }
+  }
+}
+
 async function assertCrossTerminalTokenRejected(sourceTerminal, targetTerminal, token) {
-  const { response, body } = await requestJson(`/${targetTerminal}/getInfo`, {
-    method: 'GET',
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (response.ok && body.code === 200) {
-    throw new Error(`${sourceTerminal} token was accepted by ${targetTerminal} getInfo`);
+  for (const endpoint of ['getInfo', 'getRouters']) {
+    const { response, body } = await requestJson(`/${targetTerminal}/${endpoint}`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (response.ok && body.code === 200) {
+      throw new Error(`${sourceTerminal} token was accepted by ${targetTerminal} ${endpoint}`);
+    }
   }
 }
 
 async function assertAnonymousPortalRequestRejected(terminal) {
-  const { response, body } = await requestJson(`/${terminal}/getInfo`, {
-    method: 'GET',
-  });
-  if (response.ok && body.code === 200) {
-    throw new Error(`${terminal} anonymous getInfo request was accepted`);
+  for (const endpoint of ['getInfo', 'getRouters']) {
+    const { response, body } = await requestJson(`/${terminal}/${endpoint}`, {
+      method: 'GET',
+    });
+    if (response.ok && body.code === 200) {
+      throw new Error(`${terminal} anonymous ${endpoint} request was accepted`);
+    }
   }
 }
 
 async function verifyTerminal(terminal) {
   const token = await login(terminal);
   const info = await authorizedGet(terminal, token, '/getInfo');
+  assertPortalGetInfoContract(terminal, info);
   assertSelfManagementPermissions(terminal, info.permissions);
   assertNoFrozenBusinessSurface(terminal, 'getInfo', info);
 
   const routers = await authorizedGet(terminal, token, '/getRouters');
+  assertSelfManagementRouters(terminal, routers);
   assertNoFrozenBusinessSurface(terminal, 'getRouters', routers);
 
   for (const endpoint of READ_ENDPOINTS) {
     const data = await authorizedGet(terminal, token, endpoint);
     assertNoFrozenBusinessSurface(terminal, endpoint, data);
+    if (endpoint === '/roles/menus') {
+      assertTerminalRoleMenuTemplate(terminal, data);
+    }
+    if (isSelfAuditEndpoint(endpoint)) {
+      assertSelfAuditDto(`${terminal} ${endpoint}`, data);
+    }
   }
 
   return token;

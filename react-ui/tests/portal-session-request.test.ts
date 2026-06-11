@@ -407,6 +407,10 @@ describe('portal request isolation', () => {
     expect(isPortalTerminalPath('/seller/direct-login/next', 'seller')).toBe(false);
     expect(isPortalRoute('/seller/login/next')).toBe(false);
     expect(isPortalRoute('/seller/direct-login/next')).toBe(false);
+    expect(isPortalTerminalPath('https://evil.test/seller/portal/account', 'seller')).toBe(false);
+    expect(isPortalTerminalPath('//evil.test/seller/portal/account', 'seller')).toBe(false);
+    expect(getPortalTerminalFromPath('https://evil.test/buyer/portal/account')).toBeUndefined();
+    expect(isPortalRoute('//evil.test/buyer/portal/account')).toBe(false);
     expect(isPortalTerminalPath('/buyer/admin/menus', 'buyer')).toBe(false);
     expect(getPortalTerminalFromPath('/seller/accounts')).toBeUndefined();
     expect(getPortalTerminalFromPath('/seller')).toBeUndefined();

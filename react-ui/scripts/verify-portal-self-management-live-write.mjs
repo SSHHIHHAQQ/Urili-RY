@@ -62,6 +62,29 @@ const FORBIDDEN_SELF_AUDIT_FIELDS = [
   'tokenId',
 ];
 
+const FORBIDDEN_PORTAL_ACCOUNT_FIELDS = [
+  'subjectId',
+  'terminal',
+];
+
+const ALLOWED_PORTAL_LOGIN_RESULT_FIELDS = [
+  'token',
+  'terminal',
+  'subjectNo',
+  'username',
+  'nickName',
+  'expireMinutes',
+  'expireTime',
+];
+
+const ALLOWED_PORTAL_GET_INFO_FIELDS = [
+  'subjectNo',
+  'userName',
+  'nickName',
+  'roles',
+  'permissions',
+];
+
 function printHelp() {
   console.log(`Usage:
   PORTAL_LIVE_BASE_URL=http://127.0.0.1:8080 \\
@@ -144,6 +167,30 @@ function assertSuccess(label, response, body) {
   return body.data ?? body;
 }
 
+function assertNoUnexpectedFields(label, data, allowedFields) {
+  const unexpected = Object.keys(data || {}).filter((field) => !allowedFields.includes(field));
+  if (unexpected.length > 0) {
+    throw new Error(`${label} exposed unexpected response fields: ${unexpected.join(', ')}`);
+  }
+}
+
+function assertPortalLoginResultContract(terminal, data) {
+  assertNoUnexpectedFields(`${terminal} login`, data, ALLOWED_PORTAL_LOGIN_RESULT_FIELDS);
+  if (!data || data.terminal !== terminal || typeof data.token !== 'string' || data.token.length === 0) {
+    throw new Error(`${terminal} login returned invalid token payload`);
+  }
+  if (data.expireMinutes !== undefined && (!Number.isInteger(data.expireMinutes) || data.expireMinutes <= 0)) {
+    throw new Error(`${terminal} login returned invalid expireMinutes`);
+  }
+  if (data.expireTime !== undefined && (typeof data.expireTime !== 'string' || data.expireTime.trim().length === 0)) {
+    throw new Error(`${terminal} login returned invalid expireTime`);
+  }
+}
+
+function assertPortalGetInfoContract(terminal, data) {
+  assertNoUnexpectedFields(`${terminal} getInfo`, data, ALLOWED_PORTAL_GET_INFO_FIELDS);
+}
+
 async function login(terminal) {
   const username = process.env[envName(terminal, 'USERNAME')];
   const password = process.env[envName(terminal, 'PASSWORD')];
@@ -152,9 +199,7 @@ async function login(terminal) {
     body: JSON.stringify({ username, password }),
   });
   const data = assertSuccess(`${terminal} login`, response, body);
-  if (!data || data.terminal !== terminal || typeof data.token !== 'string' || data.token.length === 0) {
-    throw new Error(`${terminal} login returned invalid token payload`);
-  }
+  assertPortalLoginResultContract(terminal, data);
   return data.token;
 }
 
@@ -198,11 +243,39 @@ function collectTreeIds(nodes, target = []) {
   return target;
 }
 
-function assertTerminalMenuIds(terminal, menuIds) {
+function assertTerminalRoleMenuTemplate(terminal, menuIds) {
   const [min, max] = terminal === 'seller' ? [100000, 200000] : [200000, 300000];
+  const uniqueMenuIds = new Set(menuIds);
   const invalid = menuIds.filter((menuId) => menuId < min || menuId >= max);
-  if (menuIds.length === 0 || invalid.length > 0) {
-    throw new Error(`${terminal} role menu template has invalid ids: ${invalid.join(',') || 'empty'}`);
+  if (menuIds.length === 0) {
+    throw new Error(`${terminal} role menu template is empty`);
+  }
+  if (uniqueMenuIds.size !== menuIds.length) {
+    throw new Error(`${terminal} role menu template contains duplicate ids`);
+  }
+  if (invalid.length > 0) {
+    throw new Error(`${terminal} role menu template has cross-terminal ids: ${invalid.join(',')}`);
+  }
+  if (menuIds.length !== SELF_MANAGEMENT_PERMISSIONS[terminal].length) {
+    throw new Error(
+      `${terminal} role menu template is not exactly self-management; expected=${
+        SELF_MANAGEMENT_PERMISSIONS[terminal].length
+      } actual=${menuIds.length}`,
+    );
+  }
+}
+
+function crossTerminalMenuIdFor(terminal) {
+  return terminal === 'seller' ? 200003 : 100008;
+}
+
+function assertPortalAccountRecord(terminal, account) {
+  if (!Number.isInteger(account?.accountId) || account.accountId <= 0) {
+    throw new Error(`${terminal} created account did not return a usable accountId`);
+  }
+  const leaked = FORBIDDEN_PORTAL_ACCOUNT_FIELDS.filter((field) => Object.prototype.hasOwnProperty.call(account, field));
+  if (leaked.length > 0) {
+    throw new Error(`${terminal} created account leaked internal subject scope: ${leaked.join(', ')}`);
   }
 }
 
@@ -240,6 +313,70 @@ function markerFor(terminal) {
   return `${terminal}_${Date.now().toString(36)}_${random}`;
 }
 
+function isSuccessResponse(response, body) {
+  return response.ok && body?.code === 200;
+}
+
+async function cleanupUnexpectedRole(terminal, token, roleKey) {
+  const roles = rowsOf(await authorizedGet(terminal, token, '/roles'));
+  const role = roles.find((item) => item.roleKey === roleKey);
+  if (Number.isInteger(role?.roleId) && role.roleId > 0) {
+    await authorizedRequest(terminal, token, 'DELETE', `/roles/${role.roleId}`);
+  }
+  return role;
+}
+
+async function assertRoleCreateRejectsInvalidMenuIds(terminal, token, marker, menuIds, invalidMenuId) {
+  const roleKey = `verify_reject_${marker}`;
+  const { response, body } = await requestJson(`/${terminal}/roles`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      roleName: `Verify Reject ${marker}`,
+      roleKey,
+      roleSort: 98,
+      status: '0',
+      menuIds: [...menuIds, invalidMenuId],
+      remark: 'portal self-management invalid role menu verification',
+    }),
+  });
+  if (isSuccessResponse(response, body)) {
+    await cleanupUnexpectedRole(terminal, token, roleKey);
+    throw new Error(`${terminal} role create accepted cross-terminal menu ids`);
+  }
+  const leakedRole = await cleanupUnexpectedRole(terminal, token, roleKey);
+  if (leakedRole) {
+    throw new Error(`${terminal} rejected role write still persisted`);
+  }
+}
+
+async function assertRoleUpdateRejectsInvalidMenuIds(terminal, token, roleId, roleKey, roleName, menuIds, invalidMenuId) {
+  const { response, body } = await requestJson(`/${terminal}/roles/${roleId}`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      roleName: `${roleName} Invalid`,
+      roleKey,
+      roleSort: 99,
+      status: '0',
+      menuIds: [...menuIds, invalidMenuId],
+      remark: 'portal self-management invalid role menu update verification',
+    }),
+  });
+  if (isSuccessResponse(response, body)) {
+    throw new Error(`${terminal} role update accepted cross-terminal menu ids`);
+  }
+  const roleMenuSnapshot = await authorizedGet(terminal, token, `/roles/${roleId}/menus`);
+  const checkedKeys = Array.isArray(roleMenuSnapshot.checkedKeys) ? roleMenuSnapshot.checkedKeys : [];
+  const expected = new Set(menuIds);
+  const changed = checkedKeys.length !== expected.size
+    || checkedKeys.some((menuId) => !expected.has(menuId))
+    || checkedKeys.includes(invalidMenuId);
+  if (changed) {
+    throw new Error(`${terminal} role update rejection mutated checkedKeys`);
+  }
+}
+
 async function verifyTerminalWrites(terminal) {
   const token = await login(terminal);
   const marker = markerFor(terminal);
@@ -254,11 +391,13 @@ async function verifyTerminalWrites(terminal) {
 
   try {
     const info = await authorizedGet(terminal, token, '/getInfo');
+    assertPortalGetInfoContract(terminal, info);
     assertExactSelfManagementPermissions(terminal, info.permissions);
 
     const roleMenus = await authorizedGet(terminal, token, '/roles/menus');
     const menuIds = collectTreeIds(roleMenus.menus || []);
-    assertTerminalMenuIds(terminal, menuIds);
+    assertTerminalRoleMenuTemplate(terminal, menuIds);
+    const crossTerminalMenuId = crossTerminalMenuIdFor(terminal);
 
     const deptName = `Verify ${marker}`;
     await authorizedRequest(terminal, token, 'POST', '/depts', {
@@ -286,6 +425,7 @@ async function verifyTerminalWrites(terminal) {
 
     const roleKey = `verify_${marker}`;
     const roleName = `Verify ${marker}`;
+    await assertRoleCreateRejectsInvalidMenuIds(terminal, token, marker, menuIds, crossTerminalMenuId);
     await authorizedRequest(terminal, token, 'POST', '/roles', {
       roleName,
       roleKey,
@@ -304,6 +444,16 @@ async function verifyTerminalWrites(terminal) {
     if (checkedKeys.length === 0 || checkedKeys.some((menuId) => !menuIds.includes(menuId))) {
       throw new Error(`${terminal} role menu checkedKeys are not limited to the self-management template`);
     }
+
+    await assertRoleUpdateRejectsInvalidMenuIds(
+      terminal,
+      token,
+      state.roleId,
+      roleKey,
+      roleName,
+      menuIds,
+      crossTerminalMenuId,
+    );
 
     await authorizedRequest(terminal, token, 'PUT', `/roles/${state.roleId}`, {
       roleName: `${roleName} Edited`,
@@ -328,10 +478,8 @@ async function verifyTerminalWrites(terminal) {
       await authorizedGet(terminal, token, '/accounts'),
       (account) => account.userName === userName,
     );
+    assertPortalAccountRecord(terminal, createdAccount);
     state.accountId = createdAccount.accountId;
-    if (createdAccount.subjectId !== info.subjectId) {
-      throw new Error(`${terminal} created account subject does not match current token subject`);
-    }
 
     await authorizedRequest(terminal, token, 'PUT', `/accounts/${state.accountId}/roles`, {
       roleIds: [state.roleId],

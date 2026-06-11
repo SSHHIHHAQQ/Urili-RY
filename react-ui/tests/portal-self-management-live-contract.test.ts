@@ -2,9 +2,14 @@ import fs from 'fs';
 import path from 'path';
 
 const uiRoot = path.resolve(__dirname, '..');
+const repoRoot = path.resolve(uiRoot, '..');
 
 function readUiSource(relativePath: string) {
   return fs.readFileSync(path.join(uiRoot, relativePath), 'utf8');
+}
+
+function readRepoSource(relativePath: string) {
+  return fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
 }
 
 const EXPECTED_SELF_MANAGEMENT_PERMISSIONS = {
@@ -83,9 +88,17 @@ describe('portal self-management live verifier contract', () => {
       'SELLER_PORTAL_PASSWORD',
       'BUYER_PORTAL_USERNAME',
       'BUYER_PORTAL_PASSWORD',
+      'PORTAL_SELF_MANAGEMENT_LIVE_CONFIRM',
+      'APPLY_PORTAL_SELF_MANAGEMENT_LIVE_VERIFY',
     ]) {
       expect(script).toContain(envName);
     }
+    expect(script).toContain("const LIVE_CONFIRM_ENV = 'PORTAL_SELF_MANAGEMENT_LIVE_CONFIRM'");
+    expect(script).toContain(
+      "const LIVE_CONFIRM_VALUE = 'APPLY_PORTAL_SELF_MANAGEMENT_LIVE_VERIFY'",
+    );
+    expect(script).toContain('requires explicit live');
+    expect(script).toContain('create login logs and sessions');
     expect(script).toContain('It does not read .env.local');
     expect(script).not.toContain('readFile');
     expect(script).not.toContain("from 'fs'");
@@ -95,10 +108,37 @@ describe('portal self-management live verifier contract', () => {
     expect(script).not.toContain('RUOYI_DB_');
     expect(script).not.toContain('RUOYI_REDIS_');
     expect(script).toContain("process.env.PORTAL_LIVE_API_PREFIX || ''");
-    expect(script).toContain('The default base URL is the backend service on 8080');
-    expect(script).toContain('set PORTAL_LIVE_API_PREFIX=/api only when targeting the React dev proxy');
+    expect(script).toContain('The default base URL is');
+    expect(script).toContain('the backend service on 8080');
+    expect(script).toContain('set PORTAL_LIVE_API_PREFIX=/api only when targeting');
+    expect(script).toContain('the React dev proxy');
+    expect(script).toContain('opposite terminal getInfo/getRouters endpoints');
     expect(script).toContain('apiPath(path)');
     expect(script).not.toContain('requestJson(`/api/');
+  });
+
+  it('keeps the runbook aligned with the explicit live confirmation gate', () => {
+    const runbook = readRepoSource(
+      'docs/plans/2026-06-11-three-terminal-portal-self-management-sql-live-runbook.md',
+    );
+    expect(runbook).toContain(
+      "$env:PORTAL_SELF_MANAGEMENT_LIVE_CONFIRM = 'APPLY_PORTAL_SELF_MANAGEMENT_LIVE_VERIFY'",
+    );
+    expect(runbook).toContain('如果缺少确认变量或任一账号密码环境变量');
+    expect(runbook).toContain('npm run verify:portal-self-management-live');
+  });
+
+  it('checks explicit live confirmation before any portal login can run', () => {
+    const mainIndex = script.indexOf('async function main()');
+    expect(mainIndex).toBeGreaterThanOrEqual(0);
+    const mainBody = script.slice(mainIndex);
+    const requireIndex = mainBody.indexOf('requireLiveEnv();');
+    const verifyIndex = mainBody.indexOf('verifyTerminal(terminal)');
+    expect(requireIndex).toBeGreaterThanOrEqual(0);
+    expect(verifyIndex).toBeGreaterThan(requireIndex);
+    expect(mainBody.slice(0, requireIndex)).not.toContain('await ');
+    expect(script).toContain('process.env[LIVE_CONFIRM_ENV] !== LIVE_CONFIRM_VALUE');
+    expect(script).toContain('missing.push(`${LIVE_CONFIRM_ENV}=${LIVE_CONFIRM_VALUE}`)');
   });
 
   it('keeps the live verifier read-only after the terminal login request', () => {
@@ -119,6 +159,35 @@ describe('portal self-management live verifier contract', () => {
     expect(script).not.toContain('deleteDept');
   });
 
+  it('keeps the portal login live response contract whitelisted', () => {
+    for (const allowedField of [
+      'token',
+      'terminal',
+      'subjectNo',
+      'username',
+      'nickName',
+      'expireMinutes',
+      'expireTime',
+    ]) {
+      expect(script).toContain(`'${allowedField}'`);
+    }
+    expect(script).toContain('ALLOWED_PORTAL_LOGIN_RESULT_FIELDS');
+    expect(script).toContain('assertNoUnexpectedFields');
+    expect(script).toContain('assertPortalLoginResultContract(terminal, data)');
+    expect(script).toContain('exposed unexpected response fields');
+    expect(script).toContain('login returned invalid expireMinutes');
+    expect(script).toContain('login returned invalid expireTime');
+  });
+
+  it('keeps the portal getInfo live response contract whitelisted', () => {
+    for (const allowedField of ['subjectNo', 'userName', 'nickName', 'roles', 'permissions']) {
+      expect(script).toContain(`'${allowedField}'`);
+    }
+    expect(script).toContain('ALLOWED_PORTAL_GET_INFO_FIELDS');
+    expect(script).toContain('assertPortalGetInfoContract(terminal, info)');
+    expect(script).toContain('assertNoUnexpectedFields(`${terminal} getInfo`, data');
+  });
+
   it('checks exact self-management permissions and frozen business surfaces', () => {
     expect(new Set(extractTerminalPermissions(script, 'seller'))).toEqual(
       new Set(EXPECTED_SELF_MANAGEMENT_PERMISSIONS.seller),
@@ -126,32 +195,88 @@ describe('portal self-management live verifier contract', () => {
     expect(new Set(extractTerminalPermissions(script, 'buyer'))).toEqual(
       new Set(EXPECTED_SELF_MANAGEMENT_PERMISSIONS.buyer),
     );
-    for (const frozenPart of [
-      ':product:',
-      ':order:',
-      ':inventory:',
-      ':logistics:',
-      ':finance:',
-      ':fulfillment:',
-      ':integration:',
+    for (const frozenTerm of [
+      'product',
+      'order',
+      'inventory',
+      'logistics',
+      'finance',
+      'fulfillment',
+      'integration',
     ]) {
-      expect(script).toContain(`'${frozenPart}'`);
+      expect(script).toContain(`'${frozenTerm}'`);
     }
+    expect(script).toContain('serialized.includes(`${terminal}:${term}:`)');
+    expect(script).toContain("serialized.includes(`/${term}/`)");
     expect(script).toContain('assertSelfManagementPermissions(terminal, info.permissions)');
     expect(script).toContain("assertNoFrozenBusinessSurface(terminal, 'getInfo', info)");
+    expect(script).toContain('assertSelfManagementRouters(terminal, routers)');
     expect(script).toContain("assertNoFrozenBusinessSurface(terminal, 'getRouters', routers)");
     expect(script).toContain('assertNoFrozenBusinessSurface(terminal, endpoint, data)');
+  });
+
+  it('checks self-audit read DTOs do not expose internal audit fields', () => {
+    for (const endpointPrefix of [
+      '/account/login-logs',
+      '/account/oper-logs',
+      '/account/sessions',
+    ]) {
+      expect(script).toContain(`'${endpointPrefix}'`);
+    }
+    for (const field of [
+      'subjectId',
+      'accountId',
+      'directLoginTicketId',
+      'actingAdminId',
+      'actingAdminName',
+      'directLoginReason',
+      'operParam',
+      'jsonResult',
+      'tokenId',
+    ]) {
+      expect(script).toContain(`'${field}'`);
+    }
+    expect(script).toContain('function assertSelfAuditDto');
+    expect(script).toContain('FORBIDDEN_SELF_AUDIT_FIELDS.filter');
+    expect(script).toContain('isSelfAuditEndpoint(endpoint)');
+    expect(script).toContain('assertSelfAuditDto(`${terminal} ${endpoint}`, data)');
+  });
+
+  it('checks live getRouters contains only terminal self-management route permissions', () => {
+    expect(script).toContain('flattenRouters');
+    expect(script).toContain("const homePerm = `${terminal}:portal:home`");
+    expect(script).toContain('getRouters did not include ${homePerm}');
+    expect(script).toContain('portal home route path is not terminal-scoped');
+    expect(script).toContain('portal home route component is not terminal-scoped');
+    expect(script).toContain('getRouters exposes wildcard permission');
+    expect(script).toContain('getRouters exposes cross-terminal permission');
+    expect(script).toContain('getRouters exposes admin permission');
+    expect(script).toContain('getRouters exposes non self-management permission');
+  });
+
+  it('checks live role menu templates stay in the terminal id range and self-management size', () => {
+    expect(script).toContain("if (endpoint === '/roles/menus')");
+    expect(script).toContain('assertTerminalRoleMenuTemplate(terminal, data)');
+    expect(script).toContain('function collectTreeIds');
+    expect(script).toContain("terminal === 'seller' ? [100000, 200000] : [200000, 300000]");
+    expect(script).toContain('role menu template is empty');
+    expect(script).toContain('role menu template contains duplicate ids');
+    expect(script).toContain('role menu template has cross-terminal ids');
+    expect(script).toContain('role menu template is not exactly self-management');
+    expect(script).toContain('SELF_MANAGEMENT_PERMISSIONS[terminal].length');
   });
 
   it('checks that seller and buyer tokens are rejected by the opposite terminal', () => {
     expect(script).toContain("assertCrossTerminalTokenRejected('seller', 'buyer', tokens.seller)");
     expect(script).toContain("assertCrossTerminalTokenRejected('buyer', 'seller', tokens.buyer)");
-    expect(script).toContain('throw new Error(`${sourceTerminal} token was accepted by ${targetTerminal} getInfo`)');
+    expect(script).toContain("for (const endpoint of ['getInfo', 'getRouters'])");
+    expect(script).toContain('throw new Error(`${sourceTerminal} token was accepted by ${targetTerminal} ${endpoint}`)');
   });
 
   it('checks that anonymous portal getInfo requests are rejected before login', () => {
     expect(script).toContain('assertAnonymousPortalRequestRejected');
-    expect(script).toContain('anonymous getInfo request was accepted');
+    expect(script).toContain("for (const endpoint of ['getInfo', 'getRouters'])");
+    expect(script).toContain('anonymous ${endpoint} request was accepted');
     expect(script).toContain('await assertAnonymousPortalRequestRejected(terminal)');
   });
 });

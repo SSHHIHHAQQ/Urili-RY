@@ -124,32 +124,6 @@ export async function getAdminBuyerMenu(menuId: number) {
   });
 }
 
-export async function addAdminBuyerMenu(data: API.Partner.PortalMenu) {
-  return request<API.Result>('/api/buyer/admin/menus', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json;charset=UTF-8',
-    },
-    data,
-  });
-}
-
-export async function updateAdminBuyerMenu(data: API.Partner.PortalMenu) {
-  return request<API.Result>('/api/buyer/admin/menus', {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json;charset=UTF-8',
-    },
-    data,
-  });
-}
-
-export async function removeAdminBuyerMenu(menuId: number) {
-  return request<API.Result>(`/api/buyer/admin/menus/${menuId}`, {
-    method: 'DELETE',
-  });
-}
-
 export async function getAdminBuyerRoleMenuTree(buyerId: number, roleId: number) {
   return request<API.Partner.PortalRoleMenuTreeResult>(`/api/buyer/admin/menus/roleMenuTreeselect/${buyerId}/${roleId}`, {
     method: 'GET',

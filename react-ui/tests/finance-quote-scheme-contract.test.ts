@@ -89,6 +89,10 @@ describe('finance quote scheme admin contract', () => {
     expect(page).toContain('<ProFormSwitch');
     expect(page).toContain('checkedChildren="启用"');
     expect(page).toContain('placeholder: \'数字越大越优先\'');
+    expect(page).toContain('normalizeWarehouseCodes');
+    expect(page).toContain('warehouseCodes: normalizeWarehouseCodes');
+    expect(page).toContain("warehouseCodes: warehouseCode");
+    expect(page).not.toContain('name="warehouseCodes"\n                      label="适用仓库"\n                      mode="multiple"');
     expect(page).toContain('buildChannelFormValues');
     expect(page).toContain('buildValueFeeFormValues');
     expect(page).toContain('QuoteSchemeValueFeeRule');
