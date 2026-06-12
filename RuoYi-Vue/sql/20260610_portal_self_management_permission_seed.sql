@@ -506,6 +506,8 @@ begin
       union all select 'buyer:role:add'
       union all select 'buyer:role:edit'
       union all select 'buyer:role:remove'
+      union all select 'buyer:product:center:list'
+      union all select 'buyer:product:center:query'
     ) expected on expected.perms = m.perms
     where r.del_flag = '0'
       and r.status = '0'

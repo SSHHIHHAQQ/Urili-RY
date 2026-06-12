@@ -26,6 +26,9 @@ public class UpstreamLingxingClientFactory
     @Autowired
     private SecretCipherSupport secretCipherSupport;
 
+    @Autowired
+    private UpstreamClockHealthGuard clockHealthGuard;
+
     public LingxingOpenApiClient createClient(UpstreamSystemConnection connection)
     {
         String appKey = secretCipherSupport.decrypt(connection.getAppKeyCiphertext());
@@ -35,6 +38,7 @@ public class UpstreamLingxingClientFactory
 
     public LingxingOpenApiClient createClient(String connectionCode, String appKey, String appSecret)
     {
+        clockHealthGuard.assertSystemClockHealthy();
         return new LingxingOpenApiClient(new LingxingCredentials(appKey, appSecret),
             entry -> insertRequestLog(connectionCode, entry));
     }
@@ -68,6 +72,7 @@ public class UpstreamLingxingClientFactory
     private void insertRequestLog(String connectionCode, LingxingRequestLogEntry entry)
     {
         UpstreamRequestLog log = new UpstreamRequestLog();
+        log.setRequestLogId(entry.getRequestLogId());
         log.setConnectionCode(connectionCode);
         log.setTraceId(entry.getTraceId());
         log.setOperation(entry.getOperation());
@@ -80,6 +85,12 @@ public class UpstreamLingxingClientFactory
         log.setExternalErrorCode(entry.getExternalErrorCode());
         log.setExternalErrorMessage(entry.getExternalErrorMessage());
         log.setStatus(entry.getStatus());
-        upstreamSystemMapper.insertRequestLog(log);
+        if (entry.getRequestLogId() == null)
+        {
+            upstreamSystemMapper.insertRequestLog(log);
+            entry.setRequestLogId(log.getRequestLogId());
+            return;
+        }
+        upstreamSystemMapper.updateRequestLog(log);
     }
 }

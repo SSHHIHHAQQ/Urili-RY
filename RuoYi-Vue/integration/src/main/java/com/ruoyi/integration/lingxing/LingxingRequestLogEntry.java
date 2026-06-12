@@ -7,6 +7,7 @@ import java.util.Date;
  */
 public class LingxingRequestLogEntry
 {
+    private Long requestLogId;
     private String traceId;
     private String operation;
     private String endpoint;
@@ -19,6 +20,8 @@ public class LingxingRequestLogEntry
     private String externalErrorMessage;
     private String status;
 
+    public Long getRequestLogId() { return requestLogId; }
+    public void setRequestLogId(Long requestLogId) { this.requestLogId = requestLogId; }
     public String getTraceId() { return traceId; }
     public void setTraceId(String traceId) { this.traceId = traceId; }
     public String getOperation() { return operation; }

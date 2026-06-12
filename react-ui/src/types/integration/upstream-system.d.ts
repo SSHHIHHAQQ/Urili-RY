@@ -61,11 +61,16 @@ declare namespace API.Integration {
     skuDimensionCount: number;
     warehouseStockCount: number;
     syncBatchId: string;
+    requestNo?: string;
+    requestId?: number;
+    taskCount?: number;
     items?: SyncItemResult[];
   }
 
   export interface SyncItemResult {
     syncType?: string;
+    taskId?: number;
+    syncBatchId?: string;
     status?: string;
     count?: number;
     pulledCount?: number;
@@ -364,5 +369,75 @@ declare namespace API.Integration {
     msg: string;
     total: number;
     rows: RequestLog[];
+  }
+
+  export interface SyncRequestRecord {
+    requestId: number;
+    requestNo: string;
+    connectionCode: string;
+    triggerSource?: string;
+    mode?: string;
+    requestedSyncTypes?: string;
+    status?: string;
+    submittedBy?: string;
+    submittedTime?: string;
+    startedTime?: string;
+    finishedTime?: string;
+    taskCount?: number;
+    successCount?: number;
+    failedCount?: number;
+    timeoutCount?: number;
+    skippedCount?: number;
+    cancelledCount?: number;
+    lastErrorMessage?: string;
+    createTime?: string;
+    updateTime?: string;
+    remark?: string;
+  }
+
+  export interface SyncTask {
+    taskId: number;
+    requestNo: string;
+    syncBatchId: string;
+    connectionCode: string;
+    syncType?: string;
+    mode?: string;
+    triggerSource?: string;
+    status?: string;
+    priority?: number;
+    leaseOwner?: string;
+    leaseUntil?: string;
+    attemptCount?: number;
+    maxAttempts?: number;
+    nextAttemptTime?: string;
+    deadlineAt?: string;
+    startedTime?: string;
+    finishedTime?: string;
+    traceId?: string;
+    sysJobInvokeTarget?: string;
+    pulledCount?: number;
+    insertedCount?: number;
+    changedCount?: number;
+    unchangedCount?: number;
+    disabledCount?: number;
+    failedCount?: number;
+    errorCode?: string;
+    errorMessage?: string;
+    createTime?: string;
+    updateTime?: string;
+  }
+
+  export interface SyncTaskPageResult {
+    code: number;
+    msg: string;
+    total: number;
+    rows: SyncTask[];
+  }
+
+  export interface SyncRequestPageResult {
+    code: number;
+    msg: string;
+    total: number;
+    rows: SyncRequestRecord[];
   }
 }

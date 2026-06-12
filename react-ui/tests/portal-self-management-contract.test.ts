@@ -7,10 +7,19 @@ function readUiSource(relativePath: string) {
   return fs.readFileSync(path.join(uiRoot, relativePath), 'utf8');
 }
 
+function extractInterfaceBody(source: string, interfaceName: string) {
+  const match = source.match(new RegExp(`export interface ${interfaceName} \\{([\\s\\S]*?)\\n  \\}`));
+  if (!match) {
+    throw new Error(`Missing interface ${interfaceName}`);
+  }
+  return match[1];
+}
+
 describe('portal self-management contract', () => {
   const page = readUiSource('src/pages/Portal/Home/PortalSelfManagement.tsx');
   const home = readUiSource('src/pages/Portal/Home/index.tsx');
   const routes = readUiSource('config/routes.ts');
+  const types = readUiSource('src/types/seller-buyer/party.d.ts');
 
   it('keeps the self-management surface inside the terminal portal service boundary', () => {
     expect(page).toContain("import { PORTAL_SERVICE, type PortalTerminal } from '../terminal';");
@@ -73,8 +82,9 @@ describe('portal self-management contract', () => {
     }
 
     expect(home).toContain("portalPermission(terminal, 'account:session:list')");
-    expect(home).toContain('PORTAL_SERVICE[currentTerminal].getSessions({ pageNum: 1, pageSize: 5 })');
+    expect(home).toContain('PORTAL_SERVICE[currentTerminal].getSessions({ pageNum: 1, pageSize })');
     expect(home).toContain('<PortalSelfManagement');
+    expect(home).toContain('activeView={activeView}');
     expect(home).toContain('accounts={data.accounts || []}');
     expect(home).toContain('depts={data.depts || []}');
     expect(home).toContain('roles={data.roles || []}');
@@ -82,7 +92,48 @@ describe('portal self-management contract', () => {
     expect(home).toContain('onChanged={handleRefresh}');
   });
 
-  it('keeps the current portal home entry disconnected from frozen business surfaces', () => {
+  it('adds portal shell routes and keeps them outside the admin remote-menu layout', () => {
+    for (const terminal of ['seller', 'buyer']) {
+      for (const view of [
+        'workbench',
+        'accounts',
+        'roles',
+        'depts',
+        'sessions',
+        'loginLogs',
+        'operLogs',
+      ]) {
+        expect(routes).toContain(`path: '/${terminal}/portal/${view}'`);
+      }
+    }
+    expect(routes).toContain("path: '/buyer/portal/product-center'");
+    expect(home).toContain("productCenter: '商品中心'");
+    expect(home).toContain("permission: 'product:center:list'");
+    expect(home).toContain('<BuyerProductCenter permissions={permissions} />');
+    expect(home).toContain("name: '组织权限'");
+    expect(home).toContain('<ProLayout');
+    expect(home).toContain('<SelectLang key="SelectLang" />');
+    expect(home).toContain("import defaultSettings from '../../../../config/defaultSettings';");
+    expect(home).toContain("import HeaderDropdown from '@/components/HeaderDropdown';");
+    expect(home).toContain("'个人中心'");
+    expect(home).not.toContain('Question');
+    expect(home).not.toContain('getRemoteMenu');
+    expect(home).not.toContain('getRoutersInfo');
+  });
+
+  it('keeps portal online sessions as a read-only menu page', () => {
+    expect(home).toContain("sessions: '在线会话'");
+    expect(home).toContain('不提供强制下线操作');
+    expect(home).toContain("permission: 'account:session:list'");
+    expect(home).not.toContain('forceLogout');
+    expect(home).not.toContain('deleteSession');
+    expect(home).not.toContain('强制踢出');
+    expect(page).not.toContain('forceLogout');
+    expect(page).not.toContain('deleteSession');
+    expect(page).not.toContain('强制踢出');
+  });
+
+  it('keeps the current portal home entry disconnected from frozen business surfaces except buyer product center', () => {
     for (const frozenFragment of [
       'SellerOwnDistributionProductList',
       'BuyerDistributionProductList',
@@ -92,7 +143,9 @@ describe('portal self-management contract', () => {
       'ProductSchema',
       'product/distribution',
       'product/categories',
-      ':product:',
+      ':product:distribution',
+      ':product:category',
+      ':product:schema',
       ':order:',
       ':inventory:',
       ':logistics:',
@@ -107,8 +160,9 @@ describe('portal self-management contract', () => {
     expect(routes).toContain("path: '/seller/portal'");
     expect(routes).toContain("path: '/buyer/portal'");
     expect(routes).toContain("component: './Portal/Home'");
+    expect(routes).toContain("path: '/buyer/portal/product-center'");
     expect(routes).not.toContain("path: '/seller/portal/product");
-    expect(routes).not.toContain("path: '/buyer/portal/product");
+    expect(routes).not.toContain("path: '/buyer/portal/product/");
     expect(routes).not.toContain("path: '/seller/portal/order");
     expect(routes).not.toContain("path: '/buyer/portal/order");
   });
@@ -122,5 +176,36 @@ describe('portal self-management contract', () => {
     expect(page).not.toContain('updateMenu');
     expect(page).not.toContain('deleteMenu');
     expect(page).not.toContain('menuDefinition');
+  });
+
+  it('keeps portal-visible own audit and session types free of internal audit fields', () => {
+    const forbiddenFields = [
+      'sellerId',
+      'buyerId',
+      'subjectId',
+      'accountId',
+      'sellerAccountId',
+      'buyerAccountId',
+      'terminal',
+      'tokenId',
+      'directLogin',
+      'directLoginTicketId',
+      'actingAdminId',
+      'actingAdminName',
+      'directLoginReason',
+      'operParam',
+      'jsonResult',
+    ];
+
+    for (const interfaceName of [
+      'PortalOwnLoginLogProfile',
+      'PortalOwnOperLogProfile',
+      'PortalOwnSessionProfile',
+    ]) {
+      const body = extractInterfaceBody(types, interfaceName);
+      for (const field of forbiddenFields) {
+        expect(body).not.toContain(`${field}?:`);
+      }
+    }
   });
 });

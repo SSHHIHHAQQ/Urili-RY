@@ -7,15 +7,21 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.After;
 import org.junit.Test;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import com.ruoyi.buyer.domain.Buyer;
 import com.ruoyi.buyer.domain.BuyerAccount;
 import com.ruoyi.buyer.mapper.BuyerMapper;
 import com.ruoyi.buyer.mapper.BuyerPortalPermissionMapper;
 import com.ruoyi.buyer.service.IBuyerService;
+import com.ruoyi.common.core.domain.entity.SysUser;
+import com.ruoyi.common.core.domain.model.LoginUser;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.system.domain.PortalMenu;
 import com.ruoyi.system.domain.PortalRole;
@@ -23,6 +29,12 @@ import com.ruoyi.system.service.support.PartnerSupport;
 
 public class BuyerPortalPermissionServiceImplTest
 {
+    @After
+    public void clearSecurityContext()
+    {
+        SecurityContextHolder.clearContext();
+    }
+
     @Test
     public void assignAccountRolesKeepsBuyerAccountAndRoleScope()
     {
@@ -296,6 +308,31 @@ public class BuyerPortalPermissionServiceImplTest
     }
 
     @Test
+    public void insertRoleAllowsBuyerProductCenterMenus()
+    {
+        Buyer buyer = buyer(11L);
+        BuyerAccount account = account(22L, 11L);
+        PortalMenu productCenterPage = menu(200010L, "C", "buyer:product:center:list", "Buyer/ProductCenter/index");
+        PortalMenu productCenterQuery = menu(200011L, "F", "buyer:product:center:query", "");
+        RecordingBuyerPortalPermissionMapper permissionMapper = new RecordingBuyerPortalPermissionMapper(1)
+                .withValidMenuCount(2)
+                .withSelectedMenus(productCenterPage, productCenterQuery);
+        BuyerPortalPermissionServiceImpl service = service(buyerService(buyer), buyerMapper(account),
+                permissionMapper.proxy());
+        PortalRole payload = role(null, 11L, "staff");
+        payload.setMenuIds(new Long[] { 200010L, 200011L });
+        setCurrentAdmin("admin");
+
+        int rows = service.insertRole(11L, payload);
+
+        assertEquals(1, rows);
+        assertEquals(1, permissionMapper.countMenusCallCount);
+        assertEquals(2, permissionMapper.selectMenuByIdCallCount);
+        assertEquals(1, permissionMapper.insertRoleCallCount);
+        assertEquals(1, permissionMapper.batchRoleMenuCallCount);
+    }
+
+    @Test
     public void selectMenuByIdRejectsMenuOutsideBuyerTerminalRange()
     {
         Buyer buyer = buyer(11L);
@@ -543,6 +580,16 @@ public class BuyerPortalPermissionServiceImplTest
         assertEquals(0, permissionMapper.countMenusCallCount);
         assertEquals(0, permissionMapper.insertRoleCallCount);
         assertEquals(0, permissionMapper.batchRoleMenuCallCount);
+    }
+
+    private void setCurrentAdmin(String username)
+    {
+        SysUser user = new SysUser();
+        user.setUserId(1L);
+        user.setUserName(username);
+        LoginUser loginUser = new LoginUser(1L, 103L, user, Collections.emptySet());
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(loginUser, null, loginUser.getAuthorities()));
     }
 
     private IBuyerService buyerService(Buyer buyer)

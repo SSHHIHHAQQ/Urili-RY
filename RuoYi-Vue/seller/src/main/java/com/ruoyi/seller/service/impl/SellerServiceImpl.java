@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import com.github.pagehelper.Page;
+import com.github.pagehelper.page.PageMethod;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -362,7 +363,7 @@ public class SellerServiceImpl implements ISellerService
     @Override
     public List<PortalOwnLoginLogProfile> selectSellerOwnLoginLogList(PortalLoginSession session, PortalLoginLog log)
     {
-        assertSellerSessionAccount(session);
+        assertSellerSessionAccountWithoutPage(session);
         List<PortalLoginLog> logs = sellerMapper.selectSellerLoginLogList(buildSellerOwnLoginLogQuery(session, log));
         List<PortalOwnLoginLogProfile> profiles = newOwnLoginLogProfileList(logs);
         for (PortalLoginLog item : logs)
@@ -375,7 +376,7 @@ public class SellerServiceImpl implements ISellerService
     @Override
     public List<PortalOwnOperLogProfile> selectSellerOwnOperLogList(PortalLoginSession session, PortalOperLog log)
     {
-        assertSellerSessionAccount(session);
+        assertSellerSessionAccountWithoutPage(session);
         List<PortalOperLog> logs = sellerMapper.selectSellerOperLogList(buildSellerOwnOperLogQuery(session, log));
         List<PortalOwnOperLogProfile> profiles = newOwnOperLogProfileList(logs);
         for (PortalOperLog item : logs)
@@ -388,7 +389,7 @@ public class SellerServiceImpl implements ISellerService
     @Override
     public List<PortalOwnSessionProfile> selectSellerOwnSessionList(PortalLoginSession session)
     {
-        assertSellerSessionAccount(session);
+        assertSellerSessionAccountWithoutPage(session);
         List<PortalSessionProfile> sessions = sellerMapper.selectSellerSessionProfileList(
             session.getSubjectId(), session.getAccountId());
         List<PortalOwnSessionProfile> profiles = newOwnSessionProfileList(sessions);
@@ -556,6 +557,25 @@ public class SellerServiceImpl implements ISellerService
         if (account == null)
         {
             throw portalSessionExpired();
+        }
+    }
+
+    private void assertSellerSessionAccountWithoutPage(PortalLoginSession session)
+    {
+        Page<?> page = PageMethod.getLocalPage();
+        if (page == null)
+        {
+            assertSellerSessionAccount(session);
+            return;
+        }
+        try
+        {
+            PageMethod.clearPage();
+            assertSellerSessionAccount(session);
+        }
+        finally
+        {
+            PageMethod.setLocalPage(page);
         }
     }
 

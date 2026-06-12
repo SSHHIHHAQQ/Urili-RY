@@ -194,6 +194,24 @@ public class BuyerPortalPermissionServiceImplPortalAccessTest
     }
 
     @Test
+    public void selectPermissionsKeepsBuyerProductCenterPermissions()
+    {
+        Buyer buyer = buyer(11L);
+        BuyerAccount account = account(22L, 11L);
+        RecordingBuyerMapper buyerMapper = recordingBuyerMapper(1, account);
+        RecordingBuyerPortalPermissionMapper permissionMapper = new RecordingBuyerPortalPermissionMapper()
+                .withPermissions("buyer:account:list,buyer:product:center:list",
+                        "buyer:product:center:query,buyer:product:distribution:list");
+        BuyerPortalPermissionServiceImpl service = service(buyerService(buyer), buyerMapper.proxy(),
+                permissionMapper.proxy());
+
+        assertArrayEquals(new String[] { "buyer:account:list", "buyer:product:center:list",
+                "buyer:product:center:query" }, service.selectPermissions(session(11L, 22L)).toArray(new String[0]));
+        assertOnlineBuyerSessionLookup(buyerMapper);
+        assertBuyerPermissionLookup(permissionMapper);
+    }
+
+    @Test
     public void selectPermissionsRejectsMalformedBuyerSessionBeforeLookup()
     {
         BuyerPortalPermissionServiceImpl service = service(failOnLookup(IBuyerService.class, "buyer service"),

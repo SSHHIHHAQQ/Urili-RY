@@ -255,6 +255,31 @@ public class BuyerServiceImplTest
     }
 
     @Test
+    public void updateBuyerAccountIgnoresPayloadBuyerIdAndUsesScopedBuyerId()
+    {
+        authenticateAdmin();
+        Buyer buyer = buyer(11L, "BAA010001", PartnerSupport.STATUS_NORMAL);
+        BuyerAccount current = account(22L, 11L, "buyer-staff", PartnerSupport.STATUS_NORMAL);
+        current.setAccountRole(PartnerSupport.ACCOUNT_ROLE_STAFF);
+        RecordingBuyerMapper mapper = recordingMapper(buyer, current);
+        BuyerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper().proxy(),
+            new RecordingPortalTokenSupport());
+        BuyerAccount update = new BuyerAccount();
+        update.setBuyerAccountId(22L);
+        update.setAccountId(999L);
+        update.setBuyerId(999L);
+        update.setNickName("Buyer Staff");
+        update.setStatus(PartnerSupport.STATUS_NORMAL);
+
+        int rows = service.updateBuyerAccount(11L, update);
+
+        assertEquals(1, rows);
+        assertEquals(Long.valueOf(11L), mapper.updatedAccount.getBuyerId());
+        assertEquals(Long.valueOf(22L), mapper.updatedAccount.getBuyerAccountId());
+        assertEquals(Long.valueOf(22L), mapper.updatedAccount.getAccountId());
+    }
+
+    @Test
     public void resetBuyerAccountPasswordForcesOnlyThatAccountSessionsOut()
     {
         authenticateAdmin();

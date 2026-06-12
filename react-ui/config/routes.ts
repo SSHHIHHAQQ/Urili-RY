@@ -41,7 +41,82 @@ export default [
     component: './Portal/Home',
   },
   {
+    path: '/seller/portal/workbench',
+    layout: false,
+    component: './Portal/Home',
+  },
+  {
+    path: '/seller/portal/accounts',
+    layout: false,
+    component: './Portal/Home',
+  },
+  {
+    path: '/seller/portal/roles',
+    layout: false,
+    component: './Portal/Home',
+  },
+  {
+    path: '/seller/portal/depts',
+    layout: false,
+    component: './Portal/Home',
+  },
+  {
+    path: '/seller/portal/sessions',
+    layout: false,
+    component: './Portal/Home',
+  },
+  {
+    path: '/seller/portal/loginLogs',
+    layout: false,
+    component: './Portal/Home',
+  },
+  {
+    path: '/seller/portal/operLogs',
+    layout: false,
+    component: './Portal/Home',
+  },
+  {
     path: '/buyer/portal',
+    layout: false,
+    component: './Portal/Home',
+  },
+  {
+    path: '/buyer/portal/workbench',
+    layout: false,
+    component: './Portal/Home',
+  },
+  {
+    path: '/buyer/portal/product-center',
+    layout: false,
+    component: './Portal/Home',
+  },
+  {
+    path: '/buyer/portal/accounts',
+    layout: false,
+    component: './Portal/Home',
+  },
+  {
+    path: '/buyer/portal/roles',
+    layout: false,
+    component: './Portal/Home',
+  },
+  {
+    path: '/buyer/portal/depts',
+    layout: false,
+    component: './Portal/Home',
+  },
+  {
+    path: '/buyer/portal/sessions',
+    layout: false,
+    component: './Portal/Home',
+  },
+  {
+    path: '/buyer/portal/loginLogs',
+    layout: false,
+    component: './Portal/Home',
+  },
+  {
+    path: '/buyer/portal/operLogs',
     layout: false,
     component: './Portal/Home',
   },

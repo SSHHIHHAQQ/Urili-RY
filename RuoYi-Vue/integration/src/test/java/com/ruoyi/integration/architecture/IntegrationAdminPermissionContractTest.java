@@ -85,6 +85,14 @@ public class IntegrationAdminPermissionContractTest
         assertHandlerAuthorization(handlers, "inventorySyncState",
                 "@ss.hasPermi('integration:upstream:inventoryQuery')", violations);
         assertHandlerAuthorization(handlers, "syncStates", "@ss.hasPermi('integration:upstream:query')", violations);
+        assertHandlerAuthorization(handlers, "syncRequests",
+                "@ss.hasPermi('integration:upstream:task:list')", violations);
+        assertHandlerAuthorization(handlers, "syncTasks",
+                "@ss.hasPermi('integration:upstream:task:list')", violations);
+        assertHandlerAuthorization(handlers, "retrySyncTask",
+                "@ss.hasPermi('integration:upstream:task:retry')", violations);
+        assertHandlerAuthorization(handlers, "cancelSyncTask",
+                "@ss.hasPermi('integration:upstream:task:cancel')", violations);
         assertHandlerAuthorization(handlers, "warehouses", "@ss.hasPermi('integration:upstream:query')", violations);
         assertHandlerAuthorization(handlers, "warehousePairings",
                 "@ss.hasPermi('integration:upstream:query')", violations);
@@ -369,7 +377,10 @@ public class IntegrationAdminPermissionContractTest
                 "integration:upstream:log",
                 "integration:upstream:dimensionSync",
                 "integration:upstream:inventoryQuery",
-                "integration:upstream:inventorySync"
+                "integration:upstream:inventorySync",
+                "integration:upstream:task:list",
+                "integration:upstream:task:retry",
+                "integration:upstream:task:cancel"
         })
         {
             assertSourceContains(upstreamSeed, permission,

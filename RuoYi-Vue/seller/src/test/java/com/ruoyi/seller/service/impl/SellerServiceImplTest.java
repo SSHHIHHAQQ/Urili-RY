@@ -232,6 +232,31 @@ public class SellerServiceImplTest
     }
 
     @Test
+    public void updateSellerAccountIgnoresPayloadSellerIdAndUsesScopedSellerId()
+    {
+        authenticateAdmin();
+        Seller seller = seller(11L, "SAA010001", PartnerSupport.STATUS_NORMAL);
+        SellerAccount current = account(22L, 11L, "seller-staff", PartnerSupport.STATUS_NORMAL);
+        current.setAccountRole(PartnerSupport.ACCOUNT_ROLE_STAFF);
+        RecordingSellerMapper mapper = recordingMapper(seller, current);
+        SellerServiceImpl service = service(mapper.proxy(), new RecordingDirectLoginSupport(), deptMapper().proxy(),
+            new RecordingPortalTokenSupport());
+        SellerAccount update = new SellerAccount();
+        update.setSellerAccountId(22L);
+        update.setAccountId(999L);
+        update.setSellerId(999L);
+        update.setNickName("Seller Staff");
+        update.setStatus(PartnerSupport.STATUS_NORMAL);
+
+        int rows = service.updateSellerAccount(11L, update);
+
+        assertEquals(1, rows);
+        assertEquals(Long.valueOf(11L), mapper.updatedAccount.getSellerId());
+        assertEquals(Long.valueOf(22L), mapper.updatedAccount.getSellerAccountId());
+        assertEquals(Long.valueOf(22L), mapper.updatedAccount.getAccountId());
+    }
+
+    @Test
     public void resetSellerAccountPasswordForcesOnlyThatAccountSessionsOut()
     {
         authenticateAdmin();

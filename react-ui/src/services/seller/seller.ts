@@ -273,17 +273,17 @@ export async function getAdminSellerAccountSessions(
   );
 }
 
-export async function createAdminSellerDirectLogin(sellerId: number, reason: string) {
+export async function createAdminSellerDirectLogin(sellerId: number, reason?: string) {
   return request<API.Partner.DirectLoginApiResult>(`/api/seller/admin/sellers/${sellerId}/directLogin`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json;charset=UTF-8',
     },
-    data: { reason },
+    data: { reason: reason?.trim() || '' },
   });
 }
 
-export async function createAdminSellerAccountDirectLogin(sellerId: number, sellerAccountId: number, reason: string) {
+export async function createAdminSellerAccountDirectLogin(sellerId: number, sellerAccountId: number, reason?: string) {
   return request<API.Partner.DirectLoginApiResult>(
     `/api/seller/admin/sellers/${sellerId}/accounts/${sellerAccountId}/directLogin`,
     {
@@ -291,7 +291,7 @@ export async function createAdminSellerAccountDirectLogin(sellerId: number, sell
       headers: {
         'Content-Type': 'application/json;charset=UTF-8',
       },
-      data: { reason },
+      data: { reason: reason?.trim() || '' },
     },
   );
 }

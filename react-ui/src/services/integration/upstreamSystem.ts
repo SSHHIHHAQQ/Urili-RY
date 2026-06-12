@@ -221,3 +221,32 @@ export async function getRequestLogList(connectionCode: string, params?: Record<
     params,
   });
 }
+
+export async function getSyncTaskList(connectionCode: string, params?: Record<string, any>) {
+  return request<API.Integration.SyncTaskPageResult>(`${baseUrl}/${connectionCode}/sync-tasks/list`, {
+    method: 'GET',
+    params,
+  });
+}
+
+export async function getSyncRequestList(connectionCode: string, params?: Record<string, any>) {
+  return request<API.Integration.SyncRequestPageResult>(`${baseUrl}/${connectionCode}/sync-requests/list`, {
+    method: 'GET',
+    params,
+  });
+}
+
+export async function retrySyncTask(connectionCode: string, taskId: number) {
+  return request<API.Result & { data: API.Integration.SyncResult }>(
+    `${baseUrl}/${connectionCode}/sync-tasks/${taskId}/retry`,
+    {
+      method: 'POST',
+    },
+  );
+}
+
+export async function cancelSyncTask(connectionCode: string, taskId: number) {
+  return request<API.Result>(`${baseUrl}/${connectionCode}/sync-tasks/${taskId}/cancel`, {
+    method: 'POST',
+  });
+}

@@ -9,6 +9,9 @@ import {
   getBuyerPortalDistributionProduct,
   getBuyerPortalDistributionProducts,
   getBuyerPortalDistributionProductSkus,
+  getBuyerPortalProductCenterProduct,
+  getBuyerPortalProductCenterProducts,
+  getBuyerPortalProductCenterProductSkus,
   getBuyerPortalProductCategories,
   getBuyerPortalProductSchema,
   getPortalAccountProfile,
@@ -375,6 +378,28 @@ const portalAuthenticatedRequestCases: PortalRequestCase[] = [
     method: 'GET',
     call: () => getBuyerPortalDistributionProductSkus(2001),
   },
+  {
+    name: 'buyer product center list',
+    terminal: 'buyer',
+    url: '/api/buyer/product/center/list',
+    method: 'GET',
+    params: { keyword: 'desk' },
+    call: () => getBuyerPortalProductCenterProducts({ buyerId: 12, keyword: 'desk' }),
+  },
+  {
+    name: 'buyer product center detail',
+    terminal: 'buyer',
+    url: '/api/buyer/product/center/2001',
+    method: 'GET',
+    call: () => getBuyerPortalProductCenterProduct(2001),
+  },
+  {
+    name: 'buyer product center skus',
+    terminal: 'buyer',
+    url: '/api/buyer/product/center/2001/skus',
+    method: 'GET',
+    call: () => getBuyerPortalProductCenterProductSkus(2001),
+  },
 ];
 
 describe('portal request isolation', () => {
@@ -451,6 +476,7 @@ describe('portal request isolation', () => {
     } as any);
     await getSellerPortalDistributionProducts({ sellerId: 11, spuName: 'sku' });
     await getBuyerPortalDistributionProducts({ buyerId: 12, spuName: 'sku' });
+    await getBuyerPortalProductCenterProducts({ buyerId: 12, keyword: 'sku' });
 
     expect(mockedRequest).toHaveBeenNthCalledWith(1, '/api/buyer/account/oper-logs', {
       method: 'GET',
@@ -480,6 +506,11 @@ describe('portal request isolation', () => {
         params: { spuName: 'sku' },
       },
     );
+    expect(mockedRequest).toHaveBeenNthCalledWith(5, '/api/buyer/product/center/list', {
+      method: 'GET',
+      headers: { Authorization: 'Bearer buyer-token', isToken: false },
+      params: { keyword: 'sku' },
+    });
   });
 
   it('normalizes portal role and menu id arrays before write requests', async () => {

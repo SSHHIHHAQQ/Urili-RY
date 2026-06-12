@@ -70,10 +70,6 @@ const scopeTypeFallback = [
   { label: '买家等级', value: 'BUYER_LEVEL', listClass: 'processing' },
   { label: '指定买家', value: 'BUYER', listClass: 'warning' },
 ];
-const warehouseScopeFallback = [
-  { label: '全部仓库', value: 'ALL_WAREHOUSES', listClass: 'default' },
-  { label: '指定仓库', value: 'INCLUDE', listClass: 'processing' },
-];
 const statusFallback = [
   { label: '启用', value: 'ENABLED', listClass: 'success' },
   { label: '停用', value: 'DISABLED', listClass: 'default' },
@@ -93,7 +89,6 @@ const defaultSchemeValues: Partial<API.Finance.QuoteScheme> = {
   schemeType: 'BILLING',
   feeSourceMode: 'EXTERNAL_ESTIMATE',
   scopeType: 'ALL_BUYERS',
-  warehouseScopeMode: 'ALL_WAREHOUSES',
   effectivePriority: 0,
   status: 'ENABLED',
 };
@@ -240,8 +235,6 @@ export default function FinanceQuoteSchemePage() {
     useState<SelectOption[]>(feeSourceFallback);
   const [scopeTypeOptions, setScopeTypeOptions] =
     useState<SelectOption[]>(scopeTypeFallback);
-  const [warehouseScopeOptions, setWarehouseScopeOptions] =
-    useState<SelectOption[]>(warehouseScopeFallback);
   const [statusOptions, setStatusOptions] =
     useState<SelectOption[]>(statusFallback);
   const [valueFeeTriggerOptions, setValueFeeTriggerOptions] =
@@ -276,7 +269,6 @@ export default function FinanceQuoteSchemePage() {
         schemeTypes,
         feeSources,
         scopeTypes,
-        warehouseScopes,
         statuses,
         valueFeeTriggers,
         valueFeeCalcMethods,
@@ -293,7 +285,6 @@ export default function FinanceQuoteSchemePage() {
         getDictSelectOption('quote_scheme_type'),
         getDictSelectOption('quote_scheme_fee_source_mode'),
         getDictSelectOption('quote_scheme_scope_type'),
-        getDictSelectOption('quote_scheme_warehouse_scope_mode'),
         getDictSelectOption('quote_scheme_status'),
         getDictSelectOption('quote_scheme_value_fee_trigger'),
         getDictSelectOption('quote_scheme_value_fee_calc_method'),
@@ -310,7 +301,6 @@ export default function FinanceQuoteSchemePage() {
       if (schemeTypes.status === 'fulfilled') setSchemeTypeOptions(normalizeOptions(schemeTypes.value as any[], schemeTypeFallback));
       if (feeSources.status === 'fulfilled') setFeeSourceOptions(normalizeOptions(feeSources.value as any[], feeSourceFallback));
       if (scopeTypes.status === 'fulfilled') setScopeTypeOptions(normalizeOptions(scopeTypes.value as any[], scopeTypeFallback));
-      if (warehouseScopes.status === 'fulfilled') setWarehouseScopeOptions(normalizeOptions(warehouseScopes.value as any[], warehouseScopeFallback));
       if (statuses.status === 'fulfilled') setStatusOptions(normalizeOptions(statuses.value as any[], statusFallback));
       if (valueFeeTriggers.status === 'fulfilled') setValueFeeTriggerOptions(normalizeOptions(valueFeeTriggers.value as any[], valueFeeTriggerFallback));
       if (valueFeeCalcMethods.status === 'fulfilled') setValueFeeCalcMethodOptions(normalizeOptions(valueFeeCalcMethods.value as any[], valueFeeCalcMethodFallback));
@@ -386,6 +376,7 @@ export default function FinanceQuoteSchemePage() {
     const payload: API.Finance.QuoteScheme = {
       ...values,
       status: currentScheme?.status || values.status || 'ENABLED',
+      warehouseScopeMode: 'INCLUDE',
       effectiveTime: toDateTime(values.effectiveTime),
       expireTime: toDateTime(values.expireTime),
       buyerIds: values.buyerIds?.map((item) => Number(item)),
@@ -618,7 +609,7 @@ export default function FinanceQuoteSchemePage() {
       ellipsis: true,
     },
     {
-      title: '仓库范围',
+      title: '仓库',
       dataIndex: 'warehouseSummary',
       search: false,
       width: 200,
@@ -937,28 +928,13 @@ export default function FinanceQuoteSchemePage() {
             </ProFormDependency>
             <Col xs={24} md={12} xl={8}>
               <ProFormSelect
-                name="warehouseScopeMode"
-                label="仓库范围"
-                options={warehouseScopeOptions}
+                name="warehouseCodes"
+                label="仓库"
+                options={warehouseOptions}
                 fieldProps={{ ...SEARCHABLE_SELECT_PROPS, style: { width: '100%' } }}
-                rules={[{ required: true, message: '请选择仓库范围' }]}
+                rules={[{ required: true, message: '请选择仓库' }]}
               />
             </Col>
-            <ProFormDependency name={['warehouseScopeMode']}>
-              {({ warehouseScopeMode }) =>
-                warehouseScopeMode === 'INCLUDE' ? (
-                  <Col xs={24} md={12} xl={8}>
-                    <ProFormSelect
-                      name="warehouseCodes"
-                      label="适用仓库"
-                      options={warehouseOptions}
-                      fieldProps={{ ...SEARCHABLE_SELECT_PROPS, style: { width: '100%' } }}
-                      rules={[{ required: true, message: '请选择适用仓库' }]}
-                    />
-                  </Col>
-                ) : null
-              }
-            </ProFormDependency>
             <Col xs={24} md={12} xl={8}>
               <ProFormDateTimePicker
                 name="effectiveTime"

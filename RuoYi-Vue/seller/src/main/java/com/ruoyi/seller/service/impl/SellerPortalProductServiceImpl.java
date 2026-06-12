@@ -5,6 +5,7 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import com.github.pagehelper.Page;
+import com.github.pagehelper.page.PageMethod;
 import com.ruoyi.common.constant.HttpStatus;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.StringUtils;
@@ -120,11 +121,28 @@ public class SellerPortalProductServiceImpl implements ISellerPortalProductServi
         {
             throw new ServiceException("登录状态已失效", HttpStatus.UNAUTHORIZED);
         }
-        SellerAccount account = sellerMapper.selectSellerAccountByIdAndSellerId(session.getSubjectId(),
-            session.getAccountId());
+        SellerAccount account = selectSellerSessionAccountWithoutPage(session);
         if (account == null)
         {
             throw new ServiceException("登录状态已失效", HttpStatus.UNAUTHORIZED);
+        }
+    }
+
+    private SellerAccount selectSellerSessionAccountWithoutPage(PortalLoginSession session)
+    {
+        Page<?> page = PageMethod.getLocalPage();
+        if (page == null)
+        {
+            return sellerMapper.selectSellerAccountByIdAndSellerId(session.getSubjectId(), session.getAccountId());
+        }
+        try
+        {
+            PageMethod.clearPage();
+            return sellerMapper.selectSellerAccountByIdAndSellerId(session.getSubjectId(), session.getAccountId());
+        }
+        finally
+        {
+            PageMethod.setLocalPage(page);
         }
     }
 

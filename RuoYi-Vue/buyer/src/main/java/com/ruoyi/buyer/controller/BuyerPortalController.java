@@ -1,7 +1,6 @@
 package com.ruoyi.buyer.controller;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -21,6 +20,7 @@ import com.ruoyi.buyer.domain.BuyerAccount;
 import com.ruoyi.buyer.service.IBuyerPortalDeptService;
 import com.ruoyi.buyer.service.IBuyerPortalPermissionService;
 import com.ruoyi.buyer.service.IBuyerService;
+import com.ruoyi.buyer.service.support.BuyerPortalPermissionCatalog;
 import com.ruoyi.common.annotation.Anonymous;
 import com.ruoyi.common.annotation.PortalLog;
 import com.ruoyi.common.annotation.PortalPreAuthorize;
@@ -57,28 +57,6 @@ import com.ruoyi.system.service.support.PortalSessionContext;
 public class BuyerPortalController extends BaseController
 {
     private static final int PORTAL_LIST_MAX_PAGE_SIZE = 100;
-
-    private static final Set<String> PORTAL_SELF_MANAGEMENT_PERMS = new HashSet<>(Arrays.asList(
-            "buyer:portal:home",
-            "buyer:account:list",
-            "buyer:account:add",
-            "buyer:account:edit",
-            "buyer:account:role:query",
-            "buyer:account:role:edit",
-            "buyer:account:loginLog:list",
-            "buyer:account:operLog:list",
-            "buyer:account:session:list",
-            "buyer:dept:list",
-            "buyer:dept:query",
-            "buyer:dept:add",
-            "buyer:dept:edit",
-            "buyer:dept:remove",
-            "buyer:role:list",
-            "buyer:role:query",
-            "buyer:role:add",
-            "buyer:role:edit",
-            "buyer:role:remove"
-    ));
 
     @Autowired
     private IBuyerPortalPermissionService permissionService;
@@ -190,6 +168,7 @@ public class BuyerPortalController extends BaseController
         }
         account.setBuyerAccountId(targetAccountId);
         account.setAccountId(targetAccountId);
+        account.setBuyerId(null);
         return toAjax(buyerService.updateBuyerAccount(session.getSubjectId(), account));
     }
 
@@ -324,7 +303,7 @@ public class BuyerPortalController extends BaseController
     {
         PortalSessionContext.requireSession("buyer");
         AjaxResult ajax = AjaxResult.success();
-        ajax.put("menus", PortalPermissionSupport.buildMenuTreeSelect(selectPortalSelfManagementMenus()));
+        ajax.put("menus", PortalPermissionSupport.buildMenuTreeSelect(selectPortalAssignableMenus()));
         ajax.put("checkedKeys", new Long[0]);
         return ajax;
     }
@@ -337,10 +316,10 @@ public class BuyerPortalController extends BaseController
     public AjaxResult roleMenus(@PathVariable("roleId") Long roleId)
     {
         PortalLoginSession session = PortalSessionContext.requireSession("buyer");
-        List<PortalMenu> selfManagementMenus = selectPortalSelfManagementMenus();
+        List<PortalMenu> assignableMenus = selectPortalAssignableMenus();
         AjaxResult ajax = AjaxResult.success();
-        ajax.put("menus", PortalPermissionSupport.buildMenuTreeSelect(selfManagementMenus));
-        ajax.put("checkedKeys", selectPortalSelfManagementMenuIds(session.getSubjectId(), roleId, selfManagementMenus));
+        ajax.put("menus", PortalPermissionSupport.buildMenuTreeSelect(assignableMenus));
+        ajax.put("checkedKeys", selectPortalAssignableMenuIds(session.getSubjectId(), roleId, assignableMenus));
         return ajax;
     }
 
@@ -446,17 +425,17 @@ public class BuyerPortalController extends BaseController
             }
             PortalMenu menu = permissionService.selectMenuById(menuId);
             PortalPermissionSupport.assertReadableTerminalMenu(menu, "buyer");
-            if (!PORTAL_SELF_MANAGEMENT_PERMS.contains(StringUtils.trimToEmpty(menu.getPerms())))
+            if (!BuyerPortalPermissionCatalog.isRoleAssignable(StringUtils.trimToEmpty(menu.getPerms())))
             {
-                throw new ServiceException("买家端自助角色只能分配本轮最小权限模板");
+                throw new ServiceException("买家端自助角色只能分配已开放的端内权限模板");
             }
         }
     }
 
-    private List<Long> selectPortalSelfManagementMenuIds(Long buyerId, Long roleId, List<PortalMenu> selfManagementMenus)
+    private List<Long> selectPortalAssignableMenuIds(Long buyerId, Long roleId, List<PortalMenu> assignableMenus)
     {
         Set<Long> allowedMenuIds = new HashSet<>();
-        for (PortalMenu menu : selfManagementMenus)
+        for (PortalMenu menu : assignableMenus)
         {
             if (menu.getMenuId() != null)
             {
@@ -475,13 +454,13 @@ public class BuyerPortalController extends BaseController
         return checkedMenuIds;
     }
 
-    private List<PortalMenu> selectPortalSelfManagementMenus()
+    private List<PortalMenu> selectPortalAssignableMenus()
     {
         List<PortalMenu> menus = new ArrayList<>();
         for (PortalMenu menu : permissionService.selectMenuList(new PortalMenu()))
         {
             String perms = menu == null ? "" : StringUtils.trimToEmpty(menu.getPerms());
-            if (PORTAL_SELF_MANAGEMENT_PERMS.contains(perms))
+            if (BuyerPortalPermissionCatalog.isRoleAssignable(perms))
             {
                 PortalPermissionSupport.assertReadableTerminalMenu(menu, "buyer");
                 menus.add(menu);

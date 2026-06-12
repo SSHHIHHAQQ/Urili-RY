@@ -54,6 +54,8 @@ const EXPECTED_SELF_MANAGEMENT_PERMISSIONS = {
     'buyer:role:add',
     'buyer:role:edit',
     'buyer:role:remove',
+    'buyer:product:center:list',
+    'buyer:product:center:query',
   ],
 };
 
@@ -204,6 +206,9 @@ describe('portal direct-login live verifier contract', () => {
     expect(script).toContain('direct-login token was accepted by ${targetTerminal} ${endpoint}');
     expect(script).toContain('one-time direct-login token was accepted twice');
     expect(script).toContain('assertExactSelfManagementPermissions(terminal, info.permissions)');
+    expect(script).toContain('ALLOWED_BUSINESS_PERMISSION_PREFIXES');
+    expect(script).toContain('buyer: ["buyer:product:center:"]');
+    expect(script).toContain('serialized = serialized.replaceAll(prefix,');
     expect(script).toContain("assertNoFrozenBusinessSurface(terminal, 'getInfo', info)");
     expect(script).toContain("assertNoFrozenBusinessSurface(terminal, 'getRouters', routers)");
     expect(script).toContain("data.loginUrl.includes(`/${terminal}/direct-login`)");

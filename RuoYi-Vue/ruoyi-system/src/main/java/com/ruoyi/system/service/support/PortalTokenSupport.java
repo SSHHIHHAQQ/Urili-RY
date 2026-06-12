@@ -257,6 +257,7 @@ public class PortalTokenSupport
         session.setLoginTime(loginTime);
         session.setExpireTime(expireAt);
         session.setStatus(PartnerSupport.STATUS_NORMAL);
+        session.setDirectLogin(Boolean.FALSE);
         return session;
     }
 

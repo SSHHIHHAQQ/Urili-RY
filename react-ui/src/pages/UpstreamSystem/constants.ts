@@ -10,6 +10,8 @@ export {
   skuPairingStatusSearchOptions as skuPairingStatusOptions,
   skuSyncItemStatusSearchOptions as skuSyncItemStatusOptions,
   syncItemStatusText,
+  syncTaskStatusColor,
+  syncTaskStatusText,
   syncTypeText,
   systemKindOptions,
   systemKindText,

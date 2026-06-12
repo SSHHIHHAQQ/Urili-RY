@@ -20,11 +20,14 @@ import { PORTAL_SERVICE, type PortalTerminal } from '../terminal';
 type Props = {
   terminal: PortalTerminal;
   permissions: string[];
+  activeView: PortalSelfManagementView;
   accounts: API.Partner.PortalAccountBase[];
   depts: API.Partner.PortalDeptProfile[];
   roles: API.Partner.PortalRoleProfile[];
   onChanged: () => void;
 };
+
+export type PortalSelfManagementView = 'accounts' | 'depts' | 'roles' | 'loginLogs' | 'operLogs';
 
 type PortalTreeDataNode = {
   title: string;
@@ -75,6 +78,7 @@ function mapTreeData(nodes?: API.Partner.PortalTreeNode[]): PortalTreeDataNode[]
 const PortalSelfManagement: React.FC<Props> = ({
   terminal,
   permissions,
+  activeView,
   accounts,
   depts,
   roles,
@@ -128,7 +132,9 @@ const PortalSelfManagement: React.FC<Props> = ({
   );
 
   const loadAudit = useCallback(async () => {
-    if (!canViewLoginLogs && !canViewOperLogs) {
+    const shouldLoadLoginLogs = activeView === 'loginLogs' && canViewLoginLogs;
+    const shouldLoadOperLogs = activeView === 'operLogs' && canViewOperLogs;
+    if (!shouldLoadLoginLogs && !shouldLoadOperLogs) {
       setLoginLogs([]);
       setOperLogs([]);
       return;
@@ -136,12 +142,12 @@ const PortalSelfManagement: React.FC<Props> = ({
     setAuditLoading(true);
     try {
       const [loginRes, operRes] = await Promise.all([
-        canViewLoginLogs
+        shouldLoadLoginLogs
           ? service.getLoginLogs({ pageNum: 1, pageSize: 5 }).then((response) =>
               assertPortalSuccess(response, '登录日志加载失败'),
             )
           : Promise.resolve({ rows: [] }),
-        canViewOperLogs
+        shouldLoadOperLogs
           ? service.getOperLogs({ pageNum: 1, pageSize: 5 }).then((response) =>
               assertPortalSuccess(response, '操作日志加载失败'),
             )
@@ -155,7 +161,7 @@ const PortalSelfManagement: React.FC<Props> = ({
     } finally {
       setAuditLoading(false);
     }
-  }, [canViewLoginLogs, canViewOperLogs, service]);
+  }, [activeView, canViewLoginLogs, canViewOperLogs, service]);
 
   useEffect(() => {
     loadAudit();
@@ -403,7 +409,7 @@ const PortalSelfManagement: React.FC<Props> = ({
 
   return (
     <>
-      {canViewAccounts ? (
+      {activeView === 'accounts' && canViewAccounts ? (
         <Card
           title="账号管理"
           variant="borderless"
@@ -421,7 +427,7 @@ const PortalSelfManagement: React.FC<Props> = ({
         </Card>
       ) : null}
 
-      {canViewDepts ? (
+      {activeView === 'depts' && canViewDepts ? (
         <Card
           title="部门管理"
           variant="borderless"
@@ -439,7 +445,7 @@ const PortalSelfManagement: React.FC<Props> = ({
         </Card>
       ) : null}
 
-      {canViewRoles ? (
+      {activeView === 'roles' && canViewRoles ? (
         <Card
           title="角色管理"
           variant="borderless"
@@ -457,7 +463,7 @@ const PortalSelfManagement: React.FC<Props> = ({
         </Card>
       ) : null}
 
-      {canViewLoginLogs ? (
+      {activeView === 'loginLogs' && canViewLoginLogs ? (
         <Card title="登录日志" variant="borderless" style={fullSpanStyle}>
           <Table
             rowKey={(record, index) => `${record.userName || ''}-${record.loginTime || ''}-${index}`}
@@ -475,7 +481,7 @@ const PortalSelfManagement: React.FC<Props> = ({
         </Card>
       ) : null}
 
-      {canViewOperLogs ? (
+      {activeView === 'operLogs' && canViewOperLogs ? (
         <Card title="操作日志" variant="borderless" style={fullSpanStyle}>
           <Table
             rowKey={(record, index) => `${record.title || ''}-${record.operTime || ''}-${index}`}

@@ -273,17 +273,17 @@ export async function getAdminBuyerAccountSessions(
   );
 }
 
-export async function createAdminBuyerDirectLogin(buyerId: number, reason: string) {
+export async function createAdminBuyerDirectLogin(buyerId: number, reason?: string) {
   return request<API.Partner.DirectLoginApiResult>(`/api/buyer/admin/buyers/${buyerId}/directLogin`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json;charset=UTF-8',
     },
-    data: { reason },
+    data: { reason: reason?.trim() || '' },
   });
 }
 
-export async function createAdminBuyerAccountDirectLogin(buyerId: number, buyerAccountId: number, reason: string) {
+export async function createAdminBuyerAccountDirectLogin(buyerId: number, buyerAccountId: number, reason?: string) {
   return request<API.Partner.DirectLoginApiResult>(
     `/api/buyer/admin/buyers/${buyerId}/accounts/${buyerAccountId}/directLogin`,
     {
@@ -291,7 +291,7 @@ export async function createAdminBuyerAccountDirectLogin(buyerId: number, buyerA
       headers: {
         'Content-Type': 'application/json;charset=UTF-8',
       },
-      data: { reason },
+      data: { reason: reason?.trim() || '' },
     },
   );
 }

@@ -57,6 +57,10 @@ public interface UpstreamSystemMapper
 
     int insertRequestLog(UpstreamRequestLog log);
 
+    int updateRequestLog(UpstreamRequestLog log);
+
+    Long selectDatabaseEpochMillis();
+
     List<UpstreamRequestLog> selectRequestLogList(@Param("connectionCode") String connectionCode);
 
     int upsertSyncState(UpstreamSyncState state);

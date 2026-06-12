@@ -540,7 +540,6 @@ if (portalHomePage) {
     'getTerminalAccessToken(terminal)',
     'history.replace(PORTAL_META[terminal].loginPath)',
     'loadData(terminal);',
-    'loadSessions(terminal);',
     "message.error('门户数据加载失败，请稍后重试')",
   ]) {
     assertIncludes(
@@ -550,6 +549,12 @@ if (portalHomePage) {
       'keep portal home token gate and terminal-scoped recovery',
     );
   }
+  assertMatches(
+    portalHomePage.source,
+    portalHomePage.relativePath,
+    /loadSessions\(\s*terminal(?:\s*,[^)]*)?\)/,
+    'keep portal home protected session loading scoped to the current terminal',
+  );
   assertDoesNotInclude(
     portalHomePage.source,
     portalHomePage.relativePath,

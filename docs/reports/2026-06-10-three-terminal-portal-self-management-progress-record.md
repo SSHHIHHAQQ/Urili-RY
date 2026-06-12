@@ -1527,3 +1527,210 @@
 - 影响边界：
   - 本次只更新 live-write verifier 和静态合同，不执行真实 portal 登录或写闭环。
   - 未写 MySQL、Redis 或业务数据；不扩展商品、订单、库存、物流、财务、履约或外部系统业务菜单。
+
+## 2026-06-12 03:05 管理端菜单定义入口冻结复核
+
+- 复核原因：
+  - 本阶段要求 seller/buyer portal 端内角色只能从平台预置 `seller_menu` / `buyer_menu` 权限模板中分配权限，不开放菜单定义能力。
+  - 管理端“卖家管理 / 买家管理”的菜单弹窗应只读展示权限模板，不能继续暴露新增、编辑、删除菜单的 UI、service wiring 或后端写路由。
+- 当前代码状态：
+  - `AdminSellerMenuController` / `AdminBuyerMenuController` 仅保留 `list`、`getInfo`、`treeselect`、`roleMenuTreeselect` 读接口；未暴露 `add`、`edit`、`remove` 写 handler。
+  - `PartnerMenuModal.tsx` 当前为只读权限模板表格，只调用 `config.services.listMenus()`，不再依赖 `useAccess`、`addMenu`、`updateMenu`、`removeMenu` 或菜单定义表单校验。
+  - `PartnerManagementPage`、`Seller/index.tsx`、`Buyer/index.tsx` 和 seller/buyer 前端 service 当前均不再 wiring / export 菜单写函数。
+  - `check-partner-management-template.mjs` 与 `partner-management-contract.test.ts` 已按只读模板口径检查，禁止 CRUD 入口回流。
+- 已验证：
+  - `cd RuoYi-Vue; mvn -pl ruoyi-system,seller,buyer -am "-Dtest=SellerAdminPermissionContractTest,BuyerAdminPermissionContractTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，8 tests passed，BUILD SUCCESS。
+  - `cd react-ui; npx jest --config jest.config.ts tests/partner-management-contract.test.ts --runInBand`：通过，1 suite / 9 tests passed。
+  - `cd react-ui; node scripts\check-partner-management-template.mjs`：通过。
+  - `cd react-ui; node scripts\verify-three-terminal.mjs --check-manifest`：通过。
+  - `cd react-ui; npm run verify:three-terminal`：通过，33 suites / 304 tests passed；React typecheck 通过；后端 reactor `test-compile` 和三端合同测试均 BUILD SUCCESS。
+  - `node .\scripts\portal-self-management-sql-runner.mjs --precheck`：通过，只读确认目标库 `fenxiao`；seller/buyer self-management 模板均为 `19 / 19`，root button 均为 `18 / 18`，OWNER self-management grants 均为 `665 = 35 * 19`，OWNER non-self grants 均为 0；无无效权限、ID 区间、component 或重复 perms 问题。
+  - `git diff --check -- <本轮复核相关文件>`：通过，无 whitespace error。
+- 影响边界：
+  - 本轮未执行清理历史管理端 `sys_menu` 权限按钮的 DML；如需移除 live 管理端历史 `seller:admin:menu:add/edit/remove` 或 `buyer:admin:menu:add/edit/remove` 按钮权限，需另走受控 SQL 方案与确认。
+  - 本轮未执行真实 portal 账号密码登录、direct-login 或 self-management 写闭环。
+  - 未写 Redis；除只读 precheck 外未写 MySQL；不扩展商品、订单、库存、物流、财务、履约或外部系统业务菜单。
+## 2026-06-12 03:13 live 前门禁复核
+
+- 复核原因：
+  - SQL seed 已经落到 `fenxiao`，本轮继续按 P0/P1 口径复核直登 OWNER、端内主体派生、裸账号查询、前端请求净化、菜单模板只读和 role-menu fail-closed 门禁。
+  - 真实 live 登录、direct-login 和 self-management 写闭环会写登录日志、操作日志、票据、portal session 和测试账号/角色/部门数据，不能用 seed 确认替代。
+- 当前结论：
+  - 代码侧未发现新的 P0/P1 缺口；本轮未改业务代码。
+  - 管理端主体级 direct-login 仍默认取 active OWNER；指定账号 direct-login 仍校验主体归属和账号状态。
+  - portal 自助接口继续从 token/session 推导主体与账号；前端 portal service 继续剥离 caller-controlled scope 字段。
+  - 管理端 seller/buyer 菜单定义入口继续冻结，角色菜单读写均限制为 self-management 模板。
+- 已验证：
+  - `node .\scripts\portal-self-management-sql-runner.mjs --precheck`：通过，只读确认目标库 `fenxiao`；seller/buyer self-management 模板均为 `19 / 19`，root button 均为 `18 / 18`，OWNER self-management grants 均为 `665 = 35 * 19`，OWNER non-self grants 均为 0；无无效权限、ID 区间、component 或重复 perms 问题。
+  - `cd RuoYi-Vue; mvn -pl ruoyi-system,seller,buyer -am "-Dtest=TerminalAccountIsolationTest,AdminDirectLoginPermissionContractTest,PortalSelfServiceSurfaceContractTest,SellerAdminPermissionContractTest,BuyerAdminPermissionContractTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，14 tests passed，BUILD SUCCESS。
+  - `cd react-ui; npx jest --config jest.config.ts tests/portal-session-request.test.ts tests/portal-self-management-contract.test.ts tests/partner-management-contract.test.ts --runInBand`：通过，3 suites / 71 tests passed。
+  - `cd react-ui; node scripts\check-partner-management-template.mjs`：通过。
+  - `cd react-ui; node scripts\verify-three-terminal.mjs --check-manifest`：通过。
+  - `cd react-ui; npm run verify:three-terminal`：通过，33 suites / 304 tests passed；React typecheck 通过；后端 reactor `test-compile` 和三端合同测试均 BUILD SUCCESS。
+- 未执行项：
+  - 未执行真实 portal 账号密码登录。
+  - 未执行管理端 direct-login 票据签发和目标 portal 一次性消费。
+  - 未执行 self-management 写闭环。
+  - 未写 Redis；除只读 precheck 外未写 MySQL；不扩展商品、订单、库存、物流、财务、履约或外部系统业务菜单。
+- 完成度审计：见 `docs/reports/2026-06-12-three-terminal-minimal-permission-completion-audit.md`。
+## 2026-06-12 03:22 会话表独立审计合同补强
+
+- 补强原因：
+  - 本阶段要求 seller/buyer 会话必须独立，且管理端直登必须可审计。
+  - 已有 SQL guard 覆盖了日志表和 seed 结构，本轮把 `seller_session` / `buyer_session` 独立 DDL 与 direct-login 审计字段收敛到更贴近三端目标的合同测试。
+- 已补强：
+  - `TerminalSqlIsolationContractTest#terminalSessionTablesMustUseIndependentDdlAndDirectLoginAuditFields`。
+  - 合同固定端内 session 表必须包含 `token_id`、端内主体 ID、端内账号 ID、`direct_login`、`direct_login_ticket_id`、`acting_admin_id`、`acting_admin_name`、`direct_login_reason`。
+  - 合同拒绝 session DDL 使用 `LIKE` 克隆或引用 `sys_*`。
+- 已验证：
+  - `cd RuoYi-Vue; mvn -pl ruoyi-system -am "-Dtest=TerminalSqlIsolationContractTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，13 tests，BUILD SUCCESS。
+  - `cd react-ui; node scripts\verify-three-terminal.mjs --check-manifest`：通过。
+  - `cd react-ui; npm run verify:three-terminal`：通过，33 suites / 304 tests，React typecheck 通过，后端 reactor `test-compile` 和三端合同测试均 BUILD SUCCESS。
+- 影响边界：本轮只补静态合同；未写 MySQL/Redis，未执行真实 portal 登录、direct-login 或 self-management 写闭环。
+
+## 2026-06-12 03:26 portal 自助前端类型泄露合同补强
+
+- 补强原因：
+  - 后端 `PortalOwnLoginLogProfile`、`PortalOwnOperLogProfile`、`PortalOwnSessionProfile` 已作为 portal 自助可见 DTO，前端类型也必须保持同一边界。
+  - 避免后续把管理端审计字段、token/session 内部字段或 caller-controlled 身份范围字段误加回 seller/buyer portal 可见类型。
+- 已补强：
+  - `react-ui/tests/portal-self-management-contract.test.ts` 新增类型合同。
+  - 合同固定 `PortalOwnLoginLogProfile`、`PortalOwnOperLogProfile`、`PortalOwnSessionProfile` 不得包含 `sellerId`、`buyerId`、`subjectId`、`accountId`、`sellerAccountId`、`buyerAccountId`、`terminal`、`tokenId`、`directLogin`、`directLoginTicketId`、`actingAdminId`、`actingAdminName`、`directLoginReason`、`operParam`、`jsonResult`。
+- 已验证：
+  - `cd react-ui; npx jest --config jest.config.ts tests/portal-self-management-contract.test.ts --runInBand`：通过，1 suite / 6 tests。
+  - `cd react-ui; node scripts\verify-three-terminal.mjs --check-manifest`：通过。
+- 影响边界：本轮只补前端静态合同；未写 MySQL/Redis，未执行真实 portal 登录、direct-login 或 self-management 写闭环。
+
+## 2026-06-12 03:30 完整门禁复跑
+
+- 复跑命令：`cd react-ui; npm run verify:three-terminal`。
+- 复跑结果：通过，33 suites / 304 tests passed；React typecheck 通过；后端 reactor `test-compile` 与三端合同测试均 BUILD SUCCESS。
+- 空白检查：`git diff --check -- <本轮三端相关文件>` 通过，无 whitespace error，仅有 LF/CRLF 工作区提示。
+- live 状态：仍未执行真实 portal 账号密码登录、direct-login 或 self-management 写闭环；后续执行前仍需单独确认写入范围和 OWNER 凭据。
+
+## 2026-06-12 03:31 seed 后只读复核
+
+- 复核命令：`node .\scripts\portal-self-management-sql-runner.mjs --precheck`。
+- 命令性质：只读 `SELECT`，未执行 SQL seed，未写 MySQL、Redis 或业务数据。
+- 目标环境：当前后端 `druid` 激活配置，目标库 `fenxiao`；连接来源为 `RUOYI_DB_*` / `RUOYI_REDIS_*` 运行变量，记录中不输出连接明文。
+- 复核结果：`seller_menu` 23 行，ID `100008-100031`；`buyer_menu` 23 行，ID `200003-200026`；seller/buyer self-management 模板均为 `19 / 19`，root button 模板均为 `18 / 18`，OWNER self-management grants 均为 `665 = 35 * 19`，OWNER non-self grants 均为 0；无无效权限、ID 区间违规、页面 component 违规或重复 perms。
+
+## 2026-06-12 03:37 服务层主体 ID 防串端合同补强
+
+- 补强原因：
+  - seller/buyer portal 和管理端主体路径都必须以 token/session 或路径主体 ID 为准，不能让请求体携带的 `sellerId` / `buyerId` 参与端内账号更新。
+  - 生产代码已在 `updateSellerAccount` / `updateBuyerAccount` 中覆盖主体 ID，本轮新增回归测试固定该口径。
+- 已补强：
+  - `SellerServiceImplTest#updateSellerAccountIgnoresPayloadSellerIdAndUsesScopedSellerId`。
+  - `BuyerServiceImplTest#updateBuyerAccountIgnoresPayloadBuyerIdAndUsesScopedBuyerId`。
+  - 合同确认请求体里的伪造主体 ID 和通用 `accountId` 不会进入最终 mapper 更新对象；最终写入对象使用服务方法传入的主体 ID 和当前账号 ID。
+- 已验证：
+  - `cd RuoYi-Vue; mvn -pl seller,buyer -am "-Dtest=SellerServiceImplTest,BuyerServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，seller 64 tests、buyer 65 tests，BUILD SUCCESS。
+  - `cd react-ui; node scripts\verify-three-terminal.mjs --check-manifest`：通过。
+  - `cd react-ui; npm run verify:three-terminal`：通过，33 suites / 304 tests，React typecheck 通过，后端 reactor `test-compile` 和三端合同测试均 BUILD SUCCESS。
+  - `node .\scripts\portal-self-management-sql-runner.mjs --precheck`：通过，只读确认当前库 `fenxiao`，seller/buyer self-management 模板均为 `19 / 19`，OWNER self-management grants 均为 `665 = 35 * 19`，异常项均为 0。
+- 影响边界：本轮只补服务层测试；未改生产代码，未写 MySQL/Redis，未执行真实 portal 登录、direct-login 或 self-management 写闭环。
+
+## 2026-06-12 03:49 子 Agent 只读复核与本地 P0/P1 复查
+
+- 子 Agent：
+  - 启动 2 个只读复核子 Agent，实际模型均为 `gpt-5.3-codex-spark`。
+  - 前端子 Agent 范围：`react-ui/src`、`react-ui/tests`、`react-ui/scripts`；结论：未发现高置信 P0/P1 缺口，指出剩余为完整 live 链路未执行。
+  - 后端子 Agent 范围：`RuoYi-Vue/seller`、`RuoYi-Vue/buyer`、`RuoYi-Vue/ruoyi-system`；连续等待未返回，已关闭，未产出结论，未作为验收证据。
+- 本地复查：
+  - portal request/service 已覆盖当前端 token、scope 参数剥离、路径 ID 正整数校验、roleIds/menuIds 规范化和重复 ID fail-closed。
+  - direct-login support 已覆盖 terminal-scoped Redis key、legacy key 仅清理、跨端消费不污染当前端审计。
+  - SQL runner 与 seed guard 已覆盖 self-management 精确模板、OWNER grants、ID 区间、component 和权限前缀；本轮未执行 SQL。
+- 当前结论：代码级 P0/P1 未发现新的高置信缺口；仍不能标记目标完成，因为真实 seller/buyer 登录、管理端 direct-login 消费回传和 OWNER self-management 写闭环尚未执行。
+
+## 2026-06-12 03:57 portal 账号编辑入口主体 ID 收紧
+
+- 补强原因：portal 账号编辑接口必须从当前 token/session 推导主体，不能让请求体中的 `sellerId` / `buyerId` 参与端内账号更新链路。服务层此前已覆盖主体 ID，本轮把 controller 入口也收紧，减少对下游兜底的依赖。
+- 已修改：
+  - `SellerPortalController#editAccount`：路径 `targetAccountId` 覆盖 `sellerAccountId` / `accountId` 后，显式执行 `account.setSellerId(null)`。
+  - `BuyerPortalController#editAccount`：路径 `targetAccountId` 覆盖 `buyerAccountId` / `accountId` 后，显式执行 `account.setBuyerId(null)`。
+  - `PortalSelfServiceSurfaceContractTest`：要求上述清理语句必须出现在 `editAccount` 方法体内。
+- 已验证：
+  - `cd RuoYi-Vue; mvn -pl ruoyi-system "-Dtest=PortalSelfServiceSurfaceContractTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，1 test。
+  - `cd RuoYi-Vue; mvn -pl seller,buyer -am "-Dtest=SellerServiceImplTest,BuyerServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，seller 64 tests、buyer 65 tests。
+  - 有一次 `ruoyi-system` 窄测因 PowerShell 参数未加引号导致 Maven lifecycle phase 解析失败，随后用引号形式重跑通过。
+- 影响边界：未执行新的 SQL seed、未写 MySQL/Redis、未执行真实 portal 登录、direct-login 或 self-management 写闭环；未触碰商品、订单、库存、物流、财务、履约和外部系统业务。
+
+## 2026-06-12 04:04 完整门禁收口
+
+- 本轮门禁阻塞与修复：
+  - `react-ui` TypeScript 编译发现旁路 `UpstreamSystem/components/SyncTabs.tsx` 缺少状态常量导出和 `useRef` 初始值；已用 re-export 与 `useRef<ActionType | null>(null)` 做最小 P0 编译修复。
+  - 后端 `StandalonePartnerSeedMenuContractTest` 发现上游同步任务权限 seed 复用 `2310-2312`，与 seller 管理端账号按钮冲突；已将 `upstream_system_management_seed.sql` 与 `20260612_upstream_sync_task_lifecycle.sql` 的上游任务权限 ID 统一迁到 `2324-2326`。
+- 验证结果：
+  - `cd RuoYi-Vue; mvn -pl ruoyi-system "-Dtest=StandalonePartnerSeedMenuContractTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`：通过，2 tests。
+  - `cd react-ui; npm run verify:three-terminal`：通过，33 suites / 304 tests，React typecheck 通过，后端 reactor `test-compile` 与三端合同测试均 BUILD SUCCESS。
+  - `node .\scripts\portal-self-management-sql-runner.mjs --precheck`：通过，只读确认 `fenxiao` 中 seller/buyer self-management 模板均为 `19 / 19`，OWNER self-management grants 均为 `665 = 35 * 19`，异常项均为 0。
+  - `git diff --check -- <本轮相关文件>`：通过，仅 LF/CRLF 工作区提示。
+  - `codegraph sync .`：通过，`Synced 20 changed files; Added: 1, Modified: 19 - 1,226 nodes in 1.8s`。
+- 当前边界：SQL/seed 权限模板缺口已收口；真实 seller/buyer 账号密码登录、管理端 direct-login 消费回传和 OWNER self-management 写闭环仍未执行，不能标记总目标完成。
+
+## 2026-06-12 04:07 self-management 权限 seed 执行前确认
+
+- 用户已确认允许对当前目标库 `fenxiao` 执行本阶段 self-management 权限 seed。
+- 影响范围限定为 `seller_menu`、`buyer_menu`、`seller_role_menu`、`buyer_role_menu`，不包含商品、订单、库存、物流、财务、履约或外部系统业务数据。
+- 数据源确认：后端当前激活 `druid`，MySQL 由 `.env.local` 中 `RUOYI_DB_*` 注入；Redis 由 `RUOYI_REDIS_*` 注入，本次 SQL seed 不读写 Redis。
+- 拟执行命令：`PORTAL_SELF_MANAGEMENT_SQL_CONFIRM=APPLY_PORTAL_SELF_MANAGEMENT_PERMISSION_SEED node .\scripts\portal-self-management-sql-runner.mjs --apply`。
+
+## 2026-06-12 04:08 self-management 权限 seed 已执行
+
+- 执行命令：`PORTAL_SELF_MANAGEMENT_SQL_CONFIRM=APPLY_PORTAL_SELF_MANAGEMENT_PERMISSION_SEED node .\scripts\portal-self-management-sql-runner.mjs --apply`。
+- 执行结果：成功；runner 已完成 postcheck，并输出 `postcheck exact self-management permission state verified.`。
+- postcheck 确认：
+  - 当前库为 `fenxiao`。
+  - `seller_menu` 23 行，ID 范围 `100008-100031`；`buyer_menu` 23 行，ID 范围 `200003-200026`。
+  - seller/buyer self-management 模板均为 `19 / 19`，root button 模板均为 `18 / 18`。
+  - seller/buyer OWNER self-management grants 均为 `665 = 35 * 19`，OWNER non-self grants 均为 0。
+  - 无效权限、菜单 ID 区间违规、页面 component 违规和重复 perms 均为 0。
+- 影响边界：本次没有执行真实 seller/buyer portal 登录、管理端 direct-login 消费回传或 OWNER self-management 写闭环；这些仍未计入完成。
+
+## 2026-06-12 04:09 seed 后收尾复核
+
+- `git diff --check -- <本轮相关文件>`：通过，无 whitespace error，仅 LF/CRLF 工作区提示。
+- `node .\scripts\portal-self-management-sql-runner.mjs --precheck`：通过，只读确认目标库 `fenxiao`；seller/buyer self-management 模板均为 `19 / 19`，OWNER self-management grants 均为 `665 = 35 * 19`，异常项均为 0。
+- `codegraph sync .`：通过，`Synced 5 changed files; Modified: 5 - 299 nodes in 1.0s`。
+- 当前下一步：需要单独确认真实 portal 登录、direct-login 和 self-management 写闭环的写入范围与 OWNER 凭据后再执行 live 验证。
+
+## 2026-06-12 04:12 seed 后 live 前门禁复跑
+
+- `node .\scripts\portal-self-management-sql-runner.mjs --precheck`：通过，只读确认 `fenxiao` 中 self-management 权限 seed 后状态仍正确。
+- `cd react-ui; node scripts\verify-three-terminal.mjs --check-manifest`：通过。
+- `cd react-ui; node scripts\check-portal-token-isolation.mjs`：通过。
+- `cd react-ui; node scripts\check-partner-management-template.mjs`：通过。
+- live 脚本缺少确认变量时均 fail-closed：
+  - self-management 只读 live：缺少 `PORTAL_SELF_MANAGEMENT_LIVE_CONFIRM=APPLY_PORTAL_SELF_MANAGEMENT_LIVE_VERIFY` 和 seller/buyer portal 凭据时退出。
+  - direct-login live：缺少 `PORTAL_DIRECT_LOGIN_LIVE_CONFIRM=APPLY_PORTAL_DIRECT_LOGIN_LIVE_VERIFY` 和管理端认证上下文时退出。
+  - self-management write live：缺少 `PORTAL_LIVE_WRITE_CONFIRM=APPLY_PORTAL_SELF_MANAGEMENT_WRITE_VERIFY` 和 seller/buyer portal 凭据时退出。
+- `cd react-ui; npm run verify:three-terminal`：通过，33 suites / 304 tests，React typecheck 通过，后端 reactor `test-compile` 与三端合同测试均 BUILD SUCCESS。
+- 本轮未执行真实 portal 登录、direct-login 或 self-management 写闭环；未新增 SQL 或业务数据扩展。
+
+## 2026-06-12 04:15 阻塞前静态证据复核
+
+- 账号查询边界：生产代码未发现裸 `selectSeller/BuyerAccountById(Long accountId)` 签名；现有 seller/buyer 账号查询仍为 `subjectId + accountId` 两参约束。
+- 控制面边界：seller/buyer 模块生产和测试代码未发现 `sys_user`、`sys_role`、`sys_menu`、`sys_dept`、`sys_user_role`、`sys_role_menu` 端内控制面引用。
+- seed 边界：self-management seed 仍保留 menu ID 区间、通配权限、admin 命名空间和 component fail-closed guard；`node .\scripts\portal-self-management-sql-runner.mjs --precheck` 继续通过。
+- 当前阻塞：真实 live 验证需要写登录日志、操作日志、portal session、direct-login 票据/审计、测试角色、测试部门和停用 STAFF 测试账号；未获得这些写入范围的明确确认和 OWNER/admin 凭据前，不能继续执行 live，也不能标记总目标完成。
+
+## 2026-06-12 11:13 三类 live 执行授权记录
+
+- 用户已授权自行解决三类 live 验证：portal 账号密码登录、管理端 direct-login、self-management 写闭环。
+- 允许写入范围：登录日志、操作日志、portal session、direct-login 票据/审计、测试角色、测试部门、停用 STAFF 测试账号。
+- 数据源确认：当前后端激活 `druid`，MySQL/Redis 来自 `.env.local` 的 `RUOYI_DB_*` / `RUOYI_REDIS_*`，不输出连接明文、token 或密码。
+- 执行准备：当前 8080 未连通，需先按项目约定启动本机后端，再执行三类 live 脚本。
+
+## 2026-06-12 11:34 三类 live 执行结果
+
+- 后端启动与打包：按项目约定重启本机后端，`/captchaImage` 返回 200；live 暴露 session 字段和分页污染问题后，重新打包 `ruoyi-admin` 并重启运行 jar。
+- P0 修复：`PortalTokenSupport#buildSession` 为普通登录 session 默认写入 `direct_login = false`；seller/buyer self-list 查询在账号校验期间临时清理 PageHelper 分页上下文，避免校验 SQL 被追加 `LIMIT`。
+- live 脚本修复：自助管理只读 live 兼容若依分页响应，`assertSuccess` 在响应缺少 `data` 时返回完整 body，用于校验 top-level `rows`。
+- 窄测通过：`PortalTokenSupportTest` 通过；`PortalSelfServiceSurfaceContractTest`、`SellerServiceImplTest`、`BuyerServiceImplTest` 通过，seller 64 tests、buyer 65 tests。
+- 账号密码登录 live：`npm run verify:portal-self-management-live` 通过，覆盖 seller/buyer OWNER 账号密码登录、`getInfo`、`getRouters`、账号/部门/角色/日志/会话只读闭环、冻结业务权限不可见和跨端 token 拒绝。
+- direct-login live：`npm run verify:portal-direct-login-live` 通过，完成管理端签发、portal 一次性消费、跨端和重复消费拒绝、token/session 隔离；本次票据证据为 seller#120、buyer#121。
+- self-management 写入 live：`npm run verify:portal-self-management-live-write` 通过，完成测试部门和角色的创建/清理、禁用 STAFF 证据账号创建、账号角色分配与清理、跨端 menuId fail-closed；保留禁用证据账号 `seller#41`、`buyer#37`。
+- 最终门禁：`npm run verify:three-terminal` 通过，33 suites / 304 tests；React typecheck、portal token isolation guard、partner management template guard、后端 reactor `test-compile` 与三端合同测试均通过。
+- 数据库复核：`node .\scripts\portal-self-management-sql-runner.mjs --precheck` 通过，目标库 `fenxiao` 中 seller/buyer self-management 模板均 `19 / 19`，OWNER grants 均 `665 = 35 * 19`，无无效权限、跨端 ID、component 或重复 perms 异常。
+- 当前结论：本阶段 seller/buyer portal 最小可登录权限框架已经代码级、SQL seed、三类 live 和最小门禁收口；商品、订单、库存、物流、财务、履约、外部系统等业务菜单和页面继续冻结。

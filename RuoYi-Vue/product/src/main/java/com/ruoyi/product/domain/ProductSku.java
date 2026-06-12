@@ -23,6 +23,8 @@ public class ProductSku extends BaseEntity
     private String productNameEn;
     private String spuStatus;
     private String keyword;
+    private String skuCode;
+    private String sourceWarehouseCode;
     private String systemSkuCode;
     private String sellerSkuCode;
     private String color;
@@ -103,6 +105,10 @@ public class ProductSku extends BaseEntity
     public void setSpuStatus(String spuStatus) { this.spuStatus = spuStatus; }
     public String getKeyword() { return keyword; }
     public void setKeyword(String keyword) { this.keyword = keyword; }
+    public String getSkuCode() { return skuCode; }
+    public void setSkuCode(String skuCode) { this.skuCode = skuCode; }
+    public String getSourceWarehouseCode() { return sourceWarehouseCode; }
+    public void setSourceWarehouseCode(String sourceWarehouseCode) { this.sourceWarehouseCode = sourceWarehouseCode; }
     public String getSystemSkuCode() { return systemSkuCode; }
     public void setSystemSkuCode(String systemSkuCode) { this.systemSkuCode = systemSkuCode; }
     public String getSellerSkuCode() { return sellerSkuCode; }

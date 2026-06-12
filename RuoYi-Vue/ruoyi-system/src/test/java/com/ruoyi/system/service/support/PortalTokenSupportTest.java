@@ -57,6 +57,11 @@ public class PortalTokenSupportTest
         assertEquals(Long.valueOf(22L), issue.getResult().getAccountId());
         assertEquals("seller-owner", issue.getResult().getUsername());
         assertEquals(Integer.valueOf(30), issue.getResult().getExpireMinutes());
+        assertEquals(Boolean.FALSE, issue.getSession().getDirectLogin());
+        assertNull(issue.getSession().getDirectLoginTicketId());
+        assertNull(issue.getSession().getActingAdminId());
+        assertNull(issue.getSession().getActingAdminName());
+        assertNull(issue.getSession().getDirectLoginReason());
 
         String key = redisCache.onlyStoredKey();
         assertTrue(key.startsWith(PortalTokenSupport.CACHE_PREFIX + "seller:seller_"));

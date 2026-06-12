@@ -54,6 +54,8 @@ const EXPECTED_SELF_MANAGEMENT_PERMISSIONS = {
     'buyer:role:add',
     'buyer:role:edit',
     'buyer:role:remove',
+    'buyer:product:center:list',
+    'buyer:product:center:query',
   ],
 };
 
@@ -206,6 +208,9 @@ describe('portal self-management live verifier contract', () => {
     ]) {
       expect(script).toContain(`'${frozenTerm}'`);
     }
+    expect(script).toContain('ALLOWED_BUSINESS_PERMISSION_PREFIXES');
+    expect(script).toContain('buyer: ["buyer:product:center:"]');
+    expect(script).toContain('serialized = serialized.replaceAll(prefix,');
     expect(script).toContain('serialized.includes(`${terminal}:${term}:`)');
     expect(script).toContain("serialized.includes(`/${term}/`)");
     expect(script).toContain('assertSelfManagementPermissions(terminal, info.permissions)');

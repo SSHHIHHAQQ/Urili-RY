@@ -110,5 +110,29 @@ export const requestResultText: Record<string, string> = {
   SUCCESS: '成功',
   FAILURE: '失败',
   FAILED: '失败',
+  TIMEOUT: '超时',
+  STARTED: '已开始',
   ERROR: '异常',
+};
+
+export const syncTaskStatusText: Record<string, string> = {
+  PENDING: '排队中',
+  CLAIMED: '已领取',
+  RUNNING: '同步中',
+  SUCCESS: '成功',
+  FAILED: '失败',
+  TIMEOUT: '超时',
+  CANCELED: '已取消',
+  SKIPPED: '已跳过',
+};
+
+export const syncTaskStatusColor: Record<string, string> = {
+  PENDING: 'default',
+  CLAIMED: 'processing',
+  RUNNING: 'processing',
+  SUCCESS: 'green',
+  FAILED: 'red',
+  TIMEOUT: 'orange',
+  CANCELED: 'default',
+  SKIPPED: 'gold',
 };

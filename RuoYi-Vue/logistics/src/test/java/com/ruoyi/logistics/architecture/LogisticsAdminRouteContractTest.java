@@ -396,6 +396,21 @@ public class LogisticsAdminRouteContractTest
         assertContains(customerMapper, "#{displayOrder}, #{createBy}, sysdate(), #{updateBy}, sysdate(), #{remark}");
     }
 
+    @Test
+    public void carrierRequestLogListMustKeepPageHelperOnLogQuery() throws IOException
+    {
+        String service = readLogistics(
+            "src/main/java/com/ruoyi/logistics/service/impl/LogisticsCarrierServiceImpl.java");
+        int methodStart = service.indexOf("public List<LogisticsCarrierRequestLog> selectRequestLogList");
+        int methodEnd = service.indexOf("\n    private void fillProviderExtension", methodStart);
+        assertTrue("selectRequestLogList method must exist", methodStart >= 0 && methodEnd > methodStart);
+        String method = service.substring(methodStart, methodEnd);
+
+        assertContains(method, "return logisticsCarrierMapper.selectRequestLogList(carrierAccountId);");
+        assertNotContains(method, "selectConnectionByAccountId");
+        assertNotContains(method, "requireProviderConnection");
+    }
+
     private static String readBackend(String relativePath) throws IOException
     {
         return Files.readString(backendRoot().resolve(relativePath), StandardCharsets.UTF_8)

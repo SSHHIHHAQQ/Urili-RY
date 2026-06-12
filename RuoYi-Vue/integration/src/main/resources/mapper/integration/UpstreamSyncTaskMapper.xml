@@ -1,0 +1,267 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.integration.mapper.UpstreamSyncTaskMapper">
+
+    <resultMap id="SyncRequestResult" type="UpstreamSyncRequestRecord">
+        <id property="requestId" column="request_id"/>
+        <result property="requestNo" column="request_no"/>
+        <result property="connectionCode" column="connection_code"/>
+        <result property="triggerSource" column="trigger_source"/>
+        <result property="mode" column="mode"/>
+        <result property="requestedSyncTypes" column="requested_sync_types"/>
+        <result property="status" column="status"/>
+        <result property="submittedBy" column="submitted_by"/>
+        <result property="submittedTime" column="submitted_time"/>
+        <result property="startedTime" column="started_time"/>
+        <result property="finishedTime" column="finished_time"/>
+        <result property="taskCount" column="task_count"/>
+        <result property="successCount" column="success_count"/>
+        <result property="failedCount" column="failed_count"/>
+        <result property="timeoutCount" column="timeout_count"/>
+        <result property="skippedCount" column="skipped_count"/>
+        <result property="cancelledCount" column="cancelled_count"/>
+        <result property="lastErrorMessage" column="last_error_message"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="remark" column="remark"/>
+    </resultMap>
+
+    <resultMap id="SyncTaskResult" type="UpstreamSyncTask">
+        <id property="taskId" column="task_id"/>
+        <result property="requestNo" column="request_no"/>
+        <result property="syncBatchId" column="sync_batch_id"/>
+        <result property="connectionCode" column="connection_code"/>
+        <result property="syncType" column="sync_type"/>
+        <result property="mode" column="mode"/>
+        <result property="triggerSource" column="trigger_source"/>
+        <result property="status" column="status"/>
+        <result property="priority" column="priority"/>
+        <result property="payloadRedacted" column="payload_redacted"/>
+        <result property="leaseOwner" column="lease_owner"/>
+        <result property="leaseUntil" column="lease_until"/>
+        <result property="attemptCount" column="attempt_count"/>
+        <result property="maxAttempts" column="max_attempts"/>
+        <result property="nextAttemptTime" column="next_attempt_time"/>
+        <result property="deadlineAt" column="deadline_at"/>
+        <result property="startedTime" column="started_time"/>
+        <result property="finishedTime" column="finished_time"/>
+        <result property="currentRequestLogId" column="current_request_log_id"/>
+        <result property="traceId" column="trace_id"/>
+        <result property="sysJobInvokeTarget" column="sys_job_invoke_target"/>
+        <result property="pulledCount" column="pulled_count"/>
+        <result property="insertedCount" column="inserted_count"/>
+        <result property="changedCount" column="changed_count"/>
+        <result property="unchangedCount" column="unchanged_count"/>
+        <result property="disabledCount" column="disabled_count"/>
+        <result property="failedCount" column="failed_count"/>
+        <result property="errorCode" column="error_code"/>
+        <result property="errorMessage" column="error_message"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="remark" column="remark"/>
+    </resultMap>
+
+    <sql id="SyncRequestWhere">
+        <where>
+            <if test="connectionCode != null and connectionCode != ''">
+                and connection_code = #{connectionCode}
+            </if>
+            <if test="requestNo != null and requestNo != ''">
+                and request_no = #{requestNo}
+            </if>
+            <if test="status != null and status != ''">
+                and status = #{status}
+            </if>
+            <if test="triggerSource != null and triggerSource != ''">
+                and trigger_source = #{triggerSource}
+            </if>
+            <if test="mode != null and mode != ''">
+                and mode = #{mode}
+            </if>
+        </where>
+    </sql>
+
+    <sql id="SyncTaskWhere">
+        <where>
+            <if test="connectionCode != null and connectionCode != ''">
+                and connection_code = #{connectionCode}
+            </if>
+            <if test="requestNo != null and requestNo != ''">
+                and request_no = #{requestNo}
+            </if>
+            <if test="syncType != null and syncType != ''">
+                and sync_type = #{syncType}
+            </if>
+            <if test="status != null and status != ''">
+                and status = #{status}
+            </if>
+            <if test="triggerSource != null and triggerSource != ''">
+                and trigger_source = #{triggerSource}
+            </if>
+            <if test="mode != null and mode != ''">
+                and mode = #{mode}
+            </if>
+        </where>
+    </sql>
+
+    <insert id="insertSyncRequest" parameterType="UpstreamSyncRequestRecord" useGeneratedKeys="true" keyProperty="requestId">
+        insert into upstream_system_sync_request(
+            request_no, connection_code, trigger_source, mode, requested_sync_types,
+            status, submitted_by, submitted_time, task_count, create_time, remark
+        ) values (
+            #{requestNo}, #{connectionCode}, #{triggerSource}, #{mode}, #{requestedSyncTypes},
+            #{status}, #{submittedBy}, #{submittedTime}, #{taskCount}, sysdate(), #{remark}
+        )
+    </insert>
+
+    <insert id="insertSyncTask" parameterType="UpstreamSyncTask" useGeneratedKeys="true" keyProperty="taskId">
+        insert into upstream_system_sync_task(
+            request_no, sync_batch_id, connection_code, sync_type, mode, trigger_source,
+            status, priority, payload_redacted, attempt_count, max_attempts,
+            next_attempt_time, deadline_at, trace_id, sys_job_invoke_target, create_time, remark
+        ) values (
+            #{requestNo}, #{syncBatchId}, #{connectionCode}, #{syncType}, #{mode}, #{triggerSource},
+            #{status}, #{priority}, #{payloadRedacted}, coalesce(#{attemptCount}, 0), coalesce(#{maxAttempts}, 1),
+            #{nextAttemptTime}, #{deadlineAt}, #{traceId}, #{sysJobInvokeTarget}, sysdate(), #{remark}
+        )
+    </insert>
+
+    <select id="selectSyncRequestList" parameterType="UpstreamSyncTaskQuery" resultMap="SyncRequestResult">
+        select *
+        from upstream_system_sync_request
+        <include refid="SyncRequestWhere"/>
+        order by submitted_time desc, request_id desc
+    </select>
+
+    <select id="selectSyncTaskList" parameterType="UpstreamSyncTaskQuery" resultMap="SyncTaskResult">
+        select *
+        from upstream_system_sync_task
+        <include refid="SyncTaskWhere"/>
+        order by task_id desc
+    </select>
+
+    <select id="selectSyncTaskById" resultMap="SyncTaskResult">
+        select *
+        from upstream_system_sync_task
+        where connection_code = #{connectionCode}
+          and task_id = #{taskId}
+        limit 1
+    </select>
+
+    <select id="selectClaimableTasks" resultMap="SyncTaskResult">
+        select *
+        from upstream_system_sync_task
+        where status = 'PENDING'
+          and (next_attempt_time is null or next_attempt_time &lt;= sysdate())
+        order by priority asc, task_id asc
+        limit #{limit}
+    </select>
+
+    <select id="selectExpiredLeaseTasks" resultMap="SyncTaskResult">
+        select *
+        from upstream_system_sync_task
+        where status in ('CLAIMED', 'RUNNING')
+          and lease_until is not null
+          and lease_until &lt; #{now}
+        order by lease_until asc, task_id asc
+    </select>
+
+    <update id="claimSyncTask">
+        update upstream_system_sync_task
+        set status = 'CLAIMED',
+            lease_owner = #{leaseOwner},
+            lease_until = #{leaseUntil},
+            update_time = sysdate()
+        where task_id = #{taskId}
+          and status = 'PENDING'
+    </update>
+
+    <update id="markSyncTaskRunning" parameterType="UpstreamSyncTask">
+        update upstream_system_sync_task
+        set status = 'RUNNING',
+            started_time = #{startedTime},
+            trace_id = #{traceId},
+            lease_until = #{leaseUntil},
+            attempt_count = attempt_count + 1,
+            update_time = sysdate()
+        where task_id = #{taskId}
+          and status = 'CLAIMED'
+    </update>
+
+    <update id="completeSyncTask" parameterType="UpstreamSyncTask">
+        update upstream_system_sync_task
+        set status = #{status},
+            finished_time = #{finishedTime},
+            lease_owner = '',
+            lease_until = null,
+            current_request_log_id = #{currentRequestLogId},
+            pulled_count = coalesce(#{pulledCount}, 0),
+            inserted_count = coalesce(#{insertedCount}, 0),
+            changed_count = coalesce(#{changedCount}, 0),
+            unchanged_count = coalesce(#{unchangedCount}, 0),
+            disabled_count = coalesce(#{disabledCount}, 0),
+            failed_count = coalesce(#{failedCount}, 0),
+            error_code = #{errorCode},
+            error_message = #{errorMessage},
+            update_time = sysdate()
+        where task_id = #{taskId}
+          and status in ('CLAIMED', 'RUNNING')
+    </update>
+
+    <update id="cancelSyncTask">
+        update upstream_system_sync_task
+        set status = 'CANCELED',
+            finished_time = sysdate(),
+            error_code = 'CANCELED',
+            error_message = #{message},
+            update_time = sysdate()
+        where connection_code = #{connectionCode}
+          and task_id = #{taskId}
+          and status in ('PENDING', 'CLAIMED')
+    </update>
+
+    <update id="updateRequestSummary">
+        update upstream_system_sync_request r
+        join (
+            select request_no,
+                   count(1) as task_count,
+                   sum(case when status = 'SUCCESS' then 1 else 0 end) as success_count,
+                   sum(case when status = 'FAILED' then 1 else 0 end) as failed_count,
+                   sum(case when status = 'TIMEOUT' then 1 else 0 end) as timeout_count,
+                   sum(case when status = 'SKIPPED' then 1 else 0 end) as skipped_count,
+                   sum(case when status = 'CANCELED' then 1 else 0 end) as cancelled_count,
+                   min(started_time) as started_time,
+                   case
+                     when sum(case when status in ('PENDING', 'CLAIMED', 'RUNNING') then 1 else 0 end) = 0
+                     then max(finished_time)
+                     else null
+                   end as finished_time,
+                   substring_index(group_concat(nullif(error_message, '') order by task_id desc separator ' | '), ' | ', 1) as last_error_message
+            from upstream_system_sync_task
+            where request_no = #{requestNo}
+            group by request_no
+        ) t on t.request_no = r.request_no
+        set r.task_count = t.task_count,
+            r.success_count = coalesce(t.success_count, 0),
+            r.failed_count = coalesce(t.failed_count, 0),
+            r.timeout_count = coalesce(t.timeout_count, 0),
+            r.skipped_count = coalesce(t.skipped_count, 0),
+            r.cancelled_count = coalesce(t.cancelled_count, 0),
+            r.started_time = t.started_time,
+            r.finished_time = t.finished_time,
+            r.last_error_message = coalesce(t.last_error_message, ''),
+            r.status = case
+                when t.finished_time is null then
+                    case when t.started_time is null then 'PENDING' else 'RUNNING' end
+                when coalesce(t.failed_count, 0) > 0 then 'FAILED'
+                when coalesce(t.timeout_count, 0) > 0 then 'TIMEOUT'
+                when coalesce(t.cancelled_count, 0) = t.task_count then 'CANCELED'
+                when coalesce(t.success_count, 0) = t.task_count then 'SUCCESS'
+                else 'SKIPPED'
+            end,
+            r.update_time = sysdate()
+        where r.request_no = #{requestNo}
+    </update>
+</mapper>

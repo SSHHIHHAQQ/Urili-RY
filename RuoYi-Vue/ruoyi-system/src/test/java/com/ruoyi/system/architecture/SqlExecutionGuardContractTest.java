@@ -3710,6 +3710,64 @@ public class SqlExecutionGuardContractTest
     }
 
     @Test
+    public void buyerProductCenterMenuSeedMustFailClosedAndGrantOwnerRoles() throws IOException
+    {
+        Path backendRoot = findWorkspaceRoot().resolve("RuoYi-Vue");
+        Path sqlFile = backendRoot.resolve("sql/20260612_buyer_product_center_menu_seed.sql");
+        String source = Files.readString(sqlFile, StandardCharsets.UTF_8);
+        String fileName = sqlFile.getFileName().toString();
+        List<String> violations = new ArrayList<>();
+
+        for (String expected : new String[] {
+                "@confirm_buyer_product_center_menu_seed",
+                "APPLY_BUYER_PRODUCT_CENTER_MENU_SEED",
+                "create procedure assert_buyer_product_center_menu_seed_confirmed",
+                "create procedure assert_buyer_product_center_menu_ready",
+                "create procedure assert_buyer_menu_permission_slot",
+                "create procedure assert_buyer_product_center_seed_completed",
+                "buyer_menu contains IDs outside buyer range 200000-299999",
+                "buyer_menu auto_increment must be between 200000 and 299999 before buyer product center seed inserts",
+                "buyer_menu page menus require component under Buyer/",
+                "buyer_menu perms must be unique before buyer product center grants",
+                "buyer product center page menu signature mismatch",
+                "buyer product center query button signature mismatch",
+                "buyer owner roles product center permission exact grant count mismatch",
+                "call assert_buyer_menu_permission_slot('buyer:product:center:list', 0, 'C', '/buyer/portal/product-center', 'Buyer/ProductCenter/index', 'BuyerProductCenter'",
+                "call assert_buyer_menu_permission_slot('buyer:product:center:query', @buyer_product_center_menu_id, 'F', '', null, ''",
+                "join buyer_menu m on m.perms in ('buyer:product:center:list', 'buyer:product:center:query')",
+                "r.role_key = 'owner'",
+                "start transaction;",
+                "commit;",
+                "drop procedure if exists assert_buyer_product_center_seed_completed"
+        })
+        {
+            requireContains(violations, fileName, source, expected);
+        }
+
+        assertAppearsBefore(violations, fileName, source,
+                "call assert_buyer_product_center_menu_seed_confirmed();",
+                "call assert_buyer_product_center_menu_ready();");
+        assertAppearsBefore(violations, fileName, source,
+                "call assert_buyer_product_center_menu_ready();",
+                "call assert_buyer_menu_permission_slot('buyer:product:center:list'");
+        assertAppearsBefore(violations, fileName, source,
+                "call assert_buyer_menu_permission_slot('buyer:product:center:list'",
+                "start transaction;");
+        assertAppearsBefore(violations, fileName, source,
+                "start transaction;",
+                "insert into buyer_menu");
+        assertAppearsBefore(violations, fileName, source,
+                "call assert_buyer_product_center_seed_completed();",
+                "commit;");
+
+        if (!violations.isEmpty())
+        {
+            fail("buyer product center menu seed must fail closed and grant owner roles exactly:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    @Test
     public void productReviewMenuSeedMustFailClosedForParentAndButtonSlots() throws IOException
     {
         Path backendRoot = findWorkspaceRoot().resolve("RuoYi-Vue");

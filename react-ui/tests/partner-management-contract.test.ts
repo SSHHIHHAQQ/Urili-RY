@@ -155,6 +155,21 @@ describe('partner management contract', () => {
     expect(accountModal).not.toContain('message.success(`${config.label}端账号免密登录链接已生成');
   });
 
+  it('keeps admin direct-login reason optional for subject and account entry points', () => {
+    expect(managementPage).toContain('label="代入原因（选填）"');
+    expect(managementPage).not.toContain("required: true, whitespace: true, message: '请输入免密登录原因'");
+    expect(accountModal).toContain('代入原因（选填）');
+    expect(accountModal).not.toContain("message.error('请输入免密登录原因')");
+    expect(accountModal).not.toContain('DIRECT_LOGIN_REASON_REQUIRED');
+
+    expect(sellerService).toContain('createAdminSellerDirectLogin(sellerId: number, reason?: string)');
+    expect(sellerService).toContain('createAdminSellerAccountDirectLogin(sellerId: number, sellerAccountId: number, reason?: string)');
+    expect(buyerService).toContain('createAdminBuyerDirectLogin(buyerId: number, reason?: string)');
+    expect(buyerService).toContain('createAdminBuyerAccountDirectLogin(buyerId: number, buyerAccountId: number, reason?: string)');
+    expect(sellerService).toContain("data: { reason: reason?.trim() || '' }");
+    expect(buyerService).toContain("data: { reason: reason?.trim() || '' }");
+  });
+
   it('keeps admin session list params limited to pagination', () => {
     expect(managementPage).toContain('params?: API.Partner.PartnerSessionPageParams');
     expect(sellerService).toContain('sanitizePartnerSessionPageParams');

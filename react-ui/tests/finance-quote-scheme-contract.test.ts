@@ -92,7 +92,11 @@ describe('finance quote scheme admin contract', () => {
     expect(page).toContain('normalizeWarehouseCodes');
     expect(page).toContain('warehouseCodes: normalizeWarehouseCodes');
     expect(page).toContain("warehouseCodes: warehouseCode");
-    expect(page).not.toContain('name="warehouseCodes"\n                      label="适用仓库"\n                      mode="multiple"');
+    expect(page).toContain("warehouseScopeMode: 'INCLUDE'");
+    expect(page).toContain('name="warehouseCodes"\n                label="仓库"');
+    expect(page).not.toContain('label="仓库范围"');
+    expect(page).not.toContain('label="适用仓库"');
+    expect(page).not.toContain('quote_scheme_warehouse_scope_mode');
     expect(page).toContain('buildChannelFormValues');
     expect(page).toContain('buildValueFeeFormValues');
     expect(page).toContain('QuoteSchemeValueFeeRule');

@@ -366,7 +366,7 @@ public class PortalDirectLoginSupport
 
     private String normalizeReason(String reason)
     {
-        String value = PartnerSupport.trimRequired(reason, "免密登录原因不能为空");
+        String value = StringUtils.trimToEmpty(reason);
         if (value.length() > 255)
         {
             throw new ServiceException("免密登录原因不能超过255个字符");

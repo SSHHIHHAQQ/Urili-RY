@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 import org.junit.Test;
 import com.github.pagehelper.Page;
+import com.github.pagehelper.page.PageMethod;
 import com.ruoyi.buyer.domain.BuyerAccount;
 import com.ruoyi.buyer.domain.BuyerPortalProduct;
 import com.ruoyi.buyer.domain.BuyerPortalProductSku;
@@ -26,7 +27,7 @@ import com.ruoyi.system.domain.PortalLoginSession;
 public class BuyerPortalProductServiceImplTest
 {
     @Test
-    public void selectVisibleProductListUsesOnSaleProductQueryAndIgnoresClientScopeFields()
+    public void selectVisibleProductListUsesBuyerVisibleQueryAndIgnoresClientScopeFields()
     {
         RecordingProductDistributionService productService = new RecordingProductDistributionService();
         productService.onSaleProductListResult.add(onSaleProduct(1L));
@@ -52,9 +53,9 @@ public class BuyerPortalProductServiceImplTest
         assertEquals("Chair", productService.onSaleProductListQuery.getProductNameEn());
         assertEquals(Long.valueOf(7L), productService.onSaleProductListQuery.getCategoryId());
         assertEquals("chair", productService.onSaleProductListQuery.getKeyword());
+        assertEquals("SPU-INTERNAL", productService.onSaleProductListQuery.getSystemSpuCode());
+        assertEquals("SKU-INTERNAL", productService.onSaleProductListQuery.getSystemSkuCode());
         assertEquals(null, productService.onSaleProductListQuery.getSellerId());
-        assertEquals(null, productService.onSaleProductListQuery.getSystemSpuCode());
-        assertEquals(null, productService.onSaleProductListQuery.getSystemSkuCode());
         assertEquals(null, productService.onSaleProductListQuery.getSellerSpuCode());
         assertEquals(null, productService.onSaleProductListQuery.getSellerSkuCode());
         assertEquals(null, productService.onSaleProductListQuery.getSpuStatus());
@@ -82,6 +83,29 @@ public class BuyerPortalProductServiceImplTest
         assertEquals(20, resultPage.getPageSize());
         assertEquals(45L, resultPage.getTotal());
         assertEquals(3, resultPage.getPages());
+    }
+
+    @Test
+    public void selectVisibleProductListDoesNotApplyPageHelperToSessionAccountLookup()
+    {
+        RecordingProductDistributionService productService = new RecordingProductDistributionService();
+        RecordingBuyerMapper buyerMapper = new RecordingBuyerMapper(true);
+        BuyerPortalProductServiceImpl service = service(productService, buyerMapper(buyerMapper));
+        Page<ProductSpu> activePage = new Page<>(1, 20, true);
+
+        PageMethod.setLocalPage(activePage);
+        try
+        {
+            service.selectVisibleProductList(buyerSession(), new ProductSpu());
+
+            assertFalse(buyerMapper.pageActiveDuringAccountLookup);
+            assertSame(activePage, productService.pageDuringOnSaleProductList);
+            assertSame(activePage, PageMethod.getLocalPage());
+        }
+        finally
+        {
+            PageMethod.clearPage();
+        }
     }
 
     @Test
@@ -360,6 +384,7 @@ public class BuyerPortalProductServiceImplTest
 
         private ProductSpu onSaleProductListQuery;
         private List<ProductSpu> returnedOnSaleProductListSource;
+        private Page<?> pageDuringOnSaleProductList;
         private ProductSpu onSaleProductByIdResult;
         private Long onSaleProductByIdArg;
         private Long onSaleSkuListSpuId;
@@ -386,6 +411,7 @@ public class BuyerPortalProductServiceImplTest
         public List<ProductSpu> selectBuyerVisibleProductList(ProductSpu query)
         {
             onSaleProductListQuery = query;
+            pageDuringOnSaleProductList = PageMethod.getLocalPage();
             returnedOnSaleProductListSource = onSaleProductListResult;
             return onSaleProductListResult;
         }
@@ -410,6 +436,7 @@ public class BuyerPortalProductServiceImplTest
         private final boolean accountExists;
         private Long buyerId;
         private Long buyerAccountId;
+        private boolean pageActiveDuringAccountLookup;
 
         private RecordingBuyerMapper(boolean accountExists)
         {
@@ -423,6 +450,7 @@ public class BuyerPortalProductServiceImplTest
             {
                 buyerId = (Long) args[0];
                 buyerAccountId = (Long) args[1];
+                pageActiveDuringAccountLookup = PageMethod.getLocalPage() != null;
                 return accountExists ? new BuyerAccount() : null;
             }
             if ("toString".equals(method.getName()))

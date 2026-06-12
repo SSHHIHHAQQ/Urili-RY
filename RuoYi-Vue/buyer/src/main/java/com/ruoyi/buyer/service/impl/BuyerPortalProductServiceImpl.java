@@ -8,6 +8,7 @@ import java.util.Set;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import com.github.pagehelper.Page;
+import com.github.pagehelper.page.PageMethod;
 import com.ruoyi.buyer.domain.BuyerAccount;
 import com.ruoyi.buyer.domain.BuyerPortalProduct;
 import com.ruoyi.buyer.domain.BuyerPortalProductSku;
@@ -72,6 +73,8 @@ public class BuyerPortalProductServiceImpl implements IBuyerPortalProductService
         scoped.setKeyword(query.getKeyword());
         scoped.setProductName(query.getProductName());
         scoped.setProductNameEn(query.getProductNameEn());
+        scoped.setSystemSpuCode(query.getSystemSpuCode());
+        scoped.setSystemSkuCode(query.getSystemSkuCode());
         scoped.setCategoryId(query.getCategoryId());
         return scoped;
     }
@@ -119,11 +122,28 @@ public class BuyerPortalProductServiceImpl implements IBuyerPortalProductService
         {
             throw new ServiceException("登录状态已失效", HttpStatus.UNAUTHORIZED);
         }
-        BuyerAccount account = buyerMapper.selectBuyerAccountByIdAndBuyerId(session.getSubjectId(),
-            session.getAccountId());
+        BuyerAccount account = selectBuyerSessionAccountWithoutPage(session);
         if (account == null)
         {
             throw new ServiceException("登录状态已失效", HttpStatus.UNAUTHORIZED);
+        }
+    }
+
+    private BuyerAccount selectBuyerSessionAccountWithoutPage(PortalLoginSession session)
+    {
+        Page<?> page = PageMethod.getLocalPage();
+        if (page == null)
+        {
+            return buyerMapper.selectBuyerAccountByIdAndBuyerId(session.getSubjectId(), session.getAccountId());
+        }
+        try
+        {
+            PageMethod.clearPage();
+            return buyerMapper.selectBuyerAccountByIdAndBuyerId(session.getSubjectId(), session.getAccountId());
+        }
+        finally
+        {
+            PageMethod.setLocalPage(page);
         }
     }
 

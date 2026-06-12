@@ -38,6 +38,7 @@ public class PortalProductEndpointPermissionContractTest
         assertProductSchemaController(backendRoot, "buyer", violations);
         assertSellerDistributionController(backendRoot, violations);
         assertBuyerDistributionController(backendRoot, violations);
+        assertBuyerProductCenterController(backendRoot, violations);
 
         if (!violations.isEmpty())
         {
@@ -168,6 +169,23 @@ public class PortalProductEndpointPermissionContractTest
                 "PortalSessionContext.requireSession(\"buyer\")",
                 "buyerPortalProductService.selectVisibleProductById(session, spuId)", violations);
         assertPortalHandler(controller, handlers, "skus", "buyer", "buyer:product:distribution:query",
+                "PortalSessionContext.requireSession(\"buyer\")",
+                "buyerPortalProductService.selectVisibleSkuList(session, spuId)", violations);
+    }
+
+    private void assertBuyerProductCenterController(Path backendRoot, List<String> violations) throws IOException
+    {
+        Path controller = backendRoot.resolve(
+                "buyer/src/main/java/com/ruoyi/buyer/controller/BuyerPortalProductCenterController.java");
+        List<HandlerMethod> handlers = extractHandlerMethods(Files.readString(controller, StandardCharsets.UTF_8));
+
+        assertPortalHandler(controller, handlers, "list", "buyer", "buyer:product:center:list",
+                "PortalSessionContext.requireSession(\"buyer\")",
+                "buyerPortalProductService.selectVisibleProductList(session, query)", violations);
+        assertPortalHandler(controller, handlers, "get", "buyer", "buyer:product:center:query",
+                "PortalSessionContext.requireSession(\"buyer\")",
+                "buyerPortalProductService.selectVisibleProductById(session, spuId)", violations);
+        assertPortalHandler(controller, handlers, "skus", "buyer", "buyer:product:center:query",
                 "PortalSessionContext.requireSession(\"buyer\")",
                 "buyerPortalProductService.selectVisibleSkuList(session, spuId)", violations);
     }

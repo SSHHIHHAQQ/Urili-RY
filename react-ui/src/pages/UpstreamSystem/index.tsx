@@ -439,7 +439,7 @@ export default function UpstreamSystemPage() {
         syncTypes: defaultManualSyncTypes,
         submitting: false,
       });
-      message.success('已开始后台同步，可继续操作');
+      message.success('已提交同步任务，可在同步任务页查看进度');
       startSyncPolling(record.connectionCode, submittedTypes);
       await reloadCurrent(record.connectionCode);
     } else {

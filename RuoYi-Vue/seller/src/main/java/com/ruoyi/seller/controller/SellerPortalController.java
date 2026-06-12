@@ -190,6 +190,7 @@ public class SellerPortalController extends BaseController
         }
         account.setSellerAccountId(targetAccountId);
         account.setAccountId(targetAccountId);
+        account.setSellerId(null);
         return toAjax(sellerService.updateSellerAccount(session.getSubjectId(), account));
     }
 

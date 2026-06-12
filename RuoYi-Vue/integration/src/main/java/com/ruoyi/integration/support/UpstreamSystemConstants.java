@@ -39,7 +39,31 @@ public final class UpstreamSystemConstants
 
     public static final String SYNC_STATUS_FAILED = "FAILED";
 
+    public static final String SYNC_STATUS_TIMEOUT = "TIMEOUT";
+
     public static final String SYNC_STATUS_SKIPPED = "SKIPPED";
+
+    public static final String SYNC_TASK_STATUS_PENDING = "PENDING";
+
+    public static final String SYNC_TASK_STATUS_CLAIMED = "CLAIMED";
+
+    public static final String SYNC_TASK_STATUS_RUNNING = "RUNNING";
+
+    public static final String SYNC_TASK_STATUS_SUCCESS = "SUCCESS";
+
+    public static final String SYNC_TASK_STATUS_FAILED = "FAILED";
+
+    public static final String SYNC_TASK_STATUS_TIMEOUT = "TIMEOUT";
+
+    public static final String SYNC_TASK_STATUS_SKIPPED = "SKIPPED";
+
+    public static final String SYNC_TASK_STATUS_CANCELED = "CANCELED";
+
+    public static final String SYNC_TRIGGER_MANUAL = "MANUAL";
+
+    public static final String SYNC_TRIGGER_SCHEDULED = "SCHEDULED";
+
+    public static final String SYNC_TRIGGER_RECOVERY = "RECOVERY";
 
     public static final String SYNC_TYPE_WAREHOUSE = "WAREHOUSE";
 
@@ -74,6 +98,8 @@ public final class UpstreamSystemConstants
     public static final String OP_SKU_DIMENSION_SELECTED_SYNC = "SKU_DIMENSION_SELECTED_SYNC";
 
     public static final String OP_INVENTORY_SYNC = "INVENTORY_SYNC";
+
+    public static final String OP_FEE_ESTIMATE = "FEE_ESTIMATE";
 
     public static final String OP_TASK_WAREHOUSE_SYNC = "TASK_WAREHOUSE_SYNC";
 

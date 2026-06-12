@@ -69,8 +69,16 @@ describe('upstream system permission guard', () => {
 
     expect(source).toContain("const canPairUpstream = access.hasPerms('integration:upstream:pair')");
     expect(source).toContain("const canQueryOfficialWarehouses = access.hasPerms('warehouse:official:list')");
+    expect(source).toContain("const canViewSyncTasks = access.hasPerms('integration:upstream:task:list')");
+    expect(source).toContain("const canRetrySyncTask = access.hasPerms('integration:upstream:task:retry')");
+    expect(source).toContain("const canCancelSyncTask = access.hasPerms('integration:upstream:task:cancel')");
     expect(source).toContain('hidden={!canPairUpstream || !canQueryOfficialWarehouses}');
     expect(source).toMatch(/return canPairUpstream \? \([\s\S]*?<Popconfirm[\s\S]*?deleteLogisticsChannelPairing[\s\S]*?\) : \(/);
+    expect(source).toContain("key: 'tasks'");
+    expect(source).toContain('disabled: !canViewSyncTasks');
+    expect(source).toContain('getSyncTaskList(requestCode,');
+    expect(source).toContain('retrySyncTask(selectedCode, record.taskId)');
+    expect(source).toContain('cancelSyncTask(selectedCode, record.taskId)');
   });
 
   it('maps request-log ProTable pagination to RuoYi page parameters', () => {
@@ -79,6 +87,8 @@ describe('upstream system permission guard', () => {
     expect(source).toContain('const { current, pageSize, ...rest } = params;');
     expect(source).toMatch(/getRequestLogList\(requestCode,\s*\{[\s\S]*?\.\.\.rest[\s\S]*?pageNum:\s*current[\s\S]*?pageSize[\s\S]*?\}\)/);
     expect(source).not.toContain('getRequestLogList(requestCode, params)');
+    expect(source).toMatch(/getSyncTaskList\(requestCode,\s*\{[\s\S]*?\.\.\.rest[\s\S]*?pageNum:\s*current[\s\S]*?pageSize[\s\S]*?\}\)/);
+    expect(source).not.toContain('getSyncTaskList(requestCode, params)');
   });
 
   it('maps upstream SKU and inventory panels to RuoYi page parameters', () => {

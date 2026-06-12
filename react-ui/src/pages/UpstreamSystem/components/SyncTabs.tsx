@@ -4,15 +4,19 @@ import {
   ProTable,
 } from '@ant-design/pro-components';
 import { Button, Popconfirm, Space, Tabs, Tag, Typography } from 'antd';
+import { useRef } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import {
+  cancelSyncTask,
   deleteLogisticsChannelPairing,
   deleteWarehousePairing,
   getLogisticsChannelPairings,
   getLogisticsChannelSyncList,
   getRequestLogList,
+  getSyncTaskList,
   getWarehousePairings,
   getWarehouseSyncList,
+  retrySyncTask,
 } from '@/services/integration/upstreamSystem';
 import {
   getProTablePagination,
@@ -24,6 +28,9 @@ import {
   pairingRoleText,
   requestOperationText,
   requestResultText,
+  syncTaskStatusColor,
+  syncTaskStatusText,
+  syncTypeText,
 } from '../constants';
 import { resultOk, statusTag } from '../helpers';
 import styles from '../style.module.css';
@@ -52,8 +59,14 @@ const requestResultLabel = (value?: string) => {
   return requestResultText[normalizedValue] || value || '-';
 };
 
-const requestResultColor = (value?: string) =>
-  value?.toUpperCase() === 'SUCCESS' ? 'green' : 'red';
+const requestResultColor = (value?: string) => {
+  const normalizedValue = value?.toUpperCase();
+  if (normalizedValue === 'SUCCESS') return 'green';
+  if (normalizedValue === 'STARTED') return 'processing';
+  if (normalizedValue === 'TIMEOUT') return 'orange';
+  if (['FAILURE', 'FAILED', 'ERROR'].includes(normalizedValue || '')) return 'red';
+  return 'default';
+};
 
 export default function SyncTabs({
   access,
@@ -73,6 +86,10 @@ export default function SyncTabs({
   const canQueryOfficialWarehouses = access.hasPerms('warehouse:official:list');
   const canQueryInventory = access.hasPerms('integration:upstream:inventoryQuery');
   const canViewLogs = access.hasPerms('integration:upstream:log');
+  const canViewSyncTasks = access.hasPerms('integration:upstream:task:list');
+  const canRetrySyncTask = access.hasPerms('integration:upstream:task:retry');
+  const canCancelSyncTask = access.hasPerms('integration:upstream:task:cancel');
+  const taskActionRef = useRef<ActionType>(null);
   const normalizedSettlementType = normalizeSettlementTypeValue(
     selectedConnection.settlementType,
   );
@@ -231,6 +248,97 @@ export default function SyncTabs({
           配为{currentPairingRoleLabel}渠道
         </Button>,
       ],
+    },
+  ];
+
+  const taskColumns: ProColumns<API.Integration.SyncTask>[] = [
+    { title: '创建时间', dataIndex: 'createTime', width: 170, search: false },
+    {
+      title: '同步项',
+      dataIndex: 'syncType',
+      width: 150,
+      renderText: (value) => syncTypeText[value] || value || '-',
+    },
+    {
+      title: '状态',
+      dataIndex: 'status',
+      width: 110,
+      render: (_, record) => {
+        const status = record.status?.toUpperCase() || '';
+        return (
+          <Tag color={syncTaskStatusColor[status] || 'default'}>
+            {syncTaskStatusText[status] || record.status || '-'}
+          </Tag>
+        );
+      },
+    },
+    {
+      title: '模式',
+      dataIndex: 'mode',
+      width: 110,
+      renderText: (value) => (value === 'SCHEDULED' ? '定时' : value === 'SELECTED' ? '指定SKU' : '手动'),
+    },
+    { title: '批次号', dataIndex: 'syncBatchId', width: 220, copyable: true, search: false },
+    { title: '开始时间', dataIndex: 'startedTime', width: 170, search: false },
+    { title: '结束时间', dataIndex: 'finishedTime', width: 170, search: false },
+    {
+      title: '拉取/变更',
+      dataIndex: 'pulledCount',
+      width: 120,
+      search: false,
+      render: (_, record) => `${record.pulledCount ?? 0}/${record.changedCount ?? 0}`,
+    },
+    {
+      title: '错误信息',
+      dataIndex: 'errorMessage',
+      ellipsis: true,
+      search: false,
+    },
+    {
+      title: '操作',
+      valueType: 'option',
+      width: 150,
+      render: (_, record) => {
+        const status = record.status?.toUpperCase();
+        const canRetry = ['FAILED', 'TIMEOUT', 'SKIPPED', 'CANCELED'].includes(status || '');
+        const canCancel = ['PENDING', 'CLAIMED'].includes(status || '');
+        return [
+          <Button
+            key="retry"
+            type="link"
+            size="small"
+            hidden={!canRetrySyncTask || !canRetry}
+            onClick={async () => {
+              const ok = resultOk(
+                await retrySyncTask(selectedCode, record.taskId),
+                '已提交重试任务',
+              );
+              if (ok) taskActionRef.current?.reload();
+            }}
+          >
+            重试
+          </Button>,
+          <Popconfirm
+            key="cancel"
+            title="确认取消该同步任务？"
+            onConfirm={async () => {
+              const ok = resultOk(
+                await cancelSyncTask(selectedCode, record.taskId),
+                '已取消任务',
+              );
+              if (ok) taskActionRef.current?.reload();
+            }}
+          >
+            <Button
+              type="link"
+              size="small"
+              hidden={!canCancelSyncTask || !canCancel}
+            >
+              取消
+            </Button>
+          </Popconfirm>,
+        ];
+      },
     },
   ];
 
@@ -420,6 +528,43 @@ export default function SyncTabs({
               />
             ),
             disabled: !canQueryInventory,
+          },
+          {
+            key: 'tasks',
+            label: '同步任务',
+            disabled: !canViewSyncTasks,
+            children: (
+              <ProTable<API.Integration.SyncTask>
+                actionRef={taskActionRef}
+                className={`${styles.fillTable} upstream-fill-table`}
+                key={`tasks-${selectedCode}`}
+                rowKey="taskId"
+                columns={taskColumns}
+                params={{ selectedCode }}
+                request={async (params) => {
+                  if (!canViewSyncTasks) {
+                    return { data: [], total: 0, success: true };
+                  }
+                  const requestCode = selectedCode;
+                  const { current, pageSize, ...rest } = params;
+                  const resp = await getSyncTaskList(requestCode, {
+                    ...rest,
+                    pageNum: current,
+                    pageSize,
+                  });
+                  return {
+                    data: resp.rows || [],
+                    total: resp.total || 0,
+                    success: resp.code === 200,
+                  };
+                }}
+                pagination={getProTablePagination(10)}
+                search={false}
+                options={false}
+                toolBarRender={false}
+                scroll={getProTableScroll(1300)}
+              />
+            ),
           },
           {
             key: 'logs',

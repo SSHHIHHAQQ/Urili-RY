@@ -385,7 +385,10 @@ insert into tmp_upstream_system_management_sys_menu_guard(menu_id, parent_id, me
     (2306, 2031, 'F', '#', '', '', 'integration:upstream:log'),
     (2307, 2031, 'F', '#', '', '', 'integration:upstream:dimensionSync'),
     (2308, 2031, 'F', '#', '', '', 'integration:upstream:inventoryQuery'),
-    (2309, 2031, 'F', '#', '', '', 'integration:upstream:inventorySync');
+    (2309, 2031, 'F', '#', '', '', 'integration:upstream:inventorySync'),
+    (2324, 2031, 'F', '#', '', '', 'integration:upstream:task:list'),
+    (2325, 2031, 'F', '#', '', '', 'integration:upstream:task:retry'),
+    (2326, 2031, 'F', '#', '', '', 'integration:upstream:task:cancel');
 
 call assert_upstream_system_management_sys_menu_guard();
 
@@ -494,7 +497,16 @@ values
      sysdate(), '', null, ''),
     (2309, 'SKU库存同步', 2031, 50, '#', '', '', '',
      1, 0, 'F', '0', '0', 'integration:upstream:inventorySync', '#', 'admin',
-     sysdate(), '', null, '')
+     sysdate(), '', null, ''),
+    (2324, '同步任务查看', 2031, 55, '#', '', '', '',
+     1, 0, 'F', '0', '0', 'integration:upstream:task:list', '#', 'admin',
+     sysdate(), '', null, '查看上游同步任务请求和执行项'),
+    (2325, '同步任务重试', 2031, 60, '#', '', '', '',
+     1, 0, 'F', '0', '0', 'integration:upstream:task:retry', '#', 'admin',
+     sysdate(), '', null, '重试失败或超时的上游同步任务'),
+    (2326, '同步任务取消', 2031, 65, '#', '', '', '',
+     1, 0, 'F', '0', '0', 'integration:upstream:task:cancel', '#', 'admin',
+     sysdate(), '', null, '取消尚未执行的上游同步任务')
 on duplicate key update
     menu_name = values(menu_name),
     parent_id = values(parent_id),

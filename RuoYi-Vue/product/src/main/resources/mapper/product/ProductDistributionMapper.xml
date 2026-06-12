@@ -660,6 +660,21 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                 or p.product_name_en like concat('%', #{keyword}, '%')
             )
         </if>
+        <if test="skuCode != null and skuCode != ''">
+            and (
+                sk.system_sku_code like concat('%', #{skuCode}, '%')
+                or sk.seller_sku_code like concat('%', #{skuCode}, '%')
+                or b.master_sku like concat('%', #{skuCode}, '%')
+            )
+        </if>
+        <if test="sourceWarehouseCode != null and sourceWarehouseCode != ''">
+            and exists (
+                select 1
+                from product_spu_warehouse fsw
+                where fsw.spu_id = sk.spu_id
+                  and fsw.warehouse_code = #{sourceWarehouseCode}
+            )
+        </if>
         <if test="systemSkuCode != null and systemSkuCode != ''">
             and sk.system_sku_code like concat('%', #{systemSkuCode}, '%')
         </if>

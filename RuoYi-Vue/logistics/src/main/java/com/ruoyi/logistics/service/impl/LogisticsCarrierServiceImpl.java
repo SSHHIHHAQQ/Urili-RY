@@ -467,7 +467,6 @@ public class LogisticsCarrierServiceImpl implements ILogisticsCarrierService
     @Override
     public List<LogisticsCarrierRequestLog> selectRequestLogList(Long carrierAccountId)
     {
-        selectConnectionByAccountId(carrierAccountId);
         return logisticsCarrierMapper.selectRequestLogList(carrierAccountId);
     }
 

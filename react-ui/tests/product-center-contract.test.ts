@@ -18,6 +18,8 @@ function expectPureNamedReExport(relativePath: string, target: string) {
 describe('product center buyer-facing contract', () => {
   it('keeps js mirrors aligned for product center pages and shared components', () => {
     expectPureDefaultReExport('src/pages/Product/ProductCenter/index.js', './index.tsx');
+    expectPureDefaultReExport('src/pages/Buyer/ProductCenter/index.js', './index.tsx');
+    expectPureDefaultReExport('src/pages/Portal/Home/BuyerProductCenter.js', './BuyerProductCenter.tsx');
     expectPureDefaultReExport('src/components/ProductCenter/ProductCenterPage.js', './ProductCenterPage.tsx');
     expectPureDefaultReExport(
       'src/components/ProductCenter/ProductCenterDetailModal.js',
@@ -47,6 +49,39 @@ describe('product center buyer-facing contract', () => {
     expect(sharedPage).not.toContain("access.hasPerms('product:center");
     expect(sharedPage).toContain('fetchList: (params?: Record<string, any>)');
     expect(sharedPage).toContain('fetchProduct: (spuId: number)');
+  });
+
+  it('reuses the shared product center page for the buyer portal entry', () => {
+    const buyerPage = readSource('src/pages/Portal/Home/BuyerProductCenter.tsx');
+    const buyerRouteEntry = readSource('src/pages/Buyer/ProductCenter/index.tsx');
+    const portalService = readSource('src/services/portal/session.ts');
+
+    expect(buyerRouteEntry.trim()).toBe("export { default } from '@/pages/Portal/Home';");
+    expect(buyerPage).toContain("import ProductCenterPage from '@/components/ProductCenter/ProductCenterPage';");
+    expect(buyerPage).toContain('getBuyerPortalProductCenterProducts');
+    expect(buyerPage).toContain('getBuyerPortalProductCenterProduct');
+    expect(buyerPage).toContain('getBuyerPortalProductCenterProductSkus');
+    expect(buyerPage).toContain("hasPermission(permissions, 'buyer:product:center:list')");
+    expect(buyerPage).toContain("hasPermission(permissions, 'buyer:product:center:query')");
+    expect(buyerPage).toContain('visibleSystemSkuCodes');
+    expect(buyerPage).toContain('fetchList={fetchBuyerProductCenterList}');
+    expect(buyerPage).toContain('fetchProduct={fetchBuyerProductCenterProduct}');
+    expect(buyerPage).toContain('storageKey="buyer-product-center"');
+    expect(portalService).toContain("buildPortalUrl('buyer', '/product/center/list')");
+    expect(portalService).toContain("buildPortalUrl('buyer', `/product/center/${spuId}`)");
+    expect(portalService).toContain("buildPortalUrl('buyer', `/product/center/${spuId}/skus`)");
+
+    for (const forbidden of [
+      'buyerId',
+      'sellerId',
+      'sellerName',
+      'sellerSkuCode',
+      'supplyPrice',
+      'controlStatus',
+      'getBuyerPortalDistributionProducts',
+    ]) {
+      expect(buyerPage).not.toContain(forbidden);
+    }
   });
 
   it('does not expose seller, customer sku, supply price, or admin control fields', () => {

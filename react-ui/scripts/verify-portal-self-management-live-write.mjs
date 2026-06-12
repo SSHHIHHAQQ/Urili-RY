@@ -47,6 +47,8 @@ const SELF_MANAGEMENT_PERMISSIONS = {
     'buyer:role:add',
     'buyer:role:edit',
     'buyer:role:remove',
+    'buyer:product:center:list',
+    'buyer:product:center:query',
   ],
 };
 

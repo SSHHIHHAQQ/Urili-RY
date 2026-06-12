@@ -31,6 +31,11 @@
 
         <!-- 鍗曞厓娴嬭瘯 -->
         <dependency>
+            <groupId>com.ruoyi</groupId>
+            <artifactId>finance</artifactId>
+        </dependency>
+
+        <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
             <version>4.13.2</version>

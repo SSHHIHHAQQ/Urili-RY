@@ -29,6 +29,7 @@ import com.ruoyi.integration.domain.SourceWarehouseStockItem;
 import com.ruoyi.integration.domain.UpstreamSkuSyncItem;
 import com.ruoyi.integration.domain.UpstreamSystemConnection;
 import com.ruoyi.integration.domain.query.SourceWarehouseStockQuery;
+import com.ruoyi.integration.domain.query.UpstreamSyncTaskQuery;
 import com.ruoyi.integration.domain.request.LogisticsChannelPairingRequest;
 import com.ruoyi.integration.domain.request.SkuDimensionSelectedSyncRequest;
 import com.ruoyi.integration.domain.request.SkuPairingRequest;
@@ -191,6 +192,44 @@ public class AdminUpstreamSystemController extends BaseController
     public AjaxResult syncStates(@PathVariable("connectionCode") String connectionCode)
     {
         return success(upstreamSystemService.selectSyncStateList(connectionCode));
+    }
+
+    @PreAuthorize("@ss.hasPermi('integration:upstream:task:list')")
+    @GetMapping("/{connectionCode}/sync-requests/list")
+    public TableDataInfo syncRequests(@PathVariable("connectionCode") String connectionCode,
+        UpstreamSyncTaskQuery query)
+    {
+        startPage();
+        query.setConnectionCode(connectionCode);
+        return getDataTable(upstreamSyncService.selectSyncRequestList(query));
+    }
+
+    @PreAuthorize("@ss.hasPermi('integration:upstream:task:list')")
+    @GetMapping("/{connectionCode}/sync-tasks/list")
+    public TableDataInfo syncTasks(@PathVariable("connectionCode") String connectionCode,
+        UpstreamSyncTaskQuery query)
+    {
+        startPage();
+        query.setConnectionCode(connectionCode);
+        return getDataTable(upstreamSyncService.selectSyncTaskList(query));
+    }
+
+    @PreAuthorize("@ss.hasPermi('integration:upstream:task:retry')")
+    @Log(title = "上游同步任务重试", businessType = BusinessType.OTHER)
+    @PostMapping("/{connectionCode}/sync-tasks/{taskId}/retry")
+    public AjaxResult retrySyncTask(@PathVariable("connectionCode") String connectionCode,
+        @PathVariable("taskId") Long taskId)
+    {
+        return success(upstreamSyncService.retrySyncTask(connectionCode, taskId));
+    }
+
+    @PreAuthorize("@ss.hasPermi('integration:upstream:task:cancel')")
+    @Log(title = "上游同步任务取消", businessType = BusinessType.OTHER)
+    @PostMapping("/{connectionCode}/sync-tasks/{taskId}/cancel")
+    public AjaxResult cancelSyncTask(@PathVariable("connectionCode") String connectionCode,
+        @PathVariable("taskId") Long taskId)
+    {
+        return toAjax(upstreamSyncService.cancelSyncTask(connectionCode, taskId));
     }
 
     @PreAuthorize("@ss.hasPermi('integration:upstream:query')")

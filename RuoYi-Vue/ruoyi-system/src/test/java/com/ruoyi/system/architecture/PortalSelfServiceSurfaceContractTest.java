@@ -125,6 +125,8 @@ public class PortalSelfServiceSurfaceContractTest
         requireBodyContains(controller, methods, "accountSessions",
                 "return getDataTable(" + terminal + "Service.select" + capitalize(terminal)
                         + "OwnSessionList(session));", violations);
+        requireBodyContains(controller, methods, "editAccount",
+                "account.set" + capitalize(terminal) + "Id(null);", violations);
 
         String source = Files.readString(controller, StandardCharsets.UTF_8);
         assertPortalSelfManagementControllerSurface(controller, source, terminal, violations);
@@ -142,12 +144,19 @@ public class PortalSelfServiceSurfaceContractTest
         String serviceName = terminal + "Service";
         String accountIdSetter = "set" + terminalCap + "AccountId(targetAccountId);";
 
-        assertExactStringLiteralBlock(controller, source,
-                "private static final Set<String> PORTAL_SELF_MANAGEMENT_PERMS", "));",
-                portalSelfManagementPermissions(terminal), violations);
+        if ("buyer".equals(terminal))
+        {
+            requireSourceContains(controller, source, "import com.ruoyi.buyer.service.support.BuyerPortalPermissionCatalog;",
+                    violations);
+        }
+        else
+        {
+            assertExactStringLiteralBlock(controller, source,
+                    "private static final Set<String> PORTAL_SELF_MANAGEMENT_PERMS", "));",
+                    portalSelfManagementPermissions(terminal), violations);
+        }
 
-        for (String expected : Arrays.asList(
-                "private static final Set<String> PORTAL_SELF_MANAGEMENT_PERMS",
+        List<String> expectedSource = new ArrayList<>(Arrays.asList(
                 "\"" + terminal + ":account:add\"",
                 "\"" + terminal + ":account:edit\"",
                 "\"" + terminal + ":account:role:query\"",
@@ -175,7 +184,6 @@ public class PortalSelfServiceSurfaceContractTest
                 "deptService.updateDept(session.getSubjectId(), dept)",
                 "deptService.deleteDeptById(session.getSubjectId(), deptId)",
                 "permissionService.selectRoleById(session.getSubjectId(), roleId)",
-                "selectPortalSelfManagementMenuIds(session.getSubjectId(), roleId, selfManagementMenus)",
                 "permissionService.selectMenuIdsByRoleId(" + terminal + "Id, roleId)",
                 "permissionService.insertRole(session.getSubjectId(), role)",
                 "permissionService.updateRole(session.getSubjectId(), role)",
@@ -184,12 +192,26 @@ public class PortalSelfServiceSurfaceContractTest
                 "if (menuId == null || menuId <= 0)",
                 "if (!seenMenuIds.add(menuId))",
                 "PortalPermissionSupport.assertReadableTerminalMenu(menu, \"" + terminal + "\");",
-                "if (!PORTAL_SELF_MANAGEMENT_PERMS.contains(StringUtils.trimToEmpty(menu.getPerms())))",
                 "if (allowedMenuIds.contains(menuId))",
-                "String perms = menu == null ? \"\" : StringUtils.trimToEmpty(menu.getPerms());",
-                "if (PORTAL_SELF_MANAGEMENT_PERMS.contains(perms))",
-                "PortalPermissionSupport.buildMenuTreeSelect(selectPortalSelfManagementMenus())"
-        ))
+                "String perms = menu == null ? \"\" : StringUtils.trimToEmpty(menu.getPerms());"
+        ));
+        if ("buyer".equals(terminal))
+        {
+            expectedSource.add("selectPortalAssignableMenuIds(session.getSubjectId(), roleId, assignableMenus)");
+            expectedSource.add("if (!BuyerPortalPermissionCatalog.isRoleAssignable(StringUtils.trimToEmpty(menu.getPerms())))");
+            expectedSource.add("if (BuyerPortalPermissionCatalog.isRoleAssignable(perms))");
+            expectedSource.add("PortalPermissionSupport.buildMenuTreeSelect(selectPortalAssignableMenus())");
+        }
+        else
+        {
+            expectedSource.add("private static final Set<String> PORTAL_SELF_MANAGEMENT_PERMS");
+            expectedSource.add("selectPortalSelfManagementMenuIds(session.getSubjectId(), roleId, selfManagementMenus)");
+            expectedSource.add("if (!PORTAL_SELF_MANAGEMENT_PERMS.contains(StringUtils.trimToEmpty(menu.getPerms())))");
+            expectedSource.add("if (PORTAL_SELF_MANAGEMENT_PERMS.contains(perms))");
+            expectedSource.add("PortalPermissionSupport.buildMenuTreeSelect(selectPortalSelfManagementMenus())");
+        }
+
+        for (String expected : expectedSource)
         {
             requireSourceContains(controller, source, expected, violations);
         }
@@ -230,20 +252,30 @@ public class PortalSelfServiceSurfaceContractTest
         requireSourceContains(service, serviceSource,
                 "public List<PortalOwnSessionProfile> select" + terminalCap + "OwnSessionList", violations);
 
-        assertOwnerDefaultSelfManagementPerms(service, serviceSource, terminal, violations);
+        assertOwnerDefaultPortalPerms(service, serviceSource, terminal, violations);
 
         requireBodyContains(service, methods, "select" + terminalCap + "OwnLoginLogList",
                 "newOwnLoginLogProfileList(logs)", violations);
         requireBodyContains(service, methods, "select" + terminalCap + "OwnLoginLogList",
                 "profiles.add(buildOwnLoginLogProfile(item));", violations);
+        requireBodyContains(service, methods, "select" + terminalCap + "OwnLoginLogList",
+                "assert" + terminalCap + "SessionAccountWithoutPage(session);", violations);
         requireBodyContains(service, methods, "select" + terminalCap + "OwnOperLogList",
                 "newOwnOperLogProfileList(logs)", violations);
         requireBodyContains(service, methods, "select" + terminalCap + "OwnOperLogList",
                 "profiles.add(buildOwnOperLogProfile(item));", violations);
+        requireBodyContains(service, methods, "select" + terminalCap + "OwnOperLogList",
+                "assert" + terminalCap + "SessionAccountWithoutPage(session);", violations);
         requireBodyContains(service, methods, "select" + terminalCap + "OwnSessionList",
                 "newOwnSessionProfileList(sessions)", violations);
         requireBodyContains(service, methods, "select" + terminalCap + "OwnSessionList",
                 "profiles.add(buildOwnSessionProfile(profile));", violations);
+        requireBodyContains(service, methods, "select" + terminalCap + "OwnSessionList",
+                "assert" + terminalCap + "SessionAccountWithoutPage(session);", violations);
+        requireBodyContains(service, methods, "assert" + terminalCap + "SessionAccountWithoutPage",
+                "PageMethod.clearPage();", violations);
+        requireBodyContains(service, methods, "assert" + terminalCap + "SessionAccountWithoutPage",
+                "PageMethod.setLocalPage(page);", violations);
         requireBodyContains(service, methods, "newOwnLoginLogProfileList", "copyPageMetadata(source, result);",
                 violations);
         requireBodyContains(service, methods, "newOwnOperLogProfileList", "copyPageMetadata(source, result);",
@@ -289,9 +321,16 @@ public class PortalSelfServiceSurfaceContractTest
         }
     }
 
-    private void assertOwnerDefaultSelfManagementPerms(Path service, String serviceSource, String terminal,
+    private void assertOwnerDefaultPortalPerms(Path service, String serviceSource, String terminal,
             List<String> violations)
     {
+        if ("buyer".equals(terminal))
+        {
+            requireSourceContains(service, serviceSource,
+                    "private static final String[] DEFAULT_OWNER_PERMS = BuyerPortalPermissionCatalog.ownerDefaultPerms();",
+                    violations);
+            return;
+        }
         assertExactStringLiteralBlock(service, serviceSource,
                 "private static final String[] DEFAULT_OWNER_PERMS", "};",
                 portalSelfManagementPermissions(terminal), violations);
@@ -304,23 +343,52 @@ public class PortalSelfServiceSurfaceContractTest
                 + "/service/impl/" + capitalize(terminal) + "PortalPermissionServiceImpl.java");
         String source = Files.readString(service, StandardCharsets.UTF_8);
 
-        assertExactStringLiteralBlock(service, source,
-                "private static final Set<String> PORTAL_SELF_MANAGEMENT_PERMS", "));",
-                portalSelfManagementPermissions(terminal), violations);
-        requireSourceContains(service, source, "splitSelfManagementPermissions(permissionMapper.select"
-                + capitalize(terminal) + "AccountPermissions(", violations);
-        requireSourceContains(service, source, "if (PORTAL_SELF_MANAGEMENT_PERMS.contains(permission))", violations);
+        if ("buyer".equals(terminal))
+        {
+            assertBuyerPortalPermissionCatalog(backendRoot, violations);
+            requireSourceContains(service, source,
+                    "import com.ruoyi.buyer.service.support.BuyerPortalPermissionCatalog;", violations);
+            requireSourceContains(service, source, "splitAssignablePermissions(permissionMapper.select"
+                    + capitalize(terminal) + "AccountPermissions(", violations);
+            requireSourceContains(service, source, "if (BuyerPortalPermissionCatalog.isRoleAssignable(permission))",
+                    violations);
+        }
+        else
+        {
+            assertExactStringLiteralBlock(service, source,
+                    "private static final Set<String> PORTAL_SELF_MANAGEMENT_PERMS", "));",
+                    portalSelfManagementPermissions(terminal), violations);
+            requireSourceContains(service, source, "splitSelfManagementPermissions(permissionMapper.select"
+                    + capitalize(terminal) + "AccountPermissions(", violations);
+            requireSourceContains(service, source, "if (PORTAL_SELF_MANAGEMENT_PERMS.contains(permission))",
+                    violations);
+        }
         requireSourceContains(service, source, "permissions.add(permission);", violations);
         requireSourceContains(service, source, "return selectPortalPermissionInfo(session).getPermissions();",
                 violations);
         requireSourceContains(service, source, "permission.contains(\"*\")", violations);
-        requireSourceContains(service, source, "List<PortalMenu> selfManagementMenus = new ArrayList<>();",
-                violations);
-        requireSourceContains(service, source,
-                "if (PORTAL_SELF_MANAGEMENT_PERMS.contains(StringUtils.trimToEmpty(menu.getPerms())))", violations);
-        requireSourceContains(service, source, "selfManagementMenus.add(menu);", violations);
-        requireSourceContains(service, source, "return PortalPermissionSupport.buildMenuTree(selfManagementMenus);",
-                violations);
+        if ("buyer".equals(terminal))
+        {
+            requireSourceContains(service, source, "List<PortalMenu> navigationMenus = new ArrayList<>();",
+                    violations);
+            requireSourceContains(service, source,
+                    "if (BuyerPortalPermissionCatalog.isNavigationPermission(StringUtils.trimToEmpty(menu.getPerms())))",
+                    violations);
+            requireSourceContains(service, source, "navigationMenus.add(menu);", violations);
+            requireSourceContains(service, source, "return PortalPermissionSupport.buildMenuTree(navigationMenus);",
+                    violations);
+        }
+        else
+        {
+            requireSourceContains(service, source, "List<PortalMenu> selfManagementMenus = new ArrayList<>();",
+                    violations);
+            requireSourceContains(service, source,
+                    "if (PORTAL_SELF_MANAGEMENT_PERMS.contains(StringUtils.trimToEmpty(menu.getPerms())))",
+                    violations);
+            requireSourceContains(service, source, "selfManagementMenus.add(menu);", violations);
+            requireSourceContains(service, source, "return PortalPermissionSupport.buildMenuTree(selfManagementMenus);",
+                    violations);
+        }
         requireSourceContains(service, source, "Long[] ids = normalizeRoleIds(roleIds);", violations);
         requireSourceContains(service, source, "if (roleId == null || roleId <= 0)", violations);
         requireSourceContains(service, source, "if (!values.add(roleId))", violations);
@@ -334,17 +402,52 @@ public class PortalSelfServiceSurfaceContractTest
         requireSourceContains(service, source, "if (!values.add(menuId))", violations);
         requireSourceContains(service, source, "permissionMapper.count" + capitalize(terminal)
                 + "MenusByIds(menuIds) != menuIds.length", violations);
-        requireSourceContains(service, source, "assertRoleMenuSelfManagement(menu);", violations);
-        requireSourceContains(service, source, "private void assertRoleMenuSelfManagement(PortalMenu menu)",
+        if ("buyer".equals(terminal))
+        {
+            requireSourceContains(service, source, "assertRoleMenuAssignable(menu);", violations);
+            requireSourceContains(service, source, "private void assertRoleMenuAssignable(PortalMenu menu)",
+                    violations);
+            requireSourceContains(service, source,
+                    "if (!BuyerPortalPermissionCatalog.isRoleAssignable(StringUtils.trimToEmpty(menu.getPerms())))",
+                    violations);
+        }
+        else
+        {
+            requireSourceContains(service, source, "assertRoleMenuSelfManagement(menu);", violations);
+            requireSourceContains(service, source, "private void assertRoleMenuSelfManagement(PortalMenu menu)",
+                    violations);
+            requireSourceContains(service, source,
+                    "if (!PORTAL_SELF_MANAGEMENT_PERMS.contains(StringUtils.trimToEmpty(menu.getPerms())))",
+                    violations);
+        }
+    }
+
+    private void assertBuyerPortalPermissionCatalog(Path backendRoot, List<String> violations) throws IOException
+    {
+        Path catalog = backendRoot.resolve(
+                "buyer/src/main/java/com/ruoyi/buyer/service/support/BuyerPortalPermissionCatalog.java");
+        String source = Files.readString(catalog, StandardCharsets.UTF_8);
+        assertExactStringLiteralBlock(catalog, source,
+                "public static final Set<String> SELF_MANAGEMENT_PERMS = permissions(", ");",
+                portalSelfManagementPermissions("buyer"), violations);
+        assertExactStringLiteralBlock(catalog, source,
+                "public static final Set<String> BUSINESS_PERMS = permissions(", ");",
+                buyerPortalBusinessPermissions(), violations);
+        requireSourceContains(catalog, source,
+                "public static final Set<String> ROLE_ASSIGNABLE_PERMS = combine(SELF_MANAGEMENT_PERMS, BUSINESS_PERMS);",
                 violations);
-        requireSourceContains(service, source,
-                "if (!PORTAL_SELF_MANAGEMENT_PERMS.contains(StringUtils.trimToEmpty(menu.getPerms())))",
+        requireSourceContains(catalog, source,
+                "public static final Set<String> NAVIGATION_PERMS = ROLE_ASSIGNABLE_PERMS;", violations);
+        requireSourceContains(catalog, source, "public static boolean isRoleAssignable(String permission)",
                 violations);
+        requireSourceContains(catalog, source, "public static boolean isNavigationPermission(String permission)",
+                violations);
+        requireSourceContains(catalog, source, "public static String[] ownerDefaultPerms()", violations);
     }
 
     private List<String> portalSelfManagementPermissions(String terminal)
     {
-        return Arrays.asList(
+        List<String> permissions = new ArrayList<>(Arrays.asList(
                 terminal + ":portal:home",
                 terminal + ":account:list",
                 terminal + ":account:add",
@@ -364,6 +467,15 @@ public class PortalSelfServiceSurfaceContractTest
                 terminal + ":role:add",
                 terminal + ":role:edit",
                 terminal + ":role:remove"
+        ));
+        return permissions;
+    }
+
+    private List<String> buyerPortalBusinessPermissions()
+    {
+        return Arrays.asList(
+                "buyer:product:center:list",
+                "buyer:product:center:query"
         );
     }
 

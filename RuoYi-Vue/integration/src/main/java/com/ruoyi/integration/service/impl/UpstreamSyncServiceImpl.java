@@ -2,33 +2,42 @@ package com.ruoyi.integration.service.impl;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
+import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONObject;
 import com.ruoyi.common.exception.ServiceException;
+import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.inventory.service.IInventoryOverviewService;
 import com.ruoyi.integration.domain.UpstreamInventorySyncState;
 import com.ruoyi.integration.domain.UpstreamSkuSyncItem;
+import com.ruoyi.integration.domain.UpstreamSyncRequestRecord;
+import com.ruoyi.integration.domain.UpstreamSyncTask;
 import com.ruoyi.integration.domain.UpstreamSystemConnection;
+import com.ruoyi.integration.domain.query.UpstreamSyncTaskQuery;
 import com.ruoyi.integration.domain.request.SkuDimensionSelectedSyncRequest;
 import com.ruoyi.integration.domain.request.UpstreamSyncRequest;
 import com.ruoyi.integration.domain.response.UpstreamSyncItemResult;
 import com.ruoyi.integration.domain.response.UpstreamSyncResult;
 import com.ruoyi.integration.lingxing.LingxingOpenApiClient;
+import com.ruoyi.integration.mapper.UpstreamSyncTaskMapper;
 import com.ruoyi.integration.mapper.UpstreamSystemMapper;
 import com.ruoyi.integration.service.IUpstreamSyncService;
 import com.ruoyi.integration.support.UpstreamSystemConstants;
 import com.ruoyi.integration.sync.UpstreamInventorySyncComponent;
 import com.ruoyi.integration.sync.UpstreamLingxingClientFactory;
 import com.ruoyi.integration.sync.UpstreamLogisticsChannelSyncComponent;
-import com.ruoyi.integration.sync.UpstreamManualSyncSubmitter;
 import com.ruoyi.integration.sync.UpstreamSkuDimensionSyncComponent;
 import com.ruoyi.integration.sync.UpstreamSkuInfoSyncComponent;
 import com.ruoyi.integration.sync.UpstreamSyncStateRecorder;
@@ -42,10 +51,15 @@ public class UpstreamSyncServiceImpl implements IUpstreamSyncService
 {
     private static final int SKU_DIMENSION_SELECTED_LIMIT = 100;
 
+    private static final int DISPATCH_LIMIT = 5;
+
     private final Set<String> syncingConnectionCodes = ConcurrentHashMap.newKeySet();
 
     @Autowired
     private UpstreamSystemMapper upstreamSystemMapper;
+
+    @Autowired
+    private UpstreamSyncTaskMapper upstreamSyncTaskMapper;
 
     @Autowired
     private SourceProductReadModelService sourceProductReadModelService;
@@ -77,9 +91,6 @@ public class UpstreamSyncServiceImpl implements IUpstreamSyncService
     @Autowired
     private UpstreamSyncStateRecorder syncStateRecorder;
 
-    @Autowired
-    private UpstreamManualSyncSubmitter manualSyncSubmitter;
-
     @Override
     public UpstreamSyncResult syncAll(String connectionCode)
     {
@@ -105,7 +116,6 @@ public class UpstreamSyncServiceImpl implements IUpstreamSyncService
         {
             LingxingOpenApiClient client = lingxingClientFactory.createClient(connection);
             UpstreamSyncResult result = new UpstreamSyncResult();
-            result.setSyncBatchId(UUID.randomUUID().toString());
             for (String syncType : syncTypes)
             {
                 UpstreamSyncItemResult item = executeSyncItem(client, connectionCode, syncType,
@@ -130,14 +140,17 @@ public class UpstreamSyncServiceImpl implements IUpstreamSyncService
         {
             throw new ServiceException("请选择需要同步的内容");
         }
-        return submitAsyncSync(connection, syncTypes, UpstreamSystemConstants.SYNC_MODE_MANUAL);
+        return enqueueSyncTasks(connection, syncTypes, UpstreamSystemConstants.SYNC_MODE_MANUAL,
+            UpstreamSystemConstants.SYNC_TRIGGER_MANUAL, currentUsername(), null);
     }
 
     @Override
     public UpstreamSyncResult syncScheduled(String connectionCode, String syncType)
     {
-        return syncSingleType(connectionCode, normalizeSingleSyncType(syncType),
-            UpstreamSystemConstants.SYNC_MODE_SCHEDULED);
+        UpstreamSystemConnection connection = selectEnabledConnection(connectionCode);
+        return enqueueSyncTasks(connection, List.of(normalizeSingleSyncType(syncType)),
+            UpstreamSystemConstants.SYNC_MODE_SCHEDULED, UpstreamSystemConstants.SYNC_TRIGGER_SCHEDULED,
+            "system", null);
     }
 
     @Override
@@ -171,8 +184,9 @@ public class UpstreamSyncServiceImpl implements IUpstreamSyncService
     public UpstreamSyncResult submitSkusOnly(String connectionCode)
     {
         UpstreamSystemConnection connection = selectEnabledConnection(connectionCode);
-        return submitAsyncSync(connection, List.of(UpstreamSystemConstants.SYNC_TYPE_SKU),
-            UpstreamSystemConstants.SYNC_MODE_MANUAL);
+        return enqueueSyncTasks(connection, List.of(UpstreamSystemConstants.SYNC_TYPE_SKU),
+            UpstreamSystemConstants.SYNC_MODE_MANUAL, UpstreamSystemConstants.SYNC_TRIGGER_MANUAL,
+            currentUsername(), null);
     }
 
     @Override
@@ -186,8 +200,9 @@ public class UpstreamSyncServiceImpl implements IUpstreamSyncService
     public UpstreamSyncResult submitSkuDimensionsOnly(String connectionCode)
     {
         UpstreamSystemConnection connection = selectEnabledConnection(connectionCode);
-        return submitAsyncSync(connection, List.of(UpstreamSystemConstants.SYNC_TYPE_SKU_DIMENSION),
-            UpstreamSystemConstants.SYNC_MODE_MANUAL);
+        return enqueueSyncTasks(connection, List.of(UpstreamSystemConstants.SYNC_TYPE_SKU_DIMENSION),
+            UpstreamSystemConstants.SYNC_MODE_MANUAL, UpstreamSystemConstants.SYNC_TRIGGER_MANUAL,
+            currentUsername(), null);
     }
 
     @Override
@@ -248,7 +263,9 @@ public class UpstreamSyncServiceImpl implements IUpstreamSyncService
     {
         UpstreamSystemConnection connection = selectEnabledConnection(connectionCode);
         List<String> skuList = normalizeSelectedSkuList(request == null ? null : request.getSkuList());
-        return submitAsyncSelectedDimensionSync(connection, skuList);
+        return enqueueSyncTasks(connection, List.of(UpstreamSystemConstants.SYNC_TYPE_SKU_DIMENSION),
+            UpstreamSystemConstants.SYNC_MODE_SELECTED, UpstreamSystemConstants.SYNC_TRIGGER_MANUAL,
+            currentUsername(), skuList);
     }
 
     @Override
@@ -262,51 +279,403 @@ public class UpstreamSyncServiceImpl implements IUpstreamSyncService
     public UpstreamSyncResult submitWarehouseStocksOnly(String connectionCode)
     {
         UpstreamSystemConnection connection = selectEnabledConnection(connectionCode);
-        return submitAsyncSync(connection, List.of(UpstreamSystemConstants.SYNC_TYPE_INVENTORY),
-            UpstreamSystemConstants.SYNC_MODE_MANUAL);
+        return enqueueSyncTasks(connection, List.of(UpstreamSystemConstants.SYNC_TYPE_INVENTORY),
+            UpstreamSystemConstants.SYNC_MODE_MANUAL, UpstreamSystemConstants.SYNC_TRIGGER_MANUAL,
+            currentUsername(), null);
     }
 
-    private UpstreamSyncResult submitAsyncSync(UpstreamSystemConnection connection, List<String> syncTypes, String mode)
+    @Override
+    public List<UpstreamSyncRequestRecord> selectSyncRequestList(UpstreamSyncTaskQuery query)
     {
-        String connectionCode = connection.getConnectionCode();
-        LingxingOpenApiClient client = lingxingClientFactory.createClient(connection);
-        return manualSyncSubmitter.submit(connectionCode, syncTypes, mode,
-            () -> acquireSyncLock(connectionCode),
-            () -> releaseSyncLock(connectionCode),
-            workItem -> runManualSyncItem(client, connectionCode, workItem),
-            lingxingClientFactory::toServiceException,
-            () -> upstreamSystemMapper.updateConnectionSyncSummary(connectionCode));
+        return upstreamSyncTaskMapper.selectSyncRequestList(query);
     }
 
-    private UpstreamSyncResult submitAsyncSelectedDimensionSync(UpstreamSystemConnection connection, List<String> skuList)
+    @Override
+    public List<UpstreamSyncTask> selectSyncTaskList(UpstreamSyncTaskQuery query)
     {
-        String connectionCode = connection.getConnectionCode();
-        LingxingOpenApiClient client = lingxingClientFactory.createClient(connection);
-        return manualSyncSubmitter.submit(connectionCode, List.of(UpstreamSystemConstants.SYNC_TYPE_SKU_DIMENSION),
-            UpstreamSystemConstants.SYNC_MODE_SELECTED,
-            () -> acquireSyncLock(connectionCode),
-            () -> releaseSyncLock(connectionCode),
-            workItem -> runSelectedDimensionSyncItem(client, connectionCode, skuList, workItem),
-            lingxingClientFactory::toServiceException,
-            () -> upstreamSystemMapper.updateConnectionSyncSummary(connectionCode));
+        return upstreamSyncTaskMapper.selectSyncTaskList(query);
     }
 
-    private UpstreamSyncItemResult runManualSyncItem(LingxingOpenApiClient client, String connectionCode,
-        UpstreamManualSyncSubmitter.SyncWorkItem workItem)
+    @Override
+    public UpstreamSyncResult retrySyncTask(String connectionCode, Long taskId)
     {
-        UpstreamSyncItemResult item = doSyncItem(client, connectionCode, workItem.getSyncType(),
-            workItem.getSyncBatchId(), workItem.getStartedTime(), workItem.getRateLimitMs());
-        rebuildReadModel(connectionCode, workItem.getSyncType());
+        UpstreamSyncTask task = selectSyncTaskForAction(connectionCode, taskId);
+        if (!isRetriableTaskStatus(task.getStatus()))
+        {
+            throw new ServiceException("Only failed, timed out, skipped, or canceled sync tasks can be retried");
+        }
+        UpstreamSystemConnection connection = selectEnabledConnection(connectionCode);
+        List<String> selectedSkus = UpstreamSystemConstants.SYNC_MODE_SELECTED.equals(task.getMode())
+            ? selectedSkuListFromPayload(task.getPayloadRedacted()) : null;
+        return enqueueSyncTasks(connection, List.of(task.getSyncType()), task.getMode(),
+            UpstreamSystemConstants.SYNC_TRIGGER_MANUAL, currentUsername(), selectedSkus);
+    }
+
+    @Override
+    public int cancelSyncTask(String connectionCode, Long taskId)
+    {
+        UpstreamSyncTask task = selectSyncTaskForAction(connectionCode, taskId);
+        int affected = upstreamSyncTaskMapper.cancelSyncTask(connectionCode, taskId, "管理端取消同步任务");
+        if (affected > 0)
+        {
+            upstreamSyncTaskMapper.updateRequestSummary(task.getRequestNo());
+        }
+        return affected;
+    }
+
+    @Override
+    public int dispatchPendingTasks()
+    {
+        int handled = recoverExpiredLeaseTasks();
+        List<UpstreamSyncTask> tasks = upstreamSyncTaskMapper.selectClaimableTasks(DISPATCH_LIMIT);
+        for (UpstreamSyncTask task : tasks)
+        {
+            Date leaseUntil = minutesFromNow(leaseMinutes(task.getSyncType()));
+            if (upstreamSyncTaskMapper.claimSyncTask(task.getTaskId(), dispatcherOwner(), leaseUntil) == 0)
+            {
+                continue;
+            }
+            task.setLeaseUntil(leaseUntil);
+            executeClaimedTask(task);
+            handled++;
+        }
+        return handled;
+    }
+
+    private UpstreamSyncResult enqueueSyncTasks(UpstreamSystemConnection connection, List<String> syncTypes,
+        String mode, String triggerSource, String submittedBy, List<String> selectedSkuList)
+    {
+        String requestNo = UUID.randomUUID().toString();
+        Date submittedTime = new Date();
+        UpstreamSyncRequestRecord request = new UpstreamSyncRequestRecord();
+        request.setRequestNo(requestNo);
+        request.setConnectionCode(connection.getConnectionCode());
+        request.setTriggerSource(triggerSource);
+        request.setMode(mode);
+        request.setRequestedSyncTypes(StringUtils.join(syncTypes, ","));
+        request.setStatus(UpstreamSystemConstants.SYNC_TASK_STATUS_PENDING);
+        request.setSubmittedBy(StringUtils.defaultIfBlank(submittedBy, "system"));
+        request.setSubmittedTime(submittedTime);
+        request.setTaskCount(syncTypes.size());
+        request.setRemark("RuoYi dispatcher accepted upstream sync request");
+        upstreamSyncTaskMapper.insertSyncRequest(request);
+
+        UpstreamSyncResult result = new UpstreamSyncResult();
+        result.setRequestId(request.getRequestId());
+        result.setRequestNo(requestNo);
+        result.setTaskCount(syncTypes.size());
+        for (String syncType : syncTypes)
+        {
+            UpstreamSyncTask task = new UpstreamSyncTask();
+            task.setRequestNo(requestNo);
+            task.setSyncBatchId(UUID.randomUUID().toString());
+            task.setConnectionCode(connection.getConnectionCode());
+            task.setSyncType(syncType);
+            task.setMode(mode);
+            task.setTriggerSource(triggerSource);
+            task.setStatus(UpstreamSystemConstants.SYNC_TASK_STATUS_PENDING);
+            task.setPriority(priorityForSyncType(syncType));
+            task.setPayloadRedacted(payloadFor(syncType, mode, selectedSkuList));
+            task.setAttemptCount(0);
+            task.setMaxAttempts(1);
+            task.setDeadlineAt(minutesFrom(submittedTime, deadlineMinutes(syncType)));
+            task.setTraceId(UUID.randomUUID().toString());
+            task.setSysJobInvokeTarget("upstreamSyncDispatchTask.dispatch");
+            task.setRemark("accepted");
+            upstreamSyncTaskMapper.insertSyncTask(task);
+            mergeAcceptedTask(result, task);
+        }
+        upstreamSyncTaskMapper.updateRequestSummary(requestNo);
+        return result;
+    }
+
+    private int recoverExpiredLeaseTasks()
+    {
+        int handled = 0;
+        List<UpstreamSyncTask> expiredTasks = upstreamSyncTaskMapper.selectExpiredLeaseTasks(new Date());
+        for (UpstreamSyncTask task : expiredTasks)
+        {
+            Date finishedTime = new Date();
+            boolean wasRunning = UpstreamSystemConstants.SYNC_TASK_STATUS_RUNNING.equals(task.getStatus());
+            UpstreamSyncItemResult failed = failedItem(task, "任务租约超时，已由恢复器收口");
+            task.setStatus(UpstreamSystemConstants.SYNC_TASK_STATUS_TIMEOUT);
+            task.setFinishedTime(finishedTime);
+            task.setPulledCount(0);
+            task.setInsertedCount(0);
+            task.setChangedCount(0);
+            task.setUnchangedCount(0);
+            task.setDisabledCount(0);
+            task.setFailedCount(1);
+            task.setErrorCode("SYNC_TASK_TIMEOUT");
+            task.setErrorMessage("任务租约超时，已由恢复器收口");
+            upstreamSyncTaskMapper.completeSyncTask(task);
+            if (wasRunning)
+            {
+                syncStateRecorder.recordFailure(task.getConnectionCode(), task.getSyncType(), task.getMode(),
+                    task.getSyncBatchId(), task.getStartedTime(), finishedTime, failed, task.getErrorMessage(),
+                    rateLimitMs(task.getSyncType()));
+            }
+            upstreamSyncTaskMapper.updateRequestSummary(task.getRequestNo());
+            upstreamSystemMapper.updateConnectionSyncSummary(task.getConnectionCode());
+            handled++;
+        }
+        return handled;
+    }
+
+    private void executeClaimedTask(UpstreamSyncTask task)
+    {
+        Date startedTime = new Date();
+        task.setStartedTime(startedTime);
+        task.setTraceId(StringUtils.defaultIfBlank(task.getTraceId(), UUID.randomUUID().toString()));
+        task.setLeaseUntil(minutesFrom(startedTime, leaseMinutes(task.getSyncType())));
+        if (upstreamSyncTaskMapper.markSyncTaskRunning(task) == 0)
+        {
+            return;
+        }
+
+        boolean syncBatchRecorded = false;
+        try
+        {
+            UpstreamSystemConnection connection = selectEnabledConnection(task.getConnectionCode());
+            acquireSyncLock(task.getConnectionCode());
+            try
+            {
+                int rateLimitMs = rateLimitMs(task.getSyncType());
+                LingxingOpenApiClient client = lingxingClientFactory.createClient(connection);
+                syncStateRecorder.recordSyncing(task.getConnectionCode(), task.getSyncType(), task.getSyncBatchId(),
+                    startedTime, task.getMode(), rateLimitMs);
+                syncBatchRecorded = true;
+                UpstreamSyncItemResult item = executeTaskItem(client, task, startedTime, rateLimitMs);
+                Date finishedTime = new Date();
+                rebuildReadModel(task.getConnectionCode(), task.getSyncType());
+                syncStateRecorder.recordSuccess(task.getConnectionCode(), task.getSyncType(), task.getMode(),
+                    task.getSyncBatchId(), startedTime, finishedTime, item, rateLimitMs);
+                completeTask(task, UpstreamSystemConstants.SYNC_TASK_STATUS_SUCCESS, finishedTime, item, "", "");
+            }
+            finally
+            {
+                releaseSyncLock(task.getConnectionCode());
+            }
+        }
+        catch (RuntimeException ex)
+        {
+            Date finishedTime = new Date();
+            String message = StringUtils.left(StringUtils.defaultIfBlank(ex.getMessage(), "上游同步任务执行失败"), 500);
+            String taskStatus = message.contains("正在同步")
+                ? UpstreamSystemConstants.SYNC_TASK_STATUS_SKIPPED : UpstreamSystemConstants.SYNC_TASK_STATUS_FAILED;
+            UpstreamSyncItemResult failed = failedItem(task, message);
+            if (syncBatchRecorded)
+            {
+                syncStateRecorder.recordFailure(task.getConnectionCode(), task.getSyncType(), task.getMode(),
+                    task.getSyncBatchId(), startedTime, finishedTime, failed, message, rateLimitMs(task.getSyncType()));
+            }
+            completeTask(task, taskStatus, finishedTime, failed,
+                UpstreamSystemConstants.SYNC_TASK_STATUS_SKIPPED.equals(taskStatus) ? "SYNC_TASK_SKIPPED" : "SYNC_TASK_FAILED",
+                message);
+        }
+        finally
+        {
+            upstreamSyncTaskMapper.updateRequestSummary(task.getRequestNo());
+            upstreamSystemMapper.updateConnectionSyncSummary(task.getConnectionCode());
+        }
+    }
+
+    private UpstreamSyncTask selectSyncTaskForAction(String connectionCode, Long taskId)
+    {
+        UpstreamSyncTask task = upstreamSyncTaskMapper.selectSyncTaskById(connectionCode, taskId);
+        if (task == null)
+        {
+            throw new ServiceException("同步任务不存在");
+        }
+        return task;
+    }
+
+    private boolean isRetriableTaskStatus(String status)
+    {
+        return Set.of(UpstreamSystemConstants.SYNC_TASK_STATUS_FAILED, UpstreamSystemConstants.SYNC_TASK_STATUS_TIMEOUT,
+            UpstreamSystemConstants.SYNC_TASK_STATUS_SKIPPED, UpstreamSystemConstants.SYNC_TASK_STATUS_CANCELED)
+            .contains(status);
+    }
+
+    private UpstreamSyncItemResult executeTaskItem(LingxingOpenApiClient client, UpstreamSyncTask task,
+        Date startedTime, int rateLimitMs)
+    {
+        if (UpstreamSystemConstants.SYNC_TYPE_SKU_DIMENSION.equals(task.getSyncType())
+            && UpstreamSystemConstants.SYNC_MODE_SELECTED.equals(task.getMode()))
+        {
+            UpstreamSyncItemResult item = skuDimensionSyncComponent.syncSelected(client, task.getConnectionCode(),
+                selectedSkuListFromPayload(task.getPayloadRedacted()), task.getSyncBatchId());
+            item.setTaskId(task.getTaskId());
+            item.setSyncBatchId(task.getSyncBatchId());
+            return item;
+        }
+        UpstreamSyncItemResult item = doSyncItem(client, task.getConnectionCode(), task.getSyncType(),
+            task.getSyncBatchId(), startedTime, rateLimitMs);
+        item.setTaskId(task.getTaskId());
+        item.setSyncBatchId(task.getSyncBatchId());
         return item;
     }
 
-    private UpstreamSyncItemResult runSelectedDimensionSyncItem(LingxingOpenApiClient client, String connectionCode,
-        List<String> skuList, UpstreamManualSyncSubmitter.SyncWorkItem workItem)
+    private void completeTask(UpstreamSyncTask task, String status, Date finishedTime, UpstreamSyncItemResult item,
+        String errorCode, String errorMessage)
     {
-        UpstreamSyncItemResult item = skuDimensionSyncComponent.syncSelected(client, connectionCode, skuList,
-            workItem.getSyncBatchId());
-        sourceProductReadModelService.rebuildOfficialMasterByConnection(connectionCode);
-        return item;
+        task.setStatus(status);
+        task.setFinishedTime(finishedTime);
+        task.setPulledCount(item == null ? 0 : item.getPulledCount());
+        task.setInsertedCount(item == null ? 0 : item.getInsertedCount());
+        task.setChangedCount(item == null ? 0 : item.getChangedCount());
+        task.setUnchangedCount(item == null ? 0 : item.getUnchangedCount());
+        task.setDisabledCount(item == null ? 0 : item.getDisabledCount());
+        task.setFailedCount(UpstreamSystemConstants.SYNC_TASK_STATUS_SUCCESS.equals(status) ? 0 : 1);
+        task.setErrorCode(errorCode);
+        task.setErrorMessage(StringUtils.left(StringUtils.defaultString(errorMessage), 500));
+        upstreamSyncTaskMapper.completeSyncTask(task);
+    }
+
+    private UpstreamSyncItemResult failedItem(UpstreamSyncTask task, String message)
+    {
+        UpstreamSyncItemResult failed = new UpstreamSyncItemResult();
+        failed.setTaskId(task.getTaskId());
+        failed.setSyncBatchId(task.getSyncBatchId());
+        failed.setSyncType(task.getSyncType());
+        failed.setStatus(UpstreamSystemConstants.SYNC_TASK_STATUS_FAILED);
+        failed.setErrorMessage(StringUtils.left(StringUtils.defaultString(message), 500));
+        return failed;
+    }
+
+    private void mergeAcceptedTask(UpstreamSyncResult result, UpstreamSyncTask task)
+    {
+        if (StringUtils.isBlank(result.getSyncBatchId()))
+        {
+            result.setSyncBatchId(task.getSyncBatchId());
+        }
+        UpstreamSyncItemResult item = new UpstreamSyncItemResult();
+        item.setTaskId(task.getTaskId());
+        item.setSyncBatchId(task.getSyncBatchId());
+        item.setSyncType(task.getSyncType());
+        item.setStatus(UpstreamSystemConstants.SYNC_TASK_STATUS_PENDING);
+        result.getItems().add(item);
+    }
+
+    private String payloadFor(String syncType, String mode, List<String> selectedSkuList)
+    {
+        if (!UpstreamSystemConstants.SYNC_TYPE_SKU_DIMENSION.equals(syncType)
+            || !UpstreamSystemConstants.SYNC_MODE_SELECTED.equals(mode))
+        {
+            return "";
+        }
+        JSONObject payload = new JSONObject();
+        payload.put("skuList", selectedSkuList == null ? List.of() : selectedSkuList);
+        return JSON.toJSONString(payload);
+    }
+
+    private List<String> selectedSkuListFromPayload(String payloadRedacted)
+    {
+        if (StringUtils.isBlank(payloadRedacted))
+        {
+            throw new ServiceException("指定SKU任务缺少SKU列表");
+        }
+        JSONObject payload = JSON.parseObject(payloadRedacted);
+        if (payload == null || payload.getJSONArray("skuList") == null)
+        {
+            throw new ServiceException("指定SKU任务缺少SKU列表");
+        }
+        return normalizeSelectedSkuList(payload.getJSONArray("skuList").toJavaList(String.class));
+    }
+
+    private int priorityForSyncType(String syncType)
+    {
+        if (UpstreamSystemConstants.SYNC_TYPE_INVENTORY.equals(syncType))
+        {
+            return 30;
+        }
+        if (UpstreamSystemConstants.SYNC_TYPE_WAREHOUSE.equals(syncType))
+        {
+            return 40;
+        }
+        if (UpstreamSystemConstants.SYNC_TYPE_LOGISTICS_CHANNEL.equals(syncType))
+        {
+            return 50;
+        }
+        if (UpstreamSystemConstants.SYNC_TYPE_SKU.equals(syncType))
+        {
+            return 60;
+        }
+        if (UpstreamSystemConstants.SYNC_TYPE_SKU_DIMENSION.equals(syncType))
+        {
+            return 90;
+        }
+        return 100;
+    }
+
+    private int deadlineMinutes(String syncType)
+    {
+        if (UpstreamSystemConstants.SYNC_TYPE_SKU_DIMENSION.equals(syncType))
+        {
+            return 180;
+        }
+        if (UpstreamSystemConstants.SYNC_TYPE_SKU.equals(syncType))
+        {
+            return 60;
+        }
+        return 30;
+    }
+
+    private int leaseMinutes(String syncType)
+    {
+        if (UpstreamSystemConstants.SYNC_TYPE_SKU_DIMENSION.equals(syncType))
+        {
+            return 180;
+        }
+        if (UpstreamSystemConstants.SYNC_TYPE_SKU.equals(syncType))
+        {
+            return 60;
+        }
+        return 30;
+    }
+
+    private int rateLimitMs(String syncType)
+    {
+        return UpstreamSystemConstants.SYNC_TYPE_SKU_DIMENSION.equals(syncType)
+            ? UpstreamSystemConstants.SKU_DIMENSION_FULL_RATE_LIMIT_MS : 0;
+    }
+
+    private Date minutesFromNow(int minutes)
+    {
+        return minutesFrom(new Date(), minutes);
+    }
+
+    private Date minutesFrom(Date date, int minutes)
+    {
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTime(date);
+        calendar.add(Calendar.MINUTE, minutes);
+        return calendar.getTime();
+    }
+
+    private String currentUsername()
+    {
+        try
+        {
+            return SecurityUtils.getUsername();
+        }
+        catch (RuntimeException ex)
+        {
+            return "system";
+        }
+    }
+
+    private String dispatcherOwner()
+    {
+        String host = "unknown";
+        try
+        {
+            host = InetAddress.getLocalHost().getHostName();
+        }
+        catch (UnknownHostException ignored)
+        {
+        }
+        return host + ":" + ProcessHandle.current().pid();
     }
 
     private UpstreamSyncResult syncSingleType(String connectionCode, String syncType, String mode)
@@ -318,7 +687,6 @@ public class UpstreamSyncServiceImpl implements IUpstreamSyncService
             LingxingOpenApiClient client = lingxingClientFactory.createClient(connection);
             UpstreamSyncItemResult item = executeSyncItem(client, connectionCode, syncType, mode);
             UpstreamSyncResult result = new UpstreamSyncResult();
-            result.setSyncBatchId(UUID.randomUUID().toString());
             mergeSyncItemResult(result, item);
             upstreamSystemMapper.updateConnectionSyncSummary(connectionCode);
             return result;
@@ -342,6 +710,7 @@ public class UpstreamSyncServiceImpl implements IUpstreamSyncService
         {
             UpstreamSyncItemResult item = doSyncItem(client, connectionCode, syncType, syncBatchId, startedTime,
                 rateLimitMs);
+            item.setSyncBatchId(syncBatchId);
             Date finishedTime = new Date();
             rebuildReadModel(connectionCode, syncType);
             syncStateRecorder.recordSuccess(connectionCode, syncType, mode, syncBatchId, startedTime, finishedTime,
@@ -354,6 +723,7 @@ public class UpstreamSyncServiceImpl implements IUpstreamSyncService
             String message = StringUtils.left(ex.getMessage(), 500);
             UpstreamSyncItemResult failed = new UpstreamSyncItemResult();
             failed.setSyncType(syncType);
+            failed.setSyncBatchId(syncBatchId);
             failed.setStatus(UpstreamSystemConstants.SYNC_STATUS_FAILED);
             failed.setErrorMessage(message);
             syncStateRecorder.recordFailure(connectionCode, syncType, mode, syncBatchId, startedTime, finishedTime,
@@ -548,6 +918,10 @@ public class UpstreamSyncServiceImpl implements IUpstreamSyncService
         if (item == null)
         {
             return;
+        }
+        if (StringUtils.isBlank(result.getSyncBatchId()))
+        {
+            result.setSyncBatchId(item.getSyncBatchId());
         }
         result.getItems().add(item);
         if (UpstreamSystemConstants.SYNC_TYPE_WAREHOUSE.equals(item.getSyncType()))

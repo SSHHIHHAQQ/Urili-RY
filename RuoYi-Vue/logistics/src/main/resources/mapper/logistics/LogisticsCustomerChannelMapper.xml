@@ -19,6 +19,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="systemMappingCount"            column="system_mapping_count"             />
         <result property="buyerScopeCount"               column="buyer_scope_count"                />
         <result property="systemChannelSummary"          column="system_channel_summary"           />
+        <result property="quoteMasterWarehouseSummary"   column="quote_master_warehouse_summary"   />
+        <result property="quoteUpstreamChannelSummary"   column="quote_upstream_channel_summary"   />
         <result property="buyerScopeSummary"             column="buyer_scope_summary"              />
         <result property="createBy"                      column="create_by"                        />
         <result property="createTime"                    column="create_time"                      />
@@ -76,6 +78,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                coalesce(sm.system_mapping_count, 0) as system_mapping_count,
                coalesce(bs.buyer_scope_count, 0) as buyer_scope_count,
                coalesce(sm.system_channel_summary, '') as system_channel_summary,
+               coalesce(qm.quote_master_warehouse_summary, '') as quote_master_warehouse_summary,
+               coalesce(qm.quote_upstream_channel_summary, '') as quote_upstream_channel_summary,
                case
                  when cc.buyer_scope_mode = 'ALL' then '全部买家'
                  when cc.buyer_scope_mode = 'INCLUDE' then concat('可用名单：', coalesce(bs.buyer_scope_summary, ''))
@@ -90,6 +94,14 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
           from logistics_customer_channel_system_mapping
           group by customer_channel_code
         ) sm on sm.customer_channel_code = cc.customer_channel_code
+        left join (
+          select customer_channel_code,
+                 group_concat(master_warehouse_name_snapshot order by mapping_id desc separator '、') as quote_master_warehouse_summary,
+                 group_concat(concat(upstream_channel_code, ' / ', upstream_channel_name) order by mapping_id desc separator '、') as quote_upstream_channel_summary
+          from logistics_customer_channel_quote_mapping
+          where pairing_role = 'QUOTE'
+          group by customer_channel_code
+        ) qm on qm.customer_channel_code = cc.customer_channel_code
         left join (
           select customer_channel_code,
                  count(1) as buyer_scope_count,

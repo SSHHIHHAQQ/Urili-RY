@@ -470,6 +470,37 @@ export async function getBuyerPortalDistributionProductSkus(spuId: number) {
   );
 }
 
+export async function getBuyerPortalProductCenterProducts(params?: Record<string, any>) {
+  return request<API.Partner.BuyerPortalProductPageResult>(
+    buildPortalUrl('buyer', '/product/center/list'),
+    {
+      method: 'GET',
+      headers: { ...buildPortalAuthHeaders('buyer'), isToken: false },
+      params: sanitizePortalQueryParams(params),
+    },
+  );
+}
+
+export async function getBuyerPortalProductCenterProduct(spuId: number) {
+  return request<API.Partner.BuyerPortalProductInfoResult>(
+    buildPortalUrl('buyer', `/product/center/${spuId}`),
+    {
+      method: 'GET',
+      headers: { ...buildPortalAuthHeaders('buyer'), isToken: false },
+    },
+  );
+}
+
+export async function getBuyerPortalProductCenterProductSkus(spuId: number) {
+  return request<API.Partner.BuyerPortalProductSkuListResult>(
+    buildPortalUrl('buyer', `/product/center/${spuId}/skus`),
+    {
+      method: 'GET',
+      headers: { ...buildPortalAuthHeaders('buyer'), isToken: false },
+    },
+  );
+}
+
 export const sellerPortalSessionService = {
   login: (data: API.Partner.PortalLoginParams) => portalLogin('seller', data),
   directLogin: (directLoginToken: string) => portalDirectLogin('seller', directLoginToken),

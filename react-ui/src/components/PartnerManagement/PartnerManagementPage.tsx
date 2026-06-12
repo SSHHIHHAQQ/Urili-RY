@@ -94,8 +94,8 @@ type PartnerService = {
   forceLogoutAccount: (id: number, accountId: number) => Promise<API.Result>;
   getAccountRoles: (id: number, accountId: number) => Promise<API.Partner.PortalAccountRoleResult>;
   assignAccountRoles: (id: number, accountId: number, roleIds: number[]) => Promise<API.Result>;
-  directLogin: (id: number, reason: string) => Promise<API.Partner.DirectLoginApiResult>;
-  directLoginAccount?: (id: number, accountId: number, reason: string) => Promise<API.Partner.DirectLoginApiResult>;
+  directLogin: (id: number, reason?: string) => Promise<API.Partner.DirectLoginApiResult>;
+  directLoginAccount?: (id: number, accountId: number, reason?: string) => Promise<API.Partner.DirectLoginApiResult>;
   listLoginLogs: (params?: Record<string, any>) => Promise<API.Partner.PortalAuditPageResult<API.Partner.PortalLoginLog>>;
   listOperLogs: (params?: Record<string, any>) => Promise<API.Partner.PortalAuditPageResult<API.Partner.PortalOperLog>>;
   listDirectLoginTickets: (params?: Record<string, any>) => Promise<API.Partner.PortalAuditPageResult<API.Partner.PortalDirectLoginTicket>>;
@@ -588,9 +588,8 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
         <Form form={directLoginForm} layout="vertical" preserve={false}>
           <Form.Item
             name="reason"
-            label="代入原因"
+            label="代入原因（选填）"
             rules={[
-              { required: true, whitespace: true, message: '请输入免密登录原因' },
               { max: 255, message: '代入原因不能超过 255 个字符' },
             ]}
           >
@@ -598,7 +597,7 @@ const PartnerManagementPage: React.FC<{ config: PartnerModuleConfig }> = ({ conf
               rows={3}
               maxLength={255}
               showCount
-              placeholder="例如：协助客户排查订单问题"
+              placeholder="可选，例如：协助客户排查订单问题"
             />
           </Form.Item>
         </Form>

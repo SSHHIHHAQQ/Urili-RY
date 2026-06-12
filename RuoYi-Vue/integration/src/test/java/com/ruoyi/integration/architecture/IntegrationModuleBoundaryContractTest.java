@@ -128,6 +128,120 @@ public class IntegrationModuleBoundaryContractTest
         }
     }
 
+    @Test
+    public void upstreamSyncMustUseRuoyiDispatcherTaskLifecycle() throws IOException
+    {
+        Path backendRoot = findBackendRoot();
+        String syncService = read(backendRoot.resolve(
+                "integration/src/main/java/com/ruoyi/integration/service/impl/UpstreamSyncServiceImpl.java"));
+        String dispatchTask = read(backendRoot.resolve(
+                "integration/src/main/java/com/ruoyi/integration/task/UpstreamSyncDispatchTask.java"));
+        String lifecycleSql = read(backendRoot.resolve("sql/20260612_upstream_sync_task_lifecycle.sql"));
+        List<String> violations = new ArrayList<>();
+
+        assertContains(syncService, "enqueueSyncTasks(",
+                "manual and scheduled upstream sync must enqueue durable tasks", violations);
+        assertContains(syncService, "dispatchPendingTasks()",
+                "upstream sync service must expose the RuoYi dispatcher entry", violations);
+        assertContains(syncService, "SYNC_TRIGGER_SCHEDULED",
+                "scheduled sync must be represented as a queued scheduled trigger", violations);
+        assertNotContains(syncService, "manualSyncSubmitter",
+                "upstream sync service must not dispatch through the old in-memory manual submitter", violations);
+        assertContains(dispatchTask, "upstreamSyncService.dispatchPendingTasks()",
+                "RuoYi task bean must delegate to the durable dispatcher", violations);
+        assertContains(dispatchTask, "@Component(\"upstreamSyncDispatchTask\")",
+                "RuoYi task bean name must exactly match the Quartz invoke target", violations);
+        assertContains(lifecycleSql, "upstreamSyncDispatchTask.dispatch",
+                "migration must register the RuoYi Quartz dispatcher invoke target", violations);
+        assertContains(lifecycleSql, "'0/30 * * * * ?'",
+                "dispatcher cron must run every 30 seconds", violations);
+        assertContains(lifecycleSql, "concurrent = '1'",
+                "dispatcher job must be non-concurrent", violations);
+
+        if (!violations.isEmpty())
+        {
+            fail("upstream sync task lifecycle contract failed:\n" + String.join("\n", violations));
+        }
+    }
+
+    @Test
+    public void lingxingHttpRequestsMustUseStartLogAndHardTimeout() throws IOException
+    {
+        Path backendRoot = findBackendRoot();
+        String client = read(backendRoot.resolve(
+                "integration/src/main/java/com/ruoyi/integration/lingxing/LingxingOpenApiClient.java"));
+        String factory = read(backendRoot.resolve(
+                "integration/src/main/java/com/ruoyi/integration/sync/UpstreamLingxingClientFactory.java"));
+        String clockGuard = read(backendRoot.resolve(
+                "integration/src/main/java/com/ruoyi/integration/sync/UpstreamClockHealthGuard.java"));
+        String mapperApi = read(backendRoot.resolve(
+                "integration/src/main/java/com/ruoyi/integration/mapper/UpstreamSystemMapper.java"));
+        String mapperXml = read(backendRoot.resolve(
+                "integration/src/main/resources/mapper/integration/UpstreamSystemMapper.xml"));
+        List<String> violations = new ArrayList<>();
+
+        assertContains(client, "log.setStatus(\"STARTED\")",
+                "Lingxing request log must be inserted before the external HTTP call starts", violations);
+        assertContains(client, "HttpResponse<String> response = sendWithHardTimeout(request)",
+                "Lingxing requests must go through the hard-timeout wrapper", violations);
+        assertContains(client, "httpClient.sendAsync(request",
+                "Lingxing requests must not block the task thread with synchronous send", violations);
+        assertContains(client, "future.get(DEFAULT_TIMEOUT_MS, TimeUnit.MILLISECONDS)",
+                "Lingxing requests must have a hard timeout around async execution", violations);
+        assertContains(client, "future.cancel(true)",
+                "Lingxing timeout handling must cancel the in-flight future", violations);
+        assertContains(client, "LINGXING_TIMEOUT",
+                "Lingxing timeout failures must be classified explicitly", violations);
+        assertNotContains(client, "httpClient.send(request",
+                "Lingxing requests must not use blocking HttpClient#send", violations);
+        assertContains(factory, "entry.setRequestLogId(log.getRequestLogId())",
+                "request logger must keep the generated request log id for completion updates", violations);
+        assertContains(factory, "upstreamSystemMapper.updateRequestLog(log)",
+                "request logger must update the started log row on completion", violations);
+        assertContains(factory, "clockHealthGuard.assertSystemClockHealthy()",
+                "Lingxing client creation must fail fast when the local clock is unhealthy", violations);
+        assertContains(clockGuard, "selectDatabaseEpochMillis()",
+                "clock guard must compare the host clock against the active database clock", violations);
+        assertContains(clockGuard, "LOCAL_CLOCK_SKEW",
+                "clock guard must classify local host clock drift explicitly", violations);
+        assertContains(mapperApi, "int updateRequestLog(UpstreamRequestLog log)",
+                "mapper API must expose request log completion updates", violations);
+        assertContains(mapperApi, "Long selectDatabaseEpochMillis()",
+                "mapper API must expose active database time for clock health checks", violations);
+        assertContains(mapperXml, "<update id=\"updateRequestLog\"",
+                "mapper XML must update request log completion fields", violations);
+        assertContains(mapperXml, "<select id=\"selectDatabaseEpochMillis\"",
+                "mapper XML must define active database time lookup for clock health checks", violations);
+
+        if (!violations.isEmpty())
+        {
+            fail("Lingxing hard-timeout request logging contract failed:\n" + String.join("\n", violations));
+        }
+    }
+
+    @Test
+    public void upstreamSyncTaskCompletionMustNotOverwriteTerminalRows() throws IOException
+    {
+        Path backendRoot = findBackendRoot();
+        String syncService = read(backendRoot.resolve(
+                "integration/src/main/java/com/ruoyi/integration/service/impl/UpstreamSyncServiceImpl.java"));
+        String taskMapperXml = read(backendRoot.resolve(
+                "integration/src/main/resources/mapper/integration/UpstreamSyncTaskMapper.xml"));
+        List<String> violations = new ArrayList<>();
+
+        assertContains(syncService, "isRetriableTaskStatus(task.getStatus())",
+                "retry must be limited to terminal task states in the service layer", violations);
+        assertContains(syncService, "SYNC_TASK_STATUS_SKIPPED",
+                "skipped task state must belong to the task lifecycle constants", violations);
+        assertContains(taskMapperXml, "and status in ('CLAIMED', 'RUNNING')",
+                "task completion must not overwrite rows already closed by timeout, cancel, or recovery", violations);
+
+        if (!violations.isEmpty())
+        {
+            fail("upstream sync terminal row contract failed:\n" + String.join("\n", violations));
+        }
+    }
+
     private List<Path> javaFiles(Path root) throws IOException
     {
         try (Stream<Path> files = Files.walk(root))

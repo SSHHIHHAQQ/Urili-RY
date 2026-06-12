@@ -47,6 +47,8 @@ const SELF_MANAGEMENT_PERMISSIONS = {
     'buyer:role:add',
     'buyer:role:edit',
     'buyer:role:remove',
+    'buyer:product:center:list',
+    'buyer:product:center:query',
   ],
 };
 
@@ -59,6 +61,11 @@ const FROZEN_BUSINESS_TERMS = [
   'fulfillment',
   'integration',
 ];
+
+const ALLOWED_BUSINESS_PERMISSION_PREFIXES = {
+  seller: [],
+  buyer: ["buyer:product:center:"],
+};
 
 const FORBIDDEN_SELF_AUDIT_FIELDS = [
   'subjectId',
@@ -185,7 +192,7 @@ function assertSuccess(label, response, body) {
   if (!response.ok || body.code !== 200) {
     throw new Error(`${label} failed: HTTP ${response.status}, code=${body.code}, msg=${body.msg || ''}`);
   }
-  return body.data;
+  return Object.prototype.hasOwnProperty.call(body, 'data') ? body.data : body;
 }
 
 function assertNoUnexpectedFields(label, data, allowedFields) {
@@ -283,7 +290,10 @@ function assertTerminalRoleMenuTemplate(terminal, value) {
 }
 
 function assertNoFrozenBusinessSurface(terminal, label, value) {
-  const serialized = JSON.stringify(value).toLowerCase();
+  let serialized = JSON.stringify(value ?? {}).toLowerCase();
+  for (const prefix of ALLOWED_BUSINESS_PERMISSION_PREFIXES[terminal] || []) {
+    serialized = serialized.replaceAll(prefix, '');
+  }
   const frozen = FROZEN_BUSINESS_TERMS.filter(
     (term) => serialized.includes(`${terminal}:${term}:`) || serialized.includes(`/${term}/`),
   );

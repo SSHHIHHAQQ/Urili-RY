@@ -6,6 +6,7 @@ import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Duration;
@@ -17,9 +18,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import javax.crypto.Mac;
@@ -202,6 +207,21 @@ public class LingxingOpenApiClient
         dataRequest.put("skuList", safeSkuList);
         return listProductSkuPage(dataRequest, 1, safeSkuList.size(),
             StringUtils.defaultIfBlank(operation, UpstreamSystemConstants.OP_SKU_DIMENSION_SYNC), traceId);
+    }
+
+    public Object estimateFee(String path, Object data, String traceId)
+    {
+        String normalizedPath = StringUtils.trimToEmpty(path);
+        if (StringUtils.isBlank(normalizedPath))
+        {
+            throw new LingxingClientException("LINGXING_ESTIMATE_ENDPOINT_UNCONFIGURED",
+                "Lingxing fee estimate endpoint is not configured", false);
+        }
+        if (!normalizedPath.startsWith("/"))
+        {
+            normalizedPath = "/" + normalizedPath;
+        }
+        return post(normalizedPath, data, UpstreamSystemConstants.OP_FEE_ESTIMATE, traceId);
     }
 
     public LingxingInventoryProductPage listInventoryProductPage(int current, int size, String traceId)
@@ -427,6 +447,8 @@ public class LingxingOpenApiClient
             log.setEndpoint(endpoint);
             log.setRequestTime(new Date(started));
             log.setRequestPayloadRedacted(requestLog);
+            log.setStatus("STARTED");
+            writeLog(log);
             try
             {
                 HttpRequest request = HttpRequest.newBuilder()
@@ -437,7 +459,7 @@ public class LingxingOpenApiClient
                     .header("X-Trace-Id", safeTraceId)
                     .POST(HttpRequest.BodyPublishers.ofString(requestJson, StandardCharsets.UTF_8))
                     .build();
-                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+                HttpResponse<String> response = sendWithHardTimeout(request);
                 long finished = System.currentTimeMillis();
                 log.setResponseTime(new Date(finished));
                 log.setDurationMs(finished - started);
@@ -486,6 +508,38 @@ public class LingxingOpenApiClient
             }
         }
         throw new LingxingClientException("LINGXING_RETRY_ERROR", "领星请求重试失败", false);
+    }
+
+    private HttpResponse<String> sendWithHardTimeout(HttpRequest request)
+    {
+        CompletableFuture<HttpResponse<String>> future = httpClient.sendAsync(request,
+            HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        try
+        {
+            return future.get(DEFAULT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        }
+        catch (TimeoutException ex)
+        {
+            future.cancel(true);
+            throw new LingxingClientException("LINGXING_TIMEOUT", "Lingxing request timed out", true);
+        }
+        catch (InterruptedException ex)
+        {
+            future.cancel(true);
+            Thread.currentThread().interrupt();
+            throw new LingxingClientException("LINGXING_INTERRUPTED", "Lingxing request interrupted", true);
+        }
+        catch (ExecutionException ex)
+        {
+            Throwable cause = ex.getCause();
+            if (cause instanceof HttpTimeoutException)
+            {
+                throw new LingxingClientException("LINGXING_TIMEOUT", "Lingxing request timed out", true);
+            }
+            throw new LingxingClientException("LINGXING_NETWORK_ERROR",
+                StringUtils.defaultIfBlank(cause == null ? null : cause.getMessage(), "Lingxing network request failed"),
+                true);
+        }
     }
 
     private void finishFailureLog(LingxingRequestLogEntry log, LingxingClientException ex)

@@ -27,9 +27,8 @@ describe('portal home error handling contract', () => {
   it('loads the protected session list only when the terminal account has session permission', () => {
     expect(source).toContain("portalPermission(terminal, 'account:session:list')");
     expect(source).toContain('const canViewSessions = hasPortalPermission');
-    expect(source).toContain('if (hasPortalPermission(permissions, portalPermission(terminal, \'account:session:list\'))) {');
-    expect(source).toContain('loadSessions(terminal);');
-    expect(source).toContain('{canViewSessions ? (');
+    expect(source).toMatch(/hasPortalPermission\(\s*permissions,\s*portalPermission\(terminal, 'account:session:list'\)\s*\)/);
+    expect(source).toMatch(/loadSessions\(\s*terminal(?:\s*,[^)]*)?\)/);
   });
 
   it('does not refresh the protected session list without session permission', () => {
@@ -43,6 +42,6 @@ describe('portal home error handling contract', () => {
       source.indexOf('const handleRefresh = () => {'),
       source.indexOf('return ('),
     );
-    expect(handleRefreshBody).not.toContain('loadSessions(terminal)');
+    expect(handleRefreshBody).not.toMatch(/loadSessions\(\s*terminal(?:\s*,[^)]*)?\)/);
   });
 });

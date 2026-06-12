@@ -308,6 +308,32 @@ public class TerminalSqlIsolationContractTest
     }
 
     @Test
+    public void terminalSessionTablesMustUseIndependentDdlAndDirectLoginAuditFields() throws IOException
+    {
+        Path backendRoot = findBackendRoot();
+        List<String> violations = new ArrayList<>();
+
+        for (String script : Arrays.asList(
+                "sql/20260604_three_terminal_isolation_migration.sql",
+                "sql/seller_buyer_management_seed.sql"))
+        {
+            Path path = backendRoot.resolve(script);
+            String sql = readText(path);
+            String fileName = path.getFileName().toString();
+            assertIndependentSessionDdl(fileName, sql, "seller_session", "seller_id", "seller_account_id",
+                    violations);
+            assertIndependentSessionDdl(fileName, sql, "buyer_session", "buyer_id", "buyer_account_id",
+                    violations);
+        }
+
+        if (!violations.isEmpty())
+        {
+            fail("seller/buyer terminal sessions must stay on independent terminal tables with direct-login audit fields:\n"
+                    + String.join("\n", violations));
+        }
+    }
+
+    @Test
     public void currentIsolationMigrationMustNotBackfillTerminalAccountsFromSysUser() throws IOException
     {
         Path backendRoot = findBackendRoot();
@@ -591,6 +617,37 @@ public class TerminalSqlIsolationContractTest
                 "call add_column_if_missing('" + table + "', '" + column + "'");
         requireContains(violations, fileName + " " + table + " patch", sql,
                 "call assert_column_exists('" + table + "', '" + column + "'");
+    }
+
+    private void assertIndependentSessionDdl(String fileName, String sql, String tableName, String subjectColumn,
+            String accountColumn, List<String> violations)
+    {
+        String createTable = extractCreateTableStatement(sql, tableName);
+        requireContains(violations, fileName + " " + tableName, createTable,
+                "create table if not exists " + tableName);
+        requireContains(violations, fileName + " " + tableName, createTable,
+                "token_id");
+        requireContains(violations, fileName + " " + tableName, createTable,
+                subjectColumn);
+        requireContains(violations, fileName + " " + tableName, createTable,
+                accountColumn);
+        for (String column : Arrays.asList(
+                "direct_login",
+                "direct_login_ticket_id",
+                "acting_admin_id",
+                "acting_admin_name",
+                "direct_login_reason"))
+        {
+            requireContains(violations, fileName + " " + tableName, createTable, column);
+        }
+        if (createTable.toLowerCase().contains(" like "))
+        {
+            violations.add(fileName + " " + tableName + " must not be cloned from another table with LIKE");
+        }
+        if (createTable.toLowerCase().contains("sys_"))
+        {
+            violations.add(fileName + " " + tableName + " must not reference sys_* tables in terminal session DDL");
+        }
     }
 
     private String extractCreateTableStatement(String sql, String table)

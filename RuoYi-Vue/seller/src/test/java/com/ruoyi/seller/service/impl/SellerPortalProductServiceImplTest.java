@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 import org.junit.Test;
 import com.github.pagehelper.Page;
+import com.github.pagehelper.page.PageMethod;
 import com.ruoyi.common.constant.HttpStatus;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.product.domain.ProductSku;
@@ -89,6 +90,29 @@ public class SellerPortalProductServiceImplTest
         assertEquals(10, resultPage.getPageSize());
         assertEquals(25L, resultPage.getTotal());
         assertEquals(3, resultPage.getPages());
+    }
+
+    @Test
+    public void selectOwnProductListDoesNotApplyPageHelperToSessionAccountLookup()
+    {
+        RecordingProductDistributionService productService = new RecordingProductDistributionService();
+        RecordingSellerMapper sellerMapper = new RecordingSellerMapper(true);
+        SellerPortalProductServiceImpl service = service(productService, sellerMapper(sellerMapper));
+        Page<ProductSpu> activePage = new Page<>(1, 20, true);
+
+        PageMethod.setLocalPage(activePage);
+        try
+        {
+            service.selectOwnProductList(session(11L, 22L), new ProductSpu());
+
+            assertFalse(sellerMapper.pageActiveDuringAccountLookup);
+            assertSame(activePage, productService.pageDuringProductList);
+            assertSame(activePage, PageMethod.getLocalPage());
+        }
+        finally
+        {
+            PageMethod.clearPage();
+        }
     }
 
     @Test
@@ -344,6 +368,7 @@ public class SellerPortalProductServiceImplTest
         private List<ProductSpu> productListResult = new ArrayList<>();
         private ProductSpu productListQuery;
         private List<ProductSpu> returnedProductListSource;
+        private Page<?> pageDuringProductList;
         private ProductSpu productByIdResult;
         private Long productByIdArg;
         private Long productByIdSellerId;
@@ -354,6 +379,7 @@ public class SellerPortalProductServiceImplTest
         public List<ProductSpu> selectSellerProductList(ProductSpu query)
         {
             productListQuery = query;
+            pageDuringProductList = PageMethod.getLocalPage();
             returnedProductListSource = productListResult;
             return productListResult;
         }
@@ -398,6 +424,7 @@ public class SellerPortalProductServiceImplTest
         private final boolean accountExists;
         private Long sellerId;
         private Long sellerAccountId;
+        private boolean pageActiveDuringAccountLookup;
 
         private RecordingSellerMapper(boolean accountExists)
         {
@@ -411,6 +438,7 @@ public class SellerPortalProductServiceImplTest
             {
                 sellerId = (Long) args[0];
                 sellerAccountId = (Long) args[1];
+                pageActiveDuringAccountLookup = PageMethod.getLocalPage() != null;
                 return accountExists ? new SellerAccount() : null;
             }
             if ("toString".equals(method.getName()))

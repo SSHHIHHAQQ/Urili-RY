@@ -70,3 +70,19 @@
 - `RuoYi-Vue`：`mvn -pl finance -am -DskipTests clean compile` 通过，finance 重新编译 32 个源文件。
 - `RuoYi-Vue`：`mvn -pl ruoyi-system -am "-Dtest=FinanceAdminRouteContractTest" "-Dsurefire.failIfNoSpecifiedTests=false" test` 通过，2 项断言通过。
 - 仓库根目录：`git diff --check` 通过；仅输出既有 LF/CRLF 警告。
+
+## 2026-06-12 仓库字段合并
+
+- 报价方案基础信息里移除“仓库范围”字段，不再展示“全部仓库/指定仓库”选择。
+- 原“适用仓库”改为单个字段“仓库”，必填且只能单选一个仓库。
+- 前端保存时固定提交 `warehouseScopeMode = INCLUDE`，`warehouseCodes` 仍按接口数组格式传入一个仓库编码。
+- 后端创建、编辑、单独保存仓库时都强制使用 `INCLUDE`，并校验仓库必须且只能选择一个；空仓库和多个仓库都会拒绝保存。
+- 列表列名从“仓库范围”改为“仓库”。
+
+## 2026-06-12 仓库字段合并验证
+
+- `react-ui`：`npm run tsc` 通过。
+- `react-ui`：`npx jest --config jest.config.ts --runTestsByPath tests/finance-quote-scheme-contract.test.ts --runInBand` 通过，6 项断言通过。
+- `RuoYi-Vue`：`mvn -pl finance -am -DskipTests clean compile` 通过，finance 重新编译 44 个源文件。
+- `RuoYi-Vue`：`mvn -pl ruoyi-system -am "-Dtest=FinanceAdminRouteContractTest" "-Dsurefire.failIfNoSpecifiedTests=false" test` 通过，3 项断言通过。
+- 浏览器运行态：登录管理端后打开 `/overseas-warehouse-service/billing-quote-scheme`，列表列名显示为“仓库”；点击“新增”后弹窗内只存在 `* 仓库` 一个 combobox，未出现“仓库范围”或“适用仓库”字段。

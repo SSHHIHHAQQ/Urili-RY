@@ -121,7 +121,7 @@ public class QuoteSchemeServiceImpl implements IQuoteSchemeService
         scheme.setCreateBy(currentUsername());
         int rows = quoteSchemeMapper.insertQuoteScheme(scheme);
         saveScopes(scheme.getSchemeId(), scheme);
-        saveWarehouses(scheme.getSchemeId(), scheme.getWarehouseScopeMode(), scheme.getWarehouseCodes());
+        saveWarehouses(scheme.getSchemeId(), scheme.getWarehouseCodes());
         return rows;
     }
 
@@ -146,7 +146,7 @@ public class QuoteSchemeServiceImpl implements IQuoteSchemeService
         scheme.setUpdateBy(currentUsername());
         int rows = quoteSchemeMapper.updateQuoteScheme(scheme);
         saveScopes(schemeId, scheme);
-        saveWarehouses(schemeId, scheme.getWarehouseScopeMode(), scheme.getWarehouseCodes());
+        saveWarehouses(schemeId, scheme.getWarehouseCodes());
         return rows;
     }
 
@@ -172,10 +172,9 @@ public class QuoteSchemeServiceImpl implements IQuoteSchemeService
     public int saveQuoteSchemeWarehouses(Long schemeId, List<String> warehouseCodes)
     {
         requireScheme(schemeId);
-        String warehouseScopeMode = emptyIfNull(warehouseCodes).isEmpty() ? WAREHOUSE_ALL : WAREHOUSE_INCLUDE;
-        List<String> normalizedWarehouseCodes = normalizeWarehouseCodesForScope(warehouseScopeMode, warehouseCodes);
-        quoteSchemeMapper.updateQuoteSchemeWarehouseScopeMode(schemeId, warehouseScopeMode, currentUsername());
-        saveWarehouses(schemeId, warehouseScopeMode, normalizedWarehouseCodes);
+        List<String> normalizedWarehouseCodes = normalizeWarehouseCodesForScope(warehouseCodes);
+        quoteSchemeMapper.updateQuoteSchemeWarehouseScopeMode(schemeId, WAREHOUSE_INCLUDE, currentUsername());
+        saveWarehouses(schemeId, normalizedWarehouseCodes);
         return 1;
     }
 
@@ -339,9 +338,8 @@ public class QuoteSchemeServiceImpl implements IQuoteSchemeService
         financeCurrencyService.selectCurrencyByCode(scheme.getCurrencyCode());
         scheme.setScopeType(normalizeEnum(scheme.getScopeType(), SCOPE_ALL_BUYERS,
             SCOPE_ALL_BUYERS, SCOPE_BUYER_LEVEL, SCOPE_BUYER, "适用对象类型"));
-        scheme.setWarehouseScopeMode(normalizeEnum(scheme.getWarehouseScopeMode(), WAREHOUSE_ALL,
-            WAREHOUSE_ALL, WAREHOUSE_INCLUDE, "仓库范围模式"));
-        scheme.setWarehouseCodes(normalizeWarehouseCodesForScope(scheme.getWarehouseScopeMode(), scheme.getWarehouseCodes()));
+        scheme.setWarehouseScopeMode(WAREHOUSE_INCLUDE);
+        scheme.setWarehouseCodes(normalizeWarehouseCodesForScope(scheme.getWarehouseCodes()));
         scheme.setStatus(normalizeStatus(scheme.getStatus()));
         if (scheme.getEffectiveTime() == null)
         {
@@ -414,14 +412,10 @@ public class QuoteSchemeServiceImpl implements IQuoteSchemeService
         }
     }
 
-    private void saveWarehouses(Long schemeId, String warehouseScopeMode, List<String> warehouseCodes)
+    private void saveWarehouses(Long schemeId, List<String> warehouseCodes)
     {
         quoteSchemeMapper.deleteQuoteSchemeWarehouses(schemeId);
-        if (WAREHOUSE_ALL.equals(warehouseScopeMode))
-        {
-            return;
-        }
-        for (String warehouseCode : normalizeWarehouseCodesForScope(warehouseScopeMode, warehouseCodes))
+        for (String warehouseCode : normalizeWarehouseCodesForScope(warehouseCodes))
         {
             QuoteSchemeOption warehouse = requireWarehouseLookupService().selectWarehouseOption(warehouseCode);
             if (warehouse == null)
@@ -438,16 +432,12 @@ public class QuoteSchemeServiceImpl implements IQuoteSchemeService
         }
     }
 
-    private List<String> normalizeWarehouseCodesForScope(String warehouseScopeMode, List<String> warehouseCodes)
+    private List<String> normalizeWarehouseCodesForScope(List<String> warehouseCodes)
     {
-        if (WAREHOUSE_ALL.equals(warehouseScopeMode))
-        {
-            return Collections.emptyList();
-        }
         List<String> normalizedCodes = normalizeCodes(warehouseCodes, "仓库");
-        if (normalizedCodes.size() > 1)
+        if (normalizedCodes.size() != 1)
         {
-            throw new ServiceException("仓库最多只能选择一个");
+            throw new ServiceException("仓库必须且只能选择一个");
         }
         return normalizedCodes;
     }

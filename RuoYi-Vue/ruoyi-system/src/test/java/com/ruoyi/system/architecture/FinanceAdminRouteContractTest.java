@@ -190,8 +190,10 @@ public class FinanceAdminRouteContractTest
                 "quote scheme service must prevent duplicate value fee rules", violations);
         assertContains(service, "normalizeWarehouseCodesForScope",
                 "quote scheme service must normalize warehouse scope as a single warehouse", violations);
-        assertContains(service, "仓库最多只能选择一个",
-                "quote scheme service must reject multiple warehouse selections", violations);
+        assertContains(service, "scheme.setWarehouseScopeMode(WAREHOUSE_INCLUDE)",
+                "quote scheme service must force quote schemes to one selected warehouse", violations);
+        assertContains(service, "仓库必须且只能选择一个",
+                "quote scheme service must require exactly one warehouse selection", violations);
         assertContains(service, "assertEffectivePriorityNotConflicting",
                 "quote scheme service must reject overlapping enabled schemes with the same priority", violations);
         assertContains(service, "countOverlappingEnabledSchemeWithSamePriority",
@@ -293,8 +295,16 @@ public class FinanceAdminRouteContractTest
                 "quote scheme page must normalize warehouse form value before saving", violations);
         assertContains(page, "warehouseCodes: normalizeWarehouseCodes",
                 "quote scheme page must submit at most one warehouse code", violations);
-        assertNotContains(page, "name=\"warehouseCodes\"\n                      label=\"适用仓库\"\n                      mode=\"multiple\"",
-                "quote scheme page warehouse selector must not allow multiple selections", violations);
+        assertContains(page, "warehouseScopeMode: 'INCLUDE'",
+                "quote scheme page must submit warehouse scope as a selected warehouse", violations);
+        assertContains(page, "name=\"warehouseCodes\"\n                label=\"仓库\"",
+                "quote scheme page must render one merged warehouse selector", violations);
+        assertNotContains(page, "label=\"仓库范围\"",
+                "quote scheme page must not render a separate warehouse scope field", violations);
+        assertNotContains(page, "label=\"适用仓库\"",
+                "quote scheme page must not render the old warehouse field label", violations);
+        assertNotContains(page, "quote_scheme_warehouse_scope_mode",
+                "quote scheme page must not load warehouse scope options", violations);
         assertContains(page, "getPersistedProTableSearch({ fieldCount: 6 }, 'finance-quote-scheme')",
                 "quote scheme page must use persisted ProTable search", violations);
         assertContains(page, "getProTablePagination()",
@@ -305,6 +315,304 @@ public class FinanceAdminRouteContractTest
         if (!violations.isEmpty())
         {
             fail("finance quote scheme must stay on the finance admin surface:\n" + String.join("\n", violations));
+        }
+    }
+
+    @Test
+    public void financeFeeEstimateMustStayInFinanceAdminModule() throws IOException
+    {
+        Path backendRoot = findBackendRoot();
+        Path repoRoot = backendRoot.getParent();
+        String controller = Files.readString(backendRoot.resolve(
+                "finance/src/main/java/com/ruoyi/finance/controller/AdminFeeEstimateController.java"),
+                StandardCharsets.UTF_8);
+        String service = Files.readString(backendRoot.resolve(
+                "finance/src/main/java/com/ruoyi/finance/service/impl/FeeEstimateServiceImpl.java"),
+                StandardCharsets.UTF_8);
+        String requestDto = Files.readString(backendRoot.resolve(
+                "finance/src/main/java/com/ruoyi/finance/domain/request/FeeEstimateRequest.java"),
+                StandardCharsets.UTF_8);
+        String skuQuery = Files.readString(backendRoot.resolve(
+                "finance/src/main/java/com/ruoyi/finance/domain/query/FeeEstimateSkuQuery.java"),
+                StandardCharsets.UTF_8);
+        String skuSnapshot = Files.readString(backendRoot.resolve(
+                "finance/src/main/java/com/ruoyi/finance/domain/FeeEstimateSkuSnapshot.java"),
+                StandardCharsets.UTF_8);
+        String skuLookup = Files.readString(backendRoot.resolve(
+                "product/src/main/java/com/ruoyi/product/service/impl/ProductFeeEstimateSkuLookupServiceImpl.java"),
+                StandardCharsets.UTF_8);
+        String sql = Files.readString(backendRoot.resolve(
+                "sql/20260612_fee_estimate_menu_seed.sql"), StandardCharsets.UTF_8);
+        String serviceTs = Files.readString(repoRoot.resolve(
+                "react-ui/src/services/finance/feeEstimate.ts"), StandardCharsets.UTF_8);
+        String serviceJs = Files.readString(repoRoot.resolve(
+                "react-ui/src/services/finance/feeEstimate.js"), StandardCharsets.UTF_8);
+        String page = Files.readString(repoRoot.resolve(
+                "react-ui/src/pages/Finance/FeeEstimate/index.tsx"), StandardCharsets.UTF_8);
+        String pageJs = Files.readString(repoRoot.resolve(
+                "react-ui/src/pages/Finance/FeeEstimate/index.js"), StandardCharsets.UTF_8);
+        String frontendManifest = Files.readString(repoRoot.resolve(
+                "react-ui/tests/three-terminal.manifest.json"), StandardCharsets.UTF_8);
+        List<String> violations = new ArrayList<>();
+
+        assertContains(controller, "@RequestMapping(\"/finance/admin/fee-estimate\")",
+                "AdminFeeEstimateController must stay under /finance/admin/fee-estimate", violations);
+        assertAdminOnlyController(controller, "AdminFeeEstimateController", violations);
+        for (String expectedPermission : new String[] {
+                "finance:feeEstimate:query",
+                "finance:feeEstimate:calculate"
+        })
+        {
+            assertContains(controller, expectedPermission,
+                    "AdminFeeEstimateController must guard " + expectedPermission, violations);
+        }
+        assertContains(controller, "@GetMapping(\"/options\")",
+                "fee estimate controller must expose options route", violations);
+        assertContains(controller, "@GetMapping(\"/skus/list\")",
+                "fee estimate controller must expose SKU lookup route", violations);
+        assertContains(controller, "skus(FeeEstimateSkuQuery query)",
+                "fee estimate SKU lookup must use structured filters instead of a broad keyword", violations);
+        assertContains(controller, "@PostMapping(\"/calculate\")",
+                "fee estimate controller must expose calculate route", violations);
+        assertContains(controller, "isSaveRequestData = false",
+                "fee estimate controller must not persist destination payloads in sys_oper_log", violations);
+        assertContains(requestDto, "destinationAddress2",
+                "fee estimate request DTO must carry destination address line 2", violations);
+        assertContains(requestDto, "estimateView",
+                "fee estimate request DTO must distinguish operations and buyer simulation views", violations);
+        assertContains(requestDto, "warehouseCodes",
+                "fee estimate request DTO must allow auto-best warehouse constraints", violations);
+        assertContains(requestDto, "customerChannelCode",
+                "fee estimate request DTO must allow buyer simulation manual channel selection", violations);
+        for (String field : new String[] {
+                "sourceWarehouseCode",
+                "skuCode",
+                "productName"
+        })
+        {
+            assertContains(skuQuery, field,
+                    "fee estimate SKU query must expose structured filter " + field, violations);
+        }
+        assertContains(skuSnapshot, "sourceWarehouseCodes",
+                "fee estimate SKU snapshot must expose source warehouse codes for common-warehouse selection guards",
+                violations);
+        assertContains(skuSnapshot, "availableStock",
+                "fee estimate SKU snapshot must expose platform available stock for the selector", violations);
+
+        assertContains(service, "ObjectProvider<FinanceFeeEstimateSkuLookupService>",
+                "fee estimate service must use product lookup port instead of product mapper", violations);
+        assertContains(service, "ObjectProvider<FinanceFeeEstimateLogisticsLookupService>",
+                "fee estimate service must use logistics lookup port instead of logistics mapper", violations);
+        assertContains(service, "ObjectProvider<FinanceFeeEstimateExternalService>",
+                "fee estimate service must use external estimate port instead of integration client", violations);
+        assertContains(service, "ObjectProvider<QuoteSchemeBuyerLookupService>",
+                "fee estimate service must use buyer lookup port instead of buyer mapper", violations);
+        assertContains(service, "SELECTION_AUTO_BEST",
+                "fee estimate service must support automatic best-channel selection mode", violations);
+        assertContains(service, "VIEW_BUYER_SIMULATION",
+                "fee estimate service must support buyer simulation view", violations);
+        assertContains(service, "selectWinningSchemesByWarehouse",
+                "fee estimate service must resolve quote scheme priority before route expansion", violations);
+        assertContains(service, "resolveCommonWarehouseCandidates",
+                "fee estimate service must resolve common SKU warehouse candidates before route expansion", violations);
+        assertContains(service, "ObjectProvider<QuoteSchemeWarehouseLookupService>",
+                "fee estimate service must use warehouse lookup port instead of warehouse mapper", violations);
+        assertContains(service, "MODE_SKU",
+                "fee estimate service must support SKU input mode", violations);
+        assertContains(service, "MODE_MANUAL",
+                "fee estimate service must support manual package mode", violations);
+        assertContains(service, "Arrays.sort(sides)",
+                "fee estimate service must sort SKU dimensions before merging", violations);
+        assertContains(service, "edge1 = edge1.add(sides[0].multiply(BigDecimal.valueOf(quantity)))",
+                "fee estimate service must sum the shortest SKU side by quantity", violations);
+        assertContains(service, "edge2 = max(edge2, sides[1])",
+                "fee estimate service must use the max middle side", violations);
+        assertContains(service, "edge3 = max(edge3, sides[2])",
+                "fee estimate service must use the max longest side", violations);
+        assertContains(service, "VOLUME_WEIGHT_DIVISOR",
+                "fee estimate service must expose chargeable weight calculation", violations);
+        assertContains(service, "buildEstimateResult",
+                "fee estimate service must call the external estimate port for executable routes", violations);
+        assertNotContains(service, "com.ruoyi.product.mapper",
+                "finance fee estimate service must not import product mapper", violations);
+        assertNotContains(service, "com.ruoyi.logistics.mapper",
+                "finance fee estimate service must not import logistics mapper", violations);
+        assertNotContains(service, "LingxingOpenApiClient",
+                "finance fee estimate service must not couple directly to Lingxing client", violations);
+
+        assertContains(skuLookup, "implements FinanceFeeEstimateSkuLookupService",
+                "product module must implement the finance SKU lookup port", violations);
+        assertContains(skuLookup, "selectSkuPageList",
+                "product SKU lookup must reuse the product distribution SKU list mapper", violations);
+        assertContains(skuLookup, "selectSkuById",
+                "product SKU lookup must reuse the product distribution SKU detail mapper", violations);
+        assertContains(skuLookup, "selectSkuWarehouseCandidatesByIds",
+                "product SKU lookup must expose SKU warehouse candidates for automatic route resolution", violations);
+        assertContains(skuLookup, "setSourceWarehouseCode",
+                "product SKU lookup must pass source warehouse filter to product mapper", violations);
+        assertContains(skuLookup, "setSkuCode",
+                "product SKU lookup must pass SKU filter to product mapper", violations);
+        assertContains(skuLookup, "setProductName",
+                "product SKU lookup must pass product name filter to product mapper", violations);
+        assertContains(skuLookup, "setSourceWarehouseCodes",
+                "product SKU lookup must expose source warehouse codes to the fee estimate selector", violations);
+        assertContains(skuLookup, "setAvailableStock(sku.getAvailableStock())",
+                "product SKU lookup must expose platform available stock to the fee estimate selector", violations);
+        assertContains(skuLookup, "selectWarehousesBySpuId(sku.getSpuId())",
+                "product SKU lookup must reuse product warehouse bindings for source warehouse intersection", violations);
+        for (String sourceMeasureField : new String[] {
+                "getMeasureLengthCm",
+                "getMeasureWidthCm",
+                "getMeasureHeightCm",
+                "getMeasureWeightKg"
+        })
+        {
+            assertContains(skuLookup, sourceMeasureField,
+                    "product SKU lookup must expose source warehouse measurement field " + sourceMeasureField,
+                    violations);
+        }
+
+        assertContains(sql, "set @confirm_fee_estimate_menu_seed",
+                "fee estimate menu SQL must require an explicit confirmation token", violations);
+        assertContains(sql, "APPLY_FEE_ESTIMATE_MENU_SEED",
+                "fee estimate menu SQL must document the confirmation token", violations);
+        assertContains(sql, "signal sqlstate '45000'",
+                "fee estimate menu SQL must fail closed on guard violations", violations);
+        assertContains(sql, "(2550, 2050, 'C', 'fee-estimate', 'Finance/FeeEstimate/index'",
+                "fee estimate menu SQL must place the page under finance management", violations);
+        assertContains(sql, "and order_num = 1",
+                "fee estimate menu SQL must keep the page first under finance management", violations);
+        assertContains(sql, "finance:feeEstimate:list",
+                "fee estimate menu SQL must contain the page permission", violations);
+        assertContains(sql, "finance:feeEstimate:query",
+                "fee estimate menu SQL must contain the query permission", violations);
+        assertContains(sql, "finance:feeEstimate:calculate",
+                "fee estimate menu SQL must contain the calculate permission", violations);
+        assertNotContains(sql, "create table if not exists fee_estimate",
+                "fee estimate menu SQL must not create a business table", violations);
+
+        assertContains(serviceTs, "const baseUrl = '/api/finance/admin/fee-estimate';",
+                "fee estimate TS service must call the finance admin route", violations);
+        for (String method : new String[] {
+                "getFeeEstimateOptions",
+                "getFeeEstimateSkus",
+                "calculateFeeEstimate"
+        })
+        {
+            assertContains(serviceTs, method,
+                    "fee estimate TS service must expose " + method, violations);
+        }
+        assertEqualsTrimmed(serviceJs, "export * from './feeEstimate.ts';",
+                "fee estimate JS service mirror must be a pure TS re-export", violations);
+        assertEqualsTrimmed(pageJs, "export { default } from './index.tsx';",
+                "fee estimate page JS mirror must be a pure TSX re-export", violations);
+        assertContains(page, "access.hasPerms('finance:feeEstimate:query')",
+                "fee estimate page must gate query requests", violations);
+        assertContains(page, "access.hasPerms('finance:feeEstimate:calculate')",
+                "fee estimate page must gate calculate requests", violations);
+        assertContains(page, "inputModeOptions",
+                "fee estimate page must keep SKU and manual modes explicit", violations);
+        assertContains(page, "viewTabs",
+                "fee estimate page must expose operations and buyer simulation tabs", violations);
+        assertContains(page, "VIEW_BUYER_SIMULATION",
+                "fee estimate page must render buyer simulation mode", violations);
+        assertContains(page, "label=\"包裹方式\"",
+                "fee estimate page must move the package mode selector to the left condition panel", violations);
+        assertContains(page, "options={inputModeOptions}",
+                "fee estimate page must render the package mode selector from the shared options", violations);
+        assertContains(page, "label=\"仓库/渠道选择方式\"",
+                "buyer simulation must use the confirmed warehouse/channel selection wording", violations);
+        assertContains(page, "label=\"商品/SKU\"",
+                "buyer simulation must select products from the left condition panel", violations);
+        assertContains(page, "renderBuyerSkuPicker",
+                "buyer simulation must use a picker button instead of a huge SKU dropdown", violations);
+        assertContains(page, "title=\"选择商品 SKU\"",
+                "buyer simulation SKU selection must use a modal table", violations);
+        assertContains(page, "skuSelectorColumns",
+                "buyer simulation SKU selection must expose table columns", violations);
+        assertContains(page, "rowSelection={{",
+                "buyer simulation SKU modal must support table row selection", violations);
+        assertContains(page, "preserveSelectedRowKeys: true",
+                "buyer simulation SKU modal must preserve cross-page selections", violations);
+        assertContains(page, "dataIndex: 'sourceWarehouseCode'",
+                "buyer simulation SKU modal must expose source warehouse filtering", violations);
+        assertContains(page, "dataIndex: 'skuCode'",
+                "buyer simulation SKU modal must expose SKU filtering", violations);
+        assertContains(page, "sourceWarehouseCode: params.sourceWarehouseCode",
+                "buyer simulation SKU modal must submit source warehouse filter", violations);
+        assertContains(page, "skuCode: params.skuCode",
+                "buyer simulation SKU modal must submit SKU filter", violations);
+        assertContains(page, "productName: params.productName",
+                "buyer simulation SKU modal must submit product name filter", violations);
+        assertContains(page, "title: '可用库存'",
+                "buyer simulation SKU modal must show platform available stock", violations);
+        assertContains(page, "dataIndex: 'availableStock'",
+                "buyer simulation SKU modal must bind platform available stock", violations);
+        assertNotContains(page, "keyword: params.keyword",
+                "buyer simulation SKU modal must not use broad keyword filtering", violations);
+        assertNotContains(page, "dataIndex: 'keyword'",
+                "buyer simulation SKU modal must not render the broad keyword search field", violations);
+        assertContains(page, "getCommonSourceWarehouseCodes",
+                "buyer simulation SKU modal must compute the common source warehouse intersection", violations);
+        assertContains(page, "canMergeSkuBySourceWarehouse",
+                "buyer simulation SKU modal must block SKUs without a common source warehouse", violations);
+        assertContains(page, "getCheckboxProps: (record) =>",
+                "buyer simulation SKU modal must disable non-intersecting SKU rows", violations);
+        assertContains(page, "所选 SKU 必须至少有一个共同来源仓",
+                "buyer simulation must validate common source warehouse before applying or calculating", violations);
+        assertContains(page, "共同来源仓",
+                "buyer simulation must show the common source warehouse to operators", violations);
+        assertContains(page, "label=\"限制仓库\"",
+                "auto-best buyer simulation must allow optional warehouse constraints", violations);
+        assertContains(page, "label=\"选择客户渠道\"",
+                "manual buyer simulation must require a customer channel", violations);
+        assertContains(page, "候选解析",
+                "buyer simulation must show candidate resolution diagnostics", violations);
+        assertContains(page, "effectivePackageInputMode === 'SKU'",
+                "fee estimate page must keep SKU mode mutually exclusive", violations);
+        assertContains(page, "packageInputMode === 'MANUAL'",
+                "fee estimate page must keep manual mode mutually exclusive", violations);
+        assertContains(page, "name=\"destinationAddress2\"",
+                "fee estimate page must collect destination address line 2", violations);
+        assertContains(page, "destinationAddress2: values.destinationAddress2",
+                "fee estimate page must submit destination address line 2", violations);
+        assertContains(page, "mode=\"multiple\"",
+                "fee estimate page must allow multi-channel selection", violations);
+        assertContains(page, "placeholder=\"不选则展示全部渠道\"",
+                "fee estimate page must support all channels when none selected", violations);
+        assertContains(page, "placeholder=\"不选则全部可用仓库参与计算\"",
+                "buyer auto-best mode must treat empty warehouse constraints as all candidate warehouses", violations);
+        assertContains(page, "RequestID:",
+                "fee estimate page must show the request id above the result list", violations);
+        assertContains(page, "title: '包裹尺寸'",
+                "fee estimate result must show package size", violations);
+        assertContains(page, "title: '实重'",
+                "fee estimate result must show actual weight", violations);
+        assertContains(page, "title: '体积重'",
+                "fee estimate result must show volume weight", violations);
+        assertContains(page, "title: '计费重'",
+                "fee estimate result must show chargeable weight", violations);
+        assertNotContains(page, "title: '包裹数量'",
+                "fee estimate result must not expose package count as a main column", violations);
+        assertContains(page, "styles.conditionPanel",
+                "fee estimate page must render a left condition panel", violations);
+        assertContains(page, "styles.packagePanel",
+                "fee estimate page must render the upper package panel in SKU mode", violations);
+        assertContains(page, "styles.resolvePanel",
+                "buyer simulation must render candidate resolution panel", violations);
+        assertContains(page, "styles.resultPanel",
+                "fee estimate page must render the lower result panel", violations);
+        assertContains(page, "styles.manualWorkspace",
+                "fee estimate page must let manual mode expand result panel across the right workspace", violations);
+        assertContains(page, "styles.manualFields",
+                "fee estimate page must keep manual dimensions inside the left condition panel", violations);
+
+        assertContains(frontendManifest, "\"tests/finance-fee-estimate-contract.test.ts\"",
+                "fee estimate frontend contract must be manifest-owned", violations);
+
+        if (!violations.isEmpty())
+        {
+            fail("finance fee estimate must stay on the finance admin surface:\n" + String.join("\n", violations));
         }
     }
 

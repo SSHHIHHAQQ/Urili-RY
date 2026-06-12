@@ -14,6 +14,9 @@ public class UpstreamSyncResult
     private int skuDimensionCount;
     private int warehouseStockCount;
     private String syncBatchId;
+    private String requestNo;
+    private Long requestId;
+    private int taskCount;
     private List<UpstreamSyncItemResult> items = new ArrayList<>();
 
     public int getWarehouseCount() { return warehouseCount; }
@@ -28,6 +31,12 @@ public class UpstreamSyncResult
     public void setWarehouseStockCount(int warehouseStockCount) { this.warehouseStockCount = warehouseStockCount; }
     public String getSyncBatchId() { return syncBatchId; }
     public void setSyncBatchId(String syncBatchId) { this.syncBatchId = syncBatchId; }
+    public String getRequestNo() { return requestNo; }
+    public void setRequestNo(String requestNo) { this.requestNo = requestNo; }
+    public Long getRequestId() { return requestId; }
+    public void setRequestId(Long requestId) { this.requestId = requestId; }
+    public int getTaskCount() { return taskCount; }
+    public void setTaskCount(int taskCount) { this.taskCount = taskCount; }
     public List<UpstreamSyncItemResult> getItems() { return items; }
     public void setItems(List<UpstreamSyncItemResult> items) { this.items = items; }
 }

@@ -70,9 +70,10 @@ type CustomerChannel = {
   customerLabelUploadSupported: string;
   buyerScopeMode: string;
   status: string;
-  systemMappingCount?: number;
   buyerScopeCount?: number;
   systemChannelSummary?: string;
+  quoteMasterWarehouseSummary?: string;
+  quoteUpstreamChannelSummary?: string;
   buyerScopeSummary?: string;
   updateBy?: string;
   updateTime?: string;
@@ -728,6 +729,30 @@ export default function CustomerLogisticsChannelPage() {
       width: 140,
     },
     {
+      title: '绑定系统渠道',
+      dataIndex: 'systemChannelSummary',
+      search: false,
+      ellipsis: true,
+      width: 220,
+      render: (_, record) => record.systemChannelSummary || '-',
+    },
+    {
+      title: '上游主仓',
+      dataIndex: 'quoteMasterWarehouseSummary',
+      search: false,
+      ellipsis: true,
+      width: 180,
+      render: (_, record) => record.quoteMasterWarehouseSummary || '-',
+    },
+    {
+      title: '主仓渠道',
+      dataIndex: 'quoteUpstreamChannelSummary',
+      search: false,
+      ellipsis: true,
+      width: 240,
+      render: (_, record) => record.quoteUpstreamChannelSummary || '-',
+    },
+    {
       title: '签名服务',
       dataIndex: 'signatureServices',
       search: false,
@@ -768,6 +793,14 @@ export default function CustomerLogisticsChannelPage() {
       ),
     },
     {
+      title: '买家范围',
+      dataIndex: 'buyerScopeSummary',
+      search: false,
+      ellipsis: true,
+      width: 240,
+      render: (_, record) => record.buyerScopeSummary || '全部买家',
+    },
+    {
       title: '状态',
       dataIndex: 'status',
       valueType: 'select',
@@ -782,21 +815,6 @@ export default function CustomerLogisticsChannelPage() {
           onClick={() => toggleStatus(record)}
         />
       ),
-    },
-    {
-      title: '绑定系统渠道数量',
-      dataIndex: 'systemMappingCount',
-      search: false,
-      width: 140,
-      render: (_, record) => record.systemMappingCount || 0,
-    },
-    {
-      title: '买家范围',
-      dataIndex: 'buyerScopeSummary',
-      search: false,
-      ellipsis: true,
-      width: 240,
-      render: (_, record) => record.buyerScopeSummary || '全部买家',
     },
     { title: '最后更新人', dataIndex: 'updateBy', search: false, width: 130 },
     { title: '最后更新时间', dataIndex: 'updateTime', search: false, width: 170 },
@@ -899,7 +917,7 @@ export default function CustomerLogisticsChannelPage() {
         columns={channelColumns}
         request={(params) => getCustomerChannelList(params).then(toTableResult)}
         pagination={getProTablePagination(20)}
-        scroll={getProTableScroll(1760)}
+        scroll={getProTableScroll(2260)}
         search={getPersistedProTableSearch({ labelWidth: 100, fieldCount: 5 }, 'customer-logistics-channel')}
         toolBarRender={() => [
           <Button key="add" type="primary" icon={<PlusOutlined />} hidden={!canAdd} onClick={openCreateChannel}>

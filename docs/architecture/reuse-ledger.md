@@ -1,5 +1,27 @@
 # 复用台账
 
+## FinanceFeeEstimate 费用试算管理端模式
+
+- 位置：
+  - `RuoYi-Vue/finance/src/main/java/com/ruoyi/finance/controller/AdminFeeEstimateController.java`
+  - `RuoYi-Vue/finance/src/main/java/com/ruoyi/finance/service/IFeeEstimateService.java`
+  - `RuoYi-Vue/finance/src/main/java/com/ruoyi/finance/service/impl/FeeEstimateServiceImpl.java`
+  - `RuoYi-Vue/finance/src/main/java/com/ruoyi/finance/service/FinanceFeeEstimateSkuLookupService.java`
+  - `RuoYi-Vue/product/src/main/java/com/ruoyi/product/service/impl/ProductFeeEstimateSkuLookupServiceImpl.java`
+  - `react-ui/src/pages/Finance/FeeEstimate/index.tsx`
+  - `react-ui/src/services/finance/feeEstimate.ts`
+  - `react-ui/tests/finance-fee-estimate-contract.test.ts`
+- 当前用途：
+  - 固定费用试算属于管理端 finance 模块，接口使用 `/finance/admin/fee-estimate` 和 `finance:feeEstimate:*` 权限。
+  - 固定 SKU 尺寸来源暂时复用来源商品仓库测量尺寸 `measureLengthCm/measureWidthCm/measureHeightCm/measureWeightKg`；未来商城确认尺寸字段落地后，替换 product 侧 lookup 实现即可。
+  - 固定 finance 不直接依赖 product mapper 或领星 client；SKU 查询通过 `FinanceFeeEstimateSkuLookupService` port，领星费用字段未确认前费用结果 fail-closed，不伪造金额。
+  - 固定 SKU 合包规则：最小边按数量相加，次长边取最大值，最长边取最大值；实重按数量累加。
+  - 固定页面按包裹方式自适应布局：左侧先选择 `选择 SKU` / `手工尺寸`；SKU 模式右侧为“包裹信息 + 试算结果”上下两块，手工尺寸模式右侧只保留试算结果并铺满。
+- 复用规则：
+  - 后续新增费用试算来源或外部试算适配器时，优先在 finance 定义稳定 port，由 product/logistics/integration 实现，不要让 finance 直接 import 对方 mapper 或外部 client。
+  - 后续费用试算页面扩展字段时，继续保持“左侧条件面板 + SKU 模式右侧上下双面板 + 手工模式右侧结果单面板”结构，并同步 `finance-fee-estimate-contract.test.ts` 与 `FinanceAdminRouteContractTest`。
+  - 如果领星字段确认后接入真实试算，必须补外部请求日志、traceId、错误映射和脱敏边界；在适配器完成前继续返回失败行，不生成假费用。
+
 ## ImageResourceUtils 图片资源字段规范化
 
 - 位置：
@@ -26,14 +48,23 @@
   - `react-ui/src/components/ProductCenter/ProductCenterPage.tsx`
   - `react-ui/src/components/ProductCenter/ProductCenterDetailModal.tsx`
   - `react-ui/src/pages/Product/ProductCenter/index.tsx`
+  - `react-ui/src/pages/Buyer/ProductCenter/index.tsx`
+  - `react-ui/src/pages/Portal/Home/BuyerProductCenter.tsx`
+  - `RuoYi-Vue/buyer/src/main/java/com/ruoyi/buyer/service/support/BuyerPortalPermissionCatalog.java`
+  - `scripts/buyer-product-center-sql-runner.mjs`
   - `react-ui/tests/product-center-contract.test.ts`
+  - `react-ui/tests/buyer-product-center-sql-runner-contract.test.ts`
 - 当前用途：
   - 固定“商品中心”是买家可见商品列表视角，只读展示已上架 SPU/SKU。
   - 固定后端 DTO 不返回卖家、客户 SKU、供货价、管控原因等卖家/管理端敏感字段，只保留商品名称、系统 SPU/SKU、销售价、库存、仓库、类目、卖点、详情图文和参数。
   - 固定管理端入口使用 `/product/admin/product-center` 和 `product:center:list/query`，当前仅作为内测/备用入口；共享列表组件通过 `fetchList/fetchProduct` 注入数据源，后续买家端可以替换为 buyer portal service。
+  - 固定买家端入口使用 `/buyer/portal/product-center` 和 `buyer:product:center:list/query`，页面复用 `ProductCenterPage`，数据源注入 buyer portal product center service；第一版展示所有已上架买家可见商品，未来可在 buyer service/read model 层收口可见范围。
+  - 固定买家端业务入口权限进入 `BuyerPortalPermissionCatalog.BUSINESS_PERMS`，账号/部门/角色/日志/会话保留在 `SELF_MANAGEMENT_PERMS`，owner 默认授权和子账号角色可分配权限统一走 `ROLE_ASSIGNABLE_PERMS`。
+  - 固定商品中心远端 SQL 只能通过 `scripts/buyer-product-center-sql-runner.mjs` 受控执行，写入模式必须显式设置 `BUYER_PRODUCT_CENTER_SQL_CONFIRM=APPLY_BUYER_PRODUCT_CENTER_MENU_SEED`，执行后校验商品中心页面、查询权限、owner 授权和 buyer_menu 异常项。
   - 固定详情弹窗复用买家预览图文流，但商品中心使用 `mode="real"`，不展示预览提示、样式预览价或假库存兜底。
 - 复用规则：
   - 后续拆 `buyer-ui` 时优先迁移 `ProductCenterPage` 的布局和 `ProductCenterDetailModal` 的真实模式，不要重新实现一套买家商品列表。
+  - 后续订单、售后、财务等买家端业务权限先登记到权限 catalog，再接 Controller、菜单 seed、前端导航和合同测试；不要把业务权限重新塞回自助管理权限集合。
   - 如果新增买家可见字段，先确认不属于卖家敏感信息或成本/管控字段，并同步 `ProductCenterServiceImplTest` 与 `product-center-contract.test.ts`。
   - 如果新增购买、加入采购单等动作，动作入口必须走买家端权限和接口；管理端商品中心保持只读，不把 buyer 权限或下单接口混入 admin 页面。
 
@@ -2838,3 +2869,28 @@
   - 后续新增外部系统、支付、物流、ERP、WMS 或任何含密钥/凭证的管理端接口时，必须优先检查 `LogAspect.EXCLUDE_PROPERTIES` / `PortalLogAspect.EXCLUDE_PROPERTIES` 是否已覆盖字段名。
   - 只要接口请求 DTO 中出现新的 secret、key、token、credential、ciphertext 类字段，必须同步更新日志脱敏名单、接口 `@Log.excludeParamNames` 和 `LogAspectSensitiveFieldFilterTest`。
   - 不允许只依赖 Jackson `WRITE_ONLY` 或前端隐藏字段来保护操作日志；操作日志走 Fastjson2 过滤链，必须有日志层合同。
+
+## 上游同步任务生命周期与领星请求边界
+
+- 位置：
+  - `RuoYi-Vue/integration/src/main/java/com/ruoyi/integration/service/impl/UpstreamSyncServiceImpl.java`
+  - `RuoYi-Vue/integration/src/main/java/com/ruoyi/integration/task/UpstreamSyncDispatchTask.java`
+  - `RuoYi-Vue/integration/src/main/java/com/ruoyi/integration/mapper/UpstreamSyncTaskMapper.java`
+  - `RuoYi-Vue/integration/src/main/resources/mapper/integration/UpstreamSyncTaskMapper.xml`
+  - `RuoYi-Vue/integration/src/main/java/com/ruoyi/integration/lingxing/LingxingOpenApiClient.java`
+  - `RuoYi-Vue/integration/src/main/java/com/ruoyi/integration/sync/UpstreamLingxingClientFactory.java`
+  - `RuoYi-Vue/integration/src/main/java/com/ruoyi/integration/sync/UpstreamClockHealthGuard.java`
+  - `react-ui/src/pages/UpstreamSystem/components/SyncTabs.tsx`
+  - `react-ui/tests/upstream-system-permission-guard.test.ts`
+  - `RuoYi-Vue/integration/src/test/java/com/ruoyi/integration/architecture/IntegrationModuleBoundaryContractTest.java`
+- 当前用途：
+  - 固定上游系统手动同步和定时同步都通过 `upstream_system_sync_request` / `upstream_system_sync_task` 进入数据库任务生命周期。
+  - 固定 RuoYi Quartz dispatcher 入口为 `upstreamSyncDispatchTask.dispatch`，由 `IUpstreamSyncService.dispatchPendingTasks()` 统一领取、恢复和执行任务。
+  - 固定领星请求必须先通过 `UpstreamClockHealthGuard` 校验本机时间，再由 `LingxingOpenApiClient` 使用 `sendAsync + hard timeout + cancel` 执行。
+  - 固定外部请求日志使用 `STARTED -> 终态` 二段式写入，不再只在响应返回后插入完成态日志。
+  - 固定前端同步任务列表、重试和取消权限分别走 `integration:upstream:task:list`、`integration:upstream:task:retry`、`integration:upstream:task:cancel`。
+- 复用规则：
+  - 后续任何外部系统同步任务不要再新建 JVM 内存队列作为主执行路径，应复用“受理入库 + RuoYi dispatcher 领取 + 任务 lease + 终态汇总”的生命周期模型。
+  - 后续新增外部 HTTP 适配器时，必须有开始日志、硬超时、取消和明确错误码；不得直接在业务 Service 中调用阻塞式 HTTP。
+  - 后续新增任务状态、任务操作或前端任务列时，必须同步更新 SQL 字典、后端权限、前端 constants、前端权限 guard 和 integration 架构合同。
+  - 历史 stuck 数据修复必须继续使用 guarded SQL 的确认 token、预览数量和 SHA-256 精确目标签名，不得直接宽条件更新远端状态。

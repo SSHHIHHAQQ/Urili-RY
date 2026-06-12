@@ -37,6 +37,10 @@ public class LogisticsCustomerChannel extends BaseEntity
 
     private String systemChannelSummary;
 
+    private String quoteMasterWarehouseSummary;
+
+    private String quoteUpstreamChannelSummary;
+
     private String buyerScopeSummary;
 
     public String getCustomerChannelCode()
@@ -177,6 +181,26 @@ public class LogisticsCustomerChannel extends BaseEntity
     public void setSystemChannelSummary(String systemChannelSummary)
     {
         this.systemChannelSummary = systemChannelSummary;
+    }
+
+    public String getQuoteMasterWarehouseSummary()
+    {
+        return quoteMasterWarehouseSummary;
+    }
+
+    public void setQuoteMasterWarehouseSummary(String quoteMasterWarehouseSummary)
+    {
+        this.quoteMasterWarehouseSummary = quoteMasterWarehouseSummary;
+    }
+
+    public String getQuoteUpstreamChannelSummary()
+    {
+        return quoteUpstreamChannelSummary;
+    }
+
+    public void setQuoteUpstreamChannelSummary(String quoteUpstreamChannelSummary)
+    {
+        this.quoteUpstreamChannelSummary = quoteUpstreamChannelSummary;
     }
 
     public String getBuyerScopeSummary()

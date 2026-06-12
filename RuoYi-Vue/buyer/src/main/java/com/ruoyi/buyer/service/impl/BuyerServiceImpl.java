@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import com.github.pagehelper.Page;
+import com.github.pagehelper.page.PageMethod;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +24,7 @@ import com.ruoyi.buyer.mapper.BuyerMapper;
 import com.ruoyi.buyer.mapper.BuyerPortalPermissionMapper;
 import com.ruoyi.buyer.mapper.BuyerPortalDeptMapper;
 import com.ruoyi.buyer.service.IBuyerService;
+import com.ruoyi.buyer.service.support.BuyerPortalPermissionCatalog;
 import com.ruoyi.system.domain.PortalDept;
 import com.ruoyi.system.domain.PortalDirectLoginTicket;
 import com.ruoyi.system.domain.PortalDirectLoginResult;
@@ -56,27 +58,7 @@ public class BuyerServiceImpl implements IBuyerService
 
     private static final String OWNER_ROLE_KEY = "owner";
 
-    private static final String[] DEFAULT_OWNER_PERMS = {
-        "buyer:portal:home",
-        "buyer:account:list",
-        "buyer:account:add",
-        "buyer:account:edit",
-        "buyer:account:role:query",
-        "buyer:account:role:edit",
-        "buyer:account:loginLog:list",
-        "buyer:account:operLog:list",
-        "buyer:account:session:list",
-        "buyer:dept:list",
-        "buyer:dept:query",
-        "buyer:dept:add",
-        "buyer:dept:edit",
-        "buyer:dept:remove",
-        "buyer:role:list",
-        "buyer:role:query",
-        "buyer:role:add",
-        "buyer:role:edit",
-        "buyer:role:remove"
-    };
+    private static final String[] DEFAULT_OWNER_PERMS = BuyerPortalPermissionCatalog.ownerDefaultPerms();
 
     private static final String LOGIN_BLACK_IP_CONFIG_KEY = "sys.login.blackIPList";
 
@@ -362,7 +344,7 @@ public class BuyerServiceImpl implements IBuyerService
     @Override
     public List<PortalOwnLoginLogProfile> selectBuyerOwnLoginLogList(PortalLoginSession session, PortalLoginLog log)
     {
-        assertBuyerSessionAccount(session);
+        assertBuyerSessionAccountWithoutPage(session);
         List<PortalLoginLog> logs = buyerMapper.selectBuyerLoginLogList(buildBuyerOwnLoginLogQuery(session, log));
         List<PortalOwnLoginLogProfile> profiles = newOwnLoginLogProfileList(logs);
         for (PortalLoginLog item : logs)
@@ -375,7 +357,7 @@ public class BuyerServiceImpl implements IBuyerService
     @Override
     public List<PortalOwnOperLogProfile> selectBuyerOwnOperLogList(PortalLoginSession session, PortalOperLog log)
     {
-        assertBuyerSessionAccount(session);
+        assertBuyerSessionAccountWithoutPage(session);
         List<PortalOperLog> logs = buyerMapper.selectBuyerOperLogList(buildBuyerOwnOperLogQuery(session, log));
         List<PortalOwnOperLogProfile> profiles = newOwnOperLogProfileList(logs);
         for (PortalOperLog item : logs)
@@ -388,7 +370,7 @@ public class BuyerServiceImpl implements IBuyerService
     @Override
     public List<PortalOwnSessionProfile> selectBuyerOwnSessionList(PortalLoginSession session)
     {
-        assertBuyerSessionAccount(session);
+        assertBuyerSessionAccountWithoutPage(session);
         List<PortalSessionProfile> sessions = buyerMapper.selectBuyerSessionProfileList(
             session.getSubjectId(), session.getAccountId());
         List<PortalOwnSessionProfile> profiles = newOwnSessionProfileList(sessions);
@@ -556,6 +538,25 @@ public class BuyerServiceImpl implements IBuyerService
         if (account == null)
         {
             throw portalSessionExpired();
+        }
+    }
+
+    private void assertBuyerSessionAccountWithoutPage(PortalLoginSession session)
+    {
+        Page<?> page = PageMethod.getLocalPage();
+        if (page == null)
+        {
+            assertBuyerSessionAccount(session);
+            return;
+        }
+        try
+        {
+            PageMethod.clearPage();
+            assertBuyerSessionAccount(session);
+        }
+        finally
+        {
+            PageMethod.setLocalPage(page);
         }
     }
 

@@ -69,6 +69,9 @@ describe('customer logistics channel admin contract', () => {
     const buyerModalStart = page.indexOf('title="绑定买家"');
     const buyerModalEnd = page.indexOf('</Modal>', buyerModalStart);
     const buyerModal = page.slice(buyerModalStart, buyerModalEnd);
+    const channelColumnsStart = page.indexOf('const channelColumns');
+    const channelColumnsEnd = page.indexOf('const quoteChannelColumns', channelColumnsStart);
+    const channelColumns = page.slice(channelColumnsStart, channelColumnsEnd);
 
     expect(page).toContain("channelType: 'WAREHOUSE_LABEL'");
     expect(page).toContain("labelUploadRequired: 'NOT_REQUIRED'");
@@ -83,6 +86,23 @@ describe('customer logistics channel admin contract', () => {
     expect(page).toContain("checked={record.status === 'ENABLED'}");
     expect(page).toContain('onClick={() => toggleStatus(record)}');
     expect(page).not.toContain('size="small"\n          checked={record.status === \'ENABLED\'}');
+    expect(channelColumns).toContain("dataIndex: 'systemChannelSummary'");
+    expect(channelColumns).toContain("dataIndex: 'quoteMasterWarehouseSummary'");
+    expect(channelColumns).toContain("dataIndex: 'quoteUpstreamChannelSummary'");
+    expect(page).toContain('scroll={getProTableScroll(2260)}');
+    expect(channelColumns).not.toContain("dataIndex: 'systemMappingCount'");
+    expect(channelColumns.indexOf("dataIndex: 'standardCarrierCode'")).toBeLessThan(
+      channelColumns.indexOf("dataIndex: 'systemChannelSummary'"),
+    );
+    expect(channelColumns.indexOf("dataIndex: 'quoteUpstreamChannelSummary'")).toBeLessThan(
+      channelColumns.indexOf("dataIndex: 'signatureServices'"),
+    );
+    expect(channelColumns.indexOf("dataIndex: 'buyerScopeSummary'")).toBeLessThan(
+      channelColumns.indexOf("dataIndex: 'status'"),
+    );
+    expect(channelColumns.indexOf("dataIndex: 'status'")).toBeLessThan(
+      channelColumns.indexOf("dataIndex: 'updateBy'"),
+    );
     expect(page).toContain("const UPSTREAM_SETTLEMENT_TYPE_QUOTE = 'self-operated-receivable';");
     expect(page).toContain("const UPSTREAM_PAIRING_ROLE_QUOTE = 'QUOTE';");
     expect(page).toContain('function isQuoteUpstreamConnection');
@@ -130,6 +150,7 @@ describe('customer logistics channel admin contract', () => {
 
   it('keeps customer channel menu sql aligned with the dynamic page component and backend permissions', () => {
     const sql = readRepoSource('RuoYi-Vue/sql/20260610_customer_logistics_channel_management.sql');
+    const mapperXml = readRepoSource('RuoYi-Vue/logistics/src/main/resources/mapper/logistics/LogisticsCustomerChannelMapper.xml');
 
     expect(sql).toContain('@confirm_customer_logistics_channel_management');
     expect(sql).toContain("signal sqlstate '45000'");
@@ -154,6 +175,10 @@ describe('customer logistics channel admin contract', () => {
     }
     expect(sql).not.toContain('logistics_platform_channel_mapping');
     expect(sql).not.toContain('logistics_system_channel_buyer_scope');
+    expect(mapperXml).toContain('quote_master_warehouse_summary');
+    expect(mapperXml).toContain('quote_upstream_channel_summary');
+    expect(mapperXml).toContain('logistics_customer_channel_quote_mapping');
+    expect(mapperXml).toContain("where pairing_role = 'QUOTE'");
 
     const incrementalSql = readRepoSource('RuoYi-Vue/sql/20260611_customer_channel_quote_mapping.sql');
     expect(incrementalSql).toContain('@confirm_customer_channel_quote_mapping');

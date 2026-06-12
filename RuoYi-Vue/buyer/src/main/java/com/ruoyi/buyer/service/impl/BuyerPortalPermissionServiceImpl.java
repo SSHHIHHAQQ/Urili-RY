@@ -16,6 +16,7 @@ import com.ruoyi.buyer.mapper.BuyerMapper;
 import com.ruoyi.buyer.mapper.BuyerPortalPermissionMapper;
 import com.ruoyi.buyer.service.IBuyerPortalPermissionService;
 import com.ruoyi.buyer.service.IBuyerService;
+import com.ruoyi.buyer.service.support.BuyerPortalPermissionCatalog;
 import com.ruoyi.common.constant.UserConstants;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.StringUtils;
@@ -36,27 +37,6 @@ import com.ruoyi.system.service.support.PortalPermissionSupport;
 public class BuyerPortalPermissionServiceImpl implements IBuyerPortalPermissionService, IPortalPermissionCheckService
 {
     private static final String OWNER_ROLE_KEY = "owner";
-
-    private static final Set<String> PORTAL_SELF_MANAGEMENT_PERMS = new HashSet<>(Arrays.asList(
-            "buyer:portal:home",
-            "buyer:account:list",
-            "buyer:account:add",
-            "buyer:account:edit",
-            "buyer:account:role:query",
-            "buyer:account:role:edit",
-            "buyer:account:loginLog:list",
-            "buyer:account:operLog:list",
-            "buyer:account:session:list",
-            "buyer:dept:list",
-            "buyer:dept:query",
-            "buyer:dept:add",
-            "buyer:dept:edit",
-            "buyer:dept:remove",
-            "buyer:role:list",
-            "buyer:role:query",
-            "buyer:role:add",
-            "buyer:role:edit",
-            "buyer:role:remove"));
 
     @Autowired
     private BuyerPortalPermissionMapper permissionMapper;
@@ -94,7 +74,7 @@ public class BuyerPortalPermissionServiceImpl implements IBuyerPortalPermissionS
     @Override
     public List<PortalTreeSelect> buildSelfManagementMenuTreeSelect()
     {
-        return PortalPermissionSupport.buildMenuTreeSelect(selectSelfManagementMenus());
+        return PortalPermissionSupport.buildMenuTreeSelect(selectAssignableMenus());
     }
 
     @Override
@@ -109,7 +89,7 @@ public class BuyerPortalPermissionServiceImpl implements IBuyerPortalPermissionS
     {
         List<Long> checkedKeys = selectMenuIdsByRoleId(buyerId, roleId);
         Set<Long> allowedMenuIds = new LinkedHashSet<>();
-        for (PortalMenu menu : selectSelfManagementMenus())
+        for (PortalMenu menu : selectAssignableMenus())
         {
             allowedMenuIds.add(menu.getMenuId());
         }
@@ -313,7 +293,7 @@ public class BuyerPortalPermissionServiceImpl implements IBuyerPortalPermissionS
         info.setUserName(account.getUserName());
         info.setNickName(account.getNickName());
         info.setRoles(new LinkedHashSet<>(permissionMapper.selectBuyerAccountRoleKeys(session.getSubjectId(), session.getAccountId())));
-        info.setPermissions(splitSelfManagementPermissions(permissionMapper.selectBuyerAccountPermissions(
+        info.setPermissions(splitAssignablePermissions(permissionMapper.selectBuyerAccountPermissions(
                 session.getSubjectId(), session.getAccountId())));
         return info;
     }
@@ -323,31 +303,31 @@ public class BuyerPortalPermissionServiceImpl implements IBuyerPortalPermissionS
     {
         assertActiveBuyerSession(session);
         List<PortalMenu> menus = permissionMapper.selectBuyerAccountMenuList(session.getSubjectId(), session.getAccountId());
-        List<PortalMenu> selfManagementMenus = new ArrayList<>();
+        List<PortalMenu> navigationMenus = new ArrayList<>();
         for (PortalMenu menu : menus)
         {
             PortalPermissionSupport.assertReadableTerminalMenu(menu, "buyer");
-            if (PORTAL_SELF_MANAGEMENT_PERMS.contains(StringUtils.trimToEmpty(menu.getPerms())))
+            if (BuyerPortalPermissionCatalog.isNavigationPermission(StringUtils.trimToEmpty(menu.getPerms())))
             {
-                selfManagementMenus.add(menu);
+                navigationMenus.add(menu);
             }
         }
-        return PortalPermissionSupport.buildMenuTree(selfManagementMenus);
+        return PortalPermissionSupport.buildMenuTree(navigationMenus);
     }
 
-    private List<PortalMenu> selectSelfManagementMenus()
+    private List<PortalMenu> selectAssignableMenus()
     {
         List<PortalMenu> menus = permissionMapper.selectBuyerMenuList(new PortalMenu());
-        List<PortalMenu> selfManagementMenus = new ArrayList<>();
+        List<PortalMenu> assignableMenus = new ArrayList<>();
         for (PortalMenu menu : menus)
         {
             PortalPermissionSupport.assertReadableTerminalMenu(menu, "buyer");
-            if (PORTAL_SELF_MANAGEMENT_PERMS.contains(StringUtils.trimToEmpty(menu.getPerms())))
+            if (BuyerPortalPermissionCatalog.isRoleAssignable(StringUtils.trimToEmpty(menu.getPerms())))
             {
-                selfManagementMenus.add(menu);
+                assignableMenus.add(menu);
             }
         }
-        return selfManagementMenus;
+        return assignableMenus;
     }
 
     @Override
@@ -410,15 +390,15 @@ public class BuyerPortalPermissionServiceImpl implements IBuyerPortalPermissionS
             PortalPermissionSupport.assertTerminalMenuId(menu.getMenuId(), "buyer");
             PortalPermissionSupport.assertTerminalMenuComponent(menu, "buyer");
             PortalPermissionSupport.assertTerminalMenuPerms(menu, "buyer");
-            assertRoleMenuSelfManagement(menu);
+            assertRoleMenuAssignable(menu);
         }
     }
 
-    private void assertRoleMenuSelfManagement(PortalMenu menu)
+    private void assertRoleMenuAssignable(PortalMenu menu)
     {
-        if (!PORTAL_SELF_MANAGEMENT_PERMS.contains(StringUtils.trimToEmpty(menu.getPerms())))
+        if (!BuyerPortalPermissionCatalog.isRoleAssignable(StringUtils.trimToEmpty(menu.getPerms())))
         {
-            throw new ServiceException("买家端角色只能分配自助管理权限模板");
+            throw new ServiceException("买家端角色只能分配已开放的端内权限模板");
         }
     }
 
@@ -561,7 +541,7 @@ public class BuyerPortalPermissionServiceImpl implements IBuyerPortalPermissionS
         }
     }
 
-    private Set<String> splitSelfManagementPermissions(List<String> values)
+    private Set<String> splitAssignablePermissions(List<String> values)
     {
         Set<String> permissions = new LinkedHashSet<>();
         for (String value : values)
@@ -574,7 +554,7 @@ public class BuyerPortalPermissionServiceImpl implements IBuyerPortalPermissionS
                     if (StringUtils.isNotEmpty(permission))
                     {
                         assertBuyerPortalPermission(permission);
-                        if (PORTAL_SELF_MANAGEMENT_PERMS.contains(permission))
+                        if (BuyerPortalPermissionCatalog.isRoleAssignable(permission))
                         {
                             permissions.add(permission);
                         }

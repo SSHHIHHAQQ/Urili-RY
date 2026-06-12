@@ -1,5 +1,9 @@
 package com.ruoyi.integration.service;
 
+import java.util.List;
+import com.ruoyi.integration.domain.UpstreamSyncRequestRecord;
+import com.ruoyi.integration.domain.UpstreamSyncTask;
+import com.ruoyi.integration.domain.query.UpstreamSyncTaskQuery;
 import com.ruoyi.integration.domain.request.SkuDimensionSelectedSyncRequest;
 import com.ruoyi.integration.domain.request.UpstreamSyncRequest;
 import com.ruoyi.integration.domain.response.UpstreamSyncResult;
@@ -38,4 +42,14 @@ public interface IUpstreamSyncService
     UpstreamSyncResult syncWarehouseStocksOnly(String connectionCode);
 
     UpstreamSyncResult submitWarehouseStocksOnly(String connectionCode);
+
+    List<UpstreamSyncRequestRecord> selectSyncRequestList(UpstreamSyncTaskQuery query);
+
+    List<UpstreamSyncTask> selectSyncTaskList(UpstreamSyncTaskQuery query);
+
+    UpstreamSyncResult retrySyncTask(String connectionCode, Long taskId);
+
+    int cancelSyncTask(String connectionCode, Long taskId);
+
+    int dispatchPendingTasks();
 }

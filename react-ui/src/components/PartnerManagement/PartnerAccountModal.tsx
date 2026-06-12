@@ -536,12 +536,12 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
       okText: '生成并打开',
       content: (
         <Flex vertical gap={8}>
-          <Typography.Text>代入原因</Typography.Text>
+          <Typography.Text>代入原因（选填）</Typography.Text>
           <Input.TextArea
             rows={3}
             maxLength={255}
             showCount
-            placeholder="例如：协助客户排查订单问题"
+            placeholder="可选，例如：协助客户排查订单问题"
             onChange={(event) => {
               reason = event.target.value;
             }}
@@ -550,10 +550,6 @@ const PartnerAccountModal: React.FC<PartnerAccountModalProps> = ({
       ),
       onOk: async () => {
         const normalizedReason = reason.trim();
-        if (!normalizedReason) {
-          message.error('请输入免密登录原因');
-          throw new Error('DIRECT_LOGIN_REASON_REQUIRED');
-        }
         const hide = message.loading('正在生成免密登录链接');
         try {
           const resp = await directLoginAccount(

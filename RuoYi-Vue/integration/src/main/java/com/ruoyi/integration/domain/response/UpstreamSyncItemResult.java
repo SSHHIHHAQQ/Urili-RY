@@ -6,6 +6,8 @@ package com.ruoyi.integration.domain.response;
 public class UpstreamSyncItemResult
 {
     private String syncType;
+    private Long taskId;
+    private String syncBatchId;
     private String status;
     private int count;
     private int pulledCount;
@@ -17,6 +19,10 @@ public class UpstreamSyncItemResult
 
     public String getSyncType() { return syncType; }
     public void setSyncType(String syncType) { this.syncType = syncType; }
+    public Long getTaskId() { return taskId; }
+    public void setTaskId(Long taskId) { this.taskId = taskId; }
+    public String getSyncBatchId() { return syncBatchId; }
+    public void setSyncBatchId(String syncBatchId) { this.syncBatchId = syncBatchId; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
     public int getCount() { return count; }

@@ -385,12 +385,35 @@ public class PortalDirectLoginSupportTest
     }
 
     @Test
-    public void createTokenShouldRequireReasonBeforePersistingTicketOrRedisPayload()
+    public void createTokenShouldAllowBlankReasonAndPersistEmptyAuditReason()
     {
-        assertThrows(ServiceException.class, () -> support.createToken("seller", 7L, "SAAA010001",
+        PortalDirectLoginResult result = support.createToken("seller", 7L, "SAAA010001",
                 activeAccount(44L, "seller-owner"), "   ",
-                PortalDirectLoginSupport.SELLER_WEB_URL_CONFIG_KEY, "http://fallback/seller/direct-login"));
+                PortalDirectLoginSupport.SELLER_WEB_URL_CONFIG_KEY, "http://fallback/seller/direct-login");
 
+        assertNotNull(ticketMapper.insertedTicket);
+        assertEquals("", ticketMapper.insertedTicket.getReason());
+        PortalDirectLoginToken payload = redisCache.getCacheObject(cacheKey(result.getToken()));
+        assertNotNull(payload);
+        assertEquals("", payload.getDirectLoginReason());
+    }
+
+    @Test
+    public void createTokenShouldRejectOverlongReasonBeforePersistingTicketOrRedisPayload()
+    {
+        StringBuilder oversizedReason = new StringBuilder();
+        for (int i = 0; i < 256; i++)
+        {
+            oversizedReason.append('x');
+        }
+
+        ServiceException exception = assertThrows(ServiceException.class,
+                () -> support.createToken("seller", 7L, "SAAA010001",
+                        activeAccount(44L, "seller-owner"), oversizedReason.toString(),
+                        PortalDirectLoginSupport.SELLER_WEB_URL_CONFIG_KEY,
+                        "http://fallback/seller/direct-login"));
+
+        assertEquals("免密登录原因不能超过255个字符", exception.getMessage());
         assertNull(ticketMapper.insertedTicket);
         assertTrue(redisCache.values.isEmpty());
     }
